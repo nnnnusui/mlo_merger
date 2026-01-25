@@ -3,7 +3,7 @@ use serde::Deserialize;
 use crate::{
   xml::{XmlValueAttr, position::XmlPositionAttr},
   ymap::{
-    model::Ymap,
+    model::{Ymap, YmapEntity},
     xml::{
       XmlYmapBlock, XmlYmapBoxOccluder, XmlYmapDistantLodLightsSoa, XmlYmapEntity,
       XmlYmapLodLightsSoa, XmlYmapOccludeModel,
@@ -46,7 +46,15 @@ impl From<XmlYmap> for Ymap {
       streaming_extents_max: v.streaming_extents_max.into(),
       entities_extents_min: v.entities_extents_min.into(),
       entities_extents_max: v.entities_extents_max.into(),
-      entities: v.entities.items.into_iter().map(Into::into).collect(),
+      entity_map: v
+        .entities
+        .items
+        .into_iter()
+        .map(|e| {
+          let entity: YmapEntity = e.into();
+          (entity.guid, entity)
+        })
+        .collect(),
       box_occluders: v.box_occluders.items.into_iter().map(Into::into).collect(),
       occlude_models: v.occlude_models.items.into_iter().map(Into::into).collect(),
       lod_lights_soa: v.lod_lights_soa.into(),

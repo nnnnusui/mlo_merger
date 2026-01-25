@@ -1,3 +1,6 @@
+use indexmap::IndexMap;
+use structdiff::{Difference, StructDiff};
+
 use crate::common::Position;
 
 use super::{
@@ -6,7 +9,8 @@ use super::{
   ymap_lod_lights::YmapLodLightsSoa, ymap_occlude_model::YmapOccludeModel,
 };
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, Difference)]
+#[difference(expose, recurse)]
 pub struct Ymap {
   pub name: String,
   pub parent: String,
@@ -16,7 +20,7 @@ pub struct Ymap {
   pub streaming_extents_max: Position,
   pub entities_extents_min: Position,
   pub entities_extents_max: Position,
-  pub entities: Vec<YmapEntity>,
+  pub entity_map: IndexMap<u32, YmapEntity>,
   pub box_occluders: Vec<YmapBoxOccluder>,
   pub occlude_models: Vec<YmapOccludeModel>,
   pub lod_lights_soa: YmapLodLightsSoa,

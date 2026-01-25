@@ -1,5 +1,5 @@
 /// Box occluder definition in YMAP
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct YmapBoxOccluder {
   pub i_center_x: i32,
   pub i_center_y: i32,

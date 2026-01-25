@@ -2,17 +2,18 @@ use std::path::PathBuf;
 
 use bpaf::*;
 
+use crate::extract::ExtractYmap;
+
 #[derive(Debug)]
 pub enum Command {
   ParseYmapXml(ParseYmapXml),
   ParseYmap(ParseYmap),
   MergeYmapXml(MergeYmapXml),
+  ExtractYmap(ExtractYmap),
 }
 
 pub fn parse_args() -> Command {
-  construct!([parse_ymap_xml(), parse_ymap(), merge_ymap_xml(),])
-    .to_options()
-    .run()
+  construct!([parse_ymap_xml(), parse_ymap(), merge_ymap_xml(), extract_ymap(),]).to_options().run()
 }
 
 #[derive(Debug)]
@@ -21,9 +22,7 @@ pub struct ParseYmapXml {
 }
 
 fn parse_ymap_xml() -> impl Parser<Command> {
-  let flag = long("parse-ymap-xml")
-    .help("Parse YMAP XML file")
-    .req_flag(());
+  let flag = long("parse-ymap-xml").help("Parse YMAP XML file").req_flag(());
 
   let input = short('i').long("input").argument::<PathBuf>("FILE");
 
@@ -51,24 +50,29 @@ pub struct MergeYmapXml {
 }
 
 fn merge_ymap_xml() -> impl Parser<Command> {
-  let flag = long("merge-ymap-xml")
-    .help("Merge YMAP XML files")
-    .req_flag(());
+  let flag = long("merge-ymap-xml").help("Merge YMAP XML files").req_flag(());
   let vanilla_dir = long("vanilla-dir")
     .help("Directory containing vanilla YMAP XML files")
     .argument::<PathBuf>("DIR");
-  let mod_dir = long("mod-dir")
-    .help("Directory containing mod YMAP XML files")
-    .argument::<PathBuf>("DIR");
-  let output_dir = long("output-dir")
-    .help("Directory to save merged YMAP XML files")
-    .argument::<PathBuf>("DIR");
+  let mod_dir =
+    long("mod-dir").help("Directory containing mod YMAP XML files").argument::<PathBuf>("DIR");
+  let output_dir =
+    long("output-dir").help("Directory to save merged YMAP XML files").argument::<PathBuf>("DIR");
 
   construct!(flag, vanilla_dir, mod_dir, output_dir).map(|(_, vanilla_dir, mod_dir, output_dir)| {
-    Command::MergeYmapXml(MergeYmapXml {
-      vanilla_dir,
-      mod_dir,
-      output_dir,
-    })
+    Command::MergeYmapXml(MergeYmapXml { vanilla_dir, mod_dir, output_dir })
+  })
+}
+
+fn extract_ymap() -> impl Parser<Command> {
+  let flag = long("extract-ymap").help("Extract YMAP files from MLO directory").req_flag(());
+  let input = short('i').long("input").argument::<PathBuf>("DIR").help("MLO source directory");
+  let output = short('o')
+    .long("output")
+    .argument::<PathBuf>("DIR")
+    .help("Output directory for extracted YMAP files");
+
+  construct!(flag, input, output).map(|(_, input, output)| {
+    Command::ExtractYmap(ExtractYmap { input_dir: input, output_dir: output })
   })
 }

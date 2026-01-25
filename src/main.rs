@@ -12,6 +12,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Command::ParseYmapXml(cmd) => run_parse_ymap_xml(&cmd.input)?,
     Command::ParseYmap(cmd) => run_parse_ymap(&cmd.example)?,
     Command::MergeYmapXml(cmd) => run_merge_ymap_xml(cmd)?,
+    Command::ExtractYmap(cmd) => cmd.run()?,
   }
 
   Ok(())

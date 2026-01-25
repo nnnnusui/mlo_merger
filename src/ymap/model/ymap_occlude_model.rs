@@ -1,7 +1,7 @@
 use crate::common::Position;
 
 /// Occlude model definition in YMAP
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct YmapOccludeModel {
   pub bmin: Position,
   pub bmax: Position,

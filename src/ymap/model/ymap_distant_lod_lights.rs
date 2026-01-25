@@ -1,5 +1,5 @@
 /// Distant LOD lights structure of array in YMAP
-#[derive(Debug, Default)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct YmapDistantLodLightsSoa {
   pub position: Vec<String>,
   pub rgbi: Vec<String>,

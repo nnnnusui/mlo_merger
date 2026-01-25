@@ -16,11 +16,6 @@ pub struct XmlRotation {
 
 impl From<XmlRotation> for Rotation {
   fn from(v: XmlRotation) -> Self {
-    Self {
-      x: v.x,
-      y: v.y,
-      z: v.z,
-      w: v.w,
-    }
+    Self { x: v.x, y: v.y, z: v.z, w: v.w }
   }
 }

@@ -1,5 +1,5 @@
 /// Block metadata in YMAP
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct YmapBlock {
   pub version: u32,
   pub flags: u32,

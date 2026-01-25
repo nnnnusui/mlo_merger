@@ -1,5 +1,5 @@
 /// LOD lights structure of array in YMAP
-#[derive(Debug, Default)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct YmapLodLightsSoa {
   pub direction: Vec<String>,
   pub falloff: Vec<String>,

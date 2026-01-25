@@ -1,7 +1,9 @@
+use structdiff::{Difference, StructDiff};
+
 use crate::common::{Position, Rotation};
 
 /// Entity definition in YMAP
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, Difference)]
 pub struct YmapEntity {
   pub r#entity_type: String,
   pub archetype_name: String,
