@@ -1,16 +1,17 @@
 use serde::Deserialize;
 
-use crate::{xml::position::XmlPositionAttr, ymap::model::Ymap};
-
-use super::xml_ymap_entity::XmlEntities;
+use crate::{
+  xml::{XmlValueAttr, position::XmlPositionAttr},
+  ymap::{model::Ymap, xml::XmlEntity},
+};
 
 #[derive(Debug, Deserialize)]
 #[serde(rename = "CMapData", rename_all = "camelCase")]
 pub struct XmlYmap {
   pub name: String,
   pub parent: String,
-  pub flags: YmapFlags,
-  pub content_flags: YmapContentFlags,
+  pub flags: XmlValueAttr<u32>,
+  pub content_flags: XmlValueAttr<u32>,
   pub streaming_extents_min: XmlPositionAttr,
   pub streaming_extents_max: XmlPositionAttr,
   pub entities_extents_min: XmlPositionAttr,
@@ -34,14 +35,8 @@ impl From<XmlYmap> for Ymap {
   }
 }
 
-#[derive(Debug, Deserialize)]
-pub struct YmapFlags {
-  #[serde(rename = "@value")]
-  pub value: u32,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct YmapContentFlags {
-  #[serde(rename = "@value")]
-  pub value: u32,
+#[derive(Debug, Deserialize, Default)]
+pub struct XmlEntities {
+  #[serde(rename = "Item", default)]
+  pub items: Vec<XmlEntity>,
 }

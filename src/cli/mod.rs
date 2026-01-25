@@ -1,2 +1,2 @@
-pub mod cli;
-pub use cli::{Command, parse_args};
+pub mod command;
+pub use command::{Command, parse_args};

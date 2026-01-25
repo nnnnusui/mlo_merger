@@ -1,15 +1,9 @@
 use serde::Deserialize;
 
 use crate::{
-  xml::{position::XmlPositionAttr, rotation::XmlRotation},
+  xml::{XmlValueAttr, position::XmlPositionAttr, rotation::XmlRotation},
   ymap::model::YmapEntity,
 };
-
-#[derive(Debug, Deserialize, Default)]
-pub struct XmlEntities {
-  #[serde(rename = "Item", default)]
-  pub items: Vec<XmlEntity>,
-}
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -17,22 +11,22 @@ pub struct XmlEntity {
   #[serde(rename = "@type")]
   pub entity_type: String,
   pub archetype_name: String,
-  pub flags: EntityFlags,
-  pub guid: EntityGuid,
+  pub flags: XmlValueAttr<u32>,
+  pub guid: XmlValueAttr<u32>,
   pub position: XmlPositionAttr,
   pub rotation: XmlRotation,
-  pub scale_x_y: ScaleValue,
-  pub scale_z: ScaleValue,
-  pub parent_index: ParentIndex,
-  pub lod_dist: LodDist,
-  pub child_lod_dist: ChildLodDist,
+  pub scale_x_y: XmlValueAttr<f32>,
+  pub scale_z: XmlValueAttr<f32>,
+  pub parent_index: XmlValueAttr<i32>,
+  pub lod_dist: XmlValueAttr<f32>,
+  pub child_lod_dist: XmlValueAttr<f32>,
   pub lod_level: String,
-  pub num_children: NumChildren,
+  pub num_children: XmlValueAttr<u32>,
   pub priority_level: String,
   pub extensions: Option<()>,
-  pub ambient_occlusion_multiplier: AmbientOcclusionMultiplier,
-  pub artificial_ambient_occlusion: ArtificialAmbientOcclusion,
-  pub tint_value: TintValue,
+  pub ambient_occlusion_multiplier: XmlValueAttr<u8>,
+  pub artificial_ambient_occlusion: XmlValueAttr<u8>,
+  pub tint_value: XmlValueAttr<u32>,
 }
 
 impl From<XmlEntity> for YmapEntity {
@@ -57,64 +51,4 @@ impl From<XmlEntity> for YmapEntity {
       tint_value: v.tint_value.value,
     }
   }
-}
-
-#[derive(Debug, Deserialize)]
-pub struct EntityFlags {
-  #[serde(rename = "@value")]
-  pub value: u32,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct EntityGuid {
-  #[serde(rename = "@value")]
-  pub value: u32,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct ScaleValue {
-  #[serde(rename = "@value")]
-  pub value: f32,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct ParentIndex {
-  #[serde(rename = "@value")]
-  pub value: i32,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct LodDist {
-  #[serde(rename = "@value")]
-  pub value: f32,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct ChildLodDist {
-  #[serde(rename = "@value")]
-  pub value: f32,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct NumChildren {
-  #[serde(rename = "@value")]
-  pub value: u32,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct AmbientOcclusionMultiplier {
-  #[serde(rename = "@value")]
-  pub value: u8,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct ArtificialAmbientOcclusion {
-  #[serde(rename = "@value")]
-  pub value: u8,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct TintValue {
-  #[serde(rename = "@value")]
-  pub value: u32,
 }
