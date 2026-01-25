@@ -7,7 +7,7 @@ use crate::{
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct XmlEntity {
+pub struct XmlYmapEntity {
   #[serde(rename = "@type")]
   pub entity_type: String,
   pub archetype_name: String,
@@ -29,8 +29,8 @@ pub struct XmlEntity {
   pub tint_value: XmlValueAttr<u32>,
 }
 
-impl From<XmlEntity> for YmapEntity {
-  fn from(v: XmlEntity) -> Self {
+impl From<XmlYmapEntity> for YmapEntity {
+  fn from(v: XmlYmapEntity) -> Self {
     Self {
       entity_type: v.entity_type,
       archetype_name: v.archetype_name,

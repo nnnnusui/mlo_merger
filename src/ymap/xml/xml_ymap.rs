@@ -2,7 +2,7 @@ use serde::Deserialize;
 
 use crate::{
   xml::{XmlValueAttr, position::XmlPositionAttr},
-  ymap::{model::Ymap, xml::XmlEntity},
+  ymap::{model::Ymap, xml::XmlYmapEntity},
 };
 
 #[derive(Debug, Deserialize)]
@@ -38,5 +38,5 @@ impl From<XmlYmap> for Ymap {
 #[derive(Debug, Deserialize, Default)]
 pub struct XmlEntities {
   #[serde(rename = "Item", default)]
-  pub items: Vec<XmlEntity>,
+  pub items: Vec<XmlYmapEntity>,
 }
