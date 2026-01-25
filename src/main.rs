@@ -1,4 +1,5 @@
 use mlo_merger::cli::{Command, parse_args};
+use mlo_merger::merge::run_merge_ymap_xml;
 use mlo_merger::ymap::{model::Ymap, xml::XmlYmap};
 use quick_xml::de::from_str;
 use std::fs;
@@ -10,6 +11,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
   match opts {
     Command::ParseYmapXml(cmd) => run_parse_ymap_xml(&cmd.input)?,
     Command::ParseYmap(cmd) => run_parse_ymap(&cmd.example)?,
+    Command::MergeYmapXml(cmd) => run_merge_ymap_xml(cmd)?,
   }
 
   Ok(())

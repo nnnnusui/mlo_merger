@@ -1,2 +1,4 @@
 tab_spaces = 2
 struct_lit_single_line = false
+
+fn_args_layout = "Tall"
