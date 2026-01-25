@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use bpaf::*;
 
-use crate::extract::ExtractYmap;
+use crate::core::extract::ExtractYmap;
 
 #[derive(Debug)]
 pub enum Command {

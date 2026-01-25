@@ -1,6 +1,6 @@
 use serde::Deserialize;
 
-use crate::common::Rotation;
+use crate::core::common::Rotation;
 
 #[derive(Debug, Deserialize)]
 pub struct XmlRotation {
@@ -16,6 +16,11 @@ pub struct XmlRotation {
 
 impl From<XmlRotation> for Rotation {
   fn from(v: XmlRotation) -> Self {
-    Self { x: v.x, y: v.y, z: v.z, w: v.w }
+    Self {
+      x: v.x,
+      y: v.y,
+      z: v.z,
+      w: v.w,
+    }
   }
 }

@@ -1,6 +1,6 @@
 use serde::Deserialize;
 
-use crate::common::Position;
+use crate::core::common::Position;
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -15,6 +15,10 @@ pub struct XmlPositionAttr {
 
 impl From<XmlPositionAttr> for Position {
   fn from(v: XmlPositionAttr) -> Self {
-    Self { x: v.x, y: v.y, z: v.z }
+    Self {
+      x: v.x,
+      y: v.y,
+      z: v.z,
+    }
   }
 }

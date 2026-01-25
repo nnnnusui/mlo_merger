@@ -1,6 +1,7 @@
 use crate::cli::MergeYmapXml;
-use crate::ymap::model::ymap::YmapStructDiffEnum;
-use crate::ymap::{model::Ymap, xml::XmlYmap};
+use crate::core::format::ymap::model::Ymap;
+use crate::core::format::ymap::model::ymap::YmapStructDiffEnum;
+use crate::core::format::ymap::xml::XmlYmap;
 use quick_xml::de::from_str;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -97,7 +98,10 @@ fn create_file_pairs(
         relative_path: relative_path.to_path_buf(),
       });
     } else {
-      println!("Warning: No corresponding vanilla file found for {}", relative_path.display());
+      println!(
+        "Warning: No corresponding vanilla file found for {}",
+        relative_path.display()
+      );
     }
   }
 

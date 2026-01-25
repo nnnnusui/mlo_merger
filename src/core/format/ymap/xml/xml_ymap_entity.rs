@@ -1,6 +1,6 @@
 use serde::Deserialize;
 
-use crate::{
+use crate::core::format::{
   xml::{XmlValueAttr, position::XmlPositionAttr, rotation::XmlRotation},
   ymap::model::YmapEntity,
 };

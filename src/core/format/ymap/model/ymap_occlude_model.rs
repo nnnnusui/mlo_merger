@@ -1,4 +1,4 @@
-use crate::common::Position;
+use crate::core::common::Position;
 
 /// Occlude model definition in YMAP
 #[derive(Debug, Clone, PartialEq)]

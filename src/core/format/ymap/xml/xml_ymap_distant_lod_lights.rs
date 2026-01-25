@@ -1,6 +1,6 @@
 use serde::Deserialize;
 
-use crate::{xml::XmlValueAttr, ymap::model::YmapDistantLodLightsSoa};
+use crate::core::format::{xml::XmlValueAttr, ymap::model::YmapDistantLodLightsSoa};
 
 #[derive(Debug, Deserialize)]
 #[serde(rename = "DistantLODLightsSOA", rename_all = "camelCase")]

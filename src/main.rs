@@ -1,6 +1,10 @@
-use mlo_merger::cli::{Command, parse_args};
-use mlo_merger::merge::run_merge_ymap_xml;
-use mlo_merger::ymap::{model::Ymap, xml::XmlYmap};
+use mlo_merger::{
+  cli::{Command, parse_args},
+  core::{
+    format::ymap::{model::Ymap, xml::XmlYmap},
+    merge::run_merge_ymap_xml,
+  },
+};
 use quick_xml::de::from_str;
 use std::fs;
 

@@ -1,6 +1,6 @@
 use serde::Deserialize;
 
-use crate::ymap::model::YmapLodLightsSoa;
+use crate::core::format::ymap::model::YmapLodLightsSoa;
 
 #[derive(Debug, Deserialize, Default)]
 #[serde(rename = "LODLightsSOA", rename_all = "camelCase")]

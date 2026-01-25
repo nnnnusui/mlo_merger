@@ -1,7 +1,7 @@
 use indexmap::IndexMap;
 use structdiff::{Difference, StructDiff};
 
-use crate::common::Position;
+use crate::core::common::Position;
 
 use super::{
   ymap_block::YmapBlock, ymap_box_occluder::YmapBoxOccluder,

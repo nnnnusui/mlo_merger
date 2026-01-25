@@ -1,6 +1,6 @@
 use serde::Deserialize;
 
-use crate::{xml::XmlValueAttr, ymap::model::YmapBoxOccluder};
+use crate::core::format::{xml::XmlValueAttr, ymap::model::YmapBoxOccluder};
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
