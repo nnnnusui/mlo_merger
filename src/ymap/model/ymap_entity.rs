@@ -3,7 +3,7 @@ use crate::common::{Position, Rotation};
 /// Entity definition in YMAP
 #[derive(Debug)]
 pub struct YmapEntity {
-  pub entity_type: String,
+  pub r#entity_type: String,
   pub archetype_name: String,
   pub flags: u32,
   pub guid: u32,

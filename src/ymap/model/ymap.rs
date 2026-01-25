@@ -1,6 +1,10 @@
 use crate::common::Position;
 
-use super::ymap_entity::YmapEntity;
+use super::{
+  ymap_block::YmapBlock, ymap_box_occluder::YmapBoxOccluder,
+  ymap_distant_lod_lights::YmapDistantLodLightsSoa, ymap_entity::YmapEntity,
+  ymap_lod_lights::YmapLodLightsSoa, ymap_occlude_model::YmapOccludeModel,
+};
 
 #[derive(Debug)]
 pub struct Ymap {
@@ -13,4 +17,9 @@ pub struct Ymap {
   pub entities_extents_min: Position,
   pub entities_extents_max: Position,
   pub entities: Vec<YmapEntity>,
+  pub box_occluders: Vec<YmapBoxOccluder>,
+  pub occlude_models: Vec<YmapOccludeModel>,
+  pub lod_lights_soa: YmapLodLightsSoa,
+  pub distant_lod_lights_soa: YmapDistantLodLightsSoa,
+  pub block: YmapBlock,
 }
