@@ -1,5 +1,7 @@
 use crate::common::Position;
 
+use super::ymap_entity::YmapEntity;
+
 #[derive(Debug)]
 pub struct Ymap {
   pub name: String,
@@ -10,4 +12,5 @@ pub struct Ymap {
   pub streaming_extents_max: Position,
   pub entities_extents_min: Position,
   pub entities_extents_max: Position,
+  pub entities: Vec<YmapEntity>,
 }

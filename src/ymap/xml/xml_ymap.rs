@@ -2,8 +2,10 @@ use serde::Deserialize;
 
 use crate::{xml::position::XmlPositionAttr, ymap::model::Ymap};
 
+use super::xml_ymap_entity::XmlEntities;
+
 #[derive(Debug, Deserialize)]
-#[serde(rename = "CMapData", rename_all = "camelCase", deny_unknown_fields)]
+#[serde(rename = "CMapData", rename_all = "camelCase")]
 pub struct XmlYmap {
   pub name: String,
   pub parent: String,
@@ -13,6 +15,7 @@ pub struct XmlYmap {
   pub streaming_extents_max: XmlPositionAttr,
   pub entities_extents_min: XmlPositionAttr,
   pub entities_extents_max: XmlPositionAttr,
+  pub entities: XmlEntities,
 }
 
 impl From<XmlYmap> for Ymap {
@@ -26,6 +29,7 @@ impl From<XmlYmap> for Ymap {
       streaming_extents_max: v.streaming_extents_max.into(),
       entities_extents_min: v.entities_extents_min.into(),
       entities_extents_max: v.entities_extents_max.into(),
+      entities: v.entities.items.into_iter().map(Into::into).collect(),
     }
   }
 }
