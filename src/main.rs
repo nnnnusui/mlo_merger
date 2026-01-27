@@ -1,9 +1,6 @@
 use mlo_merger::{
-  cli::{Command, parse_args},
-  core::{
-    format::ymap::{model::Ymap, xml::XmlYmap},
-    merge::run_merge_ymap_xml,
-  },
+  cli::command::{Command, parse_args},
+  core::format::ymap::{model::Ymap, xml::XmlYmap},
 };
 use quick_xml::de::from_str;
 use std::fs;
@@ -14,8 +11,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
   match opts {
     Command::ParseYmapXml(cmd) => run_parse_ymap_xml(&cmd.input)?,
-    Command::ParseYmap(cmd) => run_parse_ymap(&cmd.example)?,
-    Command::MergeYmapXml(cmd) => run_merge_ymap_xml(cmd)?,
+    Command::MergeYmapXml(cmd) => cmd.run()?,
     Command::ExtractYmap(cmd) => cmd.run()?,
   }
 
@@ -34,12 +30,5 @@ fn run_parse_ymap_xml(file_path: &std::path::Path) -> Result<(), Box<dyn std::er
 
   println!("{:#?}", data);
 
-  Ok(())
-}
-
-fn run_parse_ymap(file_path: &std::path::Path) -> Result<(), Box<dyn std::error::Error>> {
-  println!("YMAPファイルを読み込み中: {}", file_path.display());
-  // TODO: YMAP binary format parsing
-  println!("YMAP parsing is not yet implemented");
   Ok(())
 }

@@ -2,12 +2,12 @@ use std::path::PathBuf;
 
 use bpaf::*;
 
-use crate::core::extract::ExtractYmap;
+use crate::core::{extract::ExtractYmap, merge::run::MergeYmapXml};
 
 #[derive(Debug)]
 pub enum Command {
   ParseYmapXml(ParseYmapXml),
-  ParseYmap(ParseYmap),
+  // ParseYmap(ParseYmap),
   MergeYmapXml(MergeYmapXml),
   ExtractYmap(ExtractYmap),
 }
@@ -15,7 +15,7 @@ pub enum Command {
 pub fn parse_args() -> Command {
   construct!([
     parse_ymap_xml(),
-    parse_ymap(),
+    // parse_ymap(),
     merge_ymap_xml(),
     extract_ymap(),
   ])
@@ -36,26 +36,6 @@ fn parse_ymap_xml() -> impl Parser<Command> {
   let input = short('i').long("input").argument::<PathBuf>("FILE");
 
   construct!(flag, input).map(|(_, input)| Command::ParseYmapXml(ParseYmapXml { input }))
-}
-
-#[derive(Debug)]
-pub struct ParseYmap {
-  pub example: PathBuf,
-}
-
-fn parse_ymap() -> impl Parser<Command> {
-  let flag = long("parse-ymap").help("Parse YMAP file").req_flag(());
-
-  let example = short('e').long("example").argument::<PathBuf>("FILE");
-
-  construct!(flag, example).map(|(_, example)| Command::ParseYmap(ParseYmap { example }))
-}
-
-#[derive(Debug)]
-pub struct MergeYmapXml {
-  pub vanilla_dir: PathBuf,
-  pub mod_dir: PathBuf,
-  pub output_dir: PathBuf,
 }
 
 fn merge_ymap_xml() -> impl Parser<Command> {
