@@ -1,7 +1,10 @@
+use structdiff::{Difference, StructDiff};
+
 use crate::core::common::Position;
 
 /// Occlude model definition in YMAP
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Difference)]
+#[difference(expose)]
 pub struct YmapOccludeModel {
   pub bmin: Position,
   pub bmax: Position,

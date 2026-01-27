@@ -44,18 +44,21 @@ impl ExtractYmap {
 
     let resource_dirs = get_resource_directories(&self.input_dir)?;
     println!("Found {} resource directories:", resource_dirs.len());
-    println!(
-      "Found {} vanilla YMAP files.",
-      vanilla_ymap_names.as_ref().map_or(0, |s| s.len())
-    );
+    println!("Found {} vanilla YMAP files.", vanilla_ymap_names.as_ref().map_or(0, |s| s.len()));
 
-    for resource_dir in &resource_dirs {
-      extract_ymap_files(
-        &self.output_dir,
-        resource_dir,
-        self.flatten,
-        vanilla_ymap_names.as_ref(),
-      )?;
+    let extracted_ymap_source_paths: Vec<_> = resource_dirs
+      .into_iter()
+      .flat_map(|resource_dir| {
+        extract_ymap_files(&self.output_dir, &resource_dir, vanilla_ymap_names.as_ref()).ok()
+      })
+      .flatten()
+      .collect();
+
+    let omit_list_path = self.output_dir.join("_extracted_ymaps.txt");
+    let mut omit_list_file = fs::File::create(&omit_list_path)?;
+    for src_path in extracted_ymap_source_paths {
+      use std::io::Write;
+      writeln!(omit_list_file, "{}", src_path.display())?;
     }
 
     println!("Extraction completed.");
@@ -69,21 +72,19 @@ impl ExtractYmap {
 /// - Recursively explores directories enclosed in `[...]`
 /// - Supports nested `[...]/[...]` structures
 fn get_resource_directories(
-  base_dir: &PathBuf,
+  base_dir: &PathBuf
 ) -> Result<Vec<PathBuf>, Box<dyn std::error::Error>> {
   let mut resources = explore_directory(base_dir);
-  resources.sort();
+  resources.sort_by_key(|a| a.to_string_lossy().to_lowercase());
   Ok(resources)
 }
 
 fn explore_directory(dir: &PathBuf) -> Vec<PathBuf> {
   match fs::read_dir(dir) {
     Err(_) => Vec::new(),
-    Ok(read_dir) => read_dir
-      .filter_map(|e| e.ok())
-      .map(|e| e.path())
-      .filter(|p| p.is_dir())
-      .fold(Vec::new(), |mut acc, path| {
+    Ok(read_dir) => read_dir.filter_map(|e| e.ok()).map(|e| e.path()).filter(|p| p.is_dir()).fold(
+      Vec::new(),
+      |mut acc, path| {
         let is_bracket = path
           .file_name()
           .and_then(|n| n.to_str())
@@ -101,7 +102,8 @@ fn explore_directory(dir: &PathBuf) -> Vec<PathBuf> {
           }
         }
         acc
-      }),
+      },
+    ),
   }
 }
 
@@ -109,19 +111,12 @@ fn explore_directory(dir: &PathBuf) -> Vec<PathBuf> {
 fn extract_ymap_files(
   output_dir: &Path,
   resource_dir: &Path,
-  flatten: bool,
   vanilla_ymap_names: Option<&HashSet<String>>,
-) -> Result<(), Box<dyn std::error::Error>> {
-  let dir_name = resource_dir
-    .file_name()
-    .and_then(|n| n.to_str())
-    .ok_or("Invalid directory name")?;
+) -> Result<Vec<PathBuf>, Box<dyn std::error::Error>> {
+  let dir_name =
+    resource_dir.file_name().and_then(|n| n.to_str()).ok_or("Invalid directory name")?;
 
   let ymap_files = collect_files_with_suffix(resource_dir, ".ymap");
-
-  if ymap_files.is_empty() {
-    return Ok(());
-  }
 
   // Filter files based on vanilla_ymap_names if specified
   let filtered_files: Vec<_> = if let Some(vanilla_names) = vanilla_ymap_names {
@@ -139,31 +134,15 @@ fn extract_ymap_files(
     ymap_files
   };
 
-  if filtered_files.is_empty() {
-    return Ok(());
-  }
-
-  if !flatten {
-    fs::create_dir_all(output_dir.join(dir_name))?;
-  }
-
   println!("Extracting from {}:", dir_name);
-  for src_path in filtered_files {
+  for src_path in &filtered_files {
     if let Some(filename) = src_path.file_name().and_then(|n| n.to_str()) {
-      let dest_path = if flatten {
-        output_dir.join(format!(
-          "{}{}{}",
-          dir_name,
-          ExtractYmap::FLATTEN_DELIMITER,
-          filename
-        ))
-      } else {
-        output_dir.join(dir_name).join(filename)
-      };
-      fs::copy(&src_path, &dest_path)?;
+      let dest_path =
+        output_dir.join(format!("{}{}{}", dir_name, ExtractYmap::FLATTEN_DELIMITER, filename));
+      fs::copy(src_path, &dest_path)?;
       println!("  - {}", filename);
     }
   }
 
-  Ok(())
+  Ok(filtered_files)
 }

@@ -1,10 +1,13 @@
+use crate::core::common::Position;
 use crate::core::common::function::collect_files_with_suffix;
 use crate::core::extract::ExtractYmap;
-use crate::core::format::ymap::model::Ymap;
+use crate::core::format::ymap::model::ymap::Ymap;
 use crate::core::format::ymap::model::ymap::YmapStructDiffEnum;
 use crate::core::format::ymap::xml::XmlYmap;
 use crate::core::merge::check_box_occluder_diff::check_box_occluder_diff;
 use crate::core::merge::check_entity_diff::check_entity_diff;
+use crate::core::merge::check_occlude_models_diff;
+use crate::core::merge::check_occlude_models_diff::check_occlude_models_diff;
 use quick_xml::de::from_str;
 use std::collections::HashMap;
 use std::fs;
@@ -52,10 +55,10 @@ impl MergeYmapXml {
               for entity_diff in entity_diffs {
                 match entity_diff {
                   crate::core::merge::check_entity_diff::YmapEntityDiff::Added(e) => {
-                    println!("      [Added] Entity: {:?}", e.guid);
+                    println!("      [Added] Entity: {} {}", e.guid, e.archetype_name);
                   }
                   crate::core::merge::check_entity_diff::YmapEntityDiff::Removed(e) => {
-                    println!("      [Removed] Entity: {:?}", e.guid);
+                    println!("      [Removed] Entity: {} {}", e.guid, e.archetype_name);
                   }
                   crate::core::merge::check_entity_diff::YmapEntityDiff::Modified {
                     vanilla: _,
@@ -72,22 +75,37 @@ impl MergeYmapXml {
               for box_occluder_diff in box_occluder_diffs {
                 match box_occluder_diff {
                   crate::core::merge::check_box_occluder_diff::YmapBoxOccluderDiff::Added(b) => {
-                    println!("      [Added] Box Occluder: {:?}", b);
+                    println!(
+                      "      [Added] Box Occluder: {:?}",
+                      Position {
+                        x: b.i_center_x as f32,
+                        y: b.i_center_y as f32,
+                        z: b.i_center_z as f32,
+                      }
+                    );
                   }
                   crate::core::merge::check_box_occluder_diff::YmapBoxOccluderDiff::Removed(b) => {
-                    println!("      [Removed] Box Occluder: {:?}", b);
+                    println!(
+                      "      [Removed] Box Occluder: {:?}",
+                      Position {
+                        x: b.i_center_x as f32,
+                        y: b.i_center_y as f32,
+                        z: b.i_center_z as f32,
+                      }
+                    );
                   }
                   crate::core::merge::check_box_occluder_diff::YmapBoxOccluderDiff::Modified {
                     vanilla: _,
-                    modded,
+                    diffs,
                   } => {
-                    println!("      [Modified] Diffs: {:?}", modded);
+                    println!("      [Modified] Diffs: {:?}", diffs);
                   }
                 }
               }
             }
             YmapStructDiffEnum::occlude_models(_) => {
-              println!("    Found occlude model differences (not yet implemented)");
+              let occlude_model_diffs = check_occlude_models_diff(&vanilla_ymap, &mod_ymap);
+              println!("    Found {} occlude model  differences", occlude_model_diffs.len());
             }
             YmapStructDiffEnum::block(_) => (),
             it => println!("    [warning] skip unsupported changes: {:?}", it),

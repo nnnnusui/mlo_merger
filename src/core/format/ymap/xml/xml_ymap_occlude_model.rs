@@ -19,8 +19,6 @@ pub struct XmlYmapOccludeModel {
 
 #[derive(Debug, Deserialize)]
 pub struct XmlYmapVertsAttr {
-  #[serde(rename = "@content")]
-  pub content: String,
   #[serde(rename = "$value", default)]
   pub value: String,
 }
