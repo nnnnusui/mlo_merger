@@ -10,7 +10,7 @@ use super::{
 };
 
 #[derive(Debug, Clone, PartialEq, Difference)]
-#[difference(expose, recurse)]
+#[difference(expose)]
 pub struct Ymap {
   pub name: String,
   pub parent: String,

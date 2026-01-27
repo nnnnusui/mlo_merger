@@ -4,8 +4,9 @@ use crate::core::common::{Position, Rotation};
 
 /// Entity definition in YMAP
 #[derive(Debug, Clone, PartialEq, Difference)]
+#[difference(expose)]
 pub struct YmapEntity {
-  pub r#entity_type: String,
+  pub entity_type: String,
   pub archetype_name: String,
   pub flags: u32,
   pub guid: u32,
