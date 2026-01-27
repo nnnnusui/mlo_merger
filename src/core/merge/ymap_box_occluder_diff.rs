@@ -1,5 +1,8 @@
 use crate::{
-  core::format::ymap::model::{Ymap, YmapBoxOccluder, YmapBoxOccluderStructDiffEnum},
+  core::{
+    common::position::Position,
+    format::ymap::model::{Ymap, YmapBoxOccluder, YmapBoxOccluderStructDiffEnum},
+  },
   return_early,
 };
 use std::collections::{HashMap, HashSet};
@@ -12,6 +15,49 @@ pub enum YmapBoxOccluderDiff {
     vanilla: YmapBoxOccluder,
     diffs: Vec<YmapBoxOccluderStructDiffEnum>,
   },
+}
+
+impl YmapBoxOccluderDiff {
+  pub fn extract_from(
+    vanilla: &Ymap,
+    modded: &Ymap,
+  ) -> Vec<YmapBoxOccluderDiff> {
+    check_box_occluder_diff(&vanilla, &modded)
+  }
+
+  pub fn print_diffs(diffs: &Vec<YmapBoxOccluderDiff>) {
+    log::info!("    Found {} box occluder differences", diffs.len());
+    for diff in diffs {
+      match diff {
+        Self::Added(b) => {
+          log::info!(
+            "      [Added] Box Occluder: {:?}",
+            Position {
+              x: b.i_center_x as f32,
+              y: b.i_center_y as f32,
+              z: b.i_center_z as f32,
+            }
+          );
+        }
+        Self::Removed(b) => {
+          log::info!(
+            "      [Removed] Box Occluder: {:?}",
+            Position {
+              x: b.i_center_x as f32,
+              y: b.i_center_y as f32,
+              z: b.i_center_z as f32,
+            }
+          );
+        }
+        Self::Modified {
+          vanilla: _,
+          diffs,
+        } => {
+          log::info!("      [Modified] Diffs: {:?}", diffs);
+        }
+      }
+    }
+  }
 }
 
 pub fn check_box_occluder_diff(
@@ -52,7 +98,7 @@ pub fn check_box_occluder_diff(
             })
             .collect();
 
-          return_early!(if (diffs.len() == 0) return None);
+          return_early!(if (diffs.is_empty()) return None);
           // return_early!(if (diffs.is_empty()) return None);
           Some(YmapBoxOccluderDiff::Modified {
             vanilla: (*vanilla).clone(),

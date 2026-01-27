@@ -1,17 +1,23 @@
 pub mod ymap;
 pub mod ymap_block;
 pub mod ymap_box_occluder;
+pub mod ymap_car_generator;
 pub mod ymap_distant_lod_lights;
 pub mod ymap_entity;
+pub mod ymap_instanced_data;
 pub mod ymap_lod_lights;
 pub mod ymap_occlude_model;
+pub mod ymap_time_cycle_modifier;
 
 pub use ymap::Ymap;
 pub use ymap::YmapStructDiffEnum;
 pub use ymap_block::YmapBlock;
 pub use ymap_box_occluder::YmapBoxOccluder;
 pub use ymap_box_occluder::YmapBoxOccluderStructDiffEnum;
+pub use ymap_car_generator::YmapCarGenerator;
 pub use ymap_distant_lod_lights::YmapDistantLodLightsSoa;
 pub use ymap_entity::YmapEntity;
+pub use ymap_instanced_data::YmapInstancedData;
 pub use ymap_lod_lights::YmapLodLightsSoa;
 pub use ymap_occlude_model::YmapOccludeModel;
+pub use ymap_time_cycle_modifier::YmapTimeCycleModifier;

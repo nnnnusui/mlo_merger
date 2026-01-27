@@ -1,6 +1,6 @@
 use structdiff::{Difference, StructDiff};
 
-use crate::core::common::{Position, Rotation};
+use crate::core::common::{position::Position, rotation::Rotation};
 
 /// Entity definition in YMAP
 #[derive(Debug, Clone, PartialEq, Difference)]

@@ -1,12 +1,13 @@
 use indexmap::IndexMap;
 use structdiff::{Difference, StructDiff};
 
-use crate::core::common::Position;
+use crate::core::common::position::Position;
 
 use super::{
-  ymap_block::YmapBlock, ymap_box_occluder::YmapBoxOccluder,
+  ymap_block::YmapBlock, ymap_box_occluder::YmapBoxOccluder, ymap_car_generator::YmapCarGenerator,
   ymap_distant_lod_lights::YmapDistantLodLightsSoa, ymap_entity::YmapEntity,
-  ymap_lod_lights::YmapLodLightsSoa, ymap_occlude_model::YmapOccludeModel,
+  ymap_instanced_data::YmapInstancedData, ymap_lod_lights::YmapLodLightsSoa,
+  ymap_occlude_model::YmapOccludeModel, ymap_time_cycle_modifier::YmapTimeCycleModifier,
 };
 
 #[derive(Debug, Clone, PartialEq, Difference)]
@@ -26,4 +27,9 @@ pub struct Ymap {
   pub lod_lights_soa: YmapLodLightsSoa,
   pub distant_lod_lights_soa: YmapDistantLodLightsSoa,
   pub block: YmapBlock,
+  pub container_lods: Vec<String>,
+  pub physics_dictionaries: Vec<String>,
+  pub instanced_data: YmapInstancedData,
+  pub time_cycle_modifiers: Vec<YmapTimeCycleModifier>,
+  pub car_generators: Vec<YmapCarGenerator>,
 }

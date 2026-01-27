@@ -1,6 +1,6 @@
 use serde::Deserialize;
 
-use crate::core::common::Rotation;
+use crate::core::common::rotation::Rotation;
 
 #[derive(Debug, Deserialize)]
 pub struct XmlRotation {

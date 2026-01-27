@@ -1,4 +1,7 @@
-use crate::core::format::ymap::model::{Ymap, YmapEntity, ymap_entity::YmapEntityStructDiffEnum};
+use crate::{
+  core::format::ymap::model::{Ymap, YmapEntity, ymap_entity::YmapEntityStructDiffEnum},
+  return_early,
+};
 use structdiff::StructDiff;
 
 pub enum YmapEntityDiff {
@@ -8,6 +11,35 @@ pub enum YmapEntityDiff {
     vanilla: YmapEntity,
     diffs: Vec<YmapEntityStructDiffEnum>,
   },
+}
+
+impl YmapEntityDiff {
+  pub fn extract_from(
+    vanilla: &Ymap,
+    modded: &Ymap,
+  ) -> Vec<YmapEntityDiff> {
+    check_entity_diff(&vanilla, &modded)
+  }
+
+  pub fn print_diffs(diffs: &Vec<YmapEntityDiff>) {
+    log::info!("    Found {} entity differences", diffs.len());
+    for diff in diffs {
+      match diff {
+        Self::Added(e) => {
+          log::info!("      [Added] Entity: {} {}", e.guid, e.archetype_name);
+        }
+        Self::Removed(e) => {
+          log::info!("      [Removed] Entity: {} {}", e.guid, e.archetype_name);
+        }
+        Self::Modified {
+          vanilla: _,
+          diffs,
+        } => {
+          log::info!("      [Modified] Diffs: {:?}", diffs);
+        }
+      }
+    }
+  }
 }
 
 pub fn check_entity_diff(
@@ -30,14 +62,12 @@ pub fn check_entity_diff(
       match (vanilla_entity, mod_entity) {
         (Some(vanilla), Some(modded)) => {
           let diffs = vanilla.diff(modded);
-          if diffs.is_empty() {
-            None
-          } else {
-            Some(YmapEntityDiff::Modified {
-              vanilla: vanilla.clone(),
-              diffs,
-            })
-          }
+          return_early!(if (diffs.is_empty()) return None);
+
+          Some(YmapEntityDiff::Modified {
+            vanilla: vanilla.clone(),
+            diffs,
+          })
         }
         (Some(vanilla), None) => Some(YmapEntityDiff::Removed(vanilla.clone())),
         (None, Some(modded)) => Some(YmapEntityDiff::Added(modded.clone())),

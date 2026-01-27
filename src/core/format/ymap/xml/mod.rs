@@ -1,15 +1,21 @@
 pub mod xml_ymap;
 pub mod xml_ymap_block;
 pub mod xml_ymap_box_occluder;
+pub mod xml_ymap_car_generator;
 pub mod xml_ymap_distant_lod_lights;
 pub mod xml_ymap_entity;
+pub mod xml_ymap_instanced_data;
 pub mod xml_ymap_lod_lights;
 pub mod xml_ymap_occlude_model;
+pub mod xml_ymap_time_cycle_modifier;
 
 pub use xml_ymap::XmlYmap;
 pub use xml_ymap_block::XmlYmapBlock;
 pub use xml_ymap_box_occluder::XmlYmapBoxOccluder;
+pub use xml_ymap_car_generator::XmlYmapCarGenerator;
 pub use xml_ymap_distant_lod_lights::XmlYmapDistantLodLightsSoa;
 pub use xml_ymap_entity::XmlYmapEntity;
+pub use xml_ymap_instanced_data::XmlYmapInstancedData;
 pub use xml_ymap_lod_lights::XmlYmapLodLightsSoa;
 pub use xml_ymap_occlude_model::XmlYmapOccludeModel;
+pub use xml_ymap_time_cycle_modifier::XmlYmapTimeCycleModifier;

@@ -43,8 +43,8 @@ impl ExtractYmap {
     });
 
     let resource_dirs = get_resource_directories(&self.input_dir)?;
-    println!("Found {} resource directories:", resource_dirs.len());
-    println!("Found {} vanilla YMAP files.", vanilla_ymap_names.as_ref().map_or(0, |s| s.len()));
+    log::info!("Found {} resource directories:", resource_dirs.len());
+    log::info!("Found {} vanilla YMAP files.", vanilla_ymap_names.as_ref().map_or(0, |s| s.len()));
 
     let extracted_ymap_source_paths: Vec<_> = resource_dirs
       .into_iter()
@@ -61,7 +61,7 @@ impl ExtractYmap {
       writeln!(omit_list_file, "{}", src_path.display())?;
     }
 
-    println!("Extraction completed.");
+    log::info!("Extraction completed.");
     Ok(())
   }
 }
@@ -134,13 +134,13 @@ fn extract_ymap_files(
     ymap_files
   };
 
-  println!("Extracting from {}:", dir_name);
+  log::info!("Extracting from {}:", dir_name);
   for src_path in &filtered_files {
     if let Some(filename) = src_path.file_name().and_then(|n| n.to_str()) {
       let dest_path =
         output_dir.join(format!("{}{}{}", dir_name, ExtractYmap::FLATTEN_DELIMITER, filename));
       fs::copy(src_path, &dest_path)?;
-      println!("  - {}", filename);
+      log::info!("  - {}", filename);
     }
   }
 

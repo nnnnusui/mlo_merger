@@ -1,6 +1,6 @@
 use structdiff::{Difference, StructDiff};
 
-use crate::core::common::Position;
+use crate::core::common::{position::Position, triangle::Triangle};
 
 /// Occlude model definition in YMAP
 #[derive(Debug, Clone, PartialEq, Difference)]
@@ -8,9 +8,6 @@ use crate::core::common::Position;
 pub struct YmapOccludeModel {
   pub bmin: Position,
   pub bmax: Position,
-  pub data_size: u32,
-  pub verts: Vec<u8>,
-  pub num_verts_in_bytes: u32,
-  pub num_tris: u32,
+  pub triangles: Vec<Triangle>,
   pub flags: u32,
 }

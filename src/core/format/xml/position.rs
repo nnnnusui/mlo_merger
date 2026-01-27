@@ -1,6 +1,6 @@
 use serde::Deserialize;
 
-use crate::core::common::Position;
+use crate::core::common::position::Position;
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
