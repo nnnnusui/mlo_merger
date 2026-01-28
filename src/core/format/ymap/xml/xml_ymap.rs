@@ -1,4 +1,4 @@
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::core::format::{
   xml::{XmlValueAttr, position::XmlPositionAttr},
@@ -12,7 +12,7 @@ use crate::core::format::{
   },
 };
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(rename = "CMapData", rename_all = "camelCase")]
 pub struct XmlYmap {
   pub name: String,
@@ -80,43 +80,87 @@ impl From<XmlYmap> for Ymap {
   }
 }
 
-#[derive(Debug, Deserialize, Default)]
+impl From<Ymap> for XmlYmap {
+  fn from(v: Ymap) -> Self {
+    Self {
+      name: v.name,
+      parent: v.parent,
+      flags: XmlValueAttr {
+        value: v.flags,
+      },
+      content_flags: XmlValueAttr {
+        value: v.content_flags,
+      },
+      streaming_extents_min: v.streaming_extents_min.into(),
+      streaming_extents_max: v.streaming_extents_max.into(),
+      entities_extents_min: v.entities_extents_min.into(),
+      entities_extents_max: v.entities_extents_max.into(),
+      entities: XmlEntities {
+        items: v.entity_map.into_values().map(XmlYmapEntity::from).collect(),
+      },
+      container_lods: XmlContainerLods {
+        items: v.container_lods,
+      },
+      box_occluders: XmlBoxOccluders {
+        items: v.box_occluders.into_iter().map(XmlYmapBoxOccluder::from).collect(),
+      },
+      occlude_models: XmlOccludeModels {
+        items: v.occlude_models.into_iter().map(XmlYmapOccludeModel::from).collect(),
+      },
+      physics_dictionaries: XmlPhysicsDictionaries {
+        items: v.physics_dictionaries,
+      },
+      instanced_data: v.instanced_data.into(),
+      time_cycle_modifiers: XmlTimeCycleModifiers {
+        items: v.time_cycle_modifiers.into_iter().map(XmlYmapTimeCycleModifier::from).collect(),
+      },
+      car_generators: XmlCarGenerators {
+        items: v.car_generators.into_iter().map(XmlYmapCarGenerator::from).collect(),
+      },
+      lod_lights_soa: v.lod_lights_soa.into(),
+      distant_lod_lights_soa: v.distant_lod_lights_soa.into(),
+      block: v.block.into(),
+    }
+  }
+}
+
+#[derive(Debug, Deserialize, Default, Serialize)]
 pub struct XmlEntities {
   #[serde(rename = "Item", default)]
   pub items: Vec<XmlYmapEntity>,
 }
 
-#[derive(Debug, Deserialize, Default)]
+#[derive(Debug, Deserialize, Default, Serialize)]
 pub struct XmlBoxOccluders {
   #[serde(rename = "Item", default)]
   pub items: Vec<XmlYmapBoxOccluder>,
 }
 
-#[derive(Debug, Deserialize, Default)]
+#[derive(Debug, Deserialize, Default, Serialize)]
 pub struct XmlOccludeModels {
   #[serde(rename = "Item", default)]
   pub items: Vec<XmlYmapOccludeModel>,
 }
 
-#[derive(Debug, Deserialize, Default)]
+#[derive(Debug, Deserialize, Default, Serialize)]
 pub struct XmlContainerLods {
   #[serde(rename = "Item", default)]
   pub items: Vec<String>,
 }
 
-#[derive(Debug, Deserialize, Default)]
+#[derive(Debug, Deserialize, Default, Serialize)]
 pub struct XmlPhysicsDictionaries {
   #[serde(rename = "Item", default)]
   pub items: Vec<String>,
 }
 
-#[derive(Debug, Deserialize, Default)]
+#[derive(Debug, Deserialize, Default, Serialize)]
 pub struct XmlTimeCycleModifiers {
   #[serde(rename = "Item", default)]
   pub items: Vec<XmlYmapTimeCycleModifier>,
 }
 
-#[derive(Debug, Deserialize, Default)]
+#[derive(Debug, Deserialize, Default, Serialize)]
 pub struct XmlCarGenerators {
   #[serde(rename = "Item", default)]
   pub items: Vec<XmlYmapCarGenerator>,

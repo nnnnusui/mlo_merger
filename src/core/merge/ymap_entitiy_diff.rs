@@ -4,6 +4,7 @@ use crate::{
 };
 use structdiff::StructDiff;
 
+#[derive(Debug)]
 pub enum YmapEntityDiff {
   Added(YmapEntity),
   Removed(YmapEntity),
@@ -18,7 +19,7 @@ impl YmapEntityDiff {
     vanilla: &Ymap,
     modded: &Ymap,
   ) -> Vec<YmapEntityDiff> {
-    check_entity_diff(&vanilla, &modded)
+    check_entity_diff(vanilla, modded)
   }
 
   pub fn print_diffs(diffs: &Vec<YmapEntityDiff>) {

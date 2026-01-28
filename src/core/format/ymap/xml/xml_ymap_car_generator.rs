@@ -1,11 +1,11 @@
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::core::format::{
   xml::{XmlValueAttr, position::XmlPositionAttr},
   ymap::model::YmapCarGenerator,
 };
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(rename = "Item")]
 pub struct XmlYmapCarGenerator {
   pub position: XmlPositionAttr,
@@ -46,6 +46,43 @@ impl From<XmlYmapCarGenerator> for YmapCarGenerator {
       body_color_remap_4: v.body_color_remap_4.value,
       pop_group: v.pop_group,
       livery: v.livery.value,
+    }
+  }
+}
+
+impl From<YmapCarGenerator> for XmlYmapCarGenerator {
+  fn from(v: YmapCarGenerator) -> Self {
+    Self {
+      position: v.position.into(),
+      orient_x: XmlValueAttr {
+        value: v.orient_x,
+      },
+      orient_y: XmlValueAttr {
+        value: v.orient_y,
+      },
+      perpendicular_length: XmlValueAttr {
+        value: v.perpendicular_length,
+      },
+      car_model: v.car_model,
+      flags: XmlValueAttr {
+        value: v.flags,
+      },
+      body_color_remap_1: XmlValueAttr {
+        value: v.body_color_remap_1,
+      },
+      body_color_remap_2: XmlValueAttr {
+        value: v.body_color_remap_2,
+      },
+      body_color_remap_3: XmlValueAttr {
+        value: v.body_color_remap_3,
+      },
+      body_color_remap_4: XmlValueAttr {
+        value: v.body_color_remap_4,
+      },
+      pop_group: v.pop_group,
+      livery: XmlValueAttr {
+        value: v.livery,
+      },
     }
   }
 }

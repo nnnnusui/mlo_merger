@@ -1,14 +1,17 @@
-use serde::Deserialize;
+use serde::{Deserialize, Serialize, Serializer};
 
 use crate::core::{
   common::{position::Position, triangle::Triangle},
   format::{
-    xml::{XmlValueAttr, position::XmlPositionAttr},
+    xml::{
+      XmlValueAttr, deserialize_trim_and_minify::deserialize_trim_and_minify,
+      position::XmlPositionAttr,
+    },
     ymap::model::YmapOccludeModel,
   },
 };
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct XmlYmapOccludeModel {
   pub bmin: XmlPositionAttr,
@@ -19,13 +22,6 @@ pub struct XmlYmapOccludeModel {
   pub num_tris: XmlValueAttr<u32>,
   pub flags: XmlValueAttr<u32>,
 }
-
-#[derive(Debug, Deserialize)]
-pub struct XmlYmapVertsAttr {
-  #[serde(rename = "$value", default)]
-  pub value: String,
-}
-
 impl From<XmlYmapOccludeModel> for YmapOccludeModel {
   fn from(v: XmlYmapOccludeModel) -> Self {
     // Parse hex bytes from the verts value
@@ -42,6 +38,82 @@ impl From<XmlYmapOccludeModel> for YmapOccludeModel {
       flags: v.flags.value,
     }
   }
+}
+
+impl From<YmapOccludeModel> for XmlYmapOccludeModel {
+  fn from(v: YmapOccludeModel) -> Self {
+    // Collect unique vertices and build index mapping
+    let mut index_cache: Vec<Position> = Vec::new();
+    let mut indices: Vec<u8> = Vec::new();
+
+    for triangle in &v.triangles {
+      for vert in [&triangle.corner_1, &triangle.corner_2, &triangle.corner_3] {
+        if let Some(index) = index_cache.iter().position(|it| it == vert) {
+          indices.push(index as u8);
+        } else {
+          indices.push(index_cache.len() as u8);
+          index_cache.push(vert.clone());
+        }
+      }
+    }
+
+    let mut verts: Vec<u8> =
+      index_cache.iter().flat_map(|it| [it.x, it.y, it.z]).flat_map(|f| f.to_le_bytes()).collect();
+    verts.extend(indices.iter().copied());
+
+    let verts_hex_str = format_hex_bytes(&verts);
+
+    Self {
+      bmax: v.bmax.into(),
+      bmin: v.bmin.into(),
+      data_size: XmlValueAttr {
+        value: verts.len() as u32,
+      },
+      verts: XmlYmapVertsAttr {
+        value: verts_hex_str,
+      },
+      num_verts_in_bytes: XmlValueAttr {
+        value: (index_cache.len() * 12) as u32,
+      },
+      num_tris: XmlValueAttr {
+        value: (indices.len() / 3 + 32768) as u32,
+      },
+      flags: XmlValueAttr {
+        value: v.flags,
+      },
+    }
+  }
+}
+
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize)]
+pub struct XmlYmapVertsAttr {
+  #[serde(
+    rename = "$value",
+    default,
+    deserialize_with = "deserialize_trim_and_minify",
+    serialize_with = "XmlYmapVertsAttr::serialize_with"
+  )]
+  pub value: String,
+}
+
+impl XmlYmapVertsAttr {
+  pub fn serialize_with<S>(
+    x: &str,
+    s: S,
+  ) -> Result<S::Ok, S::Error>
+  where
+    S: Serializer,
+  {
+    let items: Vec<&str> = x.split_whitespace().collect();
+    let lines: Vec<String> = items.chunks(32).map(|chunk| chunk.join(" ")).collect();
+    let indent = "\n          ";
+    let result = indent.to_string() + &lines.join(indent) + "\n        ";
+    s.serialize_str(&result)
+  }
+}
+
+fn format_hex_bytes(bytes: &[u8]) -> String {
+  bytes.iter().map(|b| format!("{:02X}", b)).collect::<Vec<_>>().join(" ")
 }
 
 /// Parse hex string like "0xE0 0xF2 0x9A ..." into Vec<u8>
@@ -79,6 +151,7 @@ fn parse_tirangles(
 #[cfg(test)]
 mod tests {
   use quick_xml::de::from_str;
+  use regex::Regex;
 
   use super::*;
 
@@ -192,9 +265,14 @@ mod tests {
         <flags value="0" />
       </Item>
     "#;
-    let xml_data: XmlYmapOccludeModel = from_str(xml)?;
-    let data: YmapOccludeModel = xml_data.into();
-    print!("{:?}", data);
+    let re = Regex::new(r"\s+").unwrap();
+    let xml = re.replace_all(xml, " ");
+    let parsed: XmlYmapOccludeModel = from_str(&xml)?;
+    let model: YmapOccludeModel = parsed.clone().into();
+    let model_to_xml: XmlYmapOccludeModel = model.into();
+    let serialized = quick_xml::se::to_string(&model_to_xml).unwrap();
+    let re_parsed: XmlYmapOccludeModel = from_str(&serialized).unwrap();
+    assert_eq!(parsed, re_parsed);
     Ok(())
   }
 }

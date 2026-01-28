@@ -9,6 +9,7 @@ deku = "0.20.3"
 indexmap = "2.7.2"
 log = "0.4"
 quick-xml = { version = "0.39.0", features = ["serialize"] }
+regex = "1.12.2"
 serde = { version = "1.0.228", features = ["derive"] }
 simplelog = "0.12"
 structdiff = { version = "0.7.3", features = ["debug_diffs"] }

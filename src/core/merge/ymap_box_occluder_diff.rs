@@ -22,7 +22,7 @@ impl YmapBoxOccluderDiff {
     vanilla: &Ymap,
     modded: &Ymap,
   ) -> Vec<YmapBoxOccluderDiff> {
-    check_box_occluder_diff(&vanilla, &modded)
+    check_box_occluder_diff(vanilla, modded)
   }
 
   pub fn print_diffs(diffs: &Vec<YmapBoxOccluderDiff>) {

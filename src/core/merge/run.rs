@@ -4,6 +4,7 @@ use crate::core::format::ymap::model::ymap::Ymap;
 use crate::core::format::ymap::xml::XmlYmap;
 use crate::core::merge::ymap_diff::YmapDiff;
 use quick_xml::de::from_str;
+use serde::Serialize;
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -30,18 +31,53 @@ impl MergeYmapXml {
     let modded_ymaps_map = collect_modded_ymaps_map(&self.mod_dir)?;
     log::info!("Found {} unique YMAP files across mods", modded_ymaps_map.len());
 
+    let mut copy_targets = Vec::new();
+
     for (ymap_name, mod_refs) in &modded_ymaps_map {
+      if mod_refs.len() > 1 {
+        let mod_ref = mod_refs.first().unwrap();
+        copy_targets.push(mod_ref);
+        log::info!("Coppied YMAP: {} (only one mod reference)", ymap_name);
+        continue;
+      }
       let vanilla_ymap_path = self.vanilla_dir.join(ymap_name);
-      log::info!("\nProcessing YMAP: {}", vanilla_ymap_path.display());
+      log::info!("Processing YMAP: {}", vanilla_ymap_path.display());
 
       let vanilla_ymap = parse_ymap_xml(&vanilla_ymap_path)?;
 
+      let mut ymap_diffs = Vec::new();
       for mod_info in mod_refs {
-        log::info!("    Mod: {} ({})", mod_info.mod_name, mod_info.mod_ymap_path.display());
+        log::info!("  Mod: {} ({})", mod_info.mod_name, mod_info.mod_ymap_path.display());
 
         let mod_ymap = parse_ymap_xml(&mod_info.mod_ymap_path)?;
-        YmapDiff::extract_from(&vanilla_ymap, &mod_ymap);
+        let ymap_diff = YmapDiff::extract_from(&vanilla_ymap, &mod_ymap);
+        ymap_diffs.push(ymap_diff);
       }
+
+      let merged_diff = ymap_diffs.into_iter().reduce(|acc, d| acc.merge(d)).unwrap();
+      let merged_ymap = merged_diff.apply_to(&vanilla_ymap);
+
+      // Convert Ymap to XmlYmap and serialize to XML with 2-space indentation
+      let xml_ymap: XmlYmap = merged_ymap.into();
+      let mut xml_string = String::new();
+      let mut serializer = quick_xml::se::Serializer::new(&mut xml_string);
+      serializer.indent(' ', 2);
+      xml_ymap.serialize(serializer)?;
+
+      // Write to file
+      let ymap_xml_path = self.output_dir.join(ymap_name);
+      fs::create_dir_all(ymap_xml_path.parent().unwrap())?;
+      fs::write(&ymap_xml_path, xml_string)?;
+      log::info!("  [Success] Wrote merged YMAP to: {}", ymap_xml_path.display());
+    }
+
+    let copy_targets_txt = self.output_dir.join("_copy_targets.txt");
+    fs::create_dir_all(copy_targets_txt.parent().unwrap())?;
+    let mut copy_targets_file = fs::File::create(copy_targets_txt)?;
+    for target in copy_targets {
+      let ymap_xml_name = target.mod_ymap_path.file_name().unwrap().to_string_lossy();
+      use std::io::Write;
+      writeln!(copy_targets_file, "{}", ymap_xml_name)?;
     }
 
     Ok(())
