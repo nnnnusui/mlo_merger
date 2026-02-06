@@ -7,7 +7,6 @@ use simplelog::*;
 use std::fs::{self, File};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-  // ログ設定: ファイルとターミナル両方に出力
   CombinedLogger::init(vec![
     TermLogger::new(LevelFilter::Info, Config::default(), TerminalMode::Mixed, ColorChoice::Auto),
     WriteLogger::new(LevelFilter::Info, Config::default(), File::create("mlo_merger.log")?),

@@ -46,12 +46,24 @@ impl ExtractYmap {
     log::info!("Found {} resource directories:", resource_dirs.len());
     log::info!("Found {} vanilla YMAP files.", vanilla_ymap_names.as_ref().map_or(0, |s| s.len()));
 
-    let extracted_ymap_source_paths: Vec<_> = resource_dirs
+    let extraction_results: Vec<_> = resource_dirs
       .into_iter()
-      .flat_map(|resource_dir| {
-        extract_ymap_files(&self.output_dir, &resource_dir, vanilla_ymap_names.as_ref()).ok()
+      .map(|resource_dir| {
+        let result =
+          extract_ymap_files(&self.output_dir, &resource_dir, vanilla_ymap_names.as_ref());
+        (resource_dir, result)
       })
+      .collect();
+    let target_notfound_dirs = extraction_results
+      .iter()
+      .filter(|(_, result)| result.as_ref().map_or(true, |v| v.is_empty()))
+      .map(|(dir, _)| dir);
+
+    let extracted_ymap_source_paths: Vec<_> = extraction_results
+      .iter()
+      .filter_map(|(_, result)| result.as_ref().ok())
       .flatten()
+      .cloned()
       .collect();
 
     let omit_list_path = self.output_dir.join("_extracted_ymaps.txt");
@@ -60,6 +72,14 @@ impl ExtractYmap {
       let relative_path = src_path.strip_prefix(&self.input_dir).unwrap();
       use std::io::Write;
       writeln!(omit_list_file, "{}", relative_path.display())?;
+    }
+
+    let notfound_list_path = self.output_dir.join("_notextracted_resources.txt");
+    let mut notfound_list_file = fs::File::create(&notfound_list_path)?;
+    for dir in target_notfound_dirs {
+      let relative_path = dir.strip_prefix(&self.input_dir).unwrap();
+      use std::io::Write;
+      writeln!(notfound_list_file, "{}", relative_path.display())?;
     }
 
     log::info!("Extraction completed.");
