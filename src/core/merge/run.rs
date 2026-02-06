@@ -13,6 +13,7 @@ use std::path::{Path, PathBuf};
 pub struct MergeYmapXml {
   pub vanilla_dir: PathBuf,
   pub mod_dir: PathBuf,
+  pub mod_ymap_dir: PathBuf,
   pub output_dir: PathBuf,
   pub rebuild_all: bool,
 }
@@ -74,11 +75,16 @@ impl MergeYmapXml {
 
     let copy_targets_txt = self.output_dir.join("_copy_targets.txt");
     fs::create_dir_all(copy_targets_txt.parent().unwrap())?;
+    let clone_ymap_dir = self.output_dir.join("clone");
+    fs::create_dir_all(&clone_ymap_dir)?;
     let mut copy_targets_file = fs::File::create(copy_targets_txt)?;
     for target in copy_targets {
       let ymap_xml_name = target.mod_ymap_path.file_name().unwrap().to_string_lossy();
+      let extracted_ymap_name = ymap_xml_name.trim_end_matches(".xml");
       use std::io::Write;
       writeln!(copy_targets_file, "{}", ymap_xml_name)?;
+      let dest_path = clone_ymap_dir.join(target.ymap_name.as_str());
+      fs::copy(self.mod_ymap_dir.join(extracted_ymap_name), &dest_path)?;
     }
 
     Ok(())
@@ -89,6 +95,7 @@ impl MergeYmapXml {
 #[derive(Debug, Clone)]
 struct ModYmapReference {
   mod_name: String,
+  ymap_name: String,
   mod_ymap_path: PathBuf,
 }
 
@@ -103,13 +110,15 @@ fn collect_modded_ymaps_map(
     let file_name = mod_file.file_name().and_then(|n| n.to_str()).ok_or("Invalid file name")?;
 
     // Extract mod name and ymap name from "modname___ymapname.ymap.xml" format
-    if let Some((mod_name, ymap_name)) = file_name.split_once(ExtractYmap::FLATTEN_DELIMITER) {
+    if let Some((mod_name, ymap_xml_name)) = file_name.split_once(ExtractYmap::FLATTEN_DELIMITER) {
+      let ymap_name = ymap_xml_name.trim_end_matches(".xml");
       let info = ModYmapReference {
         mod_name: mod_name.to_string(),
+        ymap_name: ymap_name.to_string(),
         mod_ymap_path: mod_file.clone(),
       };
 
-      map.entry(ymap_name.to_string()).or_default().push(info);
+      map.entry(ymap_xml_name.to_string()).or_default().push(info);
     } else {
       log::warn!(
         "Warning: Invalid file name format (expected 'mod___ymap.ymap.xml'): {}",

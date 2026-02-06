@@ -49,16 +49,20 @@ fn merge_ymap_xml() -> impl Parser<Command> {
     long("mod-dir").help("Directory containing mod YMAP XML files").argument::<PathBuf>("DIR");
   let output_dir =
     long("output-dir").help("Directory to save merged YMAP XML files").argument::<PathBuf>("DIR");
+  let mod_ymap_dir = long("mod-ymap-dir")
+    .help("Directory containing extracted mod YMAP files for reference during merging")
+    .argument::<PathBuf>("DIR");
   let rebuild_all = long("rebuild-all")
     .help("Rebuild all YMAP files, even if only one mod reference exists")
     .switch();
 
-  construct!(flag, vanilla_dir, mod_dir, output_dir, rebuild_all).map(
-    |(_, vanilla_dir, mod_dir, output_dir, rebuild_all)| {
+  construct!(flag, vanilla_dir, mod_dir, output_dir, mod_ymap_dir, rebuild_all).map(
+    |(_, vanilla_dir, mod_dir, output_dir, mod_ymap_dir, rebuild_all)| {
       Command::MergeYmapXml(MergeYmapXml {
         vanilla_dir,
         mod_dir,
         output_dir,
+        mod_ymap_dir,
         rebuild_all,
       })
     },
