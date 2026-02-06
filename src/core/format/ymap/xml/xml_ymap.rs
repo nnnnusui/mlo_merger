@@ -73,8 +73,8 @@ impl From<XmlYmap> for Ymap {
       instanced_data: v.instanced_data.into(),
       time_cycle_modifiers: v.time_cycle_modifiers.items.into_iter().map(Into::into).collect(),
       car_generators: v.car_generators.items.into_iter().map(Into::into).collect(),
-      lod_lights_soa: v.lod_lights_soa.into(),
-      distant_lod_lights_soa: v.distant_lod_lights_soa.into(),
+      lod_lights: v.lod_lights_soa.into(),
+      distant_lod_lights: v.distant_lod_lights_soa.into(),
       block: v.block.into(),
     }
   }
@@ -117,8 +117,8 @@ impl From<Ymap> for XmlYmap {
       car_generators: XmlCarGenerators {
         items: v.car_generators.into_iter().map(XmlYmapCarGenerator::from).collect(),
       },
-      lod_lights_soa: v.lod_lights_soa.into(),
-      distant_lod_lights_soa: v.distant_lod_lights_soa.into(),
+      lod_lights_soa: v.lod_lights.into(),
+      distant_lod_lights_soa: v.distant_lod_lights.into(),
       block: v.block.into(),
     }
   }

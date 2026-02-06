@@ -5,8 +5,8 @@ use crate::core::common::position::Position;
 
 use super::{
   ymap_block::YmapBlock, ymap_box_occluder::YmapBoxOccluder, ymap_car_generator::YmapCarGenerator,
-  ymap_distant_lod_lights::YmapDistantLodLightsSoa, ymap_entity::YmapEntity,
-  ymap_instanced_data::YmapInstancedData, ymap_lod_lights::YmapLodLightsSoa,
+  ymap_distant_lod_lights::YmapDistantLodLights, ymap_entity::YmapEntity,
+  ymap_instanced_data::YmapInstancedData, ymap_lod_light::YmapLodLight,
   ymap_occlude_model::YmapOccludeModel, ymap_time_cycle_modifier::YmapTimeCycleModifier,
 };
 
@@ -24,8 +24,8 @@ pub struct Ymap {
   pub entity_map: IndexMap<u32, YmapEntity>,
   pub box_occluders: Vec<YmapBoxOccluder>,
   pub occlude_models: Vec<YmapOccludeModel>,
-  pub lod_lights_soa: YmapLodLightsSoa,
-  pub distant_lod_lights_soa: YmapDistantLodLightsSoa,
+  pub lod_lights: Vec<YmapLodLight>,
+  pub distant_lod_lights: YmapDistantLodLights,
   pub block: YmapBlock,
   pub container_lods: Vec<String>,
   pub physics_dictionaries: Vec<String>,

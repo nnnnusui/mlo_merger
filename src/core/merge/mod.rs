@@ -1,5 +1,9 @@
 pub mod run;
 mod ymap_box_occluder_diff;
+mod ymap_car_generator_diff;
 mod ymap_diff;
+mod ymap_distant_lod_light_diff;
 mod ymap_entitiy_diff;
+mod ymap_lod_light_diff;
 mod ymap_occlude_model_diff;
+mod ymap_time_cycle_modifier_diff;

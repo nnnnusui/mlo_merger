@@ -14,6 +14,7 @@ pub struct MergeYmapXml {
   pub vanilla_dir: PathBuf,
   pub mod_dir: PathBuf,
   pub output_dir: PathBuf,
+  pub rebuild_all: bool,
 }
 
 impl MergeYmapXml {
@@ -34,7 +35,7 @@ impl MergeYmapXml {
     let mut copy_targets = Vec::new();
 
     for (ymap_name, mod_refs) in &modded_ymaps_map {
-      if mod_refs.len() > 1 {
+      if !self.rebuild_all && mod_refs.len() <= 1 {
         let mod_ref = mod_refs.first().unwrap();
         copy_targets.push(mod_ref);
         log::info!("Coppied YMAP: {} (only one mod reference)", ymap_name);

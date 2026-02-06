@@ -57,8 +57,9 @@ impl ExtractYmap {
     let omit_list_path = self.output_dir.join("_extracted_ymaps.txt");
     let mut omit_list_file = fs::File::create(&omit_list_path)?;
     for src_path in extracted_ymap_source_paths {
+      let relative_path = src_path.strip_prefix(&self.input_dir).unwrap();
       use std::io::Write;
-      writeln!(omit_list_file, "{}", src_path.display())?;
+      writeln!(omit_list_file, "{}", relative_path.display())?;
     }
 
     log::info!("Extraction completed.");

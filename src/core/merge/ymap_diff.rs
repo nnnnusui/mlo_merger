@@ -1,11 +1,15 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::core::{
   format::ymap::model::{Ymap, YmapStructDiffEnum},
   merge::{
     ymap_box_occluder_diff::YmapBoxOccluderDiff,
+    ymap_car_generator_diff::YmapCarGeneratorDiff,
+    ymap_distant_lod_light_diff::YmapDistantLodLightDiff,
     ymap_entitiy_diff::YmapEntityDiff,
+    ymap_lod_light_diff::YmapLodLightDiff,
     ymap_occlude_model_diff::{YmapOccludeModelDiff, YmapOccludeModelTriangleDiff},
+    ymap_time_cycle_modifier_diff::YmapTimeCycleModifierDiff,
   },
 };
 use structdiff::StructDiff;
@@ -14,6 +18,11 @@ pub struct YmapDiff {
   pub entity_diffs: Vec<YmapEntityDiff>,
   pub box_occluder_diffs: Vec<YmapBoxOccluderDiff>,
   pub occlude_model_diffs: Vec<YmapOccludeModelDiff>,
+  pub lod_light_diffs: Vec<YmapLodLightDiff>,
+  pub distant_lod_light_diffs: Vec<YmapDistantLodLightDiff>,
+  pub car_generator_diffs: Vec<YmapCarGeneratorDiff>,
+  pub time_cycle_modifier_diffs: Vec<YmapTimeCycleModifierDiff>,
+  pub content_flags: u32,
 }
 
 impl YmapDiff {
@@ -29,11 +38,24 @@ impl YmapDiff {
     YmapBoxOccluderDiff::print_diffs(&box_occluder_diffs);
     let occlude_model_diffs = YmapOccludeModelDiff::extract_from(vanilla, modded);
     YmapOccludeModelDiff::print_diffs(&occlude_model_diffs);
+    let lod_light_diffs = YmapLodLightDiff::extract_from(vanilla, modded);
+    YmapLodLightDiff::print_diffs(&lod_light_diffs);
+    let distant_lod_light_diffs = YmapDistantLodLightDiff::extract_from(vanilla, modded);
+    YmapDistantLodLightDiff::print_diffs(&distant_lod_light_diffs);
+    let car_generator_diffs = YmapCarGeneratorDiff::extract_from(vanilla, modded);
+    YmapCarGeneratorDiff::print_diffs(&car_generator_diffs);
+    let time_cycle_modifier_diffs = YmapTimeCycleModifierDiff::extract_from(vanilla, modded);
+    YmapTimeCycleModifierDiff::print_diffs(&time_cycle_modifier_diffs);
 
     Self {
       entity_diffs,
       box_occluder_diffs,
       occlude_model_diffs,
+      lod_light_diffs,
+      distant_lod_light_diffs,
+      car_generator_diffs,
+      time_cycle_modifier_diffs,
+      content_flags: modded.content_flags,
     }
   }
 
@@ -44,6 +66,12 @@ impl YmapDiff {
     self.entity_diffs.extend(other.entity_diffs);
     self.box_occluder_diffs.extend(other.box_occluder_diffs);
     self.occlude_model_diffs.extend(other.occlude_model_diffs);
+    self.lod_light_diffs.extend(other.lod_light_diffs);
+    self.distant_lod_light_diffs.extend(other.distant_lod_light_diffs);
+    self.car_generator_diffs.extend(other.car_generator_diffs);
+    self.time_cycle_modifier_diffs.extend(other.time_cycle_modifier_diffs);
+    // Merge content_flags using bitwise OR
+    self.content_flags |= other.content_flags;
     self
   }
 
@@ -53,8 +81,22 @@ impl YmapDiff {
   ) -> Ymap {
     let mut modded = vanilla.clone();
 
+    // Apply content_flags using bitwise OR with vanilla
+    modded.content_flags = vanilla.content_flags | self.content_flags;
+
+    // Remove duplicates from entity_diffs using Debug string as key
+    let mut seen = HashSet::new();
+    let unique_entity_diffs: Vec<YmapEntityDiff> = self
+      .entity_diffs
+      .into_iter()
+      .filter(|diff| {
+        let key = format!("{:?}", diff);
+        seen.insert(key)
+      })
+      .collect();
+
     let entity_diffs_map: HashMap<u32, Vec<YmapEntityDiff>> =
-      self.entity_diffs.into_iter().fold(HashMap::new(), |mut map, diff| {
+      unique_entity_diffs.into_iter().fold(HashMap::new(), |mut map, diff| {
         let guid = match &diff {
           YmapEntityDiff::Removed(e) => e.guid,
           YmapEntityDiff::Added(e) => e.guid,
@@ -71,7 +113,12 @@ impl YmapDiff {
       let diff = diffs.first().unwrap();
       if diffs.len() > 1 {
         let tails = diffs.iter().skip(1).collect::<Vec<_>>();
-        log::warn!("    Multiple diffs for entity GUID {}. ignored: {:?}", guid, tails);
+        log::warn!(
+          "    Multiple diffs for entity GUID {}. applied: {:?} ignored: {:?}",
+          guid,
+          diff,
+          tails
+        );
       }
       match diff {
         YmapEntityDiff::Removed(it) => {
@@ -148,6 +195,181 @@ impl YmapDiff {
       }
     }
 
+    for diff in self.lod_light_diffs {
+      match diff {
+        YmapLodLightDiff::Removed(it) => {
+          modded.lod_lights.retain(|light| {
+            // Compare by direction (rounded to 3 decimal places)
+            let key1 = (
+              (light.direction.x * 1000.0).round() as i32,
+              (light.direction.y * 1000.0).round() as i32,
+              (light.direction.z * 1000.0).round() as i32,
+            );
+            let key2 = (
+              (it.direction.x * 1000.0).round() as i32,
+              (it.direction.y * 1000.0).round() as i32,
+              (it.direction.z * 1000.0).round() as i32,
+            );
+            key1 != key2
+          });
+        }
+        YmapLodLightDiff::Added(it) => {
+          modded.lod_lights.push(it.clone());
+        }
+        YmapLodLightDiff::Modified {
+          vanilla: _,
+          modded: new_light,
+        } => {
+          // Find and replace the light with the same direction
+          if let Some(index) = modded.lod_lights.iter().position(|light| {
+            let key1 = (
+              (light.direction.x * 1000.0).round() as i32,
+              (light.direction.y * 1000.0).round() as i32,
+              (light.direction.z * 1000.0).round() as i32,
+            );
+            let key2 = (
+              (new_light.direction.x * 1000.0).round() as i32,
+              (new_light.direction.y * 1000.0).round() as i32,
+              (new_light.direction.z * 1000.0).round() as i32,
+            );
+            key1 == key2
+          }) {
+            modded.lod_lights[index] = new_light;
+          }
+        }
+      }
+    }
+
+    for diff in self.distant_lod_light_diffs {
+      match diff {
+        YmapDistantLodLightDiff::Removed(it) => {
+          modded.distant_lod_lights.items.retain(|light| {
+            // Compare by position string (rounded to 3 decimal places)
+            let coords1: Vec<&str> = light.position.split_whitespace().collect();
+            let coords2: Vec<&str> = it.position.split_whitespace().collect();
+            if coords1.len() >= 3 && coords2.len() >= 3 {
+              let key1 = (
+                (coords1[0].parse::<f32>().unwrap_or(0.0) * 1000.0).round() as i32,
+                (coords1[1].parse::<f32>().unwrap_or(0.0) * 1000.0).round() as i32,
+                (coords1[2].parse::<f32>().unwrap_or(0.0) * 1000.0).round() as i32,
+              );
+              let key2 = (
+                (coords2[0].parse::<f32>().unwrap_or(0.0) * 1000.0).round() as i32,
+                (coords2[1].parse::<f32>().unwrap_or(0.0) * 1000.0).round() as i32,
+                (coords2[2].parse::<f32>().unwrap_or(0.0) * 1000.0).round() as i32,
+              );
+              key1 != key2
+            } else {
+              true
+            }
+          });
+        }
+        YmapDistantLodLightDiff::Added(it) => {
+          modded.distant_lod_lights.items.push(it.clone());
+        }
+        YmapDistantLodLightDiff::Modified {
+          vanilla: _,
+          modded: new_light,
+        } => {
+          // Find and replace the light with the same position
+          if let Some(index) = modded.distant_lod_lights.items.iter().position(|light| {
+            let coords1: Vec<&str> = light.position.split_whitespace().collect();
+            let coords2: Vec<&str> = new_light.position.split_whitespace().collect();
+            if coords1.len() >= 3 && coords2.len() >= 3 {
+              let key1 = (
+                (coords1[0].parse::<f32>().unwrap_or(0.0) * 1000.0).round() as i32,
+                (coords1[1].parse::<f32>().unwrap_or(0.0) * 1000.0).round() as i32,
+                (coords1[2].parse::<f32>().unwrap_or(0.0) * 1000.0).round() as i32,
+              );
+              let key2 = (
+                (coords2[0].parse::<f32>().unwrap_or(0.0) * 1000.0).round() as i32,
+                (coords2[1].parse::<f32>().unwrap_or(0.0) * 1000.0).round() as i32,
+                (coords2[2].parse::<f32>().unwrap_or(0.0) * 1000.0).round() as i32,
+              );
+              key1 == key2
+            } else {
+              false
+            }
+          }) {
+            modded.distant_lod_lights.items[index] = new_light;
+          }
+        }
+      }
+    }
+
+    for diff in self.car_generator_diffs {
+      match diff {
+        YmapCarGeneratorDiff::Removed(it) => {
+          modded.car_generators.retain(|generator| {
+            // Compare by position (rounded to 3 decimal places)
+            let key1 = (
+              (generator.position.x * 1000.0).round() as i32,
+              (generator.position.y * 1000.0).round() as i32,
+              (generator.position.z * 1000.0).round() as i32,
+            );
+            let key2 = (
+              (it.position.x * 1000.0).round() as i32,
+              (it.position.y * 1000.0).round() as i32,
+              (it.position.z * 1000.0).round() as i32,
+            );
+            key1 != key2
+          });
+        }
+        YmapCarGeneratorDiff::Added(it) => {
+          modded.car_generators.push(it.clone());
+        }
+        YmapCarGeneratorDiff::Modified {
+          vanilla: _,
+          modded: new_generator,
+        } => {
+          // Find and replace the generator with the same position
+          if let Some(index) = modded.car_generators.iter().position(|generator| {
+            let key1 = (
+              (generator.position.x * 1000.0).round() as i32,
+              (generator.position.y * 1000.0).round() as i32,
+              (generator.position.z * 1000.0).round() as i32,
+            );
+            let key2 = (
+              (new_generator.position.x * 1000.0).round() as i32,
+              (new_generator.position.y * 1000.0).round() as i32,
+              (new_generator.position.z * 1000.0).round() as i32,
+            );
+            key1 == key2
+          }) {
+            modded.car_generators[index] = new_generator;
+          }
+        }
+      }
+    }
+
+    for diff in self.time_cycle_modifier_diffs {
+      match diff {
+        YmapTimeCycleModifierDiff::Removed(it) => {
+          modded.time_cycle_modifiers.retain(|modifier| {
+            // Compare by min_extents or max_extents
+            modifier.min_extents != it.min_extents && modifier.max_extents != it.max_extents
+          });
+        }
+        YmapTimeCycleModifierDiff::Added(it) => {
+          modded.time_cycle_modifiers.push(it.clone());
+        }
+        YmapTimeCycleModifierDiff::Modified {
+          vanilla,
+          diffs,
+        } => {
+          // Find and apply modifications to the modifier
+          if let Some(index) = modded.time_cycle_modifiers.iter().position(|modifier| {
+            modifier.min_extents == vanilla.min_extents
+              || modifier.max_extents == vanilla.max_extents
+          }) {
+            let before = modded.time_cycle_modifiers[index].clone();
+            let after = before.apply(diffs);
+            modded.time_cycle_modifiers[index] = after;
+          }
+        }
+      }
+    }
+
     modded
   }
 }
@@ -160,17 +382,22 @@ fn check_diffs(
   let diffs = vanilla.diff(modded);
   for diff in &diffs {
     match diff {
+      YmapStructDiffEnum::name(_) => log::info!("    skip changes: <name /> _ {} -> {}", vanilla.name, modded.name),
+      YmapStructDiffEnum::flags(_) => log::info!("    skip changes: <contentFlags /> _ {:?} -> {:?}", vanilla.content_flags, modded.content_flags),
+      YmapStructDiffEnum::content_flags(_) => {}
+      YmapStructDiffEnum::streaming_extents_max(_) => log::info!("    skip changes: <streamingExtentsMax />"),
+      YmapStructDiffEnum::streaming_extents_min(_) => log::info!("    skip changes: <streamingExtentsMin />"),
+      YmapStructDiffEnum::entities_extents_max(_) => log::info!("    skip changes: <entitiesExtentsMax />"),
+      YmapStructDiffEnum::entities_extents_min(_) => log::info!("    skip changes: <entitiesExtentsMin />"),
       YmapStructDiffEnum::entity_map(_) => {}
       YmapStructDiffEnum::box_occluders(_) => {}
       YmapStructDiffEnum::occlude_models(_) => {}
-      YmapStructDiffEnum::name(_) => log::info!("    [info] skip changes: <name /> _ {} -> {}", vanilla.name, modded.name),
-      YmapStructDiffEnum::block(_) => log::info!("    [info] skip changes: <block/>"),
-      YmapStructDiffEnum::streaming_extents_max(_) => log::info!("    [info] skip changes: <streamingExtentsMax />"),
-      YmapStructDiffEnum::streaming_extents_min(_) => log::info!("    [info] skip changes: <streamingExtentsMin />"),
-      YmapStructDiffEnum::entities_extents_max(_) => log::info!("    [info] skip changes: <entitiesExtentsMax />"),
-      YmapStructDiffEnum::entities_extents_min(_) => log::info!("    [info] skip changes: <entitiesExtentsMin />"),
-      YmapStructDiffEnum::flags(_) => log::info!("    [info] skip changes: <contentFlags /> _ {:?} -> {:?}", vanilla.content_flags, modded.content_flags),
-      it => log::warn!("    [warning] skip unsupported changes: {:?}", it),
+      YmapStructDiffEnum::time_cycle_modifiers(_) => {}
+      YmapStructDiffEnum::car_generators(_) => {}
+      YmapStructDiffEnum::lod_lights(_) => {}
+      YmapStructDiffEnum::distant_lod_lights(_) => {}
+      YmapStructDiffEnum::block(_) => log::info!("    skip changes: <block/>"),
+      it => log::warn!("    skip unsupported changes: {:?}", it),
     }
   }
 }

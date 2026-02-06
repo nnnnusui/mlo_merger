@@ -1,11 +1,11 @@
-use serde::{Deserialize, Serialize, Serializer};
+use serde::{Deserialize, Serialize};
 
 use crate::core::format::{
   xml::{
     XmlValueAttr, position::XmlPositionChildValueAttr,
     serialize_break_line_par_10::serialize_break_line_par_10,
   },
-  ymap::model::YmapDistantLodLightsSoa,
+  ymap::model::{YmapDistantLodLight, YmapDistantLodLights},
 };
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -23,7 +23,7 @@ pub struct XmlYmapDistantLodLightsSoa {
   pub category: XmlValueAttr<u32>,
 }
 
-impl From<XmlYmapDistantLodLightsSoa> for YmapDistantLodLightsSoa {
+impl From<XmlYmapDistantLodLightsSoa> for YmapDistantLodLights {
   fn from(v: XmlYmapDistantLodLightsSoa) -> Self {
     // If there's an error, log it and return empty data
     if let Some(error) = v.error {
@@ -31,30 +31,40 @@ impl From<XmlYmapDistantLodLightsSoa> for YmapDistantLodLightsSoa {
       return Self::default();
     }
 
-    let position = v
+    let positions: Vec<String> = v
       .position
       .items
       .iter()
       .map(|p| format!("{} {} {}", p.x.value, p.y.value, p.z.value))
       .collect();
 
+    let rgbi_list = parse_number_list(&v.rgbi.text);
+
+    let items = positions
+      .into_iter()
+      .zip(rgbi_list.into_iter())
+      .map(|(position, rgbi)| YmapDistantLodLight {
+        position,
+        rgbi,
+      })
+      .collect();
+
     Self {
-      position,
-      rgbi: parse_number_list(&v.rgbi.text),
+      items,
       num_street_lights: v.num_street_lights.value,
       category: v.category.value,
     }
   }
 }
 
-impl From<YmapDistantLodLightsSoa> for XmlYmapDistantLodLightsSoa {
-  fn from(v: YmapDistantLodLightsSoa) -> Self {
+impl From<YmapDistantLodLights> for XmlYmapDistantLodLightsSoa {
+  fn from(v: YmapDistantLodLights) -> Self {
     let position = XmlYmapDistantLodLightsSoaPositions {
       items: v
-        .position
+        .items
         .iter()
-        .map(|pos_str| {
-          let coords: Vec<&str> = pos_str.split_whitespace().collect();
+        .map(|item| {
+          let coords: Vec<&str> = item.position.split_whitespace().collect();
           XmlPositionChildValueAttr {
             x: XmlValueAttr {
               value: coords[0].parse().unwrap_or(0.0),
@@ -70,7 +80,7 @@ impl From<YmapDistantLodLightsSoa> for XmlYmapDistantLodLightsSoa {
         .collect(),
     };
 
-    let rgbi_text = v.rgbi.join(" ");
+    let rgbi_text = v.items.iter().map(|item| item.rgbi.as_str()).collect::<Vec<&str>>().join(" ");
 
     Self {
       error: None,

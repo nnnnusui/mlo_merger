@@ -1,8 +1,13 @@
 use serde::{Deserialize, Serialize};
 
-use crate::core::format::{
-  xml::{XmlValueAttr, serialize_break_line_par_10::serialize_break_line_par_10},
-  ymap::model::{Direction, YmapLodLightsSoa},
+use crate::core::{
+  common::position::Position,
+  format::{
+    xml::{
+      position::XmlPositionChildValueAttr, serialize_break_line_par_10::serialize_break_line_par_10,
+    },
+    ymap::model::YmapLodLight,
+  },
 };
 
 #[derive(Debug, Deserialize, Default, Serialize)]
@@ -28,7 +33,7 @@ pub struct XmlYmapLodLightsSoa {
   pub corona_intensity: XmlYmapNumberList,
 }
 
-impl From<XmlYmapLodLightsSoa> for YmapLodLightsSoa {
+impl From<XmlYmapLodLightsSoa> for Vec<YmapLodLight> {
   fn from(v: XmlYmapLodLightsSoa) -> Self {
     // If there's an error, log it and return empty data
     if let Some(error) = v.error {
@@ -36,48 +41,76 @@ impl From<XmlYmapLodLightsSoa> for YmapLodLightsSoa {
       return Self::default();
     }
 
-    let direction = v.direction.items.into_iter().map(Direction::from).collect();
+    let direction = v.direction.items.into_iter().map(Position::from).collect::<Vec<_>>();
+    let falloffs = v.falloff.text.split_whitespace().collect::<Vec<_>>();
+    let falloff_exponents = v.falloff_exponent.text.split_whitespace().collect::<Vec<_>>();
+    let time_and_state_flags = v.time_and_state_flags.text.split_whitespace().collect::<Vec<_>>();
+    let hashes = v.hash.text.split_whitespace().collect::<Vec<_>>();
+    let cone_inner_angles = v.cone_inner_angle.text.split_whitespace().collect::<Vec<_>>();
+    let cone_outer_angles_or_cap_exts =
+      v.cone_outer_angle_or_cap_ext.text.split_whitespace().collect::<Vec<_>>();
+    let corona_intensities = v.corona_intensity.text.split_whitespace().collect::<Vec<_>>();
 
-    Self {
-      direction,
-      falloff: parse_number_list(&v.falloff.text),
-      falloff_exponent: parse_number_list(&v.falloff_exponent.text),
-      time_and_state_flags: parse_number_list(&v.time_and_state_flags.text),
-      hash: parse_number_list(&v.hash.text),
-      cone_inner_angle: parse_number_list(&v.cone_inner_angle.text),
-      cone_outer_angle_or_cap_ext: parse_number_list(&v.cone_outer_angle_or_cap_ext.text),
-      corona_intensity: parse_number_list(&v.corona_intensity.text),
-    }
+    (0..direction.len())
+      .map(|i| YmapLodLight {
+        direction: direction[i].clone(),
+        falloff: falloffs.get(i).unwrap().parse::<f32>().unwrap(),
+        falloff_exponent: falloff_exponents.get(i).unwrap().parse::<f32>().unwrap(),
+        time_and_state_flags: time_and_state_flags.get(i).unwrap().to_string(),
+        hash: hashes.get(i).unwrap().to_string(),
+        cone_inner_angle: cone_inner_angles.get(i).unwrap().parse::<u32>().unwrap(),
+        cone_outer_angle_or_cap_ext: cone_outer_angles_or_cap_exts
+          .get(i)
+          .unwrap()
+          .parse::<u32>()
+          .unwrap(),
+        corona_intensity: corona_intensities.get(i).unwrap().parse::<f32>().unwrap(),
+      })
+      .collect()
   }
 }
 
-impl From<YmapLodLightsSoa> for XmlYmapLodLightsSoa {
-  fn from(v: YmapLodLightsSoa) -> Self {
+impl From<Vec<YmapLodLight>> for XmlYmapLodLightsSoa {
+  fn from(v: Vec<YmapLodLight>) -> Self {
+    let direction: Vec<Position> = v.iter().map(|light| light.direction.clone()).collect();
+    let falloff: Vec<String> = v.iter().map(|light| light.falloff.to_string()).collect();
+    let falloff_exponent: Vec<String> =
+      v.iter().map(|light| light.falloff_exponent.to_string()).collect();
+    let time_and_state_flags: Vec<String> =
+      v.iter().map(|light| light.time_and_state_flags.clone()).collect();
+    let hash: Vec<String> = v.iter().map(|light| light.hash.clone()).collect();
+    let cone_inner_angle: Vec<String> =
+      v.iter().map(|light| light.cone_inner_angle.to_string()).collect();
+    let cone_outer_angle_or_cap_ext: Vec<String> =
+      v.iter().map(|light| light.cone_outer_angle_or_cap_ext.to_string()).collect();
+    let corona_intensity: Vec<String> =
+      v.iter().map(|light| light.corona_intensity.to_string()).collect();
+
     Self {
       error: None,
       direction: XmlYmapDirectionList {
-        items: v.direction.into_iter().map(XmlYmapDirection::from).collect(),
+        items: direction.into_iter().map(XmlPositionChildValueAttr::from).collect(),
       },
       falloff: XmlYmapNumberList {
-        text: v.falloff.join(" "),
+        text: falloff.join(" "),
       },
       falloff_exponent: XmlYmapNumberList {
-        text: v.falloff_exponent.join(" "),
+        text: falloff_exponent.join(" "),
       },
       time_and_state_flags: XmlYmapNumberList {
-        text: v.time_and_state_flags.join(" "),
+        text: time_and_state_flags.join(" "),
       },
       hash: XmlYmapNumberList {
-        text: v.hash.join(" "),
+        text: hash.join(" "),
       },
       cone_inner_angle: XmlYmapNumberList {
-        text: v.cone_inner_angle.join(" "),
+        text: cone_inner_angle.join(" "),
       },
       cone_outer_angle_or_cap_ext: XmlYmapNumberList {
-        text: v.cone_outer_angle_or_cap_ext.join(" "),
+        text: cone_outer_angle_or_cap_ext.join(" "),
       },
       corona_intensity: XmlYmapNumberList {
-        text: v.corona_intensity.join(" "),
+        text: corona_intensity.join(" "),
       },
     }
   }
@@ -86,54 +119,13 @@ impl From<YmapLodLightsSoa> for XmlYmapLodLightsSoa {
 #[derive(Debug, Deserialize, Default, Serialize)]
 pub struct XmlYmapDirectionList {
   #[serde(rename = "$value", default)]
-  pub items: Vec<XmlYmapDirection>,
-}
-
-#[derive(Debug, Deserialize, Default, Serialize)]
-#[serde(rename = "Item")]
-pub struct XmlYmapDirection {
-  #[serde(default)]
-  pub x: XmlValueAttr<f32>,
-  #[serde(default)]
-  pub y: XmlValueAttr<f32>,
-  #[serde(default)]
-  pub z: XmlValueAttr<f32>,
-}
-
-impl From<XmlYmapDirection> for Direction {
-  fn from(v: XmlYmapDirection) -> Self {
-    Self {
-      x: v.x.value,
-      y: v.y.value,
-      z: v.z.value,
-    }
-  }
-}
-
-impl From<Direction> for XmlYmapDirection {
-  fn from(v: Direction) -> Self {
-    Self {
-      x: XmlValueAttr {
-        value: v.x,
-      },
-      y: XmlValueAttr {
-        value: v.y,
-      },
-      z: XmlValueAttr {
-        value: v.z,
-      },
-    }
-  }
+  pub items: Vec<XmlPositionChildValueAttr>,
 }
 
 #[derive(Debug, Deserialize, Default, Serialize)]
 pub struct XmlYmapNumberList {
   #[serde(rename = "$value", default, serialize_with = "serialize_break_line_par_10")]
   pub text: String,
-}
-
-fn parse_number_list(text: &str) -> Vec<String> {
-  text.split_whitespace().map(|s| s.to_string()).collect()
 }
 
 #[cfg(test)]
@@ -170,16 +162,18 @@ mod tests {
     assert!(parsed.error.is_none());
     assert_eq!(parsed.direction.items.len(), 2);
 
-    let converted: YmapLodLightsSoa = parsed.into();
-    assert_eq!(converted.direction.len(), 2);
-    assert_eq!(converted.direction[0].x, 0.0);
-    assert_eq!(converted.direction[0].y, 0.0);
-    assert_eq!(converted.direction[0].z, -1.0);
-    assert_eq!(converted.direction[1].x, 1.0);
-    assert_eq!(converted.direction[1].y, 0.0);
-    assert_eq!(converted.direction[1].z, 0.0);
-    assert_eq!(converted.falloff, vec!["8", "4.2", "9"]);
-    assert_eq!(converted.falloff_exponent, vec!["128", "8", "8"]);
+    let converted: Vec<YmapLodLight> = parsed.into();
+    assert_eq!(converted.len(), 2);
+    assert_eq!(converted[0].direction.x, 0.0);
+    assert_eq!(converted[0].direction.y, 0.0);
+    assert_eq!(converted[0].direction.z, -1.0);
+    assert_eq!(converted[1].direction.x, 1.0);
+    assert_eq!(converted[1].direction.y, 0.0);
+    assert_eq!(converted[1].direction.z, 0.0);
+    assert_eq!(converted[0].falloff, 8.0);
+    assert_eq!(converted[1].falloff, 4.2);
+    assert_eq!(converted[0].falloff_exponent, 128.0);
+    assert_eq!(converted[1].falloff_exponent, 8.0);
   }
 
   #[test]
@@ -194,9 +188,8 @@ mod tests {
     assert!(parsed.error.is_some());
     assert_eq!(parsed.error.as_ref().unwrap(), "Couldn't find structure info CLODLight!");
 
-    let converted: YmapLodLightsSoa = parsed.into();
-    assert_eq!(converted.direction.len(), 0);
-    assert_eq!(converted.falloff.len(), 0);
+    let converted: Vec<YmapLodLight> = parsed.into();
+    assert_eq!(converted.len(), 0);
   }
 
   #[test]
@@ -207,14 +200,7 @@ mod tests {
     assert!(parsed.error.is_none());
     assert_eq!(parsed.direction.items.len(), 0);
 
-    let converted: YmapLodLightsSoa = parsed.into();
-    assert_eq!(converted.direction.len(), 0);
-  }
-
-  #[test]
-  fn test_parse_number_list() {
-    assert_eq!(parse_number_list("1 2 3"), vec!["1", "2", "3"]);
-    assert_eq!(parse_number_list("  4.5  6.7  "), vec!["4.5", "6.7"]);
-    assert_eq!(parse_number_list(""), Vec::<String>::new());
+    let converted: Vec<YmapLodLight> = parsed.into();
+    assert_eq!(converted.len(), 0);
   }
 }
