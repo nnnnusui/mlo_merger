@@ -55,18 +55,22 @@ fn merge_ymap_xml() -> impl Parser<Command> {
   let rebuild_all = long("rebuild-all")
     .help("Rebuild all YMAP files, even if only one mod reference exists")
     .switch();
+  let blacklist_config = long("blacklist-config")
+    .help("Path to blacklist configuration file (TOML)")
+    .argument::<PathBuf>("FILE")
+    .optional();
 
-  construct!(flag, vanilla_dir, mod_dir, output_dir, mod_ymap_dir, rebuild_all).map(
-    |(_, vanilla_dir, mod_dir, output_dir, mod_ymap_dir, rebuild_all)| {
+  construct!(flag, vanilla_dir, mod_dir, output_dir, mod_ymap_dir, rebuild_all, blacklist_config)
+    .map(|(_, vanilla_dir, mod_dir, output_dir, mod_ymap_dir, rebuild_all, blacklist_config)| {
       Command::MergeYmapXml(MergeYmapXml {
         vanilla_dir,
         mod_dir,
         output_dir,
         mod_ymap_dir,
         rebuild_all,
+        blacklist_config,
       })
-    },
-  )
+    })
 }
 
 fn extract_ymap() -> impl Parser<Command> {

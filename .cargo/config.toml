@@ -2,6 +2,6 @@
 
 [alias]
 # Run MLO batch processing with sample data
-mergexml = "run -- --merge-ymap-xml --vanilla-dir asset/vanilla/ymap.xml --mod-dir asset/mlo/ymap.xml --output-dir asset/merged/ymap.xml --mod-ymap-dir asset/mlo/ymap.extracted"
+mergexml = "run -- --merge-ymap-xml --vanilla-dir asset/vanilla/ymap.xml --mod-dir asset/mlo/ymap.xml --output-dir asset/merged/ymap.xml --mod-ymap-dir asset/mlo/ymap.extracted --blacklist-config asset/blacklist.toml"
 parsexml = "run -- --parse-ymap-xml -i docs/sample/sample.ymap.xml"
 extract = "run -- --extract-ymap --flatten -i asset/mlo/source -o asset/mlo/ymap.extracted --vanilla-dir asset/vanilla/ymap.xml"

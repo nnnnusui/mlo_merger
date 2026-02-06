@@ -1,6 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::core::{
+  config::blacklist::BlacklistConfig,
   format::ymap::model::{Ymap, YmapStructDiffEnum},
   merge::{
     ymap_box_occluder_diff::YmapBoxOccluderDiff,
@@ -78,6 +79,7 @@ impl YmapDiff {
   pub fn apply_to(
     self,
     vanilla: &Ymap,
+    blacklist: Option<&BlacklistConfig>,
   ) -> Ymap {
     let mut modded = vanilla.clone();
 
@@ -187,6 +189,13 @@ impl YmapDiff {
           modded.occlude_models.retain(|om| !om.is_same(&it));
         }
         YmapOccludeModelDiff::Added(it) => {
+          // Check if this item is blacklisted
+          if let Some(blacklist_config) = blacklist
+            && blacklist_config.is_occlude_model_blacklisted(&it.bmin, &it.bmax)
+          {
+            log::info!("      [Blacklisted] Occlude Model: bmin={:?}, bmax={:?}", it.bmin, it.bmax);
+            continue;
+          }
           modded.occlude_models.push(it.clone());
         }
         YmapOccludeModelDiff::Modified {

@@ -1,4 +1,5 @@
 use crate::core::common::function::collect_files_with_suffix;
+use crate::core::config::blacklist::BlacklistConfig;
 use crate::core::extract::ExtractYmap;
 use crate::core::format::ymap::model::ymap::Ymap;
 use crate::core::format::ymap::xml::XmlYmap;
@@ -16,6 +17,7 @@ pub struct MergeYmapXml {
   pub mod_ymap_dir: PathBuf,
   pub output_dir: PathBuf,
   pub rebuild_all: bool,
+  pub blacklist_config: Option<PathBuf>,
 }
 
 impl MergeYmapXml {
@@ -26,6 +28,17 @@ impl MergeYmapXml {
       self.mod_dir.display(),
       self.output_dir.display()
     );
+
+    // Load blacklist configuration if provided
+    let blacklist = if let Some(blacklist_path) = &self.blacklist_config {
+      log::info!("Loading blacklist configuration from {}", blacklist_path.display());
+      let blacklist_content = fs::read_to_string(blacklist_path)?;
+      let config: BlacklistConfig = toml::from_str(&blacklist_content)?;
+      log::info!("Loaded {} occlude model blacklist entries", config.occlude_models.len());
+      Some(config)
+    } else {
+      None
+    };
 
     let vanila_files = collect_files_with_suffix(&self.vanilla_dir, ".ymap.xml");
     log::info!("Found {} YMAP XML files in vanilla directory", vanila_files.len());
@@ -57,7 +70,7 @@ impl MergeYmapXml {
       }
 
       let merged_diff = ymap_diffs.into_iter().reduce(|acc, d| acc.merge(d)).unwrap();
-      let merged_ymap = merged_diff.apply_to(&vanilla_ymap);
+      let merged_ymap = merged_diff.apply_to(&vanilla_ymap, blacklist.as_ref());
 
       // Convert Ymap to XmlYmap and serialize to XML with 2-space indentation
       let xml_ymap: XmlYmap = merged_ymap.into();
