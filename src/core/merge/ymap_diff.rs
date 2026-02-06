@@ -138,19 +138,35 @@ impl YmapDiff {
       }
     }
 
+    let mut box_occluder_removed_vanilla_indices = Vec::new();
     for diff in self.box_occluder_diffs {
       match diff {
         YmapBoxOccluderDiff::Removed(it) => {
-          modded.box_occluders.retain(|bo| bo != &it);
+          if let Some(index) = vanilla.box_occluders.iter().position(|vanilla| vanilla.is_same(&it))
+          {
+            box_occluder_removed_vanilla_indices.push(index);
+          };
+          modded.box_occluders.retain(|bo| !bo.is_same(&it));
         }
         YmapBoxOccluderDiff::Added(it) => {
           modded.box_occluders.push(it.clone());
         }
         YmapBoxOccluderDiff::Modified {
-          vanilla,
+          vanilla: it,
           diffs,
         } => {
-          if let Some(index) = modded.box_occluders.iter().position(|it| it.is_same(&vanilla)) {
+          if let Some(index) = vanilla.box_occluders.iter().position(|vanilla| vanilla.is_same(&it))
+            && box_occluder_removed_vanilla_indices.contains(&index)
+          {
+            log::warn!(
+              "    skipped _ Attempting to modify a box occluder that was removed: {:?}",
+              it
+            );
+            continue;
+          };
+          if let Some(index) =
+            modded.box_occluders.iter().position(|modded_it| modded_it.is_same(&it))
+          {
             let before = modded.box_occluders[index].clone();
             let after = before.apply(diffs);
             modded.box_occluders[index] = after;
@@ -159,20 +175,38 @@ impl YmapDiff {
       }
     }
 
+    let mut occlude_model_removed_vanilla_indices = Vec::new();
     for diff in self.occlude_model_diffs {
       match diff {
         YmapOccludeModelDiff::Removed(it) => {
-          modded.occlude_models.retain(|om| om != &it);
+          if let Some(index) =
+            vanilla.occlude_models.iter().position(|vanilla| vanilla.is_same(&it))
+          {
+            occlude_model_removed_vanilla_indices.push(index);
+          };
+          modded.occlude_models.retain(|om| !om.is_same(&it));
         }
         YmapOccludeModelDiff::Added(it) => {
           modded.occlude_models.push(it.clone());
         }
         YmapOccludeModelDiff::Modified {
-          vanilla,
+          vanilla: it,
           diffs,
           triangle_diffs,
         } => {
-          if let Some(index) = modded.occlude_models.iter().position(|it| it.is_same(&vanilla)) {
+          if let Some(index) =
+            vanilla.occlude_models.iter().position(|vanilla| vanilla.is_same(&it))
+            && occlude_model_removed_vanilla_indices.contains(&index)
+          {
+            log::warn!(
+              "    skipped _ Attempting to modify a occlude model that was removed: {:?}",
+              it
+            );
+            continue;
+          };
+          if let Some(index) =
+            modded.occlude_models.iter().position(|modded_it| modded_it.is_same(&it))
+          {
             let before = modded.occlude_models[index].clone();
             let mut after = before.apply(diffs);
             for diff in triangle_diffs {
