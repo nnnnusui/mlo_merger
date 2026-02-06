@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 bpaf = "0.9.22"
+chrono = { version = "0.4.43", features = ["clock"] }
 deku = "0.20.3"
 indexmap = "2.7.2"
 log = "0.4"

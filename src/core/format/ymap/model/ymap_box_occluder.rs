@@ -13,3 +13,15 @@ pub struct YmapBoxOccluder {
   pub i_height: u32,
   pub i_sin_z: i32,
 }
+
+impl YmapBoxOccluder {
+  pub fn is_same(
+    &self,
+    other: &YmapBoxOccluder,
+  ) -> bool {
+    const EPSILON: i32 = 1;
+    (self.i_center_x - other.i_center_x).abs() < EPSILON
+      && (self.i_center_y - other.i_center_y).abs() < EPSILON
+      && (self.i_center_z - other.i_center_z).abs() < EPSILON
+  }
+}

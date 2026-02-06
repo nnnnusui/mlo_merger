@@ -71,7 +71,7 @@ pub fn check_occlude_models_diff(
 
   // Check for removed and modified items
   for vanilla_item in vanilla {
-    if let Some(mod_item) = modified.iter().find(|m| is_same_occlude_model(vanilla_item, m)) {
+    if let Some(mod_item) = modified.iter().find(|m| vanilla_item.is_same(m)) {
       // Item exists in both, check if modified
       let item_diffs = vanilla_item.diff(mod_item);
       continue_early!(if (item_diffs.is_empty()) continue);
@@ -96,19 +96,12 @@ pub fn check_occlude_models_diff(
 
   // Check for added items
   for mod_item in modified {
-    if !vanilla.iter().any(|v| is_same_occlude_model(v, mod_item)) {
+    if !vanilla.iter().any(|v| v.is_same(mod_item)) {
       diffs.push(YmapOccludeModelDiff::Added(mod_item.clone()));
     }
   }
 
   diffs
-}
-
-fn is_same_occlude_model(
-  a: &YmapOccludeModel,
-  b: &YmapOccludeModel,
-) -> bool {
-  a.bmin == b.bmin || a.bmax == b.bmax
 }
 
 #[derive(Debug)]

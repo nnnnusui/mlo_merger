@@ -150,7 +150,7 @@ impl YmapDiff {
           vanilla,
           diffs,
         } => {
-          if let Some(index) = modded.box_occluders.iter().position(|it| it == &vanilla) {
+          if let Some(index) = modded.box_occluders.iter().position(|it| it.is_same(&vanilla)) {
             let before = modded.box_occluders[index].clone();
             let after = before.apply(diffs);
             modded.box_occluders[index] = after;
@@ -172,7 +172,7 @@ impl YmapDiff {
           diffs,
           triangle_diffs,
         } => {
-          if let Some(index) = modded.occlude_models.iter().position(|it| it == &vanilla) {
+          if let Some(index) = modded.occlude_models.iter().position(|it| it.is_same(&vanilla)) {
             let before = modded.occlude_models[index].clone();
             let mut after = before.apply(diffs);
             for diff in triangle_diffs {
