@@ -1,6 +1,8 @@
 
 # MLO Merger
 
+[![SUSHI-WARE LICENSE](https://img.shields.io/badge/license-SUSHI--WARE%F0%9F%8D%A3-blue.svg)](https://github.com/MakeNowJust/sushi-ware)
+
 A tool for merging FiveM mod map `.ymap` files to avoid conflicts between multiple mods.
 
 ## Status
