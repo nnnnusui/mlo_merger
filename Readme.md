@@ -1,15 +1,40 @@
 
-## Parse .ymap.xml
+# MLO Merger
 
-```
-cargo run -- --parse-ymap-xml -i docs/sample/sample.ymap.xml
+A tool for merging FiveM mod map `.ymap` files to avoid conflicts between multiple mods.
+
+## Status
+
+- ✅ Core merge functionality is working
+- 🚧 Additional utility features are under development
+
+## Usage
+
+### Basic Workflow
+
+1. **Extract** - Extract MLO data from `.ymap` files
+2. **Convert to XML** - Use CodeWalker to convert `.ymap` files to `.ymap.xml` format
+3. **Merge XML** - Run the merge command to combine vanilla and mod files
+4. **Convert to YMAP** - Use CodeWalker to convert merged `.ymap.xml` files back to `.ymap` format
+
+### Commands
+
+For detailed command information, please refer to:
+- `--help` flag for each command
+- `.cargo/config.toml` for command aliases
+- `src/cli/command.rs` for implementation details
+
+### Example: Extract
+
+```bash
+cargo run -- --extract-ymap -i asset/mlo/source -o asset/mlo/ymap.extracted --vanilla-dir asset/vanilla/ymap.xml
 ```
 
-## Merge YMAP XML Files
+### Example: Merge YMAP XML Files
 
 Merge multiple mod YMAP XML files with vanilla files:
 
-```
+```bash
 cargo run -- --merge-ymap-xml \
   --vanilla-dir asset/vanilla/ymap.xml \
   --mod-dir asset/merged/ymap.xml \
@@ -17,17 +42,17 @@ cargo run -- --merge-ymap-xml \
   --output-dir asset/merged/ymap.xml
 ```
 
-### Blacklist Configuration
+#### Blacklist Configuration
 
 You can filter out specific occlude models from being added during merge by using a blacklist configuration file:
 
-```
+```bash
 cargo run -- --merge-ymap-xml \
   --vanilla-dir asset/vanilla/ymap.xml \
   --mod-dir asset/merged/ymap.xml \
   --mod-ymap-dir asset/mlo/ymap.extracted \
   --output-dir asset/merged/ymap.xml \
-  --blacklist-config blacklist.toml
+  --blacklist-config asset/blacklist.toml
 ```
 
-See `blacklist.toml` for configuration format.
+See `asset/blacklist.toml` for configuration format.
