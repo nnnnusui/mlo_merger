@@ -3,7 +3,7 @@
 
 # Example: cfx-gabz-mapdata sp1_occl_01 occlude_model (mba)
 [[occlude_models]]
-bmin = [-407.08, -2047.73, 14.22]
+# bmin = [-407.08, -2047.73, 14.22]
 
 # You can also specify bmax to match occlude models
 # [[occlude_models]]
