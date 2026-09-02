@@ -6,7 +6,7 @@ use crate::core::format::ymap::xml::XmlYmap;
 use crate::core::merge::ymap_diff::YmapDiff;
 use quick_xml::de::from_str;
 use serde::Serialize;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -52,7 +52,7 @@ impl MergeYmapXml {
       if !self.rebuild_all && mod_refs.len() <= 1 {
         let mod_ref = mod_refs.first().unwrap();
         copy_targets.push(mod_ref);
-        log::info!("Coppied YMAP: {} (only one mod reference)", ymap_name);
+        log::info!("Coppied YMAP: {} (only one mod reference: {})", ymap_name, mod_ref.mod_name);
         continue;
       }
       let vanilla_ymap_path = self.vanilla_dir.join(ymap_name);
@@ -114,9 +114,9 @@ struct ModYmapReference {
 
 fn collect_modded_ymaps_map(
   mod_dir: &Path
-) -> Result<HashMap<String, Vec<ModYmapReference>>, Box<dyn std::error::Error>> {
+) -> Result<BTreeMap<String, Vec<ModYmapReference>>, Box<dyn std::error::Error>> {
   let mod_files = collect_files_with_suffix(mod_dir, ".ymap.xml");
-  let mut map: HashMap<String, Vec<ModYmapReference>> = HashMap::new();
+  let mut map: BTreeMap<String, Vec<ModYmapReference>> = BTreeMap::new();
 
   for mod_file in mod_files {
     // Extract file name

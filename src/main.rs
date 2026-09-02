@@ -36,6 +36,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Command::ParseYmapXml(cmd) => run_parse_ymap_xml(&cmd.input)?,
     Command::MergeYmapXml(cmd) => cmd.run()?,
     Command::ExtractYmap(cmd) => cmd.run()?,
+    Command::GetProp(cmd) => cmd.run()?,
   };
 
   log::info!("✓ Command completed successfully");

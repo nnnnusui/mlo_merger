@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use bpaf::*;
 
-use crate::core::{extract::ExtractYmap, merge::run::MergeYmapXml};
+use crate::core::{extract::ExtractYmap, getprop::GetProp, merge::run::MergeYmapXml};
 
 #[derive(Debug)]
 pub enum Command {
@@ -10,6 +10,7 @@ pub enum Command {
   // ParseYmap(ParseYmap),
   MergeYmapXml(MergeYmapXml),
   ExtractYmap(ExtractYmap),
+  GetProp(GetProp),
 }
 
 pub fn parse_args() -> Command {
@@ -18,6 +19,7 @@ pub fn parse_args() -> Command {
     // parse_ymap(),
     merge_ymap_xml(),
     extract_ymap(),
+    get_prop(),
   ])
   .to_options()
   .run()
@@ -98,4 +100,19 @@ fn extract_ymap() -> impl Parser<Command> {
       })
     },
   )
+}
+
+fn get_prop() -> impl Parser<Command> {
+  let flag =
+    long("get-prop").help("List unique prop (archetype) names from YMAP XML files").req_flag(());
+  let input = short('i')
+    .long("input")
+    .argument::<PathBuf>("PATH")
+    .help("YMAP XML file or directory containing YMAP XML files");
+
+  construct!(flag, input).map(|(_, input)| {
+    Command::GetProp(GetProp {
+      input,
+    })
+  })
 }
