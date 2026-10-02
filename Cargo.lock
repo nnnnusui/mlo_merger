@@ -880,6 +880,7 @@ dependencies = [
  "bpaf",
  "chrono",
  "deku",
+ "flate2",
  "indexmap",
  "log",
  "netcorehost",

@@ -99,11 +99,15 @@ fn run_pipeline(cmd: &Pipeline) -> Result<(), Box<dyn std::error::Error>> {
   .run()?;
 
   log::info!("Step 2/4: ymap -> xml");
-  Ymap2Xml {
+  let ymap_to_xml = Ymap2Xml {
     input_dir: cmd.extracted_dir.clone(),
     output_dir: cmd.extracted_xml_dir.clone(),
+  };
+  if cmd.native_ymap_to_xml {
+    ymap_to_xml.run_native()?;
+  } else {
+    ymap_to_xml.run(&codewalker)?;
   }
-  .run(&codewalker)?;
 
   log::info!("Step 3/4: merge xml");
   MergeYmapXml {
@@ -227,6 +231,7 @@ mod tests {
       merged_dir,
       log_dir: tmp.join("asset/log"),
       blacklist_config: None,
+      native_ymap_to_xml: false,
     };
 
     deploy_resource(&cmd, &resource_dir).unwrap();

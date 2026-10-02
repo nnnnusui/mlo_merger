@@ -24,7 +24,7 @@ fn main() {
   };
   if !dll_path.exists() {
     println!(
-      "cargo:warning=CodeWalker.Core.dll not found at {} (set CODEWALKER_CORE_DLL, or place it there). It is not distributed with this repo (GPL-3.0). The default pipeline command will not be available.",
+      "cargo:warning=CodeWalker.Core.dll not found at {} (set CODEWALKER_CORE_DLL, or place it there). It is not distributed with this repo. The CodeWalker-backed pipeline path will not be available.",
       dll_path.display()
     );
     return;

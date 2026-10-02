@@ -135,6 +135,7 @@ pub struct Pipeline {
   pub merged_dir: PathBuf,
   pub log_dir: PathBuf,
   pub blacklist_config: Option<PathBuf>,
+  pub native_ymap_to_xml: bool,
 }
 
 fn pipeline() -> impl Parser<Command> {
@@ -153,9 +154,12 @@ fn pipeline() -> impl Parser<Command> {
     )
     .argument::<PathBuf>("DIR")
     .optional();
+  let native_ymap_to_xml = long("native-ymap-to-xml")
+    .help("Use the native Rust backend for ymap -> xml; CodeWalker.Core remains the default")
+    .switch();
 
-  construct!(workspace, source_dir, output_resource_dir).map(
-    |(workspace, source_dir, output_resource_dir)| {
+  construct!(workspace, source_dir, output_resource_dir, native_ymap_to_xml).map(
+    |(workspace, source_dir, output_resource_dir, native_ymap_to_xml)| {
       let blacklist_config = workspace.join("blacklist.toml");
       Command::Pipeline(Pipeline {
         source_dir: source_dir.unwrap_or_else(|| workspace.join("source")),
@@ -167,6 +171,7 @@ fn pipeline() -> impl Parser<Command> {
         merged_dir: workspace.join("merged"),
         log_dir: workspace.join("log"),
         blacklist_config: blacklist_config.exists().then_some(blacklist_config),
+        native_ymap_to_xml,
         workspace,
       })
     },

@@ -42,7 +42,7 @@ impl From<XmlYmapDistantLodLightsSoa> for YmapDistantLodLights {
 
     let items = positions
       .into_iter()
-      .zip(rgbi_list.into_iter())
+      .zip(rgbi_list)
       .map(|(position, rgbi)| YmapDistantLodLight {
         position,
         rgbi,

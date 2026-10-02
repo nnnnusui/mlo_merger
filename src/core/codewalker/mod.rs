@@ -1,7 +1,7 @@
 //! In-process hosting of CodeWalker.Core (a managed .NET assembly) via CoreCLR,
 //! used to convert `.ymap` <-> `.ymap.xml` without shelling out to a subprocess.
 //!
-//! CodeWalker.Core.dll itself (GPL-3.0) is never bundled with this repository;
+//! CodeWalker.Core.dll is never bundled with this repository;
 //! callers must build `bridge/CodeWalker.Bridge` against a locally supplied copy
 //! (see `CODEWALKER_CORE_DLL`) before this module can be used.
 

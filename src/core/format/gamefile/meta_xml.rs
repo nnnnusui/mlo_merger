@@ -1,0 +1,994 @@
+use std::{collections::HashMap, fmt::Write as _, io};
+
+use super::meta_resource::{MetaResource, MetaStructureEntry, MetaStructureInfo};
+use super::resource_file::Rsc7Resource;
+
+const ARRAY_INFO_HASH: u32 = 0x0000_0100;
+const STRUCTURE: u8 = 0x05;
+const STRUCTURE_POINTER: u8 = 0x07;
+const ARRAY: u8 = 0x52;
+
+const KNOWN_NAMES: &[&str] = &[
+  "CMapData",
+  "CEntityDef",
+  "CMloInstanceDef",
+  "rage__fwContainerLodDef",
+  "BoxOccluder",
+  "OccludeModel",
+  "rage__fwInstancedMapData",
+  "CTimeCycleModifier",
+  "CCarGen",
+  "CLODLight",
+  "CDistantLODLight",
+  "rage__fwPropInstanceListDef",
+  "rage__fwGrassInstanceListDef",
+  "rage__fwGrassInstanceListDef__InstanceData",
+  "FloatXYZ",
+  "x",
+  "y",
+  "z",
+  "POINTER",
+  "STRING",
+  "HASH",
+  "UINT",
+  "USHORT",
+  "BYTE",
+  "FLOAT",
+  "VECTOR3",
+  "VECTOR4",
+  "name",
+  "parent",
+  "flags",
+  "contentFlags",
+  "streamingExtentsMin",
+  "streamingExtentsMax",
+  "entitiesExtentsMin",
+  "entitiesExtentsMax",
+  "entities",
+  "containerLods",
+  "boxOccluders",
+  "occludeModels",
+  "physicsDictionaries",
+  "instancedData",
+  "timeCycleModifiers",
+  "carGenerators",
+  "LODLightsSOA",
+  "DistantLODLightsSOA",
+  "block",
+  "archetypeName",
+  "guid",
+  "position",
+  "Position",
+  "NormalX",
+  "NormalY",
+  "Color",
+  "Scale",
+  "Ao",
+  "Pad",
+  "ScenarioType",
+  "Group",
+  "ModelSet",
+  "AvailabilityInMpSp",
+  "Flags",
+  "Radius",
+  "TimeTillPedLeaves",
+  "iTimeStartOverride",
+  "iTimeEndOverride",
+  "offsetPosition",
+  "enableLimitAngle",
+  "startsLocked",
+  "canBreak",
+  "limitAngle",
+  "posn",
+  "colour",
+  "flashiness",
+  "intensity",
+  "boneTag",
+  "lightType",
+  "groupId",
+  "timeFlags",
+  "cullingPlane",
+  "shadowBlur",
+  "padding1",
+  "padding2",
+  "padding3",
+  "volIntensity",
+  "volSizeScale",
+  "volOuterColour",
+  "lightHash",
+  "volOuterIntensity",
+  "coronaSize",
+  "volOuterExponent",
+  "lightFadeDistance",
+  "shadowFadeDistance",
+  "specularFadeDistance",
+  "volumetricFadeDistance",
+  "shadowNearClip",
+  "coronaZBias",
+  "tangent",
+  "coneInnerAngle",
+  "extents",
+  "projectedTextureKey",
+  "doorTargetRatio",
+  "audioHash",
+  "instances",
+  "floorId",
+  "defaultEntitySets",
+  "numExitPortals",
+  "MLOInstflags",
+  "rotation",
+  "scaleXY",
+  "scaleZ",
+  "parentIndex",
+  "lodDist",
+  "childLodDist",
+  "lodLevel",
+  "numChildren",
+  "priorityLevel",
+  "extensions",
+  "ambientOcclusionMultiplier",
+  "artificialAmbientOcclusion",
+  "tintValue",
+  "iCenterX",
+  "iCenterY",
+  "iCenterZ",
+  "iCosZ",
+  "iLength",
+  "iWidth",
+  "iHeight",
+  "iSinZ",
+  "bmin",
+  "bmax",
+  "dataSize",
+  "verts",
+  "numVertsInBytes",
+  "numTris",
+  "minExtents",
+  "maxExtents",
+  "percentage",
+  "range",
+  "startHour",
+  "endHour",
+  "orientX",
+  "orientY",
+  "perpendicularLength",
+  "carModel",
+  "bodyColorRemap1",
+  "bodyColorRemap2",
+  "bodyColorRemap3",
+  "bodyColorRemap4",
+  "popGroup",
+  "livery",
+  "version",
+  "exportedBy",
+  "owner",
+  "time",
+  "direction",
+  "falloff",
+  "falloffExponent",
+  "timeAndStateFlags",
+  "hash",
+  "coneInnerAngle",
+  "coneOuterAngle",
+  "coneOuterAngleOrCapExt",
+  "coronaIntensity",
+  "RGBI",
+  "numStreetLights",
+  "category",
+  "ImapLink",
+  "PropInstanceList",
+  "GrassInstanceList",
+  "BatchAABB",
+  "ScaleRange",
+  "LodFadeStartDist",
+  "LodInstFadeRange",
+  "OrientToTerrain",
+  "InstanceList",
+  "min",
+  "max",
+  "normalX",
+  "normalY",
+  "color",
+  "scale",
+  "ao",
+  "pad",
+  "LODTYPES_DEPTH_ORPHANHD",
+  "LODTYPES_DEPTH_HD",
+  "LODTYPES_DEPTH_LOD",
+  "LODTYPES_DEPTH_SLOD1",
+  "LODTYPES_DEPTH_SLOD2",
+  "LODTYPES_DEPTH_SLOD3",
+  "LODTYPES_DEPTH_SLOD4",
+  "PRI_REQUIRED",
+  "PRI_OPTIONAL_HIGH",
+  "PRI_OPTIONAL_MEDIUM",
+  "PRI_OPTIONAL_LOW",
+];
+
+/// Converts a binary RSC7 YMAP into CodeWalker-style META XML using its embedded schema.
+pub fn ymap_to_xml(
+  bytes: &[u8],
+  shared_hash_names: &HashMap<u32, String>,
+) -> io::Result<String> {
+  let resource = Rsc7Resource::decode(bytes)?;
+  let meta = MetaResource::parse(&resource)?;
+  meta_to_xml(&meta, shared_hash_names)
+}
+
+/// Serializes a parsed META resource to the schema-driven XML representation.
+pub fn meta_to_xml(
+  meta: &MetaResource,
+  shared_hash_names: &HashMap<u32, String>,
+) -> io::Result<String> {
+  if meta.root_block_index <= 0 {
+    return Err(invalid_data("META resource has no root data block"));
+  }
+  let root_index = meta.root_block_index as usize - 1;
+  let root_block = meta
+    .data_blocks
+    .get(root_index)
+    .ok_or_else(|| invalid_data("META root data block is missing"))?;
+  let mut names = HashMap::new();
+  for &name in KNOWN_NAMES {
+    names.insert(jenk_hash(name), name.to_string());
+  }
+  names.extend(meta.hash_names());
+  names.extend(shared_hash_names.iter().map(|(hash, name)| (*hash, name.clone())));
+
+  let mut output = String::from("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
+  let root_name = resolve_name(root_block.structure_name_hash, &names);
+  write_open_tag(&mut output, 0, &root_name, meta.name.as_deref().map(|name| ("name", name)));
+  write_structure(meta, root_index, 0, root_block.structure_name_hash, &names, 1, &mut output)?;
+  write_close_tag(&mut output, 0, &root_name);
+  Ok(output)
+}
+
+fn write_structure(
+  meta: &MetaResource,
+  block_index: usize,
+  offset: usize,
+  structure_hash: u32,
+  names: &HashMap<u32, String>,
+  depth: usize,
+  output: &mut String,
+) -> io::Result<()> {
+  let block = meta
+    .data_blocks
+    .get(block_index)
+    .ok_or_else(|| invalid_data("META structure references a missing data block"))?;
+  let fallback;
+  let structure = match meta.structures.iter().find(|s| s.name_hash == structure_hash) {
+    Some(structure) => structure,
+    None => {
+      fallback = fallback_structure(structure_hash).ok_or_else(|| {
+        invalid_data(&format!("META structure schema {structure_hash:08X} is missing"))
+      })?;
+      &fallback
+    }
+  };
+  let mut array_info: Option<&MetaStructureEntry> = None;
+
+  for entry in &structure.entries {
+    if entry.name_hash == ARRAY_INFO_HASH {
+      array_info = Some(entry);
+      continue;
+    }
+    let name = resolve_name(entry.name_hash, names);
+    let field_offset = offset
+      .checked_add(entry.data_offset as usize)
+      .ok_or_else(|| invalid_data("META field offset overflows"))?;
+    let entry_data = slice(&block.data, field_offset, field_size(entry.data_type))?;
+    match entry.data_type {
+      ARRAY => write_array(meta, array_info, entry_data, &name, names, depth, output)?,
+      0x01 => write_value(output, depth, &name, if entry_data[0] == 0 { "false" } else { "true" }),
+      0x10 => write_value(output, depth, &name, &(entry_data[0] as i8).to_string()),
+      0x11 => write_value(output, depth, &name, &entry_data[0].to_string()),
+      0x12 => write_value(output, depth, &name, &i16_at(entry_data, 0)?.to_string()),
+      0x13 => write_value(output, depth, &name, &u16_at(entry_data, 0)?.to_string()),
+      0x14 => write_value(output, depth, &name, &i32_at(entry_data, 0)?.to_string()),
+      0x15 => write_value(output, depth, &name, &u32_at(entry_data, 0)?.to_string()),
+      0x21 => write_value(output, depth, &name, &format_float(f32_at(entry_data, 0)?)),
+      0x33 => write_vector(output, depth, &name, entry_data, 3)?,
+      0x34 => write_vector(output, depth, &name, entry_data, 4)?,
+      0x40 => write_text_pair(
+        output,
+        depth,
+        &name,
+        &array_of_chars(block, field_offset, entry.reference_key as usize)?,
+      ),
+      0x44 => write_text_pair(output, depth, &name, &read_string_pointer(meta, entry_data)?),
+      0x4a => write_text(output, depth, &name, &resolve_hash(u32_at(entry_data, 0)?, names)),
+      0x50 => {
+        write_inline_bytes(output, depth, &name, entry, array_info, &block.data, field_offset)?
+      }
+      0x59 => write_data_block_pointer(meta, output, depth, &name, entry_data)?,
+      0x60 => write_value(output, depth, &name, &entry_data[0].to_string()),
+      0x62..=0x65 => write_enum_value(meta, output, depth, &name, entry, entry_data, names)?,
+      0x05 => {
+        write_open_tag(output, depth, &name, None);
+        write_structure(
+          meta,
+          block_index,
+          field_offset,
+          entry.reference_key,
+          names,
+          depth + 1,
+          output,
+        )?;
+        write_close_tag(output, depth, &name);
+      }
+      _ => {
+        return Err(invalid_data(&format!(
+          "unsupported META field type 0x{:02X} for {name}",
+          entry.data_type
+        )));
+      }
+    }
+    array_info = None;
+  }
+  Ok(())
+}
+
+fn write_array(
+  meta: &MetaResource,
+  array_info: Option<&MetaStructureEntry>,
+  descriptor: &[u8],
+  name: &str,
+  names: &HashMap<u32, String>,
+  depth: usize,
+  output: &mut String,
+) -> io::Result<()> {
+  let info = array_info
+    .ok_or_else(|| invalid_data(&format!("META array {name} has no ARRAYINFO schema")))?;
+  let pointer = u64_at(descriptor, 0)?;
+  let count = u16_at(descriptor, 8)? as usize;
+  let block_id = (pointer & 0xfff) as usize;
+  let offset = ((pointer >> 12) & 0xfffff) as usize;
+  let type_hash = info.reference_key;
+  let item_type = resolve_name(type_hash, names);
+  match info.data_type {
+    STRUCTURE => {
+      let Some(block_index) = block_id.checked_sub(1) else {
+        return write_empty_array(output, depth, name, Some(("itemType", &item_type)));
+      };
+      if count == 0 {
+        return write_empty_array(output, depth, name, Some(("itemType", &item_type)));
+      }
+      write_open_tag(output, depth, name, Some(("itemType", &item_type)));
+      let structure =
+        meta.structures.iter().find(|structure| structure.name_hash == type_hash).ok_or_else(
+          || invalid_data(&format!("META array structure {type_hash:08X} is missing")),
+        )?;
+      let mut current_block = block_index;
+      let mut current_offset = offset;
+      for _ in 0..count {
+        write_open_tag(output, depth + 1, "Item", None);
+        write_structure(meta, current_block, current_offset, type_hash, names, depth + 2, output)?;
+        write_close_tag(output, depth + 1, "Item");
+        current_offset += structure.structure_size as usize;
+        if current_offset >= meta.data_blocks[current_block].data.len() {
+          current_offset -= meta.data_blocks[current_block].data.len();
+          current_block += 1;
+        }
+      }
+      write_close_tag(output, depth, name);
+    }
+    STRUCTURE_POINTER => {
+      if count == 0 || block_id == 0 {
+        return write_empty_array(output, depth, name, None);
+      }
+      let pointer_block = meta
+        .data_blocks
+        .get(block_id - 1)
+        .ok_or_else(|| invalid_data("META pointer array references a missing block"))?;
+      write_open_tag(output, depth, name, None);
+      for index in 0..count {
+        let pointer_offset = offset + index * 8;
+        let pointer_value = u64_at(slice(&pointer_block.data, pointer_offset, 8)?, 0)?;
+        let target_block_id = (pointer_value & 0xfff) as usize;
+        let target_offset = ((pointer_value >> 12) & 0xfffff) as usize;
+        if target_block_id == 0 {
+          write_empty_array(output, depth + 1, "Item", None)?;
+          continue;
+        }
+        let target_block = meta
+          .data_blocks
+          .get(target_block_id - 1)
+          .ok_or_else(|| invalid_data("META structure pointer references a missing block"))?;
+        let target_type = resolve_name(target_block.structure_name_hash, names);
+        write_open_tag(output, depth + 1, "Item", Some(("type", &target_type)));
+        write_structure(
+          meta,
+          target_block_id - 1,
+          target_offset,
+          target_block.structure_name_hash,
+          names,
+          depth + 2,
+          output,
+        )?;
+        write_close_tag(output, depth + 1, "Item");
+      }
+      write_close_tag(output, depth, name);
+    }
+    0x11 | 0x13 | 0x15 | 0x21 | 0x4a => {
+      if count == 0 || block_id == 0 {
+        return write_empty_array(output, depth, name, None);
+      }
+      let data_block = meta
+        .data_blocks
+        .get(block_id - 1)
+        .ok_or_else(|| invalid_data("META primitive array references a missing block"))?;
+      let (stride, is_hash) = match info.data_type {
+        0x11 => (1, false),
+        0x13 => (2, false),
+        0x15 | 0x4a | 0x21 => (4, info.data_type == 0x4a),
+        _ => unreachable!(),
+      };
+      if is_hash {
+        write_open_tag(output, depth, name, None);
+        for index in 0..count {
+          let value = u32_at(slice(&data_block.data, offset + index * stride, stride)?, 0)?;
+          write_text(output, depth + 1, "Item", &resolve_hash(value, names));
+        }
+        write_close_tag(output, depth, name);
+      } else {
+        let values = (0..count)
+          .map(|index| {
+            let bytes = slice(&data_block.data, offset + index * stride, stride)?;
+            Ok(match info.data_type {
+              0x11 => bytes[0].to_string(),
+              0x13 => u16_at(bytes, 0)?.to_string(),
+              0x15 => u32_at(bytes, 0)?.to_string(),
+              _ => format_float(f32_at(bytes, 0)?),
+            })
+          })
+          .collect::<io::Result<Vec<_>>>()?;
+        write_text(output, depth, name, &values.join(" "));
+      }
+    }
+    _ => {
+      return Err(invalid_data(&format!(
+        "unsupported META array element type 0x{:02X} for {name}",
+        info.data_type
+      )));
+    }
+  }
+  Ok(())
+}
+
+fn write_inline_bytes(
+  output: &mut String,
+  depth: usize,
+  name: &str,
+  entry: &MetaStructureEntry,
+  array_info: Option<&MetaStructureEntry>,
+  data: &[u8],
+  offset: usize,
+) -> io::Result<()> {
+  let info =
+    array_info.ok_or_else(|| invalid_data("META inline byte array is missing ARRAYINFO"))?;
+  let count = entry.reference_key as usize;
+  let stride = match info.data_type {
+    0x12 | 0x13 => 2,
+    0x14 | 0x15 | 0x21 => 4,
+    _ => 1,
+  };
+  let bytes = slice(data, offset, count.saturating_mul(stride))?;
+  let text = match info.data_type {
+    0x10 => bytes.iter().map(|byte| (*byte as i8).to_string()).collect::<Vec<_>>().join(" "),
+    0x11 => bytes.iter().map(u8::to_string).collect::<Vec<_>>().join(" "),
+    0x12 => (0..count)
+      .map(|index| i16_at(bytes, index * stride).map(|value| value.to_string()))
+      .collect::<io::Result<Vec<_>>>()?
+      .join(" "),
+    0x13 => (0..count)
+      .map(|index| u16_at(bytes, index * stride).map(|value| value.to_string()))
+      .collect::<io::Result<Vec<_>>>()?
+      .join(" "),
+    0x14 => (0..count)
+      .map(|index| i32_at(bytes, index * stride).map(|value| value.to_string()))
+      .collect::<io::Result<Vec<_>>>()?
+      .join(" "),
+    0x15 => (0..count)
+      .map(|index| u32_at(bytes, index * stride).map(|value| value.to_string()))
+      .collect::<io::Result<Vec<_>>>()?
+      .join(" "),
+    0x21 => (0..count)
+      .map(|index| f32_at(bytes, index * stride).map(format_float))
+      .collect::<io::Result<Vec<_>>>()?
+      .join(" "),
+    _ => bytes.iter().map(|byte| format!("{byte:02X}")).collect::<String>(),
+  };
+  write_text(output, depth, name, &text);
+  Ok(())
+}
+
+fn write_data_block_pointer(
+  meta: &MetaResource,
+  output: &mut String,
+  depth: usize,
+  name: &str,
+  bytes: &[u8],
+) -> io::Result<()> {
+  let pointer = u64_at(bytes, 0)?;
+  let block_id = (pointer & 0xfff) as usize;
+  if block_id == 0 {
+    return write_empty_array(output, depth, name, None);
+  }
+  let block = meta
+    .data_blocks
+    .get(block_id - 1)
+    .ok_or_else(|| invalid_data("META data pointer references a missing block"))?;
+  let mut lines = Vec::new();
+  for chunk in block.data.chunks(32) {
+    lines.push(chunk.iter().map(|byte| format!("{byte:02X}")).collect::<Vec<_>>().join(" "));
+  }
+  write_text(output, depth, name, &lines.join("\n"));
+  Ok(())
+}
+
+fn write_enum_value(
+  meta: &MetaResource,
+  output: &mut String,
+  depth: usize,
+  name: &str,
+  entry: &MetaStructureEntry,
+  bytes: &[u8],
+  names: &HashMap<u32, String>,
+) -> io::Result<()> {
+  let enum_info = meta.enums.iter().find(|info| info.name_hash == entry.reference_key);
+  let raw = if entry.data_type == 0x64 { i16_at(bytes, 0)? as i32 } else { i32_at(bytes, 0)? };
+  let value = if matches!(entry.data_type, 0x63 | 0x65) {
+    enum_info
+      .into_iter()
+      .flat_map(|info| info.entries.iter())
+      .filter(|item| item.value >= 0 && raw & (1 << item.value) != 0)
+      .map(|item| resolve_name(item.name_hash, names))
+      .collect::<Vec<_>>()
+      .join(", ")
+  } else {
+    enum_info
+      .and_then(|info| info.entries.iter().find(|item| item.value == raw))
+      .map(|item| resolve_name(item.name_hash, names))
+      .unwrap_or_else(|| raw.to_string())
+  };
+  write_text(output, depth, name, &value);
+  Ok(())
+}
+
+fn read_string_pointer(
+  meta: &MetaResource,
+  bytes: &[u8],
+) -> io::Result<String> {
+  let pointer = u64_at(bytes, 0)?;
+  let block_id = (pointer & 0xfff) as usize;
+  if block_id == 0 {
+    return Ok(String::new());
+  }
+  let offset = ((pointer >> 12) & 0xfffff) as usize;
+  let count = u16_at(bytes, 8)? as usize;
+  let block = meta
+    .data_blocks
+    .get(block_id - 1)
+    .ok_or_else(|| invalid_data("META string pointer references a missing block"))?;
+  Ok(String::from_utf8_lossy(slice(&block.data, offset, count)?).trim_end_matches('\0').to_string())
+}
+
+fn array_of_chars(
+  block: &super::meta_resource::MetaDataBlock,
+  offset: usize,
+  count: usize,
+) -> io::Result<String> {
+  let bytes = slice(&block.data, offset, count)?;
+  Ok(String::from_utf8_lossy(bytes).trim_end_matches('\0').to_string())
+}
+
+fn field_size(data_type: u8) -> usize {
+  match data_type {
+    0x01 | 0x10 | 0x11 => 1,
+    0x12 | 0x13 | 0x60 | 0x64 => 2,
+    0x14 | 0x15 | 0x21 | 0x4a | 0x62 | 0x63 | 0x65 => 4,
+    0x07 | 0x34 | 0x44 | 0x52 => 16,
+    0x33 => 12,
+    0x05 | 0x40 | 0x50 => 0,
+    0x59 => 8,
+    _ => 0,
+  }
+}
+
+fn write_vector(
+  output: &mut String,
+  depth: usize,
+  name: &str,
+  bytes: &[u8],
+  count: usize,
+) -> io::Result<()> {
+  let components = ["x", "y", "z", "w"];
+  let mut attributes = Vec::new();
+  for (index, component) in components.iter().take(count).enumerate() {
+    attributes.push((*component, format_float(f32_at(bytes, index * 4)?)));
+  }
+  write_indent(output, depth);
+  write!(output, "<{name}").unwrap();
+  for (key, value) in attributes {
+    write!(output, " {key}=\"{}\"", escape_attr(&value)).unwrap();
+  }
+  output.push_str(" />\n");
+  Ok(())
+}
+
+fn write_value(
+  output: &mut String,
+  depth: usize,
+  name: &str,
+  value: &str,
+) {
+  write_indent(output, depth);
+  writeln!(output, "<{name} value=\"{}\" />", escape_attr(value)).unwrap();
+}
+
+fn write_text(
+  output: &mut String,
+  depth: usize,
+  name: &str,
+  text: &str,
+) {
+  if text.is_empty() {
+    write_indent(output, depth);
+    writeln!(output, "<{name} />").unwrap();
+  } else {
+    write_indent(output, depth);
+    writeln!(output, "<{name}>{}</{name}>", escape_text(text)).unwrap();
+  }
+}
+
+fn write_text_pair(
+  output: &mut String,
+  depth: usize,
+  name: &str,
+  text: &str,
+) {
+  write_indent(output, depth);
+  writeln!(output, "<{name}>{}</{name}>", escape_text(text)).unwrap();
+}
+
+fn write_empty_array(
+  output: &mut String,
+  depth: usize,
+  name: &str,
+  attribute: Option<(&str, &str)>,
+) -> io::Result<()> {
+  write_indent(output, depth);
+  write!(output, "<{name}").unwrap();
+  if let Some((key, value)) = attribute {
+    write!(output, " {key}=\"{}\"", escape_attr(value)).unwrap();
+  }
+  output.push_str(" />\n");
+  Ok(())
+}
+
+fn write_open_tag(
+  output: &mut String,
+  depth: usize,
+  name: &str,
+  attribute: Option<(&str, &str)>,
+) {
+  write_indent(output, depth);
+  write!(output, "<{name}").unwrap();
+  if let Some((key, value)) = attribute {
+    write!(output, " {key}=\"{}\"", escape_attr(value)).unwrap();
+  }
+  output.push_str(">\n");
+}
+
+fn write_close_tag(
+  output: &mut String,
+  depth: usize,
+  name: &str,
+) {
+  write_indent(output, depth);
+  writeln!(output, "</{name}>").unwrap();
+}
+
+fn write_indent(
+  output: &mut String,
+  depth: usize,
+) {
+  output.extend(std::iter::repeat_n(' ', depth));
+}
+
+fn escape_attr(value: &str) -> String {
+  value.replace('&', "&amp;").replace('<', "&lt;").replace('"', "&quot;")
+}
+
+fn escape_text(value: &str) -> String {
+  value.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;")
+}
+
+fn resolve_hash(
+  hash: u32,
+  names: &HashMap<u32, String>,
+) -> String {
+  if hash == 0 { String::new() } else { resolve_name(hash, names) }
+}
+
+fn resolve_name(
+  hash: u32,
+  names: &HashMap<u32, String>,
+) -> String {
+  names.get(&hash).cloned().unwrap_or_else(|| format!("hash_{hash:08X}"))
+}
+
+fn jenk_hash(value: &str) -> u32 {
+  let mut hash = 0u32;
+  for byte in value.bytes() {
+    hash = hash.wrapping_add(byte as u32);
+    hash = hash.wrapping_add(hash << 10);
+    hash ^= hash >> 6;
+  }
+  hash = hash.wrapping_add(hash << 3);
+  hash ^= hash >> 11;
+  hash.wrapping_add(hash << 15)
+}
+
+fn format_float(value: f32) -> String {
+  if value == 0.0 && value.is_sign_positive() { "0".to_string() } else { value.to_string() }
+}
+
+fn slice(
+  bytes: &[u8],
+  offset: usize,
+  length: usize,
+) -> io::Result<&[u8]> {
+  let end = offset.checked_add(length).ok_or_else(|| invalid_data("META data range overflows"))?;
+  bytes.get(offset..end).ok_or_else(|| invalid_data("META data range is out of bounds"))
+}
+
+fn u16_at(
+  bytes: &[u8],
+  offset: usize,
+) -> io::Result<u16> {
+  Ok(u16::from_le_bytes(slice(bytes, offset, 2)?.try_into().unwrap()))
+}
+
+fn i16_at(
+  bytes: &[u8],
+  offset: usize,
+) -> io::Result<i16> {
+  Ok(i16::from_le_bytes(slice(bytes, offset, 2)?.try_into().unwrap()))
+}
+
+fn u32_at(
+  bytes: &[u8],
+  offset: usize,
+) -> io::Result<u32> {
+  Ok(u32::from_le_bytes(slice(bytes, offset, 4)?.try_into().unwrap()))
+}
+
+fn i32_at(
+  bytes: &[u8],
+  offset: usize,
+) -> io::Result<i32> {
+  Ok(i32::from_le_bytes(slice(bytes, offset, 4)?.try_into().unwrap()))
+}
+
+fn u64_at(
+  bytes: &[u8],
+  offset: usize,
+) -> io::Result<u64> {
+  Ok(u64::from_le_bytes(slice(bytes, offset, 8)?.try_into().unwrap()))
+}
+
+fn f32_at(
+  bytes: &[u8],
+  offset: usize,
+) -> io::Result<f32> {
+  Ok(f32::from_le_bytes(slice(bytes, offset, 4)?.try_into().unwrap()))
+}
+
+fn invalid_data(message: &str) -> io::Error {
+  io::Error::new(io::ErrorKind::InvalidData, message)
+}
+
+fn fallback_structure(hash: u32) -> Option<MetaStructureInfo> {
+  let hash_name = |name: &str| jenk_hash(name);
+  let entry = |name: &str, offset, data_type, reference_key| MetaStructureEntry {
+    name_hash: hash_name(name),
+    data_offset: offset,
+    data_type,
+    unknown: 0,
+    reference_type_index: 0,
+    reference_key,
+  };
+  let array_info = |data_type, reference_key| MetaStructureEntry {
+    name_hash: ARRAY_INFO_HASH,
+    data_offset: 0,
+    data_type,
+    unknown: 0,
+    reference_type_index: 0,
+    reference_key,
+  };
+  let structure = |name: &str, size, entries| MetaStructureInfo {
+    name_hash: hash_name(name),
+    structure_size: size,
+    entries,
+  };
+
+  match hash {
+    value if value == hash_name("rage__fwInstancedMapData") => Some(structure(
+      "rage__fwInstancedMapData",
+      48,
+      vec![
+        entry("ImapLink", 8, 0x4a, 0),
+        array_info(STRUCTURE, hash_name("rage__fwPropInstanceListDef")),
+        entry("PropInstanceList", 16, ARRAY, 0),
+        array_info(STRUCTURE, hash_name("rage__fwGrassInstanceListDef")),
+        entry("GrassInstanceList", 32, ARRAY, 0),
+      ],
+    )),
+    value if value == hash_name("rage__spdAABB") => Some(structure(
+      "rage__spdAABB",
+      32,
+      vec![entry("min", 0, 0x34, 0), entry("max", 16, 0x34, 0)],
+    )),
+    value if value == hash_name("rage__fwGrassInstanceListDef") => Some(structure(
+      "rage__fwGrassInstanceListDef",
+      96,
+      vec![
+        entry("BatchAABB", 0, 0x05, hash_name("rage__spdAABB")),
+        entry("ScaleRange", 32, 0x33, 0),
+        entry("archetypeName", 48, 0x4a, 0),
+        entry("lodDist", 52, 0x15, 0),
+        entry("LodFadeStartDist", 56, 0x21, 0),
+        entry("LodInstFadeRange", 60, 0x21, 0),
+        entry("OrientToTerrain", 64, 0x21, 0),
+        array_info(STRUCTURE, hash_name("rage__fwGrassInstanceListDef__InstanceData")),
+        entry("InstanceList", 72, ARRAY, 0),
+      ],
+    )),
+    value if value == hash_name("rage__fwGrassInstanceListDef__InstanceData") => Some(structure(
+      "rage__fwGrassInstanceListDef__InstanceData",
+      16,
+      vec![
+        array_info(0x13, 0),
+        entry("Position", 0, 0x50, 3),
+        entry("NormalX", 6, 0x11, 0),
+        entry("NormalY", 7, 0x11, 0),
+        array_info(0x11, 0),
+        entry("Color", 8, 0x50, 4),
+        entry("Scale", 11, 0x11, 0),
+        entry("Ao", 12, 0x11, 0),
+        array_info(0x11, 0),
+        entry("Pad", 13, 0x50, 8),
+      ],
+    )),
+    value if value == hash_name("FloatXYZ") => Some(structure(
+      "FloatXYZ",
+      12,
+      vec![entry("x", 0, 0x21, 0), entry("y", 4, 0x21, 0), entry("z", 8, 0x21, 0)],
+    )),
+    value if value == hash_name("CLODLight") => Some(structure(
+      "CLODLight",
+      136,
+      vec![
+        array_info(STRUCTURE, hash_name("FloatXYZ")),
+        entry("direction", 8, ARRAY, 0),
+        array_info(0x21, 0),
+        entry("falloff", 24, ARRAY, 0),
+        array_info(0x21, 0),
+        entry("falloffExponent", 40, ARRAY, 0),
+        array_info(0x15, 0),
+        entry("timeAndStateFlags", 56, ARRAY, 0),
+        array_info(0x15, 0),
+        entry("hash", 72, ARRAY, 0),
+        array_info(0x11, 0),
+        entry("coneInnerAngle", 88, ARRAY, 0),
+        array_info(0x11, 0),
+        entry("coneOuterAngleOrCapExt", 104, ARRAY, 0),
+        array_info(0x11, 0),
+        entry("coronaIntensity", 120, ARRAY, 0),
+      ],
+    )),
+    value if value == hash_name("CDistantLODLight") => Some(structure(
+      "CDistantLODLight",
+      48,
+      vec![
+        array_info(STRUCTURE, hash_name("FloatXYZ")),
+        entry("position", 8, ARRAY, 0),
+        array_info(0x15, 0),
+        entry("RGBI", 24, ARRAY, 0),
+        entry("numStreetLights", 40, 0x13, 0),
+        entry("category", 42, 0x13, 0),
+      ],
+    )),
+    value if value == hash_name("CLightAttrDef") => Some(structure(
+      "CLightAttrDef",
+      160,
+      vec![
+        array_info(0x21, 0),
+        entry("posn", 8, 0x50, 3),
+        array_info(0x11, 0),
+        entry("colour", 20, 0x50, 3),
+        entry("flashiness", 23, 0x11, 0),
+        entry("intensity", 24, 0x21, 0),
+        entry("flags", 28, 0x15, 0),
+        entry("boneTag", 32, 0x12, 0),
+        entry("lightType", 34, 0x11, 0),
+        entry("groupId", 35, 0x11, 0),
+        entry("timeFlags", 36, 0x15, 0),
+        entry("falloff", 40, 0x21, 0),
+        entry("falloffExponent", 44, 0x21, 0),
+        array_info(0x21, 0),
+        entry("cullingPlane", 48, 0x50, 4),
+        entry("shadowBlur", 64, 0x11, 0),
+        entry("padding1", 65, 0x11, 0),
+        entry("padding2", 66, 0x12, 0),
+        entry("padding3", 68, 0x15, 0),
+        entry("volIntensity", 72, 0x21, 0),
+        entry("volSizeScale", 76, 0x21, 0),
+        array_info(0x11, 0),
+        entry("volOuterColour", 80, 0x50, 3),
+        entry("lightHash", 83, 0x11, 0),
+        entry("volOuterIntensity", 84, 0x21, 0),
+        entry("coronaSize", 88, 0x21, 0),
+        entry("volOuterExponent", 92, 0x21, 0),
+        entry("lightFadeDistance", 96, 0x11, 0),
+        entry("shadowFadeDistance", 97, 0x11, 0),
+        entry("specularFadeDistance", 98, 0x11, 0),
+        entry("volumetricFadeDistance", 99, 0x11, 0),
+        entry("shadowNearClip", 100, 0x21, 0),
+        entry("coronaIntensity", 104, 0x21, 0),
+        entry("coronaZBias", 108, 0x21, 0),
+        array_info(0x21, 0),
+        entry("direction", 112, 0x50, 3),
+        array_info(0x21, 0),
+        entry("tangent", 124, 0x50, 3),
+        entry("coneInnerAngle", 136, 0x21, 0),
+        entry("coneOuterAngle", 140, 0x21, 0),
+        array_info(0x21, 0),
+        entry("extents", 144, 0x50, 3),
+        entry("projectedTextureKey", 156, 0x15, 0),
+      ],
+    )),
+    _ => None,
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use std::collections::HashMap;
+
+  use super::ymap_to_xml;
+
+  #[test]
+  fn serializes_occlusion_ymap_using_embedded_schema() {
+    let fixture = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+      .join("asset/extracted/brofx_mansion_06___apa_ch2_occl_05.ymap");
+    let bytes = std::fs::read(fixture).unwrap();
+    let xml = ymap_to_xml(&bytes, &HashMap::new()).unwrap();
+
+    assert!(xml.starts_with("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<CMapData>"));
+    assert!(xml.contains("<boxOccluders itemType=\"BoxOccluder\">"));
+    assert!(xml.contains("<iCenterX value=\"-1567\" />"));
+    assert!(xml.contains("<occludeModels"));
+  }
+
+  #[test]
+  fn serializes_all_checked_in_ymap_resources() {
+    let fixtures = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("asset/extracted");
+    let mut converted = 0;
+
+    for entry in std::fs::read_dir(fixtures).unwrap() {
+      let path = entry.unwrap().path();
+      if path.extension().is_some_and(|extension| extension == "ymap") {
+        let bytes = std::fs::read(&path).unwrap();
+        ymap_to_xml(&bytes, &HashMap::new()).unwrap_or_else(|error| {
+          panic!("failed to serialize {}: {error}", path.display());
+        });
+        converted += 1;
+      }
+    }
+
+    assert!(converted > 0);
+  }
+}

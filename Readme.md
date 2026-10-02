@@ -22,9 +22,12 @@ cargo run
 
 # also deploy into a FiveM resource directory (overwrites stream/ymap/{merged,clone} and omit.txt)
 cargo run -- --workspace asset --source-dir asset/source --output-resource-dir asset/merged_mlo
+
+# opt in to native Rust for binary .ymap -> .ymap.xml
+cargo run -- --native-ymap-to-xml
 ```
 
-This requires CodeWalker.Core.dll (from [CodeWalker](https://github.com/dexyfex/CodeWalker), GPL-3.0) to be available locally - it is **not** distributed with this repository. By default it is looked up at `<workspace>/CodeWalker.Core.dll` (e.g. `asset/CodeWalker.Core.dll`); set `CODEWALKER_CORE_DLL` to override the location:
+The default `.ymap` -> `.ymap.xml` backend and the `.ymap.xml` -> `.ymap` step require CodeWalker.Core.dll (from [CodeWalker](https://github.com/dexyfex/CodeWalker)) to be available locally - it is **not** distributed with this repository. `--native-ymap-to-xml` replaces only the binary-to-XML step; XML-to-binary still uses the bridge. Verify the applicable license before using or redistributing CodeWalker files. By default the DLL is looked up at `<workspace>/CodeWalker.Core.dll` (e.g. `asset/CodeWalker.Core.dll`); set `CODEWALKER_CORE_DLL` to override the location:
 
 ```bash
 # .NET SDK 8 is required to build the bridge (see .devcontainer/devcontainer.json's dotnet feature,

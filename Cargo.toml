@@ -7,6 +7,7 @@ edition = "2024"
 bpaf = "0.9.22"
 chrono = { version = "0.4.43", features = ["clock"] }
 deku = "0.20.3"
+flate2 = "1.1"
 indexmap = "2.7.2"
 log = "0.4"
 netcorehost = "0.22.0"

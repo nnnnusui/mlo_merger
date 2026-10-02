@@ -10,13 +10,13 @@
   </PropertyGroup>
 
   <PropertyGroup>
-    <!-- Path to the (GPL-3.0, not redistributed) CodeWalker.Core.dll, supplied by the caller -->
+    <!-- Path to the locally supplied CodeWalker.Core.dll. -->
     <CodeWalkerCoreDllPath Condition="'$(CodeWalkerCoreDllPath)' == ''">$(CODEWALKER_CORE_DLL)</CodeWalkerCoreDllPath>
   </PropertyGroup>
 
   <Target Name="CheckCodeWalkerCoreDllPath" BeforeTargets="BeforeBuild">
     <Error Condition="'$(CodeWalkerCoreDllPath)' == ''"
-           Text="CodeWalkerCoreDllPath (or CODEWALKER_CORE_DLL env var) must point to a local CodeWalker.Core.dll. It is not distributed with this repository (GPL-3.0)." />
+           Text="CodeWalkerCoreDllPath (or CODEWALKER_CORE_DLL env var) must point to a local CodeWalker.Core.dll. It is not distributed with this repository." />
     <Error Condition="'$(CodeWalkerCoreDllPath)' != '' AND !Exists('$(CodeWalkerCoreDllPath)')"
            Text="CodeWalkerCoreDllPath '$(CodeWalkerCoreDllPath)' does not exist." />
   </Target>
