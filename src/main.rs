@@ -78,16 +78,20 @@ fn run_pipeline(cmd: &Pipeline) -> Result<(), Box<dyn std::error::Error>> {
     return Ok(());
   }
 
-  let bridge_dll =
-    std::env::var("CODEWALKER_BRIDGE_DLL").map(std::path::PathBuf::from).unwrap_or_else(|_| {
-      std::path::PathBuf::from("bridge/CodeWalker.Bridge/bin/publish/CodeWalker.Bridge.dll")
-    });
-  let codewalker = CodeWalker::init(&bridge_dll).map_err(|e| {
-    format!(
-      "Failed to load CodeWalker.Bridge from {} ({e}). Build it with `dotnet publish bridge/CodeWalker.Bridge -c Release -o bridge/CodeWalker.Bridge/bin/publish -p:CodeWalkerCoreDllPath=<path to CodeWalker.Core.dll>`, or set CODEWALKER_BRIDGE_DLL.",
-      bridge_dll.display()
-    )
-  })?;
+  let codewalker = if !cmd.native_ymap_to_xml || !cmd.native_xml_to_ymap {
+    let bridge_dll =
+      std::env::var("CODEWALKER_BRIDGE_DLL").map(std::path::PathBuf::from).unwrap_or_else(|_| {
+        std::path::PathBuf::from("bridge/CodeWalker.Bridge/bin/publish/CodeWalker.Bridge.dll")
+      });
+    Some(CodeWalker::init(&bridge_dll).map_err(|e| {
+      format!(
+        "Failed to load CodeWalker.Bridge from {} ({e}). Build it with `dotnet publish bridge/CodeWalker.Bridge -c Release -o bridge/CodeWalker.Bridge/bin/publish -p:CodeWalkerCoreDllPath=<path to CodeWalker.Core.dll>`, or set CODEWALKER_BRIDGE_DLL.",
+        bridge_dll.display()
+      )
+    })?)
+  } else {
+    None
+  };
 
   log::info!("Step 1/4: extract");
   ExtractYmap {
@@ -106,7 +110,7 @@ fn run_pipeline(cmd: &Pipeline) -> Result<(), Box<dyn std::error::Error>> {
   if cmd.native_ymap_to_xml {
     ymap_to_xml.run_native()?;
   } else {
-    ymap_to_xml.run(&codewalker)?;
+    ymap_to_xml.run(codewalker.as_ref().expect("CodeWalker backend was initialized"))?;
   }
 
   log::info!("Step 3/4: merge xml");
@@ -121,11 +125,15 @@ fn run_pipeline(cmd: &Pipeline) -> Result<(), Box<dyn std::error::Error>> {
   .run()?;
 
   log::info!("Step 4/4: xml -> ymap");
-  Xml2Ymap {
+  let xml_to_ymap = Xml2Ymap {
     input_dir: cmd.merged_xml_dir.clone(),
     output_dir: cmd.merged_dir.clone(),
+  };
+  if cmd.native_xml_to_ymap {
+    xml_to_ymap.run_native(&cmd.extracted_dir)?;
+  } else {
+    xml_to_ymap.run(codewalker.as_ref().expect("CodeWalker backend was initialized"))?;
   }
-  .run(&codewalker)?;
 
   if let Some(resource_dir) = &cmd.output_resource_dir {
     log::info!("Step 5/5: deploy to resource dir");
@@ -232,6 +240,7 @@ mod tests {
       log_dir: tmp.join("asset/log"),
       blacklist_config: None,
       native_ymap_to_xml: false,
+      native_xml_to_ymap: false,
     };
 
     deploy_resource(&cmd, &resource_dir).unwrap();

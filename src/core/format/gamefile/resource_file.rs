@@ -1,6 +1,9 @@
 use std::io::{self, Read};
 
+use flate2::Compression;
 use flate2::read::DeflateDecoder;
+use flate2::write::DeflateEncoder;
+use std::io::Write;
 
 const RSC7_MAGIC: u32 = u32::from_le_bytes(*b"RSC7");
 const RSC7_HEADER_SIZE: usize = 16;
@@ -21,6 +24,30 @@ pub struct Rsc7Resource {
 }
 
 impl Rsc7Resource {
+  /// Creates an RSC7 resource from unpadded system and graphics bytes.
+  pub fn from_pages(
+    version: u32,
+    system_data: &[u8],
+    graphics_data: &[u8],
+  ) -> io::Result<Self> {
+    let system_flags = flags_for_data(system_data.len(), (version >> 4) & 0xf)?;
+    let graphics_flags = flags_for_data(graphics_data.len(), version & 0xf)?;
+    let system_size = page_data_size(system_flags)?;
+    let graphics_size = page_data_size(graphics_flags)?;
+    let mut padded_system = vec![0; system_size];
+    let mut padded_graphics = vec![0; graphics_size];
+    padded_system[..system_data.len()].copy_from_slice(system_data);
+    padded_graphics[..graphics_data.len()].copy_from_slice(graphics_data);
+
+    Ok(Self {
+      version,
+      system_flags,
+      graphics_flags,
+      system_data: padded_system,
+      graphics_data: padded_graphics,
+    })
+  }
+
   /// Decodes an OpenIV-compatible RSC7 resource file.
   pub fn decode(bytes: &[u8]) -> io::Result<Self> {
     if bytes.len() < RSC7_HEADER_SIZE {
@@ -81,6 +108,28 @@ impl Rsc7Resource {
       .get(offset..end)
       .ok_or_else(|| invalid_data("resource address range is outside its page region"))
   }
+
+  /// Encodes the current system and graphics pages as a compressed RSC7 resource.
+  pub fn encode(&self) -> io::Result<Vec<u8>> {
+    let system_size = page_data_size(self.system_flags)?;
+    let graphics_size = page_data_size(self.graphics_flags)?;
+    if self.system_data.len() != system_size || self.graphics_data.len() != graphics_size {
+      return Err(invalid_data("RSC7 page bytes do not match their encoded flags"));
+    }
+
+    let mut encoder = DeflateEncoder::new(Vec::new(), Compression::default());
+    encoder.write_all(&self.system_data)?;
+    encoder.write_all(&self.graphics_data)?;
+    let compressed = encoder.finish()?;
+
+    let mut bytes = Vec::with_capacity(RSC7_HEADER_SIZE + compressed.len());
+    bytes.extend_from_slice(&RSC7_MAGIC.to_le_bytes());
+    bytes.extend_from_slice(&self.version.to_le_bytes());
+    bytes.extend_from_slice(&self.system_flags.to_le_bytes());
+    bytes.extend_from_slice(&self.graphics_flags.to_le_bytes());
+    bytes.extend_from_slice(&compressed);
+    Ok(bytes)
+  }
 }
 
 fn page_data_size(flags: u32) -> io::Result<usize> {
@@ -99,6 +148,34 @@ fn page_data_size(flags: u32) -> io::Result<usize> {
   (page_count as usize)
     .checked_mul(page_size)
     .ok_or_else(|| invalid_data("RSC7 page size overflows address space"))
+}
+
+fn flags_for_data(
+  length: usize,
+  version: u32,
+) -> io::Result<u32> {
+  if length == 0 {
+    return Ok((version & 0xf) << 28);
+  }
+
+  for shift in 0..=15u32 {
+    let page_size = 0x200usize
+      .checked_shl(shift)
+      .ok_or_else(|| invalid_data("RSC7 page size shift is invalid"))?;
+    let page_count = length.div_ceil(page_size);
+    if page_count > 0x7ff {
+      continue;
+    }
+    let count = page_count as u32;
+    let count_flags = ((count & 1) << 27)
+      | (((count >> 1) & 1) << 26)
+      | (((count >> 2) & 1) << 25)
+      | (((count >> 3) & 1) << 24)
+      | (((count >> 4) & 0x7f) << 17);
+    return Ok(((version & 0xf) << 28) | (shift & 0xf) | count_flags);
+  }
+
+  Err(invalid_data("RSC7 data exceeds the maximum encodable page count"))
 }
 
 fn read_u32(
@@ -147,6 +224,43 @@ mod tests {
     }
 
     assert!(decoded > 0);
+  }
+
+  #[test]
+  fn encode_decode_preserves_all_checked_in_ymap_pages() {
+    let fixtures = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("asset/extracted");
+    let mut round_tripped = 0;
+
+    for entry in std::fs::read_dir(fixtures).unwrap() {
+      let path = entry.unwrap().path();
+      if path.extension().is_some_and(|extension| extension == "ymap") {
+        let bytes = std::fs::read(&path).unwrap();
+        let original = Rsc7Resource::decode(&bytes).unwrap();
+        let encoded = original.encode().unwrap();
+        let decoded = Rsc7Resource::decode(&encoded).unwrap();
+        assert_eq!(decoded, original, "RSC7 page mismatch for {}", path.display());
+        round_tripped += 1;
+      }
+    }
+
+    assert!(round_tripped > 0);
+  }
+
+  #[test]
+  fn creates_page_flags_for_arbitrary_resource_data() {
+    let system = vec![0x5a; 0x2345];
+    let graphics = vec![0xa5; 0x401];
+    let resource = Rsc7Resource::from_pages(2, &system, &graphics).unwrap();
+    let encoded = resource.encode().unwrap();
+    let decoded = Rsc7Resource::decode(&encoded).unwrap();
+
+    assert_eq!(decoded.version, 2);
+    assert_eq!(decoded.system_data.len(), 0x2400);
+    assert_eq!(decoded.graphics_data.len(), 0x600);
+    assert_eq!(&decoded.system_data[..system.len()], system);
+    assert_eq!(&decoded.graphics_data[..graphics.len()], graphics);
+    assert!(decoded.system_data[system.len()..].iter().all(|byte| *byte == 0));
+    assert!(decoded.graphics_data[graphics.len()..].iter().all(|byte| *byte == 0));
   }
 
   #[test]

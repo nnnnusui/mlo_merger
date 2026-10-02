@@ -8,8 +8,10 @@ use std::path::Path;
 
 use mlo_merger::core::codewalker::CodeWalker;
 use mlo_merger::core::format::gamefile::{
-  meta_resource::MetaResource, meta_xml::ymap_to_xml, resource_file::Rsc7Resource,
+  meta_resource::{MetaResource, MetaSchemaCatalog}, meta_xml::ymap_to_xml,
+  resource_file::Rsc7Resource, xml_meta_builder::meta_from_xml,
 };
+use mlo_merger::core::xmlconvert::Xml2Ymap;
 use quick_xml::Reader;
 use quick_xml::events::Event;
 
@@ -44,6 +46,175 @@ fn ymap_xml_round_trip() {
   let first = std::fs::read_to_string(&xml_out).unwrap();
   let second = std::fs::read_to_string(&xml_out2).unwrap();
   assert_eq!(first, second);
+}
+
+#[test]
+#[ignore]
+fn native_meta_rebuild_is_readable_by_codewalker() {
+  let bridge_dll = std::env::var("CODEWALKER_BRIDGE_DLL")
+    .unwrap_or_else(|_| "bridge/CodeWalker.Bridge/bin/publish/CodeWalker.Bridge.dll".to_string());
+  let codewalker = CodeWalker::init(Path::new(&bridge_dll)).expect("failed to init CodeWalker");
+  let sample = Path::new("asset/extracted/brofx_mansion_06___apa_ch2_occl_05.ymap");
+  let temp_dir = std::env::temp_dir().join("mlo_merger_native_meta_rebuild");
+  std::fs::create_dir_all(&temp_dir).unwrap();
+  let original_xml_path = temp_dir.join("original.ymap.xml");
+  let rebuilt_binary_path = temp_dir.join("rebuilt.ymap");
+  let rebuilt_xml_path = temp_dir.join("rebuilt.ymap.xml");
+
+  codewalker.ymap_to_xml(sample, &original_xml_path).unwrap();
+  let original_bytes = std::fs::read(sample).unwrap();
+  let original_resource = Rsc7Resource::decode(&original_bytes).unwrap();
+  let meta = MetaResource::parse(&original_resource).unwrap();
+  let rebuilt_resource = meta.to_rsc7(original_resource.version).unwrap();
+  std::fs::write(&rebuilt_binary_path, rebuilt_resource.encode().unwrap()).unwrap();
+
+  codewalker.ymap_to_xml(&rebuilt_binary_path, &rebuilt_xml_path).unwrap();
+  let expected = std::fs::read_to_string(original_xml_path).unwrap();
+  let actual = std::fs::read_to_string(rebuilt_xml_path).unwrap();
+  assert_eq!(canonical_xml(&actual), canonical_xml(&expected));
+}
+
+#[test]
+#[ignore]
+fn native_xml_rebuild_is_readable_by_codewalker() {
+  let bridge_dll = std::env::var("CODEWALKER_BRIDGE_DLL")
+    .unwrap_or_else(|_| "bridge/CodeWalker.Bridge/bin/publish/CodeWalker.Bridge.dll".to_string());
+  let codewalker = CodeWalker::init(Path::new(&bridge_dll)).expect("failed to init CodeWalker");
+  let input = Path::new("asset/extracted/brofx_mansion_06___apa_ch2_occl_05.ymap");
+  let reference_xml = Path::new("asset/extracted.xml/brofx_mansion_06___apa_ch2_occl_05.ymap.xml");
+  let temp_dir = std::env::temp_dir().join("mlo_merger_native_xml_rebuild");
+  std::fs::create_dir_all(&temp_dir).unwrap();
+  let rebuilt_binary_path = temp_dir.join("rebuilt.ymap");
+  let rebuilt_xml_path = temp_dir.join("rebuilt.ymap.xml");
+
+  let source_bytes = std::fs::read(input).unwrap();
+  let source_resource = Rsc7Resource::decode(&source_bytes).unwrap();
+  let schema_source = MetaResource::parse(&source_resource).unwrap();
+  let xml = std::fs::read_to_string(reference_xml).unwrap();
+  let mut catalog = MetaSchemaCatalog::default();
+  catalog.add_resource(&schema_source);
+  let rebuilt_meta = meta_from_xml(&xml, &catalog).unwrap();
+  let rebuilt_resource = rebuilt_meta.to_rsc7(source_resource.version).unwrap();
+  std::fs::write(&rebuilt_binary_path, rebuilt_resource.encode().unwrap()).unwrap();
+
+  codewalker.ymap_to_xml(&rebuilt_binary_path, &rebuilt_xml_path).unwrap();
+  let actual = std::fs::read_to_string(rebuilt_xml_path).unwrap();
+  let actual_events = canonical_xml(&actual);
+  let expected_events = canonical_xml(&xml);
+  for (index, (actual_event, expected_event)) in actual_events.iter().zip(&expected_events).enumerate() {
+    if actual_event != expected_event {
+      let actual_context = actual_events[index.saturating_sub(4)..(index + 4).min(actual_events.len())]
+        .join(" | ");
+      let expected_context =
+        expected_events[index.saturating_sub(4)..(index + 4).min(expected_events.len())].join(" | ");
+      panic!(
+        "rebuilt YMAP differs from source XML at event {index}: {}; actual=[{}]; expected=[{}]",
+        describe_difference(actual_event, expected_event),
+        actual_context,
+        expected_context
+      );
+    }
+  }
+  assert_eq!(actual_events.len(), expected_events.len(), "rebuilt YMAP has a different XML event count");
+}
+
+#[test]
+#[ignore]
+fn native_xml_to_ymap_rebuilds_full_extracted_xml_corpus() {
+  let base = Path::new(env!("CARGO_MANIFEST_DIR"));
+  let input_dir = base.join("asset/extracted.xml");
+  let schema_dir = base.join("asset/extracted");
+  let output_dir = std::env::temp_dir().join("mlo_merger_native_xml_corpus");
+  std::fs::create_dir_all(&output_dir).unwrap();
+
+  Xml2Ymap {
+    input_dir: input_dir.clone(),
+    output_dir: output_dir.clone(),
+  }
+  .run_native(&schema_dir)
+  .unwrap();
+
+  let inputs = std::fs::read_dir(input_dir)
+    .unwrap()
+    .map(|entry| entry.unwrap().path())
+    .filter(|path| path.extension().is_some_and(|extension| extension == "xml"))
+    .collect::<Vec<_>>();
+  for input in &inputs {
+    let relative = input.strip_prefix(base.join("asset/extracted.xml")).unwrap();
+    let output = output_dir.join(relative).with_extension("");
+    assert!(output.is_file(), "Native conversion did not create {}", output.display());
+    let bytes = std::fs::read(&output).unwrap();
+    Rsc7Resource::decode(&bytes)
+      .unwrap_or_else(|error| panic!("invalid native RSC7 output {}: {error}", output.display()));
+  }
+  eprintln!("Native-converted {} extracted XML files to RSC7 YMAPs.", inputs.len());
+}
+
+#[test]
+#[ignore]
+fn native_xml_to_ymap_matches_codewalker_corpus() {
+  let bridge_dll = std::env::var("CODEWALKER_BRIDGE_DLL")
+    .unwrap_or_else(|_| "bridge/CodeWalker.Bridge/bin/publish/CodeWalker.Bridge.dll".to_string());
+  let codewalker = CodeWalker::init(Path::new(&bridge_dll)).expect("failed to init CodeWalker");
+  let base = Path::new(env!("CARGO_MANIFEST_DIR"));
+  let input_dir = base.join("asset/extracted.xml");
+  let schema_dir = base.join("asset/extracted");
+  let output_dir = std::env::temp_dir().join("mlo_merger_native_xml_compare");
+  let roundtrip_dir = output_dir.join("codewalker-xml");
+  std::fs::create_dir_all(&roundtrip_dir).unwrap();
+
+  Xml2Ymap {
+    input_dir: input_dir.clone(),
+    output_dir: output_dir.join("native-ymap"),
+  }
+  .run_native(&schema_dir)
+  .unwrap();
+
+  let binary_inputs = std::fs::read_dir(&schema_dir)
+    .unwrap()
+    .map(|entry| entry.unwrap().path())
+    .filter(|path| path.extension().is_some_and(|extension| extension == "ymap"))
+    .collect::<Vec<_>>();
+  for input in &binary_inputs {
+    codewalker.preload_names(input).unwrap();
+  }
+
+  let xml_inputs = std::fs::read_dir(&input_dir)
+    .unwrap()
+    .map(|entry| entry.unwrap().path())
+    .filter(|path| path.extension().is_some_and(|extension| extension == "xml"))
+    .collect::<Vec<_>>();
+  let native_dir = output_dir.join("native-ymap");
+  let mut compared = 0usize;
+  let mut source_errors = 0usize;
+  for input in &xml_inputs {
+    let source_xml = std::fs::read_to_string(input).unwrap();
+    if source_xml.contains("<error>") {
+      source_errors += 1;
+      continue;
+    }
+    let relative = input.strip_prefix(&input_dir).unwrap();
+    let native_binary = native_dir.join(relative).with_extension("");
+    let roundtrip_xml = roundtrip_dir.join(relative);
+    codewalker.ymap_to_xml(&native_binary, &roundtrip_xml).unwrap();
+    let actual = std::fs::read_to_string(roundtrip_xml).unwrap();
+    let actual_events = canonical_xml(&actual);
+    let expected_events = canonical_xml(&source_xml);
+    for (index, (actual_event, expected_event)) in actual_events.iter().zip(&expected_events).enumerate() {
+      if actual_event != expected_event {
+        panic!(
+          "Native XML->YMAP differs after CodeWalker re-export for {} at event {index}: {}",
+          input.display(),
+          describe_difference(actual_event, expected_event)
+        );
+      }
+    }
+    assert_eq!(actual_events.len(), expected_events.len(), "{} has a different XML event count", input.display());
+    compared += 1;
+  }
+
+  assert!(compared > 0, "no XML files were eligible for differential comparison");
+  eprintln!("Compared {compared} Native-built YMAPs; skipped {source_errors} source XMLs containing <error> nodes.");
 }
 
 #[test]
@@ -135,16 +306,16 @@ fn native_ymap_xml_matches_codewalker_corpus() {
     {
       let native_context = native_events[index.saturating_sub(3)..index].join(" | ");
       let expected_context = expected_events[index.saturating_sub(3)..index].join(" | ");
-      assert_eq!(
-        native_event,
-        expected_event,
-        "{} differs from CodeWalker at XML event {index}: native='{}', CodeWalker='{}'; native context=[{}], CodeWalker context=[{}]",
-        input.display(),
-        truncate(native_event),
-        truncate(expected_event),
-        native_context,
-        expected_context
-      );
+      if native_event != expected_event {
+        panic!(
+          "{} differs from CodeWalker at XML event {index}: native='{}', CodeWalker='{}'; native context=[{}], CodeWalker context=[{}]",
+          input.display(),
+          truncate(native_event),
+          truncate(expected_event),
+          native_context,
+          expected_context
+        );
+      }
     }
     assert_eq!(
       native_events.len(),
@@ -202,6 +373,22 @@ fn truncate(value: &str) -> &str {
   value.get(..value.floor_char_boundary(240)).unwrap_or(value)
 }
 
+fn describe_difference(actual: &str, expected: &str) -> String {
+  let offset = actual
+    .chars()
+    .zip(expected.chars())
+    .position(|(actual, expected)| actual != expected)
+    .unwrap_or_else(|| actual.len().min(expected.len()));
+  let start = offset.saturating_sub(60);
+  let actual_end = (offset + 100).min(actual.len());
+  let expected_end = (offset + 100).min(expected.len());
+  format!(
+    "first text offset {offset}; native='{}', source='{}'",
+    actual.get(start..actual_end).unwrap_or(actual),
+    expected.get(start..expected_end).unwrap_or(expected)
+  )
+}
+
 fn canonical_xml(xml: &str) -> Vec<String> {
   let mut normalized = Vec::new();
   let mut reader = Reader::from_str(xml);
@@ -252,9 +439,33 @@ fn canonical_element(
   attributes.sort();
   format!(
     "{}{}",
-    String::from_utf8_lossy(element.name().as_ref()),
+    normalize_element_name(&String::from_utf8_lossy(element.name().as_ref())),
     attributes.into_iter().map(|(name, value)| format!(" {name}={value}")).collect::<String>()
   )
+}
+
+fn normalize_element_name(name: &str) -> String {
+  let reserved_type = match name {
+    "STRING" => Some(0x10),
+    "BYTE" => Some(0x11),
+    "USHORT" => Some(0x13),
+    "UINT" => Some(0x15),
+    "FLOAT" => Some(0x21),
+    "VECTOR4" => Some(0x33),
+    "hash" => Some(0x4a),
+    "POINTER" => Some(0x07),
+    "ARRAYINFO" => Some(0x100),
+    _ => None,
+  };
+  if let Some(hash) = reserved_type {
+    return format!("hash:{hash:08X}");
+  }
+  if let Some(hash) = name.strip_prefix("hash_")
+    && let Ok(hash) = u32::from_str_radix(hash, 16)
+  {
+    return format!("hash:{hash:08X}");
+  }
+  name.to_string()
 }
 
 fn normalize_value(value: &str) -> String {
