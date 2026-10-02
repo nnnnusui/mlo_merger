@@ -12,6 +12,8 @@ This tool merges FiveM mod map (`.ymap`) files while avoiding conflicts between 
 
 `cargo run` with no arguments (`Command::Pipeline` in [src/cli/command.rs](../src/cli/command.rs)) runs all steps in order after a confirmation prompt (step 5 only if `--output-resource-dir` is given). Each of steps 1-4 is also available as an individual flag-based subcommand (`--extract-ymap`, `--merge-ymap-xml`, etc.) for manual use.
 
+`--check-stream-conflicts --input <DIR> --output <FILE>` uses the same manifest-aware resource discovery as extraction, scans each resource's `stream/` (or a stream directory directly), groups files by case-insensitive basename, and writes conflicting relative paths as JSON.
+
 ## CodeWalker bridge (ymap <-> xml conversion)
 
 [CodeWalker](https://github.com/dexyfex/CodeWalker) is the reference implementation for GTA5 `.ymap` binary <-> XML conversion. Its `CodeWalker.Core.dll` is a managed .NET (netstandard2.0) assembly.

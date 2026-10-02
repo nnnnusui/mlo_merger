@@ -2,7 +2,10 @@ use std::path::PathBuf;
 
 use bpaf::*;
 
-use crate::core::{extract::ExtractYmap, getprop::GetProp, merge::run::MergeYmapXml};
+use crate::core::{
+  extract::ExtractYmap, getprop::GetProp, merge::run::MergeYmapXml,
+  stream_conflicts::CheckStreamConflicts,
+};
 
 #[derive(Debug, Clone)]
 pub enum Command {
@@ -11,6 +14,7 @@ pub enum Command {
   MergeYmapXml(MergeYmapXml),
   ExtractYmap(ExtractYmap),
   GetProp(GetProp),
+  CheckStreamConflicts(CheckStreamConflicts),
   Pipeline(Pipeline),
 }
 
@@ -21,6 +25,7 @@ pub fn parse_args() -> Command {
     merge_ymap_xml(),
     extract_ymap(),
     get_prop(),
+    check_stream_conflicts(),
     pipeline(),
   ])
   .to_options()
@@ -115,6 +120,27 @@ fn get_prop() -> impl Parser<Command> {
   construct!(flag, input).map(|(_, input)| {
     Command::GetProp(GetProp {
       input,
+    })
+  })
+}
+
+fn check_stream_conflicts() -> impl Parser<Command> {
+  let flag = long("check-stream-conflicts")
+    .help("Find duplicate filenames across FiveM stream directories and write a JSON report")
+    .req_flag(());
+  let input = short('i')
+    .long("input")
+    .argument::<PathBuf>("DIR")
+    .help("Resource root containing stream directories, or a stream directory");
+  let output = short('o')
+    .long("output")
+    .argument::<PathBuf>("FILE")
+    .help("Path to write the JSON conflict report");
+
+  construct!(flag, input, output).map(|(_, input_dir, output_file)| {
+    Command::CheckStreamConflicts(CheckStreamConflicts {
+      input_dir,
+      output_file,
     })
   })
 }

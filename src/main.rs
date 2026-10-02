@@ -48,6 +48,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Command::MergeYmapXml(cmd) => cmd.run()?,
     Command::ExtractYmap(cmd) => cmd.run()?,
     Command::GetProp(cmd) => cmd.run()?,
+    Command::CheckStreamConflicts(cmd) => cmd.run()?,
     Command::Pipeline(cmd) => run_pipeline(&cmd)?,
   };
 

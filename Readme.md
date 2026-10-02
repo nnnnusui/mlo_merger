@@ -25,6 +25,9 @@ cargo run -- --workspace asset --source-dir asset/source --output-resource-dir a
 
 # opt in to CodeWalker.Core.dll for both conversion directions
 cargo run -- --use-codewalker-dll
+
+# scan nested FiveM stream folders for duplicate basenames
+cargo run -- --check-stream-conflicts --input asset/source --output asset/stream-conflicts.json
 ```
 
 Both conversion directions use the Native Rust backend by default. `--use-codewalker-dll` selects CodeWalker.Core.dll (from [CodeWalker](https://github.com/dexyfex/CodeWalker)) instead. The DLL must be available locally and is **not** distributed with this repository. Native XML-to-YMAP conversion builds its schema catalog from extracted binary YMAPs. Verify the applicable license before using or redistributing CodeWalker files. By default the DLL is looked up at `<workspace>/CodeWalker.Core.dll` (e.g. `asset/CodeWalker.Core.dll`); set `CODEWALKER_CORE_DLL` to override the location:
@@ -53,6 +56,8 @@ For detailed command information, please refer to:
 - `--help` flag for each command
 - `.cargo/config.toml` for command aliases
 - `src/cli/command.rs` for implementation details
+
+`--check-stream-conflicts` uses the same manifest-aware resource discovery as extraction, then scans each resource's `stream/` recursively (or scans a `stream/` directory directly). It groups files by case-insensitive basename and writes duplicate names with their relative paths to the requested JSON file.
 
 ### Example: Extract
 

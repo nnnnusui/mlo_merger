@@ -92,7 +92,7 @@ impl ExtractYmap {
 /// - Targets directories directly under the specified path
 /// - Recursively explores directories enclosed in `[...]`
 /// - Supports nested `[...]/[...]` structures
-fn get_resource_directories(
+pub fn get_resource_directories(
   base_dir: &PathBuf
 ) -> Result<Vec<PathBuf>, Box<dyn std::error::Error>> {
   let mut resources = explore_directory(base_dir);
