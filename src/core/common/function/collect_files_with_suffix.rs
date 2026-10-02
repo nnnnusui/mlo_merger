@@ -3,7 +3,10 @@ use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
 /// Recursively collects all files with the specified suffix from a directory
-pub fn collect_files_with_suffix(dir: &Path, suffix: &str) -> Vec<PathBuf> {
+pub fn collect_files_with_suffix(
+  dir: &Path,
+  suffix: &str,
+) -> Vec<PathBuf> {
   WalkDir::new(dir)
     .into_iter()
     .filter_map(|e| e.ok())

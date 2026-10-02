@@ -7,7 +7,7 @@ use quick_xml::de::from_str;
 use crate::core::common::function::collect_files_with_suffix;
 use crate::core::format::ymap::xml::XmlYmap;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct GetProp {
   pub input: PathBuf,
 }

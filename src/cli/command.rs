@@ -4,13 +4,14 @@ use bpaf::*;
 
 use crate::core::{extract::ExtractYmap, getprop::GetProp, merge::run::MergeYmapXml};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Command {
   ParseYmapXml(ParseYmapXml),
   // ParseYmap(ParseYmap),
   MergeYmapXml(MergeYmapXml),
   ExtractYmap(ExtractYmap),
   GetProp(GetProp),
+  Pipeline(Pipeline),
 }
 
 pub fn parse_args() -> Command {
@@ -20,12 +21,13 @@ pub fn parse_args() -> Command {
     merge_ymap_xml(),
     extract_ymap(),
     get_prop(),
+    pipeline(),
   ])
   .to_options()
   .run()
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ParseYmapXml {
   pub input: PathBuf,
 }
@@ -115,4 +117,58 @@ fn get_prop() -> impl Parser<Command> {
       input,
     })
   })
+}
+
+/// Default command run with no flags: extract -> ymap2xml -> merge -> xml2ymap,
+/// then (if `output_resource_dir` is set) deploy into a FiveM resource layout.
+/// All paths except `source_dir`/`output_resource_dir` are derived from `workspace`.
+/// Must stay last in `parse_args`' alternation since its flags are all optional.
+#[derive(Debug, Clone)]
+pub struct Pipeline {
+  pub workspace: PathBuf,
+  pub source_dir: PathBuf,
+  pub output_resource_dir: Option<PathBuf>,
+  pub vanilla_xml_dir: PathBuf,
+  pub extracted_dir: PathBuf,
+  pub extracted_xml_dir: PathBuf,
+  pub merged_xml_dir: PathBuf,
+  pub merged_dir: PathBuf,
+  pub log_dir: PathBuf,
+  pub blacklist_config: Option<PathBuf>,
+}
+
+fn pipeline() -> impl Parser<Command> {
+  let workspace = long("workspace")
+    .help("Root directory holding vanilla/extracted/merged/blacklist/log (default: asset)")
+    .argument::<PathBuf>("DIR")
+    .fallback(PathBuf::from("asset"));
+  let source_dir = long("source-dir")
+    .help("MLO source directory (default: <workspace>/source)")
+    .argument::<PathBuf>("DIR")
+    .optional();
+  let output_resource_dir = long("output-resource-dir")
+    .help(
+      "FiveM resource directory to deploy into: overwrites stream/ymap/merged, \
+       stream/ymap/clone and omit.txt",
+    )
+    .argument::<PathBuf>("DIR")
+    .optional();
+
+  construct!(workspace, source_dir, output_resource_dir).map(
+    |(workspace, source_dir, output_resource_dir)| {
+      let blacklist_config = workspace.join("blacklist.toml");
+      Command::Pipeline(Pipeline {
+        source_dir: source_dir.unwrap_or_else(|| workspace.join("source")),
+        output_resource_dir,
+        vanilla_xml_dir: workspace.join("vanilla/ymap.xml"),
+        extracted_dir: workspace.join("extracted"),
+        extracted_xml_dir: workspace.join("extracted.xml"),
+        merged_xml_dir: workspace.join("merged.xml"),
+        merged_dir: workspace.join("merged"),
+        log_dir: workspace.join("log"),
+        blacklist_config: blacklist_config.exists().then_some(blacklist_config),
+        workspace,
+      })
+    },
+  )
 }

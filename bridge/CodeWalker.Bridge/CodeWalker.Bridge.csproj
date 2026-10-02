@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>disable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <!-- a class library normally skips runtimeconfig.json; hostfxr component hosting needs it -->
+    <GenerateRuntimeConfigurationFiles>true</GenerateRuntimeConfigurationFiles>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <!-- Path to the (GPL-3.0, not redistributed) CodeWalker.Core.dll, supplied by the caller -->
+    <CodeWalkerCoreDllPath Condition="'$(CodeWalkerCoreDllPath)' == ''">$(CODEWALKER_CORE_DLL)</CodeWalkerCoreDllPath>
+  </PropertyGroup>
+
+  <Target Name="CheckCodeWalkerCoreDllPath" BeforeTargets="BeforeBuild">
+    <Error Condition="'$(CodeWalkerCoreDllPath)' == ''"
+           Text="CodeWalkerCoreDllPath (or CODEWALKER_CORE_DLL env var) must point to a local CodeWalker.Core.dll. It is not distributed with this repository (GPL-3.0)." />
+    <Error Condition="'$(CodeWalkerCoreDllPath)' != '' AND !Exists('$(CodeWalkerCoreDllPath)')"
+           Text="CodeWalkerCoreDllPath '$(CodeWalkerCoreDllPath)' does not exist." />
+  </Target>
+
+  <ItemGroup>
+    <Reference Include="CodeWalker.Core">
+      <HintPath>$(CodeWalkerCoreDllPath)</HintPath>
+      <!-- must be copied to the output dir so the hosted runtime can resolve it -->
+      <Private>true</Private>
+    </Reference>
+    <PackageReference Include="SharpDX" Version="4.2.0" />
+    <PackageReference Include="SharpDX.Mathematics" Version="4.2.0" />
+  </ItemGroup>
+
+</Project>

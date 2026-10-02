@@ -2,3 +2,8 @@
 /asset/**/*
 !/asset/**/*/
 !.gitkeep
+*.log
+
+# CodeWalker.Bridge build outputs (may embed a local, non-redistributable CodeWalker.Core.dll)
+/bridge/**/bin/
+/bridge/**/obj/

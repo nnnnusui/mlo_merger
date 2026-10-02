@@ -10,7 +10,7 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct MergeYmapXml {
   pub vanilla_dir: PathBuf,
   pub mod_dir: PathBuf,

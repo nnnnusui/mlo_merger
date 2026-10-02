@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 
 use crate::core::common::function::collect_files_with_suffix;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ExtractYmap {
   pub input_dir: PathBuf,
   pub output_dir: PathBuf,
