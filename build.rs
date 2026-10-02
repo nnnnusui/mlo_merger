@@ -12,7 +12,7 @@ fn main() {
 
   if Command::new("dotnet").arg("--version").output().is_err() {
     println!(
-      "cargo:warning=`dotnet` was not found on PATH. Install the .NET SDK to enable the CodeWalker.Bridge (ymap<->xml conversion / default pipeline command)."
+      "cargo:warning=`dotnet` was not found on PATH. Install the .NET SDK to enable the optional CodeWalker.Bridge backend (`--use-codewalker-dll`)."
     );
     return;
   }
@@ -24,7 +24,7 @@ fn main() {
   };
   if !dll_path.exists() {
     println!(
-      "cargo:warning=CodeWalker.Core.dll not found at {} (set CODEWALKER_CORE_DLL, or place it there). It is not distributed with this repo. The CodeWalker-backed pipeline path will not be available.",
+      "cargo:warning=CodeWalker.Core.dll not found at {} (set CODEWALKER_CORE_DLL, or place it there). It is not distributed with this repo. The optional `--use-codewalker-dll` backend will not be available.",
       dll_path.display()
     );
     return;

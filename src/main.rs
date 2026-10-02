@@ -58,14 +58,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 fn run_pipeline(cmd: &Pipeline) -> Result<(), Box<dyn std::error::Error>> {
   println!("This will run the full pipeline (workspace: {}):", cmd.workspace.display());
   println!("  1. extract   {} -> {}", cmd.source_dir.display(), cmd.extracted_dir.display());
-  println!("  2. ymap2xml  {} -> {}", cmd.extracted_dir.display(), cmd.extracted_xml_dir.display());
+  let backend = if cmd.use_codewalker_dll { "CodeWalker" } else { "Native" };
+  println!(
+    "  2. ymap2xml  {} -> {} ({backend})",
+    cmd.extracted_dir.display(),
+    cmd.extracted_xml_dir.display()
+  );
   println!(
     "  3. mergexml  {} + {} -> {}",
     cmd.vanilla_xml_dir.display(),
     cmd.extracted_xml_dir.display(),
     cmd.merged_xml_dir.display()
   );
-  println!("  4. xml2ymap  {} -> {}", cmd.merged_xml_dir.display(), cmd.merged_dir.display());
+  println!(
+    "  4. xml2ymap  {} -> {} ({backend})",
+    cmd.merged_xml_dir.display(),
+    cmd.merged_dir.display()
+  );
   if let Some(resource_dir) = &cmd.output_resource_dir {
     println!("  5. deploy    {} -> {}", cmd.merged_dir.display(), resource_dir.display());
   }
@@ -78,7 +87,7 @@ fn run_pipeline(cmd: &Pipeline) -> Result<(), Box<dyn std::error::Error>> {
     return Ok(());
   }
 
-  let codewalker = if !cmd.native_ymap_to_xml || !cmd.native_xml_to_ymap {
+  let codewalker = if cmd.use_codewalker_dll {
     let bridge_dll =
       std::env::var("CODEWALKER_BRIDGE_DLL").map(std::path::PathBuf::from).unwrap_or_else(|_| {
         std::path::PathBuf::from("bridge/CodeWalker.Bridge/bin/publish/CodeWalker.Bridge.dll")
@@ -107,10 +116,10 @@ fn run_pipeline(cmd: &Pipeline) -> Result<(), Box<dyn std::error::Error>> {
     input_dir: cmd.extracted_dir.clone(),
     output_dir: cmd.extracted_xml_dir.clone(),
   };
-  if cmd.native_ymap_to_xml {
-    ymap_to_xml.run_native()?;
-  } else {
+  if cmd.use_codewalker_dll {
     ymap_to_xml.run(codewalker.as_ref().expect("CodeWalker backend was initialized"))?;
+  } else {
+    ymap_to_xml.run_native()?;
   }
 
   log::info!("Step 3/4: merge xml");
@@ -129,10 +138,10 @@ fn run_pipeline(cmd: &Pipeline) -> Result<(), Box<dyn std::error::Error>> {
     input_dir: cmd.merged_xml_dir.clone(),
     output_dir: cmd.merged_dir.clone(),
   };
-  if cmd.native_xml_to_ymap {
-    xml_to_ymap.run_native(&cmd.extracted_dir)?;
-  } else {
+  if cmd.use_codewalker_dll {
     xml_to_ymap.run(codewalker.as_ref().expect("CodeWalker backend was initialized"))?;
+  } else {
+    xml_to_ymap.run_native(&cmd.extracted_dir)?;
   }
 
   if let Some(resource_dir) = &cmd.output_resource_dir {
@@ -239,8 +248,7 @@ mod tests {
       merged_dir,
       log_dir: tmp.join("asset/log"),
       blacklist_config: None,
-      native_ymap_to_xml: false,
-      native_xml_to_ymap: false,
+      use_codewalker_dll: false,
     };
 
     deploy_resource(&cmd, &resource_dir).unwrap();

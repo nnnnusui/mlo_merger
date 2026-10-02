@@ -23,14 +23,11 @@ cargo run
 # also deploy into a FiveM resource directory (overwrites stream/ymap/{merged,clone} and omit.txt)
 cargo run -- --workspace asset --source-dir asset/source --output-resource-dir asset/merged_mlo
 
-# opt in to native Rust for binary .ymap -> .ymap.xml
-cargo run -- --native-ymap-to-xml
-
-# use Native for both binary <-> XML steps (does not need CodeWalker.Core.dll)
-cargo run -- --native-ymap-to-xml --native-xml-to-ymap
+# opt in to CodeWalker.Core.dll for both conversion directions
+cargo run -- --use-codewalker-dll
 ```
 
-By default both conversion steps use CodeWalker.Core.dll (from [CodeWalker](https://github.com/dexyfex/CodeWalker)), which must be available locally and is **not** distributed with this repository. `--native-ymap-to-xml` and `--native-xml-to-ymap` independently select the Native backend for each direction; the reverse Native converter builds its schema catalog from extracted binary YMAPs. Using both flags removes the pipeline's runtime CodeWalker dependency. Verify the applicable license before using or redistributing CodeWalker files. By default the DLL is looked up at `<workspace>/CodeWalker.Core.dll` (e.g. `asset/CodeWalker.Core.dll`); set `CODEWALKER_CORE_DLL` to override the location:
+Both conversion directions use the Native Rust backend by default. `--use-codewalker-dll` selects CodeWalker.Core.dll (from [CodeWalker](https://github.com/dexyfex/CodeWalker)) instead. The DLL must be available locally and is **not** distributed with this repository. Native XML-to-YMAP conversion builds its schema catalog from extracted binary YMAPs. Verify the applicable license before using or redistributing CodeWalker files. By default the DLL is looked up at `<workspace>/CodeWalker.Core.dll` (e.g. `asset/CodeWalker.Core.dll`); set `CODEWALKER_CORE_DLL` to override the location:
 
 ```bash
 # .NET SDK 8 is required to build the bridge (see .devcontainer/devcontainer.json's dotnet feature,
@@ -39,7 +36,7 @@ export CODEWALKER_CORE_DLL=/path/to/CodeWalker.Core.dll  # optional, defaults to
 cargo run
 ```
 
-`cargo build`/`cargo run` will build `bridge/CodeWalker.Bridge` (a small .NET class library wrapping CodeWalker.Core's ymap<->xml conversion) automatically via `build.rs` whenever `CODEWALKER_CORE_DLL` is set and `dotnet` is on `PATH`. If either is missing, the build prints a warning and the pipeline command will fail at runtime with instructions - the other flag-based commands below are unaffected.
+When `--use-codewalker-dll` is selected, `cargo build`/`cargo run` builds `bridge/CodeWalker.Bridge` automatically via `build.rs` if `CODEWALKER_CORE_DLL` and `dotnet` are available. Otherwise, the default Native pipeline does not require the .NET SDK or DLL.
 
 ### Basic Workflow (manual / individual steps)
 
