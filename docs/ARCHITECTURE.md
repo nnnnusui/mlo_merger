@@ -48,6 +48,41 @@ The initial run produced 11,472 RSC7 XML files. Four inputs
 Native export now produces their `.ymap.pso.xml` files as well; none belonged
 to the targeted merge set.
 
+### Native YMAP Runtime Verification
+
+XML parity alone does not establish game-load safety. The user observed
+in-game crashes with Native rebuilt `h4_mph4_terrain_02_grass_0.ymap` and
+`bkr_id1_09.ymap`, while CodeWalker GUI imports of the same merged XML loaded
+correctly. The ignored `rebuild_crashing_merged_ymaps_with_codewalker` test
+generates only these two DLL binaries under `asset/merged_codewalker_dll`
+without overwriting Native or GUI outputs. Both DLL binaries were byte-identical
+to the known-good GUI versions; all three variants re-export equivalent XML.
+Comparison identified three Native writing defects invisible to XML parity:
+
+- `MetaStructureInfo.StructureKey`, `MetaEnumInfo.EnumKey`, and additional
+	schema metadata were discarded during parsing. The writer substituted name
+	hashes for layout keys and zeroed attributes. These fields are now preserved.
+- `FilePagesInfo.SystemPagesCount` used weighted page-size units rather than
+	the actual number of pages. The small crash case declared 18 pages for two
+	actual pages; the grass case declared 239 for 114 actual pages.
+- Native contiguous allocation could split META data blocks across resource
+	pages (one block in the small case, 107 in the grass case). CodeWalker packs
+	each block inside a page. Native `from_pages` now allocates one sufficiently
+	large power-of-two page per nonempty region, keeping contiguous blocks intact.
+	This trades additional padding for a straightforward valid runtime layout.
+
+The `native_crash_rebuilds_preserve_runtime_schemas` ignored test compares every
+used schema/enum with the known-good DLL, checks the page count and block
+containment, and compares re-exported XML. Both cases pass. Corrected Native
+files are saved in `asset/merged_native_fixed`; runtime re-testing by the user
+is still required. Existing Native/GUI/DLL files and deployed resources are
+not overwritten. Profiles and XML are under `asset/merge_validation/crash_rebuild`
+and `asset/merge_validation/native_crash_fix`.
+
+```sh
+CODEWALKER_CORE_DLL=/workspace/asset/CodeWalker.Core.dll cargo test --test codewalker_roundtrip rebuild_crashing_merged_ymaps_with_codewalker -- --ignored --nocapture
+```
+
 ### PSO Conversion and Name Resolution
 
 `gamefile/pso.rs` parses big-endian PSIN, PMAP, PSCH, and string sections.

@@ -9,6 +9,9 @@
 - [x] Validate only the 31 affected YMAPs and their 68 mod references, including XML reload.
 - [x] Identify the four rejected vanilla inputs as PSO/PSIN and verify Native export/template rebuild with CodeWalker.
 - [ ] Verify merged grass output through binary rebuild and in-game rendering, including extent handling.
+- [x] Prepare DLL rebuilds of the two in-game crash cases; both are byte-identical to the known-good GUI imports.
+- [x] Fix Native runtime metadata: preserve StructureKey/EnumKey and schema attributes, count actual pages, and prevent META blocks crossing RSC page boundaries.
+- [ ] Re-test corrected Native grass and `bkr_id1_09` in-game; fixed files are under `asset/merged_native_fixed`.
 
 ## Resource Conversion Tests
 

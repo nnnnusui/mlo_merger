@@ -158,21 +158,18 @@ fn flags_for_data(
     return Ok((version & 0xf) << 28);
   }
 
-  for shift in 0..=15u32 {
+  for shift in 4..=15u32 {
     let page_size = 0x200usize
       .checked_shl(shift)
       .ok_or_else(|| invalid_data("RSC7 page size shift is invalid"))?;
-    let page_count = length.div_ceil(page_size);
-    if page_count > 0x7ff {
-      continue;
+    if length <= page_size {
+      return Ok(((version & 0xf) << 28) | shift | (1 << 27));
     }
-    let count = page_count as u32;
-    let count_flags = ((count & 1) << 27)
-      | (((count >> 1) & 1) << 26)
-      | (((count >> 2) & 1) << 25)
-      | (((count >> 3) & 1) << 24)
-      | (((count >> 4) & 0x7f) << 17);
-    return Ok(((version & 0xf) << 28) | (shift & 0xf) | count_flags);
+  }
+  for (multiplier, count_flag) in [(2usize, 1 << 26), (4, 1 << 25), (8, 1 << 24), (16, 1 << 17)] {
+    if length <= (0x200usize << 15) * multiplier && length <= 0x1000_0000 {
+      return Ok(((version & 0xf) << 28) | 15 | count_flag);
+    }
   }
 
   Err(invalid_data("RSC7 data exceeds the maximum encodable page count"))
@@ -194,6 +191,27 @@ fn invalid_data(message: &str) -> io::Error {
 #[cfg(test)]
 mod tests {
   use super::Rsc7Resource;
+
+  #[test]
+  fn contiguous_resources_use_one_page_without_splitting_blocks() {
+    for length in [1, 9_000, 50_000, 3_000_000] {
+      let data = vec![0x5a; length];
+      let resource = Rsc7Resource::from_pages(2, &data, &[]).unwrap();
+      let flags = resource.system_flags;
+      let count = ((flags >> 27) & 1)
+        + ((flags >> 26) & 1)
+        + ((flags >> 25) & 1)
+        + ((flags >> 24) & 1)
+        + ((flags >> 17) & 0x7f)
+        + ((flags >> 11) & 0x3f)
+        + ((flags >> 7) & 0xf)
+        + ((flags >> 5) & 3)
+        + ((flags >> 4) & 1);
+      assert_eq!(count, 1);
+      assert_eq!(&resource.system_data[..length], data.as_slice());
+      assert_eq!(Rsc7Resource::decode(&resource.encode().unwrap()).unwrap(), resource);
+    }
+  }
 
   #[test]
   fn decodes_checked_in_ymap_resource() {
@@ -255,8 +273,8 @@ mod tests {
     let decoded = Rsc7Resource::decode(&encoded).unwrap();
 
     assert_eq!(decoded.version, 2);
-    assert_eq!(decoded.system_data.len(), 0x2400);
-    assert_eq!(decoded.graphics_data.len(), 0x600);
+    assert_eq!(decoded.system_data.len(), 0x4000);
+    assert_eq!(decoded.graphics_data.len(), 0x2000);
     assert_eq!(&decoded.system_data[..system.len()], system);
     assert_eq!(&decoded.graphics_data[..graphics.len()], graphics);
     assert!(decoded.system_data[system.len()..].iter().all(|byte| *byte == 0));

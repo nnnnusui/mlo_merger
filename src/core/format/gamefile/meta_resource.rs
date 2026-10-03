@@ -70,6 +70,14 @@ impl MetaResource {
 pub struct MetaStructureInfo {
   /// Hash identifying this structure type.
   pub name_hash: u32,
+  /// Layout/version key used by the runtime, distinct from the type-name hash.
+  pub structure_key: u32,
+  /// Structure metadata at record offset 8.
+  pub unknown_8: u32,
+  /// Reserved structure metadata at record offset 12.
+  pub unknown_12: u32,
+  /// Reserved structure metadata at record offset 28.
+  pub unknown_28: i16,
   /// Byte length of one structure instance.
   pub structure_size: u32,
   /// Fields in declaration order.
@@ -98,6 +106,10 @@ pub struct MetaStructureEntry {
 pub struct MetaEnumInfo {
   /// Hash identifying this enum type.
   pub name_hash: u32,
+  /// Enum layout/version key stored separately from the name hash.
+  pub enum_key: u32,
+  /// Reserved enum metadata at record offset 20.
+  pub unknown_20: u32,
   /// Enum values in declaration order.
   pub entries: Vec<MetaEnumEntry>,
 }
@@ -177,13 +189,16 @@ impl MetaResource {
       let entries_offset = append_records(&mut system, &structure.entries, 16)?;
       let record = structure_table + index * 32;
       write_u32(&mut system, record, structure.name_hash)?;
-      write_u32(&mut system, record + 4, structure.name_hash)?;
+      write_u32(&mut system, record + 4, structure.structure_key)?;
+      write_u32(&mut system, record + 8, structure.unknown_8)?;
+      write_u32(&mut system, record + 12, structure.unknown_12)?;
       write_u64(
         &mut system,
         record + 16,
         address_if_nonempty(entries_offset, structure.entries.len()),
       )?;
       write_u32(&mut system, record + 24, structure.structure_size)?;
+      write_i16(&mut system, record + 28, structure.unknown_28)?;
       write_i16(&mut system, record + 30, structure.entries.len() as i16)?;
 
       for (entry_index, entry) in structure.entries.iter().enumerate() {
@@ -201,13 +216,14 @@ impl MetaResource {
       let entries_offset = append_records(&mut system, &enum_info.entries, 8)?;
       let record = enum_table + index * 24;
       write_u32(&mut system, record, enum_info.name_hash)?;
-      write_u32(&mut system, record + 4, enum_info.name_hash)?;
+      write_u32(&mut system, record + 4, enum_info.enum_key)?;
       write_u64(
         &mut system,
         record + 8,
         address_if_nonempty(entries_offset, enum_info.entries.len()),
       )?;
       write_i32(&mut system, record + 16, enum_info.entries.len() as i32)?;
+      write_u32(&mut system, record + 20, enum_info.unknown_20)?;
       for (entry_index, entry) in enum_info.entries.iter().enumerate() {
         let offset = entries_offset + entry_index * 8;
         write_u32(&mut system, offset, entry.name_hash)?;
@@ -273,14 +289,14 @@ impl MetaResource {
 
 fn page_count(flags: u32) -> usize {
   ((flags >> 27) & 1) as usize
-    + (((flags >> 26) & 1) << 1) as usize
-    + (((flags >> 25) & 1) << 2) as usize
-    + (((flags >> 24) & 1) << 3) as usize
-    + (((flags >> 17) & 0x7f) << 4) as usize
-    + (((flags >> 11) & 0x3f) << 5) as usize
-    + (((flags >> 7) & 0xf) << 6) as usize
-    + (((flags >> 5) & 3) << 7) as usize
-    + (((flags >> 4) & 1) << 8) as usize
+    + ((flags >> 26) & 1) as usize
+    + ((flags >> 25) & 1) as usize
+    + ((flags >> 24) & 1) as usize
+    + ((flags >> 17) & 0x7f) as usize
+    + ((flags >> 11) & 0x3f) as usize
+    + ((flags >> 7) & 0xf) as usize
+    + ((flags >> 5) & 3) as usize
+    + ((flags >> 4) & 1) as usize
 }
 
 fn append_records(
@@ -386,6 +402,10 @@ fn read_structures(
       let entries = read_structure_entries(resource, entries_pointer, entry_count as usize)?;
       Ok(MetaStructureInfo {
         name_hash: read_u32(record, 0)?,
+        structure_key: read_u32(record, 4)?,
+        unknown_8: read_u32(record, 8)?,
+        unknown_12: read_u32(record, 12)?,
+        unknown_28: read_i16(record, 28)?,
         structure_size: read_u32(record, 24)?,
         entries,
       })
@@ -431,6 +451,8 @@ fn read_enums(
       let entries = read_enum_entries(resource, entries_pointer, entries_count as usize)?;
       Ok(MetaEnumInfo {
         name_hash: read_u32(record, 0)?,
+        enum_key: read_u32(record, 4)?,
+        unknown_20: read_u32(record, 20)?,
         entries,
       })
     })
@@ -589,6 +611,37 @@ mod tests {
   use crate::core::format::gamefile::resource_file::Rsc7Resource;
 
   use super::MetaResource;
+
+  #[test]
+  fn page_info_counts_pages_not_size_units() {
+    assert_eq!(super::page_count(0x0402_0000), 2);
+    assert_eq!(super::page_count(0x0400_0004), 1);
+    assert_eq!(super::page_count(0x0800_0000), 1);
+    assert_eq!(super::page_count(1 << 4), 1);
+  }
+
+  #[test]
+  fn schema_keys_and_reserved_metadata_survive_rebuild() {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+      .join("asset/extracted/brofx_mansion_06___apa_ch2_occl_05.ymap");
+    let resource = Rsc7Resource::decode(&std::fs::read(path).unwrap()).unwrap();
+    let mut meta = MetaResource::parse(&resource).unwrap();
+    meta.structures[0].structure_key = 0x1234_5678;
+    meta.structures[0].unknown_8 = 0x400;
+    meta.structures[0].unknown_12 = 0x1122_3344;
+    meta.structures[0].unknown_28 = 7;
+    meta.enums.push(super::MetaEnumInfo {
+      name_hash: 0x1020_3040,
+      enum_key: 0x5566_7788,
+      unknown_20: 9,
+      entries: vec![super::MetaEnumEntry {
+        name_hash: 0x5060_7080,
+        value: 3,
+      }],
+    });
+    let rebuilt = meta.to_rsc7(resource.version).unwrap();
+    assert_eq!(MetaResource::parse(&rebuilt).unwrap(), meta);
+  }
 
   #[test]
   fn parses_embedded_meta_tables_from_ymap() {

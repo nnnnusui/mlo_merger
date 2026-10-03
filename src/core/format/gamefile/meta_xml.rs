@@ -845,6 +845,10 @@ fn fallback_structure(hash: u32) -> Option<MetaStructureInfo> {
   };
   let structure = |name: &str, size, entries| MetaStructureInfo {
     name_hash: hash_name(name),
+    structure_key: 0,
+    unknown_8: 0,
+    unknown_12: 0,
+    unknown_28: 0,
     structure_size: size,
     entries,
   };
