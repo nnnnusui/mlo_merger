@@ -571,21 +571,14 @@ mod tests {
   use crate::core::format::gamefile::{
     meta_resource::{MetaResource, MetaSchemaCatalog},
     resource_file::Rsc7Resource,
+    test_support::{sample_ymap_catalog, sample_ymap_xml},
   };
 
   #[test]
-  fn rebuilds_occlusion_ymap_meta_from_xml() {
-    let base = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
-    let binary_path = base.join("asset/extracted/brofx_mansion_06___apa_ch2_occl_05.ymap");
-    let xml_path = base.join("asset/extracted.xml/brofx_mansion_06___apa_ch2_occl_05.ymap.xml");
-    let binary = std::fs::read(binary_path).unwrap();
-    let source_resource = Rsc7Resource::decode(&binary).unwrap();
-    let source_schema = MetaResource::parse(&source_resource).unwrap();
-    let xml = std::fs::read_to_string(xml_path).unwrap();
-
-    let mut catalog = MetaSchemaCatalog::default();
-    catalog.add_resource(&source_schema);
-    let rebuilt = meta_from_xml(&xml, &catalog).unwrap();
+  fn rebuilds_parent_reference_sample_meta_from_xml() {
+    let xml = sample_ymap_xml("parent_refs/child.ymap.xml");
+    let catalog: &MetaSchemaCatalog = sample_ymap_catalog();
+    let rebuilt = meta_from_xml(&xml, catalog).unwrap();
     assert_eq!(rebuilt.root_block_index, 1);
     assert!(!rebuilt.data_blocks.is_empty());
     let resource = rebuilt.to_rsc7(2).unwrap();

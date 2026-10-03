@@ -191,6 +191,7 @@ impl Xml2Ymap {
 #[cfg(test)]
 mod tests {
   use super::{Xml2Ymap, Ymap2Xml};
+  use crate::core::format::gamefile::test_support::{sample_ymap_binary, sample_ymap_xml};
 
   #[test]
   fn managed_output_cleanup_preserves_rebuilt_and_unmanaged_files() {
@@ -224,15 +225,15 @@ mod tests {
   }
 
   #[test]
-  fn native_batch_conversion_writes_ymap_xml() {
-    let fixture = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-      .join("asset/extracted/brofx_mansion_06___apa_ch2_occl_05.ymap");
+  fn native_batch_conversion_writes_sample_ymap_xml() {
+    let xml = sample_ymap_xml("parent_refs/child.ymap.xml");
+    let bytes = sample_ymap_binary(&xml);
     let temp_dir =
       std::env::temp_dir().join(format!("mlo_merger_native_batch_{}", std::process::id()));
     let input_dir = temp_dir.join("input");
     let output_dir = temp_dir.join("output");
     std::fs::create_dir_all(&input_dir).unwrap();
-    std::fs::copy(&fixture, input_dir.join(fixture.file_name().unwrap())).unwrap();
+    std::fs::write(input_dir.join("sample.ymap"), bytes).unwrap();
 
     Ymap2Xml {
       input_dir,
@@ -241,7 +242,7 @@ mod tests {
     .run_native()
     .unwrap();
 
-    let output = output_dir.join("brofx_mansion_06___apa_ch2_occl_05.ymap.xml");
+    let output = output_dir.join("sample.ymap.xml");
     let xml = std::fs::read_to_string(output).unwrap();
     assert!(xml.starts_with("<?xml version=\"1.0\" encoding=\"UTF-8\"?>"));
     assert!(xml.contains("<CMapData>"));
@@ -250,16 +251,16 @@ mod tests {
   }
 
   #[test]
-  fn native_batch_conversion_rebuilds_binary_ymap() {
+  fn native_batch_conversion_rebuilds_sample_binary_ymap() {
     let base = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
-    let fixture = base.join("asset/extracted.xml/brofx_mansion_06___apa_ch2_occl_05.ymap.xml");
+    let xml = sample_ymap_xml("parent_refs/child.ymap.xml");
     let schema_dir = base.join("asset/extracted");
     let temp_dir =
       std::env::temp_dir().join(format!("mlo_merger_native_xml2ymap_{}", std::process::id()));
     let input_dir = temp_dir.join("input");
     let output_dir = temp_dir.join("output");
     std::fs::create_dir_all(&input_dir).unwrap();
-    std::fs::copy(&fixture, input_dir.join(fixture.file_name().unwrap())).unwrap();
+    std::fs::write(input_dir.join("sample.ymap.xml"), xml).unwrap();
 
     Xml2Ymap {
       input_dir,
@@ -268,7 +269,7 @@ mod tests {
     .run_native(&schema_dir)
     .unwrap();
 
-    let output = output_dir.join("brofx_mansion_06___apa_ch2_occl_05.ymap");
+    let output = output_dir.join("sample.ymap");
     let bytes = std::fs::read(output).unwrap();
     let resource =
       crate::core::format::gamefile::resource_file::Rsc7Resource::decode(&bytes).unwrap();

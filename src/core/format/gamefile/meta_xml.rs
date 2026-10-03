@@ -998,13 +998,16 @@ mod tests {
   use std::collections::HashMap;
 
   use super::{meta_to_xml, ymap_to_xml};
-  use crate::core::format::gamefile::{meta_resource::MetaResource, resource_file::Rsc7Resource};
+  use crate::core::format::gamefile::{
+    meta_resource::MetaResource,
+    resource_file::Rsc7Resource,
+    test_support::{sample_ymap_binary, sample_ymap_xml},
+  };
 
   #[test]
-  fn serializes_occlusion_ymap_using_embedded_schema() {
-    let fixture = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-      .join("asset/extracted/brofx_mansion_06___apa_ch2_occl_05.ymap");
-    let bytes = std::fs::read(fixture).unwrap();
+  fn serializes_sample_occlusion_ymap_using_embedded_schema() {
+    let xml = sample_ymap_xml("occlusion/occlusion.ymap.xml");
+    let bytes = sample_ymap_binary(&xml);
     let xml = ymap_to_xml(&bytes, &HashMap::new()).unwrap();
 
     assert!(xml.starts_with("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<CMapData>"));

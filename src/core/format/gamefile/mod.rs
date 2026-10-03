@@ -7,3 +7,6 @@ pub mod xml_meta_builder;
 pub mod xml_tree;
 pub mod ybn;
 pub mod ynd;
+
+#[cfg(test)]
+pub(crate) mod test_support;

@@ -1,0 +1,39 @@
+<CMapData>
+  <name>occlusion_sample</name>
+  <parent></parent>
+  <flags value="0"/>
+  <contentFlags value="0"/>
+  <streamingExtentsMin x="0" y="0" z="0"/>
+  <streamingExtentsMax x="0" y="0" z="0"/>
+  <entitiesExtentsMin x="0" y="0" z="0"/>
+  <entitiesExtentsMax x="0" y="0" z="0"/>
+  <entities/>
+  <containerLods/>
+  <boxOccluders>
+    <Item>
+      <iCenterX value="-1567"/>
+      <iCenterY value="12"/>
+      <iCenterZ value="34"/>
+      <iCosZ value="-6546"/>
+      <iLength value="33"/>
+      <iWidth value="23"/>
+      <iHeight value="57"/>
+      <iSinZ value="-15019"/>
+    </Item>
+  </boxOccluders>
+  <occludeModels/>
+  <physicsDictionaries/>
+  <instancedData/>
+  <timeCycleModifiers/>
+  <carGenerators/>
+  <LODLightsSOA/>
+  <DistantLODLightsSOA/>
+  <block>
+    <version value="0"/>
+    <flags value="0"/>
+    <name>occlusion_sample</name>
+    <exportedBy>sample</exportedBy>
+    <owner></owner>
+    <time></time>
+  </block>
+</CMapData>

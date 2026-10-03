@@ -608,7 +608,10 @@ pub(crate) fn jenk_hash(value: &str) -> u32 {
 
 #[cfg(test)]
 mod tests {
-  use crate::core::format::gamefile::resource_file::Rsc7Resource;
+  use crate::core::format::gamefile::{
+    resource_file::Rsc7Resource,
+    test_support::{sample_ymap_binary, sample_ymap_xml},
+  };
 
   use super::MetaResource;
 
@@ -622,9 +625,8 @@ mod tests {
 
   #[test]
   fn schema_keys_and_reserved_metadata_survive_rebuild() {
-    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-      .join("asset/extracted/brofx_mansion_06___apa_ch2_occl_05.ymap");
-    let resource = Rsc7Resource::decode(&std::fs::read(path).unwrap()).unwrap();
+    let xml = sample_ymap_xml("parent_refs/child.ymap.xml");
+    let resource = Rsc7Resource::decode(&sample_ymap_binary(&xml)).unwrap();
     let mut meta = MetaResource::parse(&resource).unwrap();
     meta.structures[0].structure_key = 0x1234_5678;
     meta.structures[0].unknown_8 = 0x400;
@@ -645,9 +647,8 @@ mod tests {
 
   #[test]
   fn parses_embedded_meta_tables_from_ymap() {
-    let fixture = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-      .join("asset/extracted/brofx_mansion_06___apa_ch2_occl_05.ymap");
-    let bytes = std::fs::read(fixture).unwrap();
+    let xml = sample_ymap_xml("parent_refs/child.ymap.xml");
+    let bytes = sample_ymap_binary(&xml);
     let resource = Rsc7Resource::decode(&bytes).unwrap();
     let meta = MetaResource::parse(&resource).unwrap();
 
@@ -660,9 +661,8 @@ mod tests {
 
   #[test]
   fn rebuilds_embedded_meta_tables_in_rsc7() {
-    let fixture = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-      .join("asset/extracted/brofx_mansion_06___apa_ch2_occl_05.ymap");
-    let bytes = std::fs::read(fixture).unwrap();
+    let xml = sample_ymap_xml("parent_refs/child.ymap.xml");
+    let bytes = sample_ymap_binary(&xml);
     let original = Rsc7Resource::decode(&bytes).unwrap();
     let meta = MetaResource::parse(&original).unwrap();
 

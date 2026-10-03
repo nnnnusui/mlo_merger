@@ -191,6 +191,7 @@ fn invalid_data(message: &str) -> io::Error {
 #[cfg(test)]
 mod tests {
   use super::Rsc7Resource;
+  use crate::core::format::gamefile::test_support::{sample_ymap_binary, sample_ymap_xml};
 
   #[test]
   fn contiguous_resources_use_one_page_without_splitting_blocks() {
@@ -214,14 +215,13 @@ mod tests {
   }
 
   #[test]
-  fn decodes_checked_in_ymap_resource() {
-    let fixture = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-      .join("asset/extracted/brofx_mansion_06___apa_ch2_occl_05.ymap");
-    let bytes = std::fs::read(fixture).unwrap();
+  fn decodes_sample_ymap_resource() {
+    let xml = sample_ymap_xml("parent_refs/child.ymap.xml");
+    let bytes = sample_ymap_binary(&xml);
     let resource = Rsc7Resource::decode(&bytes).unwrap();
 
     assert_eq!(resource.version, 2);
-    assert_eq!(resource.system_data.len(), 0xa000);
+    assert!(!resource.system_data.is_empty());
     assert!(resource.graphics_data.is_empty());
   }
 
