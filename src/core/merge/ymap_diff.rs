@@ -8,7 +8,9 @@ use crate::core::{
     ymap_car_generator_diff::YmapCarGeneratorDiff,
     ymap_distant_lod_light_diff::YmapDistantLodLightDiff,
     ymap_entitiy_diff::YmapEntityDiff,
+    ymap_instanced_data_diff::YmapInstancedDataDiff,
     ymap_lod_light_diff::YmapLodLightDiff,
+    ymap_metadata_diff::YmapMetadataDiff,
     ymap_occlude_model_diff::{YmapOccludeModelDiff, YmapOccludeModelTriangleDiff},
     ymap_time_cycle_modifier_diff::YmapTimeCycleModifierDiff,
   },
@@ -24,6 +26,8 @@ pub struct YmapDiff {
   pub car_generator_diffs: Vec<YmapCarGeneratorDiff>,
   pub time_cycle_modifier_diffs: Vec<YmapTimeCycleModifierDiff>,
   pub content_flags: u32,
+  metadata: YmapMetadataDiff,
+  instanced_data: YmapInstancedDataDiff,
 }
 
 impl YmapDiff {
@@ -57,6 +61,11 @@ impl YmapDiff {
       car_generator_diffs,
       time_cycle_modifier_diffs,
       content_flags: modded.content_flags,
+      metadata: YmapMetadataDiff::extract_from(vanilla, modded),
+      instanced_data: YmapInstancedDataDiff::extract_from(
+        &vanilla.instanced_data,
+        &modded.instanced_data,
+      ),
     }
   }
 
@@ -73,6 +82,8 @@ impl YmapDiff {
     self.time_cycle_modifier_diffs.extend(other.time_cycle_modifier_diffs);
     // Merge content_flags using bitwise OR
     self.content_flags |= other.content_flags;
+    self.metadata.merge(other.metadata);
+    self.instanced_data.merge(other.instanced_data);
     self
   }
 
@@ -85,6 +96,8 @@ impl YmapDiff {
 
     // Apply content_flags using bitwise OR with vanilla
     modded.content_flags = vanilla.content_flags | self.content_flags;
+    self.metadata.apply_to(&mut modded);
+    self.instanced_data.apply_to(&mut modded.instanced_data);
 
     // Remove duplicates from entity_diffs using Debug string as key
     let mut seen = HashSet::new();
@@ -440,6 +453,8 @@ fn check_diffs(
       YmapStructDiffEnum::lod_lights(_) => {}
       YmapStructDiffEnum::distant_lod_lights(_) => {}
       YmapStructDiffEnum::block(_) => log::info!("    skip changes: <block/>"),
+      YmapStructDiffEnum::parent(_) | YmapStructDiffEnum::physics_dictionaries(_) => {}
+      YmapStructDiffEnum::instanced_data(_) => {}
       it => log::warn!("    skip unsupported changes: {:?}", it),
     }
   }

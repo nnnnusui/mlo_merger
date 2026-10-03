@@ -14,6 +14,82 @@ This tool merges FiveM mod map (`.ymap`) files while avoiding conflicts between 
 
 `--check-stream-conflicts --input <DIR> --output <FILE>` uses the same manifest-aware resource discovery as extraction, scans each resource's `stream/` (or a stream directory directly), groups files by case-insensitive basename, and writes conflicting relative paths as JSON.
 
+## YMAP Metadata Merging
+
+The XML pipeline remains in place. `YmapDiff` also merges `parent`,
+`physics_dictionaries`, and `instanced_data` instead of skipping those changes.
+Parent, dictionary, ImapLink, prop-reference, and grass-archetype comparisons
+resolve names and `hash_XXXXXXXX` to the same Jenkins hash.
+
+- A changed parent or ImapLink replaces vanilla; conflicting changes keep the
+	first mod's value in the existing processing order and log a warning.
+- Dictionary and represented prop-reference lists apply vanilla-relative
+	additions/removals. Additions are deduplicated by hash; an unchanged mod does
+	not restore another mod's removal.
+- Grass batches are identified by archetype, AABB, scale, LOD settings, and
+	terrain orientation. Within a matching batch, packed positions identify
+	instances; changes to their payloads are merged independently. Instance or
+	batch removal wins over a conflicting modification; conflicting payload
+	edits at one position keep the first change.
+- Changed batch metadata is treated as removal of the old batch plus addition
+	of the new batch. Packed coordinates are never mixed across different AABBs.
+- Valid instanced-data XML omits the optional `error` element. Emitting an
+	empty `<error/>` would make the reader discard the grass data on reload.
+
+Regenerate vanilla XML with Native conversion:
+
+```sh
+cargo run -- --to-xml --input asset/vanilla/ymap --output asset/vanilla/ymap.xml
+```
+
+The initial run produced 11,472 RSC7 XML files. Four inputs
+(`cs1_railwyc.ymap`, `cs1_railwyc_long_0.ymap`, `id2_17.ymap`,
+`id2_17_strm_0.ymap`) are valid PSO/PSIN rather than RSC7 resources.
+Native export now produces their `.ymap.pso.xml` files as well; none belonged
+to the targeted merge set.
+
+### PSO Conversion and Name Resolution
+
+`gamefile/pso.rs` parses big-endian PSIN, PMAP, PSCH, and string sections.
+PSO pointers use CodeWalker's per-u32 endian convention, not a full u64 byte
+reversal. Embedded schemas drive XML export of supported structures, pointer
+arrays, scalar/vector arrays, strings, enums, and flags. Unsupported types
+fail explicitly; support is not claimed for every PSO family.
+
+Native `--to-xml` identifies PSO by its PSIN header and writes `.pso.xml`.
+`--from-xml` uses a matching original PSO under `--schema-dir` as a template
+(a single original file may also be supplied). Existing numeric/reference
+fields and strings within their existing capacity can be updated. Array
+lengths and structure types cannot change; editing a checksummed PSO is
+rejected. Unknown bytes and sections are preserved. This is template editing,
+not general PSO creation. Four real YMAPs passed Native export and rebuild
+comparison against the hosted DLL; the bridge explicitly routes PSIN YMAPs
+through `PsoFile` rather than the RSC7-only byte loader.
+
+CodeWalker resolves names through built-in `MetaNames` plus its process-global
+`JenkIndex`. PSO STRF/STRS strings and RSC META strings populate that index;
+the GUI additionally indexes GTA RPF filenames and derived names via
+`RpfManager.BuildBaseJenkIndex`. The bridge does not load GTA archives itself.
+Native exports use built-in schema/enum names, embedded strings, and caller
+provided shared names. An unknown model hash remains `hash_XXXXXXXX`; it
+cannot be reversed without a corresponding name source.
+
+The ignored workflow test selects only YMAP names with the three unsupported
+warnings in `asset/log/mlo_merger_20261002_154241.log`, stages all their mod
+references, and executes `MergeYmapXml::run` with `rebuild_all` enabled:
+
+```sh
+cargo test --lib core::merge::run::tests::merge_logged_unsupported_ymaps -- --ignored --nocapture
+```
+
+It verifies parents, dictionary deltas, and grass payloads after XML reload,
+and checks that the targeted log contains no unsupported-change warnings.
+The local run passed for 31 YMAPs and 68 mod references. Outputs, `merge.log`,
+and `results.json` live under `asset/merge_validation/unsupported_fields`.
+The grass map retained 262 batches and 110,478 instances. This is XML-level
+merge validation, not a full deployment or in-game rendering test; existing
+extent-handling rules remain unchanged.
+
 ## CodeWalker bridge (ymap <-> xml conversion)
 
 [CodeWalker](https://github.com/dexyfex/CodeWalker) is the reference implementation for GTA5 `.ymap` binary <-> XML conversion. Its `CodeWalker.Core.dll` is a managed .NET (netstandard2.0) assembly.
@@ -24,7 +100,7 @@ Instead of shelling out to CodeWalker.exe or a subprocess, this project hosts th
 - `build.rs` builds this bridge via `dotnet publish` whenever `dotnet` is on `PATH` and a CodeWalker.Core.dll is found (otherwise it emits a warning and skips it).
 - `src/core/codewalker` hosts the CoreCLR runtime from Rust using the [`netcorehost`](https://crates.io/crates/netcorehost) crate (wrapping `hostfxr`), loads `bridge/CodeWalker.Bridge/bin/publish/CodeWalker.Bridge.dll`, and resolves the exported functions as raw function pointers. A single `CodeWalker` instance must be reused for a whole batch conversion and only ever called from one thread (CodeWalker's `JenkIndex`/`JenkHash` caches are process-global statics).
 - `src/core/xmlconvert` walks a directory of `.ymap`/`.ymap.xml` files. Native Rust is the default for both conversion directions. `--use-codewalker-dll` selects CodeWalker.Core for both directions. The Native XML-to-YMAP writer builds its schema catalog from the extracted binary YMAP directory.
-- `src/core/format/gamefile` decodes/encodes RSC7 pages, maps system/graphics virtual addresses, parses/writes META schemas/enums/data blocks, and provides shared XML-tree parsing. `--to-xml`/`--from-xml` support YMAP, RSC-META YTYP/YMT, YND NodeDictionary, and all declared YBN Bounds and polygon XML types. Plain XML YMT files are preserved; binary PSO/PSIN/RBF YMT variants remain unsupported. CodeWalker differential tests cover real YBN/YMT/YND/YTYP fixtures, and an ignored test scans active YBN resources. Some YBNs still exceed the stored-Quantum tolerance after Native rebuild; the corpus comparison currently reports those cases. Native YBN output also omits the GeometryBVH acceleration tree, so in-game collision performance/behavior is not yet verified. Bidirectional differential tests matched canonical CodeWalker XML for 623 checked-in YMAPs. Eight fixtures were excluded because their source CodeWalker XML contains `<error>` nodes for missing schema information.
+- `src/core/format/gamefile` decodes/encodes RSC7 pages, maps system/graphics virtual addresses, parses/writes META schemas/enums/data blocks, and provides shared XML-tree parsing. `--to-xml`/`--from-xml` support YMAP, RSC-META YTYP/YMT, YND NodeDictionary, and all declared YBN Bounds and polygon XML types. Plain XML YMT files are preserved. PSIN uses the embedded-schema PSO adapter for its supported types and template-based rebuilds; RBF YMT remains unsupported. CodeWalker differential tests cover real YBN/YMT/YND/YTYP fixtures and four PSO YMAPs, and an ignored test scans active YBN resources. Some YBNs still exceed the stored-Quantum tolerance after Native rebuild; the corpus comparison currently reports those cases. Native YBN output also omits the GeometryBVH acceleration tree, so in-game collision performance/behavior is not yet verified. Bidirectional differential tests matched canonical CodeWalker XML for 623 checked-in YMAPs. Eight fixtures were excluded because their source CodeWalker XML contains `<error>` nodes for missing schema information.
 
 ### Real-resource regression tests
 

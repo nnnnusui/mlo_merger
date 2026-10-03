@@ -146,5 +146,252 @@ fn collect_modded_ymaps_map(
 fn parse_ymap_xml(file_path: &Path) -> Result<Ymap, Box<dyn std::error::Error>> {
   let xml_content = fs::read_to_string(file_path)?;
   let xml_ymap: XmlYmap = from_str(&xml_content)?;
+  if let Some(error) = &xml_ymap.instanced_data.error {
+    return Err(
+      std::io::Error::new(
+        std::io::ErrorKind::InvalidData,
+        format!("{} contains an instancedData error: {error}", file_path.display()),
+      )
+      .into(),
+    );
+  }
   Ok(xml_ymap.into())
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+  use crate::core::{
+    format::ymap::model::{GrassInstance, GrassInstanceBatch},
+    merge::{ymap_instanced_data_diff::BatchKey, ymap_metadata_diff::reference_hash},
+  };
+  use std::collections::{BTreeSet, HashMap, HashSet};
+
+  #[test]
+  #[ignore = "requires local vanilla XML, extracted mods, and the original pipeline log"]
+  fn merge_logged_unsupported_ymaps() {
+    let base = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let old_log =
+      fs::read_to_string(base.join("asset/log/mlo_merger_20261002_154241.log")).unwrap();
+    let mut current = None;
+    let mut targets = BTreeSet::new();
+    for line in old_log.lines() {
+      if let Some((_, path)) = line.split_once("Processing YMAP: ") {
+        current = Some(Path::new(path).file_name().unwrap().to_str().unwrap().to_string());
+      }
+      if ["parent(", "physics_dictionaries(", "instanced_data("]
+        .iter()
+        .any(|field| line.contains(&format!("skip unsupported changes: {field}")))
+      {
+        targets.insert(current.clone().expect("warning without YMAP context"));
+      }
+    }
+    assert!(!targets.is_empty(), "no unsupported-field fixtures found");
+    let staging = std::env::temp_dir().join(format!("mlo_merge_metadata_{}", std::process::id()));
+    let vanilla_dir = staging.join("vanilla.xml");
+    let mod_dir = staging.join("mod.xml");
+    fs::create_dir_all(&vanilla_dir).unwrap();
+    fs::create_dir_all(&mod_dir).unwrap();
+    let output_dir = base.join("asset/merge_validation/unsupported_fields/merged.xml");
+    let report_dir = output_dir.parent().unwrap();
+    fs::create_dir_all(report_dir).unwrap();
+    simplelog::WriteLogger::init(
+      log::LevelFilter::Info,
+      simplelog::Config::default(),
+      fs::File::create(report_dir.join("merge.log")).unwrap(),
+    )
+    .unwrap();
+    for name in &targets {
+      fs::copy(base.join("asset/vanilla/ymap.xml").join(name), vanilla_dir.join(name))
+        .unwrap_or_else(|error| panic!("Native vanilla XML missing for {name}: {error}"));
+    }
+    let sources = collect_modded_ymaps_map(&base.join("asset/extracted.xml")).unwrap();
+    let mut mod_count = 0;
+    for name in &targets {
+      let references = sources.get(name).unwrap_or_else(|| panic!("no mod references for {name}"));
+      for source in references {
+        fs::copy(&source.mod_ymap_path, mod_dir.join(source.mod_ymap_path.file_name().unwrap()))
+          .unwrap();
+        mod_count += 1;
+      }
+    }
+    let runner = MergeYmapXml {
+      vanilla_dir,
+      mod_dir,
+      mod_ymap_dir: base.join("asset/extracted"),
+      output_dir: output_dir.clone(),
+      rebuild_all: true,
+      blacklist_config: Some(base.join("asset/blacklist.toml")),
+    };
+    runner.run().unwrap();
+    let mut records = Vec::new();
+    for name in &targets {
+      let original = parse_ymap_xml(&runner.vanilla_dir.join(name)).unwrap();
+      let mods = sources[name]
+        .iter()
+        .map(|source| parse_ymap_xml(&source.mod_ymap_path).unwrap())
+        .collect::<Vec<_>>();
+      let merged = parse_ymap_xml(&output_dir.join(name)).unwrap();
+      let expected_parent = mods
+        .iter()
+        .find(|modified| reference_hash(&modified.parent) != reference_hash(&original.parent))
+        .map(|modified| &modified.parent)
+        .unwrap_or(&original.parent);
+      assert_eq!(reference_hash(&merged.parent), reference_hash(expected_parent), "parent: {name}");
+      let original_refs = original
+        .physics_dictionaries
+        .iter()
+        .map(|name| reference_hash(name))
+        .collect::<HashSet<_>>();
+      let modified_refs = mods
+        .iter()
+        .map(|modified| {
+          modified
+            .physics_dictionaries
+            .iter()
+            .map(|name| reference_hash(name))
+            .collect::<HashSet<_>>()
+        })
+        .collect::<Vec<_>>();
+      let mut expected_refs = original_refs
+        .iter()
+        .filter(|hash| modified_refs.iter().all(|refs| refs.contains(hash)))
+        .copied()
+        .collect::<HashSet<_>>();
+      for refs in &modified_refs {
+        expected_refs.extend(refs.difference(&original_refs).copied());
+      }
+      let actual_refs =
+        merged.physics_dictionaries.iter().map(|name| reference_hash(name)).collect::<HashSet<_>>();
+      assert_eq!(actual_refs, expected_refs, "physics dictionaries: {name}");
+      assert_eq!(
+        actual_refs.len(),
+        merged.physics_dictionaries.len(),
+        "duplicate dictionaries: {name}"
+      );
+      verify_grass(&original, &mods, &merged, name);
+      let instances = merged
+        .instanced_data
+        .grass_instance_list
+        .iter()
+        .map(|batch| batch.instances.len())
+        .sum::<usize>();
+      records.push(serde_json::json!({
+        "ymap": name, "mods": sources[name].iter().map(|source| &source.mod_name).collect::<Vec<_>>(),
+        "parent": merged.parent, "physics_dictionaries": merged.physics_dictionaries.len(),
+        "grass_batches": merged.instanced_data.grass_instance_list.len(), "grass_instances": instances,
+      }));
+    }
+    fs::write(report_dir.join("results.json"), serde_json::to_vec_pretty(&records).unwrap())
+      .unwrap();
+    let merge_log = fs::read_to_string(report_dir.join("merge.log")).unwrap();
+    assert!(
+      !merge_log.contains("skip unsupported changes"),
+      "unsupported changes remain in targeted merge log"
+    );
+    fs::remove_dir_all(staging).unwrap();
+    eprintln!(
+      "Verified {} targeted YMAPs across {mod_count} mod references; output: {}",
+      targets.len(),
+      output_dir.display()
+    );
+  }
+
+  fn positions(batch: &GrassInstanceBatch) -> BTreeMap<Vec<u32>, GrassInstance> {
+    batch
+      .instances
+      .iter()
+      .map(|instance| {
+        (
+          instance
+            .position
+            .iter()
+            .map(|value| if *value == 0.0 { 0 } else { value.to_bits() })
+            .collect(),
+          instance.clone(),
+        )
+      })
+      .collect()
+  }
+
+  fn verify_grass(
+    original: &Ymap,
+    mods: &[Ymap],
+    merged: &Ymap,
+    name: &str,
+  ) {
+    let original_batches = original
+      .instanced_data
+      .grass_instance_list
+      .iter()
+      .map(|batch| (BatchKey::from_batch(batch), positions(batch)))
+      .collect::<HashMap<_, _>>();
+    let mod_batches = mods
+      .iter()
+      .map(|modified| {
+        modified
+          .instanced_data
+          .grass_instance_list
+          .iter()
+          .map(|batch| (BatchKey::from_batch(batch), positions(batch)))
+          .collect::<HashMap<_, _>>()
+      })
+      .collect::<Vec<_>>();
+    let keys = original_batches
+      .keys()
+      .chain(mod_batches.iter().flat_map(|batches| batches.keys()))
+      .cloned()
+      .collect::<HashSet<_>>();
+    let mut expected = HashMap::new();
+    for key in keys {
+      let before = original_batches.get(&key);
+      if before.is_some() && mod_batches.iter().any(|batches| !batches.contains_key(&key)) {
+        continue;
+      }
+      let empty = BTreeMap::new();
+      let before = before.unwrap_or(&empty);
+      let mut instances = before.clone();
+      instances.retain(|position, _| {
+        mod_batches.iter().all(|batches| {
+          batches.get(&key).is_some_and(|instances| instances.contains_key(position))
+        })
+      });
+      let removed = before
+        .keys()
+        .filter(|position| !instances.contains_key(*position))
+        .cloned()
+        .collect::<HashSet<_>>();
+      let mut selected = HashSet::new();
+      for batches in &mod_batches {
+        if let Some(modified) = batches.get(&key) {
+          for (position, instance) in modified {
+            if !removed.contains(position)
+              && before.get(position) != Some(instance)
+              && selected.insert(position.clone())
+            {
+              instances.insert(position.clone(), instance.clone());
+            }
+          }
+        }
+      }
+      expected.insert(key, instances);
+    }
+    let actual = merged
+      .instanced_data
+      .grass_instance_list
+      .iter()
+      .map(|batch| (BatchKey::from_batch(batch), positions(batch)))
+      .collect::<HashMap<_, _>>();
+    assert!(
+      actual == expected,
+      "grass deltas differ for {name}: actual {} batches, expected {}",
+      actual.len(),
+      expected.len()
+    );
+    assert_eq!(
+      actual.len(),
+      merged.instanced_data.grass_instance_list.len(),
+      "duplicate grass batches: {name}"
+    );
+  }
 }

@@ -34,8 +34,14 @@ public static unsafe class Exports
   public static int PreloadNames(byte* inputPathUtf8) =>
     Try(() => {
       string inputPath = PtrToString(inputPathUtf8);
+      byte[] data = File.ReadAllBytes(inputPath);
+      if (data.AsSpan().StartsWith("PSIN"u8)) {
+        PsoFile pso = new();
+        pso.Load(data);
+        return;
+      }
       YmapFile ymap = new();
-      ymap.Load(File.ReadAllBytes(inputPath));
+      ymap.Load(data);
     });
 
   [UnmanagedCallersOnly]
@@ -43,9 +49,17 @@ public static unsafe class Exports
     Try(() => {
       string inputPath = PtrToString(inputPathUtf8);
       string outputPath = PtrToString(outputPathUtf8);
-      YmapFile ymap = new();
-      ymap.Load(File.ReadAllBytes(inputPath));
-      string xml = MetaXml.GetXml(ymap, out _);
+      byte[] data = File.ReadAllBytes(inputPath);
+      string xml;
+      if (data.AsSpan().StartsWith("PSIN"u8)) {
+        PsoFile pso = new();
+        pso.Load(data);
+        xml = PsoXml.GetXml(pso);
+      } else {
+        YmapFile ymap = new();
+        ymap.Load(data);
+        xml = MetaXml.GetXml(ymap, out _);
+      }
       File.WriteAllText(outputPath, xml, new UTF8Encoding(false));
     });
 

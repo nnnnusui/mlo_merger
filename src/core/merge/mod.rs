@@ -4,6 +4,8 @@ mod ymap_car_generator_diff;
 mod ymap_diff;
 mod ymap_distant_lod_light_diff;
 mod ymap_entitiy_diff;
+mod ymap_instanced_data_diff;
 mod ymap_lod_light_diff;
+mod ymap_metadata_diff;
 mod ymap_occlude_model_diff;
 mod ymap_time_cycle_modifier_diff;

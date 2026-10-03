@@ -571,7 +571,8 @@ fn invalid_data(message: &str) -> io::Error {
   io::Error::new(io::ErrorKind::InvalidData, message)
 }
 
-fn jenk_hash(value: &str) -> u32 {
+/// Computes the Jenkins hash used by META name references.
+pub(crate) fn jenk_hash(value: &str) -> u32 {
   let mut hash = 0u32;
   for byte in value.bytes() {
     hash = hash.wrapping_add(byte as u32);

@@ -53,6 +53,10 @@ impl NativeResourceFormat {
       .strip_suffix(".xml")
       .or_else(|| name.strip_suffix(".XML"))
       .ok_or_else(|| invalid_data("input filename must end in .xml"))?;
+    let source_name = source_name
+      .strip_suffix(".pso")
+      .or_else(|| source_name.strip_suffix(".PSO"))
+      .unwrap_or(source_name);
     Self::from_path(Path::new(source_name))
   }
 
@@ -97,14 +101,17 @@ pub fn convert_files_to_xml(
   let mut failed = 0;
   for source in &inputs {
     let relative = relative_input_path(input, source)?;
-    let output_name = append_xml_suffix(&relative);
+    let bytes = fs::read(source)?;
+    let output_name = if bytes.starts_with(b"PSIN") {
+      append_suffix(&relative, ".pso.xml")
+    } else {
+      append_xml_suffix(&relative)
+    };
     let output = output_dir.join(output_name);
     if let Some(parent) = output.parent() {
       fs::create_dir_all(parent)?;
     }
-    let result = fs::read(source).and_then(|bytes| {
-      resource_to_xml(NativeResourceFormat::from_path(source)?, &bytes, &shared_names)
-    });
+    let result = resource_to_xml(NativeResourceFormat::from_path(source)?, &bytes, &shared_names);
     match result {
       Ok(xml) => {
         fs::write(output, xml)?;
@@ -149,12 +156,23 @@ pub fn convert_files_from_xml(
   for source in &inputs {
     let relative = relative_input_path(input, source)?;
     let output_name = strip_xml_suffix(&relative)?;
-    let output = output_dir.join(output_name);
+    let output = output_dir.join(&output_name);
     if let Some(parent) = output.parent() {
       fs::create_dir_all(parent)?;
     }
     let format = NativeResourceFormat::from_xml_path(source)?;
-    let result = fs::read_to_string(source).and_then(|xml| xml_to_resource(format, &xml, &catalog));
+    let result = fs::read_to_string(source).and_then(|xml| {
+      if is_pso_xml(source) {
+        let template = if schema_dir.is_file() {
+          schema_dir.to_path_buf()
+        } else {
+          schema_dir.join(&output_name)
+        };
+        super::pso::PsoResource::parse(&fs::read(template)?)?.rebuild_xml(&xml)
+      } else {
+        xml_to_resource(format, &xml, &catalog)
+      }
+    });
     match result {
       Ok(bytes) => {
         fs::write(output, bytes)?;
@@ -222,7 +240,15 @@ fn strip_xml_suffix(path: &Path) -> io::Result<PathBuf> {
     .and_then(|name| name.to_str())
     .and_then(|name| name.strip_suffix(".xml").or_else(|| name.strip_suffix(".XML")))
     .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "XML filename must end in .xml"))?;
-  Ok(PathBuf::from(name))
+  let name = name.strip_suffix(".pso").or_else(|| name.strip_suffix(".PSO")).unwrap_or(name);
+  Ok(path.with_file_name(name))
+}
+
+fn is_pso_xml(path: &Path) -> bool {
+  path
+    .file_name()
+    .and_then(|name| name.to_str())
+    .is_some_and(|name| name.to_ascii_lowercase().ends_with(".pso.xml"))
 }
 
 /// Converts an RSC-META resource to its generic CodeWalker META XML representation.
@@ -231,6 +257,9 @@ pub fn resource_to_xml(
   bytes: &[u8],
   shared_hash_names: &HashMap<u32, String>,
 ) -> io::Result<String> {
+  if format.is_generic_meta() && bytes.starts_with(b"PSIN") {
+    return super::pso::PsoResource::parse(bytes)?.to_xml(shared_hash_names);
+  }
   if format == NativeResourceFormat::Ynd {
     return ynd_to_xml(bytes);
   }
@@ -316,11 +345,13 @@ pub fn convert_path_to_xml(
   for path in &inputs {
     let format = NativeResourceFormat::from_path(path)?;
     let relative = relative_path(input, path)?;
-    let output = output_dir.join(append_suffix(&relative, ".xml"));
+    let bytes = fs::read(path)?;
+    let suffix = if bytes.starts_with(b"PSIN") { ".pso.xml" } else { ".xml" };
+    let output = output_dir.join(append_suffix(&relative, suffix));
     if let Some(parent) = output.parent() {
       fs::create_dir_all(parent)?;
     }
-    match fs::read(path).and_then(|bytes| resource_to_xml(format, &bytes, &names)) {
+    match resource_to_xml(format, &bytes, &names) {
       Ok(xml) => {
         fs::write(output, xml)?;
         converted += 1;
@@ -363,11 +394,23 @@ pub fn convert_path_from_xml(
   for path in &inputs {
     let format = NativeResourceFormat::from_xml_path(path)?;
     let relative = relative_path(input, path)?;
-    let output = output_dir.join(strip_xml_suffix(&relative)?);
+    let output_name = strip_xml_suffix(&relative)?;
+    let output = output_dir.join(&output_name);
     if let Some(parent) = output.parent() {
       fs::create_dir_all(parent)?;
     }
-    let result = fs::read_to_string(path).and_then(|xml| xml_to_resource(format, &xml, &catalog));
+    let result = fs::read_to_string(path).and_then(|xml| {
+      if is_pso_xml(path) {
+        let template = if schema_dir.is_file() {
+          schema_dir.to_path_buf()
+        } else {
+          schema_dir.join(&output_name)
+        };
+        super::pso::PsoResource::parse(&fs::read(template)?)?.rebuild_xml(&xml)
+      } else {
+        xml_to_resource(format, &xml, &catalog)
+      }
+    });
     match result {
       Ok(bytes) => {
         fs::write(output, bytes)?;
@@ -459,6 +502,34 @@ mod tests {
     meta_xml::meta_to_xml,
     resource_file::Rsc7Resource,
   };
+
+  #[test]
+  fn pso_batch_commands_preserve_suffix_and_template_format() {
+    let base = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let temp = std::env::temp_dir().join(format!("mlo_pso_batch_{}", std::process::id()));
+    let input = temp.join("input");
+    let xml_dir = temp.join("xml");
+    let rebuilt_dir = temp.join("rebuilt");
+    std::fs::create_dir_all(input.join("nested")).unwrap();
+    let source = base.join("asset/vanilla/ymap/cs1_railwyc.ymap");
+    std::fs::copy(&source, input.join("nested/cs1_railwyc.ymap")).unwrap();
+    assert_eq!(convert_files_to_xml(&input, &xml_dir).unwrap(), (1, 0));
+    assert!(xml_dir.join("nested/cs1_railwyc.ymap.pso.xml").is_file());
+    assert_eq!(
+      NativeResourceFormat::from_xml_path(&xml_dir.join("nested/cs1_railwyc.ymap.pso.xml"))
+        .unwrap(),
+      NativeResourceFormat::Ymap
+    );
+    assert_eq!(convert_files_from_xml(&xml_dir, &rebuilt_dir, &input).unwrap(), (1, 0));
+    let bytes = std::fs::read(rebuilt_dir.join("nested/cs1_railwyc.ymap")).unwrap();
+    assert!(bytes.starts_with(b"PSIN"));
+    let xml = resource_to_xml(NativeResourceFormat::Ymap, &bytes, &HashMap::new()).unwrap();
+    assert_eq!(
+      xml,
+      std::fs::read_to_string(xml_dir.join("nested/cs1_railwyc.ymap.pso.xml")).unwrap()
+    );
+    std::fs::remove_dir_all(temp).unwrap();
+  }
 
   #[test]
   fn ytyp_uses_shared_rsc_meta_conversion_path() {
@@ -618,7 +689,7 @@ mod tests {
   }
 
   #[test]
-  fn ymt_dispatch_preserves_text_xml_and_rejects_pso_binary() {
+  fn ymt_dispatch_preserves_text_xml_and_rejects_malformed_pso() {
     let xml = "<ScenarioManifest><Item /></ScenarioManifest>";
     assert_eq!(
       resource_to_xml(NativeResourceFormat::YmtRsc, xml.as_bytes(), &HashMap::new()).unwrap(),
@@ -630,7 +701,8 @@ mod tests {
     );
     let error =
       resource_to_xml(NativeResourceFormat::YmtRsc, b"PSIN\0\0\0\0", &HashMap::new()).unwrap_err();
-    assert!(error.to_string().contains("PSO/PSIN variant"));
+    assert_eq!(error.kind(), std::io::ErrorKind::InvalidData);
+    assert!(error.to_string().contains("PSO section length"));
   }
 
   #[test]

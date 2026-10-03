@@ -9,7 +9,7 @@ use crate::core::format::{
 
 #[derive(Debug, Deserialize, Default, Serialize)]
 pub struct XmlYmapInstancedData {
-  #[serde(default)]
+  #[serde(default, skip_serializing_if = "Option::is_none")]
   pub error: Option<String>,
   #[serde(rename = "ImapLink", default)]
   pub imap_link: String,
@@ -358,6 +358,11 @@ mod tests {
     assert_eq!(converted.grass_instance_list[0].archetype_name, "urbangrngrass_01");
     assert_eq!(converted.grass_instance_list[0].lod_dist, 50.0);
     assert_eq!(converted.grass_instance_list[0].scale_range.x, 0.6);
+    let serialized =
+      quick_xml::se::to_string(&XmlYmapInstancedData::from(converted.clone())).unwrap();
+    assert!(!serialized.contains("<error"));
+    let reparsed: XmlYmapInstancedData = quick_xml::de::from_str(&serialized).unwrap();
+    assert_eq!(YmapInstancedData::from(reparsed), converted);
   }
 
   #[test]

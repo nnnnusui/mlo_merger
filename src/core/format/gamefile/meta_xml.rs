@@ -54,6 +54,7 @@ const KNOWN_NAMES: &[&str] = &[
   "timeCycleModifiers",
   "carGenerators",
   "LODLightsSOA",
+  "LODLights",
   "DistantLODLightsSOA",
   "block",
   "archetypeName",
@@ -260,10 +261,7 @@ pub fn meta_to_xml(
     .data_blocks
     .get(root_index)
     .ok_or_else(|| invalid_data("META root data block is missing"))?;
-  let mut names = HashMap::new();
-  for &name in KNOWN_NAMES {
-    names.insert(jenk_hash(name), name.to_string());
-  }
+  let mut names = known_hash_names();
   names.extend(meta.hash_names());
   names.extend(shared_hash_names.iter().map(|(hash, name)| (*hash, name.clone())));
 
@@ -273,6 +271,11 @@ pub fn meta_to_xml(
   write_structure(meta, root_index, 0, root_block.structure_name_hash, &names, 1, &mut output)?;
   write_close_tag(&mut output, 0, &root_name);
   Ok(output)
+}
+
+/// Returns built-in field, structure, and enum names shared by META and PSO XML.
+pub(crate) fn known_hash_names() -> HashMap<u32, String> {
+  KNOWN_NAMES.iter().map(|name| (jenk_hash(name), (*name).to_string())).collect()
 }
 
 fn write_structure(
