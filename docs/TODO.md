@@ -9,7 +9,9 @@
 - [x] Generate individual export and rebuild tests under `src/core/format/gamefile/test`.
 - [x] Compare Native and CodeWalker exports and rebuilds; report byte identity separately.
 - [x] Isolate expensive rebuilds with per-fixture time limits and produce JSON summaries.
-- [ ] Resolve the remaining YBN export/rebuild differences and generate acceleration trees.
+- [x] Merge colliding YBN Bounds against vanilla by geometry child additions/removals, omit the source collisions, and rebuild GeometryBVH in Native.
+- [x] Generate Native GeometryBVH acceleration trees with polygon reorder and triangle edge remapping.
+- [ ] Resolve the remaining YBN export/rebuild differences.
 - [ ] Support the YTYP META array cases rejected by the current Native adapters.
 - [ ] Investigate reference YMAP schema errors and the LOD-light hash rebuild discrepancy.
 - [ ] Investigate YMT cases that CodeWalker cannot export; cover additional binary families as supported.

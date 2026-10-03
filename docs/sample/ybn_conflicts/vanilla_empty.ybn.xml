@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<BoundsFile>
+ <Bounds type="Composite">
+  <BoxMin x="0" y="0" z="0" />
+  <BoxMax x="0" y="0" z="0" />
+  <BoxCenter x="0" y="0" z="0" />
+  <SphereCenter x="0" y="0" z="0" />
+  <SphereRadius value="0" />
+  <Margin value="0" />
+  <Volume value="0" />
+  <Inertia x="0" y="0" z="0" />
+  <MaterialIndex value="0" />
+  <MaterialColourIndex value="0" />
+  <ProceduralID value="0" />
+  <RoomID value="0" />
+  <PedDensity value="0" />
+  <UnkFlags value="0" />
+  <PolyFlags value="0" />
+  <UnkType value="1" />
+  <Children/>
+ </Bounds>
+</BoundsFile>

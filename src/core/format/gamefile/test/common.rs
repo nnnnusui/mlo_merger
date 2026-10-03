@@ -188,7 +188,11 @@ fn run_case(
     serde_json::to_vec_pretty(&report).map_err(|error| error.to_string())?,
   )
   .map_err(|error| error.to_string())?;
-  fs::remove_dir_all(temporary).map_err(|error| error.to_string())?;
+  if result.is_ok() {
+    fs::remove_dir_all(&temporary).map_err(|error| error.to_string())?;
+  } else {
+    eprintln!("Preserving failed sample comparison artifacts under {}", temporary.display());
+  }
   result
 }
 

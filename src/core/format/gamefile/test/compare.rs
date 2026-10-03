@@ -124,7 +124,15 @@ pub(crate) fn assert_ybn_xml_eq(
       .zip(&reference)
       .position(|(a, b)| a != b)
       .unwrap_or(native.len().min(reference.len()));
-    return Err(format!("{context} differs in non-vertex YBN data at canonical event {index}"));
+    let difference = match (native.get(index), reference.get(index)) {
+      (Some(actual), Some(expected)) => describe_difference(actual, expected),
+      _ => {
+        format!("Native has {} canonical events; CodeWalker has {}", native.len(), reference.len())
+      }
+    };
+    return Err(format!(
+      "{context} differs in non-vertex YBN data at canonical event {index}: {difference}"
+    ));
   }
 
   let actual_vertices = ybn_vertex_arrays(actual)?;

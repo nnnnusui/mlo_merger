@@ -8,6 +8,7 @@ use mlo_merger::{
       ymap::{model::Ymap, xml::XmlYmap},
     },
     merge::run::MergeYmapXml,
+    merge::ybn_conflicts::MergeYbnConflicts,
     xmlconvert::{Xml2Ymap, Ymap2Xml},
   },
 };
@@ -70,6 +71,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn run_pipeline(cmd: &Pipeline) -> Result<(), Box<dyn std::error::Error>> {
+  let vanilla_ybn_dir = cmd.workspace.join("vanilla/ybn");
+  MergeYbnConflicts::has_conflicts(&cmd.source_dir, &vanilla_ybn_dir)?;
   println!("This will run the full pipeline (workspace: {}):", cmd.workspace.display());
   println!("  1. extract   {} -> {}", cmd.source_dir.display(), cmd.extracted_dir.display());
   let backend = if cmd.use_codewalker_dll { "CodeWalker" } else { "Native" };
@@ -89,8 +92,9 @@ fn run_pipeline(cmd: &Pipeline) -> Result<(), Box<dyn std::error::Error>> {
     cmd.merged_xml_dir.display(),
     cmd.merged_dir.display()
   );
+  println!("  5. merge YBN conflicts -> {}/merged_ybn", cmd.workspace.display());
   if let Some(resource_dir) = &cmd.output_resource_dir {
-    println!("  5. deploy    {} -> {}", cmd.merged_dir.display(), resource_dir.display());
+    println!("  6. deploy    {} -> {}", cmd.merged_dir.display(), resource_dir.display());
   }
   print!("Proceed? [y/N] ");
   io::stdout().flush()?;
@@ -158,8 +162,17 @@ fn run_pipeline(cmd: &Pipeline) -> Result<(), Box<dyn std::error::Error>> {
     xml_to_ymap.run_native(&cmd.extracted_dir)?;
   }
 
+  log::info!("Step 5/5: merge YBN conflicts against vanilla bounds");
+  MergeYbnConflicts {
+    source_dir: cmd.source_dir.clone(),
+    vanilla_dir: vanilla_ybn_dir,
+    output_dir: cmd.workspace.join("merged_ybn"),
+    omitted_files_path: cmd.extracted_dir.join("_extracted_ybns.txt"),
+  }
+  .run(codewalker.as_ref())?;
+
   if let Some(resource_dir) = &cmd.output_resource_dir {
-    log::info!("Step 5/5: deploy to resource dir");
+    log::info!("Step 6/6: deploy to resource dir");
     deploy_resource(cmd, resource_dir)?;
   }
 
@@ -176,11 +189,20 @@ fn deploy_resource(
 
   copy_dir_overwrite(&cmd.merged_dir, &stream_ymap_dir.join("merged"))?;
   copy_dir_overwrite(&cmd.merged_xml_dir.join("clone"), &stream_ymap_dir.join("clone"))?;
+  copy_dir_overwrite(&cmd.workspace.join("merged_ybn"), &resource_dir.join("stream/ybn/merged"))?;
 
   let omit_src = cmd.extracted_dir.join("_extracted_ymaps.txt");
   let omit_dest = resource_dir.join("omit.txt");
   fs::create_dir_all(resource_dir)?;
-  fs::copy(&omit_src, &omit_dest)?;
+  let mut omit = fs::read_to_string(&omit_src)?;
+  let omitted_ybns = fs::read_to_string(cmd.extracted_dir.join("_extracted_ybns.txt"))?;
+  if !omitted_ybns.is_empty() {
+    if !omit.is_empty() && !omit.ends_with('\n') {
+      omit.push('\n');
+    }
+    omit.push_str(&omitted_ybns);
+  }
+  fs::write(&omit_dest, omit)?;
   log::info!("  [Success] Copied {} -> {}", omit_src.display(), omit_dest.display());
 
   Ok(())
@@ -233,6 +255,7 @@ mod tests {
     let _ = fs::remove_dir_all(&tmp);
 
     let merged_dir = tmp.join("asset/merged");
+    let merged_ybn_dir = tmp.join("asset/merged_ybn");
     let merged_xml_dir = tmp.join("asset/merged.xml");
     let extracted_dir = tmp.join("asset/extracted");
     let resource_dir = tmp.join("asset/merged_mlo");
@@ -240,12 +263,15 @@ mod tests {
     fs::create_dir_all(merged_dir.join("sub")).unwrap();
     fs::write(merged_dir.join("foo.ymap"), "merged foo").unwrap();
     fs::write(merged_dir.join("sub/bar.ymap"), "merged bar").unwrap();
+    fs::create_dir_all(&merged_ybn_dir).unwrap();
+    fs::write(merged_ybn_dir.join("sc1_18_0.ybn"), "merged collision").unwrap();
 
     fs::create_dir_all(merged_xml_dir.join("clone")).unwrap();
     fs::write(merged_xml_dir.join("clone/baz.ymap"), "clone baz").unwrap();
 
     fs::create_dir_all(&extracted_dir).unwrap();
     fs::write(extracted_dir.join("_extracted_ymaps.txt"), "list").unwrap();
+    fs::write(extracted_dir.join("_extracted_ybns.txt"), "collision source path").unwrap();
 
     // pre-existing stale content that must be removed by the overwrite
     fs::create_dir_all(resource_dir.join("stream/ymap/merged/stale_dir")).unwrap();
@@ -279,7 +305,14 @@ mod tests {
       fs::read_to_string(resource_dir.join("stream/ymap/clone/baz.ymap")).unwrap(),
       "clone baz"
     );
-    assert_eq!(fs::read_to_string(resource_dir.join("omit.txt")).unwrap(), "list");
+    assert_eq!(
+      fs::read_to_string(resource_dir.join("stream/ybn/merged/sc1_18_0.ybn")).unwrap(),
+      "merged collision"
+    );
+    assert_eq!(
+      fs::read_to_string(resource_dir.join("omit.txt")).unwrap(),
+      "list\ncollision source path"
+    );
     assert!(!resource_dir.join("stream/ymap/merged/stale_dir").exists());
 
     fs::remove_dir_all(&tmp).unwrap();

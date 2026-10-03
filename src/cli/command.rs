@@ -222,12 +222,12 @@ fn pipeline() -> impl Parser<Command> {
   let output_resource_dir = long("output-resource-dir")
     .help(
       "FiveM resource directory to deploy into: overwrites stream/ymap/merged, \
-       stream/ymap/clone and omit.txt",
+       stream/ymap/clone, stream/ybn/merged and omit.txt",
     )
     .argument::<PathBuf>("DIR")
     .optional();
   let use_codewalker_dll = long("use-codewalker-dll")
-    .help("Use CodeWalker.Core.dll for both conversion directions; Native Rust is the default")
+    .help("Use CodeWalker.Core.dll for YMAP conversion and YBN BVH rebuilding; Native YMAP conversion is the default")
     .switch();
 
   construct!(workspace, source_dir, output_resource_dir, use_codewalker_dll).map(

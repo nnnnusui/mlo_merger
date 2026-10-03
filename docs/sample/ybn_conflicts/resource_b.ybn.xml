@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<BoundsFile>
+ <Bounds type="Composite">
+  <BoxMin x="9" y="-1" z="-1" />
+  <BoxMax x="11" y="1" z="1" />
+  <BoxCenter x="10" y="0" z="0" />
+  <SphereCenter x="10" y="0" z="0" />
+  <SphereRadius value="1.732051" />
+  <Margin value="0" />
+  <Volume value="1" />
+  <Inertia x="1" y="1" z="1" />
+  <MaterialIndex value="0" />
+  <MaterialColourIndex value="0" />
+  <ProceduralID value="0" />
+  <RoomID value="0" />
+  <PedDensity value="0" />
+  <UnkFlags value="0" />
+  <PolyFlags value="0" />
+  <UnkType value="1" />
+  <Children>
+   <Item type="Box">
+    <BoxMin x="9" y="-1" z="-1" />
+    <BoxMax x="11" y="1" z="1" />
+    <BoxCenter x="10" y="0" z="0" />
+    <SphereCenter x="10" y="0" z="0" />
+    <SphereRadius value="1.732051" />
+    <Margin value="0" />
+    <Volume value="1" />
+    <Inertia x="1" y="1" z="1" />
+    <MaterialIndex value="0" />
+    <MaterialColourIndex value="0" />
+    <ProceduralID value="0" />
+    <RoomID value="0" />
+    <PedDensity value="0" />
+    <UnkFlags value="0" />
+    <PolyFlags value="0" />
+    <UnkType value="1" />
+    <CompositeTransform>1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1</CompositeTransform>
+    <CompositeFlags1>NONE</CompositeFlags1>
+    <CompositeFlags2>NONE</CompositeFlags2>
+   </Item>
+  </Children>
+ </Bounds>
+</BoundsFile>

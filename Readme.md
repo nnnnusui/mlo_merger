@@ -14,13 +14,13 @@ A tool for merging FiveM mod map `.ymap` files to avoid conflicts between multip
 
 ### Automated Pipeline (recommended)
 
-Running `cargo run` with no arguments executes the full workflow in one go: extract -> convert to xml -> merge -> convert back to ymap. All intermediate paths (`vanilla/ymap.xml`, `extracted`, `extracted.xml`, `merged.xml`, `merged`, `blacklist.toml`, `log`) are resolved relative to a workspace directory (`asset` by default). It prompts for confirmation before running.
+Running `cargo run` with no arguments executes the full workflow in one go: extract -> convert to xml -> merge YMAPs -> rebuild YMAPs -> merge colliding YBN bounds against vanilla. All intermediate paths (`vanilla/ymap.xml`, `vanilla/ybn`, `extracted`, `extracted.xml`, `merged.xml`, `merged`, `merged_ybn`, `blacklist.toml`, `log`) are resolved relative to a workspace directory (`asset` by default). It prompts for confirmation before running.
 
 ```bash
 # defaults: workspace=asset, source-dir=<workspace>/source
 cargo run
 
-# also deploy into a FiveM resource directory (overwrites stream/ymap/{merged,clone} and omit.txt)
+# also deploy into a FiveM resource directory (overwrites merged YMAP/YBN streams and omit.txt)
 cargo run -- --workspace asset --source-dir asset/source --output-resource-dir asset/merged_mlo
 
 # opt in to CodeWalker.Core.dll for both conversion directions
@@ -30,7 +30,7 @@ cargo run -- --use-codewalker-dll
 cargo run -- --check-stream-conflicts --input asset/source --output asset/stream-conflicts.json
 ```
 
-Both conversion directions use the Native Rust backend by default. `--use-codewalker-dll` selects CodeWalker.Core.dll (from [CodeWalker](https://github.com/dexyfex/CodeWalker)) instead. The DLL must be available locally and is **not** distributed with this repository. Native XML-to-YMAP conversion builds its schema catalog from extracted binary YMAPs. Verify the applicable license before using or redistributing CodeWalker files. By default the DLL is looked up at `<workspace>/CodeWalker.Core.dll` (e.g. `asset/CodeWalker.Core.dll`); set `CODEWALKER_CORE_DLL` to override the location:
+YMAP and YBN conversion use the Native Rust backend by default. Native YBN rebuilds generate GeometryBVH acceleration trees for collision geometry. `--use-codewalker-dll` selects CodeWalker.Core.dll (from [CodeWalker](https://github.com/dexyfex/CodeWalker)) instead for YMAP conversion and YBN rebuilds. The DLL must be available locally and is **not** distributed with this repository. Native XML-to-YMAP conversion builds its schema catalog from extracted binary YMAPs. Verify the applicable license before using or redistributing CodeWalker files. By default the DLL is looked up at `<workspace>/CodeWalker.Core.dll` (e.g. `asset/CodeWalker.Core.dll`); set `CODEWALKER_CORE_DLL` to override the location:
 
 ```bash
 # .NET SDK 8 is required to build the bridge (see .devcontainer/devcontainer.json's dotnet feature,
@@ -39,7 +39,7 @@ export CODEWALKER_CORE_DLL=/path/to/CodeWalker.Core.dll  # optional, defaults to
 cargo run
 ```
 
-When `--use-codewalker-dll` is selected, `cargo build`/`cargo run` builds `bridge/CodeWalker.Bridge` automatically via `build.rs` if `CODEWALKER_CORE_DLL` and `dotnet` are available. Otherwise, the default Native pipeline does not require the .NET SDK or DLL.
+When `--use-codewalker-dll` is selected, `cargo build`/`cargo run` builds `bridge/CodeWalker.Bridge` automatically via `build.rs` if `CODEWALKER_CORE_DLL` and `dotnet` are available. The default Native pipeline does not require the .NET SDK or DLL.
 
 ### Basic Workflow (manual / individual steps)
 

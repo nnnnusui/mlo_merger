@@ -1,0 +1,3 @@
+# YBN Conflict Samples
+
+The two resource fixtures model independent collision additions. `vanilla_empty.ybn.xml` has no child bounds; the merge test verifies that both resource additions survive and identical additions are deduplicated. A second test uses `resource_a.ybn.xml` as the vanilla baseline and `resource_b.ybn.xml` as a mod delta, verifying removal of the vanilla child and insertion of the replacement child.

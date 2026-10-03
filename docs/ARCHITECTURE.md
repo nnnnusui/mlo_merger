@@ -8,11 +8,14 @@ This tool merges FiveM mod map (`.ymap`) files while avoiding conflicts between 
 2. **ymap -> xml** (`src/core/xmlconvert::Ymap2Xml`) - converts binary `.ymap` files into `.ymap.xml` via the native Rust serializer by default, or CodeWalker.Core with `--use-codewalker-dll`.
 3. **Merge** (`src/core/merge`) - combines vanilla and mod `.ymap.xml` files, tracking entity-level diffs (`src/core/format`, `structdiff`). Single-mod YMAPs are copied as binary clones only when their final parent references and hierarchy fields remain unchanged; otherwise they are rebuilt from patched original XML.
 4. **xml -> ymap** (`src/core/xmlconvert::Xml2Ymap`) - converts merged `.ymap.xml` back into binary `.ymap` via the native Rust META/RSC7 writer by default, or CodeWalker.Core with `--use-codewalker-dll`.
-5. **Deploy** (optional, `--output-resource-dir`) - overwrites a FiveM resource directory's `stream/ymap/merged`, `stream/ymap/clone` and `omit.txt` with this run's output.
+5. **YBN merge** (`src/core/merge/ybn_conflicts`) - compares colliding source YBN Bounds against `asset/vanilla/ybn`, applies child-bound additions/removals keyed by vertex/polygon geometry, and rebuilds merged binaries with the Native GeometryBVH writer by default. CodeWalker.Core is an optional rebuild backend.
+6. **Deploy** (optional, `--output-resource-dir`) - overwrites a FiveM resource directory's `stream/ymap/merged`, `stream/ymap/clone`, `stream/ybn/merged` and `omit.txt` with this run's output.
 
-`cargo run` with no arguments (`Command::Pipeline` in [src/cli/command.rs](../src/cli/command.rs)) runs all steps in order after a confirmation prompt (step 5 only if `--output-resource-dir` is given). Each of steps 1-4 is also available as an individual flag-based subcommand (`--extract-ymap`, `--merge-ymap-xml`, etc.) for manual use.
+`cargo run` with no arguments (`Command::Pipeline` in [src/cli/command.rs](../src/cli/command.rs)) runs all steps in order after a confirmation prompt (step 6 only if `--output-resource-dir` is given). Each of steps 1-4 is also available as an individual flag-based subcommand (`--extract-ymap`, `--merge-ymap-xml`, etc.) for manual use.
 
 `--check-stream-conflicts --input <DIR> --output <FILE>` uses the same manifest-aware resource discovery as extraction, scans each resource's `stream/` (or a stream directory directly), groups files by case-insensitive basename, and writes conflicting relative paths as JSON.
+
+YBN conflicts are merged only when a vanilla baseline with the same basename exists. The merger preserves vanilla children not removed by any mod, applies mod-relative removals, unions distinct added Bounds, and deduplicates identical additions. Conflicting source paths are appended to `_extracted_ybns.txt`, which deploy combines with the YMAP omit list. The Native YBN writer generates GeometryBVH node/tree data, updates polygon order, and remaps triangle edge indices. CodeWalker.Core remains available as an alternate rebuild backend.
 
 ## YMAP Metadata Merging
 

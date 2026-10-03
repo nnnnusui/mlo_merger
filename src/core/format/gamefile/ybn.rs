@@ -1,9 +1,14 @@
-use std::io;
+use std::{
+  collections::{HashMap, HashSet},
+  io,
+};
 
 use super::{
   resource_file::Rsc7Resource,
   xml_tree::{XmlElement, parse_xml},
 };
+
+mod bvh;
 
 const BASE: u64 = 0x5000_0000;
 const ROOT_OFFSET: usize = 0;
@@ -51,10 +56,11 @@ struct Material {
 #[derive(Clone, Copy, Default)]
 struct Triangle {
   material: u8,
+  area: f32,
   vertices: [u16; 3],
   vertex_flags: [bool; 3],
+  edge_indices: [u16; 3],
 }
-
 #[derive(Clone, Copy)]
 enum Polygon {
   Triangle(Triangle),
@@ -79,6 +85,9 @@ enum Polygon {
     vertex2: u16,
     radius: f32,
   },
+  Unsupported {
+    raw: [u8; 16],
+  },
 }
 
 impl Polygon {
@@ -101,6 +110,9 @@ impl Polygon {
         material,
         ..
       } => *material,
+      Self::Unsupported {
+        ..
+      } => 0,
     }
   }
 
@@ -126,6 +138,9 @@ impl Polygon {
         material,
         ..
       } => *material = index,
+      Self::Unsupported {
+        ..
+      } => {}
     }
   }
 }
@@ -148,8 +163,260 @@ pub fn xml_to_ybn(xml: &str) -> io::Result<Vec<u8>> {
   }
   let bound_node = child(&root, "Bounds")?;
   let bound = read_bound_xml(bound_node, None)?;
+  encode_ybn_bound(&bound)
+}
+
+/// Applies composite-child additions and removals relative to a vanilla YBN baseline.
+pub fn merge_ybn_deltas(
+  vanilla: &[u8],
+  mods: &[&[u8]],
+) -> io::Result<Vec<u8>> {
+  let mut merged = read_ybn_root(vanilla)?;
+  if merged.kind != "Composite" {
+    return Err(invalid("YBN delta merge requires a Composite vanilla root"));
+  }
+  let baseline_keys = merged.children.iter().map(bound_identity).collect::<io::Result<Vec<_>>>()?;
+  let baseline_counts = counts(&baseline_keys);
+  let mut removed = HashSet::new();
+  let mut added = HashMap::<Vec<u8>, (Bound, [f32; 16], [u32; 2])>::new();
+  let mut minimum = [f32::INFINITY; 3];
+  let mut maximum = [f32::NEG_INFINITY; 3];
+  let mut spheres = Vec::<([f32; 3], f32)>::new();
+
+  for root in std::iter::once(read_ybn_root(vanilla)?)
+    .chain(mods.iter().map(|bytes| read_ybn_root(bytes)).collect::<io::Result<Vec<_>>>()?)
+  {
+    if root.kind != "Composite" {
+      return Err(invalid("YBN delta merge requires Composite roots"));
+    }
+    let root_minimum = read_vec3(&root.common, 48)?;
+    let root_maximum = read_vec3(&root.common, 32)?;
+    let sphere_center = read_vec3(&root.common, 80)?;
+    let sphere_radius = read_f32(&root.common, 20)?;
+    if root_minimum.iter().chain(&root_maximum).any(|value| !value.is_finite())
+      || !sphere_radius.is_finite()
+      || sphere_radius < 0.0
+    {
+      return Err(invalid("YBN root bounds are not finite"));
+    }
+    for axis in 0..3 {
+      minimum[axis] = minimum[axis].min(root_minimum[axis]);
+      maximum[axis] = maximum[axis].max(root_maximum[axis]);
+    }
+    spheres.push((sphere_center, sphere_radius));
+
+    if spheres.len() > 1 {
+      let mut remaining = baseline_counts.clone();
+      for (index, child) in root.children.iter().enumerate() {
+        let key = bound_identity(child)?;
+        if let Some(count) = remaining.get_mut(&key).filter(|count| **count > 0) {
+          *count -= 1;
+        } else {
+          added
+            .entry(key)
+            .or_insert_with(|| (child.clone(), root.transforms[index], root.flags[index]));
+        }
+      }
+      removed.extend(remaining.into_iter().filter_map(|(key, count)| (count > 0).then_some(key)));
+    }
+  }
+
+  let mut children = Vec::new();
+  let mut transforms = Vec::new();
+  let mut flags = Vec::new();
+  for (index, child) in merged.children.drain(..).enumerate() {
+    if !removed.contains(&baseline_keys[index]) {
+      children.push(child);
+      transforms.push(merged.transforms[index]);
+      flags.push(merged.flags[index]);
+    }
+  }
+  for (key, (child, transform, child_flags)) in added {
+    if !baseline_counts.contains_key(&key) {
+      children.push(child);
+      transforms.push(transform);
+      flags.push(child_flags);
+    }
+  }
+  merged.children = children;
+  merged.transforms = transforms;
+  merged.flags = flags;
+  if merged.children.len() > u16::MAX as usize {
+    return Err(invalid("merged YBN composite has too many children"));
+  }
+
+  let center = std::array::from_fn(|axis| (minimum[axis] + maximum[axis]) * 0.5);
+  let radius = spheres
+    .iter()
+    .map(|(sphere_center, sphere_radius)| {
+      (0..3).map(|axis| (sphere_center[axis] - center[axis]).powi(2)).sum::<f32>().sqrt()
+        + sphere_radius
+    })
+    .fold(0.0f32, f32::max);
+  write_vec3(&mut merged.common, 48, minimum)?;
+  write_vec3(&mut merged.common, 32, maximum)?;
+  write_vec3(&mut merged.common, 64, center)?;
+  write_vec3(&mut merged.common, 80, center)?;
+  write_f32(&mut merged.common, 20, radius)?;
+  encode_ybn_bound(&merged)
+}
+
+fn read_ybn_root(bytes: &[u8]) -> io::Result<Bound> {
+  let resource = Rsc7Resource::decode(bytes)?;
+  read_bound(&resource, BASE + ROOT_OFFSET as u64, None)
+}
+
+fn counts(keys: &[Vec<u8>]) -> HashMap<Vec<u8>, usize> {
+  let mut counts = HashMap::new();
+  for key in keys {
+    *counts.entry(key.clone()).or_insert(0) += 1;
+  }
+  counts
+}
+
+fn bound_identity(bound: &Bound) -> io::Result<Vec<u8>> {
+  let mut identity = Vec::new();
+  append_bound_identity(bound, &mut identity)?;
+  Ok(identity)
+}
+
+fn append_bound_identity(
+  bound: &Bound,
+  identity: &mut Vec<u8>,
+) -> io::Result<()> {
+  identity.extend_from_slice(&(bound.kind.len() as u32).to_le_bytes());
+  identity.extend_from_slice(bound.kind.as_bytes());
+  identity.extend_from_slice(&bound.common[60..64]);
+  identity.extend_from_slice(&bound.common[76..80]);
+  identity.extend_from_slice(&bound.common[92..94]);
+  identity.extend_from_slice(&bound.composite_flags[0].to_le_bytes());
+  identity.extend_from_slice(&bound.composite_flags[1].to_le_bytes());
+  if let Some(transform) = bound.transform {
+    identity.push(1);
+    for value in transform {
+      append_quantized_float(identity, value)?;
+    }
+  } else {
+    identity.push(0);
+  }
+
+  if let Some(geometry) = &bound.geometry {
+    identity.push(1);
+    for value in geometry
+      .center
+      .iter()
+      .copied()
+      .chain([geometry.unknown_9c, geometry.unknown_ac])
+      .chain(geometry.vertices.iter().flatten().copied())
+    {
+      append_quantized_float(identity, value)?;
+    }
+    for material in &geometry.materials {
+      identity.extend_from_slice(&[
+        material.kind,
+        material.procedural_id,
+        material.room_id,
+        material.ped_density,
+      ]);
+      identity.extend_from_slice(&material.flags.to_le_bytes());
+      identity.push(material.colour_index);
+      identity.extend_from_slice(&material.unknown.to_le_bytes());
+    }
+    for color in geometry.material_colours.iter().chain(&geometry.vertex_colours) {
+      identity.extend_from_slice(color);
+    }
+    for polygon in &geometry.polygons {
+      match polygon {
+        Polygon::Triangle(triangle) => {
+          identity.push(0);
+          identity.push(triangle.material);
+          for vertex in triangle.vertices {
+            identity.extend_from_slice(&vertex.to_le_bytes());
+          }
+          for flag in triangle.vertex_flags {
+            identity.push(u8::from(flag));
+          }
+        }
+        Polygon::Box {
+          material,
+          vertices,
+        } => {
+          identity.extend_from_slice(&[1, *material]);
+          for vertex in vertices {
+            identity.extend_from_slice(&vertex.to_le_bytes());
+          }
+        }
+        Polygon::Sphere {
+          material,
+          vertex,
+          radius,
+        } => {
+          identity.extend_from_slice(&[2, *material]);
+          identity.extend_from_slice(&vertex.to_le_bytes());
+          append_quantized_float(identity, *radius)?;
+        }
+        Polygon::Capsule {
+          material,
+          vertex1,
+          vertex2,
+          radius,
+        } => {
+          identity.extend_from_slice(&[3, *material]);
+          identity.extend_from_slice(&vertex1.to_le_bytes());
+          identity.extend_from_slice(&vertex2.to_le_bytes());
+          append_quantized_float(identity, *radius)?;
+        }
+        Polygon::Cylinder {
+          material,
+          vertex1,
+          vertex2,
+          radius,
+        } => {
+          identity.extend_from_slice(&[4, *material]);
+          identity.extend_from_slice(&vertex1.to_le_bytes());
+          identity.extend_from_slice(&vertex2.to_le_bytes());
+          append_quantized_float(identity, *radius)?;
+        }
+        Polygon::Unsupported {
+          raw,
+        } => identity.extend_from_slice(raw),
+      }
+    }
+  } else {
+    identity.push(0);
+    identity.extend_from_slice(&bound.common);
+    if matches!(bound.kind.as_str(), "Capsule" | "Disc" | "Cylinder") {
+      identity.extend_from_slice(&bound.extension);
+    }
+  }
+
+  identity.extend_from_slice(&(bound.children.len() as u32).to_le_bytes());
+  for (index, child) in bound.children.iter().enumerate() {
+    for value in bound.transforms[index] {
+      append_quantized_float(identity, value)?;
+    }
+    identity.extend_from_slice(&bound.flags[index][0].to_le_bytes());
+    identity.extend_from_slice(&bound.flags[index][1].to_le_bytes());
+    append_bound_identity(child, identity)?;
+  }
+  Ok(())
+}
+
+fn append_quantized_float(
+  identity: &mut Vec<u8>,
+  value: f32,
+) -> io::Result<()> {
+  if !value.is_finite() {
+    return Err(invalid("YBN identity contains a non-finite float"));
+  }
+  let quantized = (value as f64 * 1000.0).round() as i64;
+  identity.extend_from_slice(&quantized.to_le_bytes());
+  Ok(())
+}
+
+fn encode_ybn_bound(bound: &Bound) -> io::Result<Vec<u8>> {
   let mut data = vec![0; ROOT_OFFSET + BOUNDS_SIZE];
-  encode_bound(&bound, &mut data, ROOT_OFFSET)?;
+  encode_bound(bound, &mut data, ROOT_OFFSET)?;
   let content_end = data.len();
   let mut slots = 1;
   let (page_info, count) = loop {
@@ -218,14 +485,14 @@ fn read_bound(
     let _flags2 = read_optional_address_table(resource, flags2_pointer, child_count, 8)?;
     for (index, child_pointer) in pointers.iter().enumerate() {
       let transform = if transform_bytes.len() >= (index + 1) * 64 {
-        read_matrix(transform_bytes, index * 64)?
+        read_matrix(&transform_bytes, index * 64)?
       } else {
         identity()
       };
       bound.transforms.push(transform);
       bound.flags.push([
-        if flags1.len() >= (index + 1) * 8 { read_u32(flags1, index * 8)? } else { 0 },
-        if flags1.len() >= (index + 1) * 8 { read_u32(flags1, index * 8 + 4)? } else { 0 },
+        if flags1.len() >= (index + 1) * 8 { read_u32(&flags1, index * 8)? } else { 0 },
+        if flags1.len() >= (index + 1) * 8 { read_u32(&flags1, index * 8 + 4)? } else { 0 },
       ]);
       let mut child = read_bound(resource, *child_pointer, Some(transform))?;
       child.composite_flags = bound.flags[index];
@@ -302,8 +569,10 @@ fn read_geometry(
         let packed = [read_u16(bytes, 4)?, read_u16(bytes, 6)?, read_u16(bytes, 8)?];
         geometry.polygons.push(Polygon::Triangle(Triangle {
           material,
+          area: read_f32(bytes, 0)?,
           vertices: [packed[0] & 0x7fff, packed[1] & 0x7fff, packed[2] & 0x7fff],
           vertex_flags: [packed[0] & 0x8000 != 0, packed[1] & 0x8000 != 0, packed[2] & 0x8000 != 0],
+          edge_indices: [read_u16(bytes, 10)?, read_u16(bytes, 12)?, read_u16(bytes, 14)?],
         }));
       }
       3 => geometry.polygons.push(Polygon::Box {
@@ -332,7 +601,9 @@ fn read_geometry(
         radius: read_f32(bytes, 4)?,
         vertex2: read_u16(bytes, 8)?,
       }),
-      kind => return Err(invalid(&format!("Native YBN polygon type {kind} is not supported yet"))),
+      _ => geometry.polygons.push(Polygon::Unsupported {
+        raw: bytes.try_into().map_err(|_| invalid("YBN polygon record has the wrong size"))?,
+      }),
     }
   }
   Ok(geometry)
@@ -462,6 +733,7 @@ fn geometry_from_xml(node: &XmlElement) -> io::Result<Geometry> {
       match polygon.name.as_str() {
         "Triangle" => geometry.polygons.push(Polygon::Triangle(Triangle {
           material,
+          area: 0.0,
           vertices: [
             polygon_attr(polygon, "v1")?,
             polygon_attr(polygon, "v2")?,
@@ -472,6 +744,7 @@ fn geometry_from_xml(node: &XmlElement) -> io::Result<Geometry> {
             polygon_attr::<u8>(polygon, "f2")? != 0,
             polygon_attr::<u8>(polygon, "f3")? != 0,
           ],
+          edge_indices: [u16::MAX; 3],
         })),
         "Box" => geometry.polygons.push(Polygon::Box {
           material,
@@ -541,12 +814,11 @@ fn encode_bound(
   let block_size = size_for_bound(bound);
   ensure_len(data, offset + block_size);
   let mut common = bound.common.clone();
-  let quantum = if bound.geometry.is_some() { geometry_quantum(&bound.common)? } else { [0.0; 3] };
   if bound.kind == "GeometryBVH"
     && let Some(geometry) = &bound.geometry
     && !geometry.polygons.is_empty()
   {
-    let (minimum, maximum) = geometry_polygon_bounds(geometry, bound)?;
+    let (minimum, maximum) = bvh::geometry_polygon_bounds(geometry, bound)?;
     let center = std::array::from_fn(|axis| (minimum[axis] + maximum[axis]) * 0.5);
     write_vec3(&mut common, 48, minimum)?;
     write_vec3(&mut common, 32, maximum)?;
@@ -556,6 +828,11 @@ fn encode_bound(
     write_f32(&mut common, 20, radius)?;
   }
   data[offset..offset + 112].copy_from_slice(&common[..112]);
+  let quantum = match &bound.geometry {
+    Some(geometry) if bound.kind == "GeometryBVH" => geometry_bvh_quantum(geometry, &common)?,
+    Some(_) => geometry_quantum(&common)?,
+    None => [0.0; 3],
+  };
   let extension_end = offset + 112 + bound.extension.len();
   if extension_end <= offset + block_size {
     data[offset + 112..extension_end].copy_from_slice(&bound.extension);
@@ -600,7 +877,14 @@ fn encode_bound(
     put_u16(data, offset + 162, bound.children.len() as u16)?;
     put_u64(data, offset + 168, 0)?;
   } else if let Some(geometry) = &bound.geometry {
-    encode_geometry(geometry, bound, quantum, data, offset)?;
+    if bound.kind == "GeometryBVH" {
+      let mut geometry = geometry.clone();
+      let pointer = bvh::append_geometry_bvh(data, &mut geometry, bound)?;
+      encode_geometry(&geometry, bound, quantum, data, offset)?;
+      put_u64(data, offset + 304, pointer)?;
+    } else {
+      encode_geometry(geometry, bound, quantum, data, offset)?;
+    }
   }
   Ok(())
 }
@@ -609,6 +893,29 @@ fn geometry_quantum(common: &[u8]) -> io::Result<[f32; 3]> {
   let minimum = read_vec3(common, 48)?;
   let maximum = read_vec3(common, 32)?;
   Ok(std::array::from_fn(|axis| (maximum[axis] - minimum[axis]) * 0.5 / 32767.0))
+}
+
+fn geometry_bvh_quantum(
+  geometry: &Geometry,
+  common: &[u8],
+) -> io::Result<[f32; 3]> {
+  let margin = read_f32(common, 44)?;
+  if !margin.is_finite() || margin < 0.0 {
+    return Err(invalid("GeometryBVH margin must be finite and nonnegative"));
+  }
+  let mut maximum = [0.0f32; 3];
+  for vertex in &geometry.vertices {
+    for axis in 0..3 {
+      if !vertex[axis].is_finite() {
+        return Err(invalid("GeometryBVH contains a non-finite vertex"));
+      }
+      maximum[axis] = maximum[axis].max(vertex[axis].abs());
+    }
+  }
+  Ok(std::array::from_fn(|axis| {
+    let extent = maximum[axis] + margin;
+    if extent <= f32::EPSILON { 1.0 / 32767.0 } else { extent / 32767.0 }
+  }))
 }
 
 fn encode_geometry(
@@ -654,12 +961,16 @@ fn encode_geometry(
   for polygon in &geometry.polygons {
     match polygon {
       Polygon::Triangle(triangle) => {
-        polygons.extend_from_slice(&[0; 4]);
+        let mut area = triangle.area.to_le_bytes();
+        area[0] &= 0xf8;
+        polygons.extend_from_slice(&area);
         for i in 0..3 {
           let value = triangle.vertices[i] | if triangle.vertex_flags[i] { 0x8000 } else { 0 };
           polygons.extend_from_slice(&value.to_le_bytes());
         }
-        polygons.extend_from_slice(&[0; 6]);
+        for edge_index in triangle.edge_indices {
+          polygons.extend_from_slice(&edge_index.to_le_bytes());
+        }
         material_indices.push(triangle.material);
       }
       Polygon::Box {
@@ -709,6 +1020,12 @@ fn encode_geometry(
         polygons[record_start] |= tag;
         material_indices.push(*material);
       }
+      Polygon::Unsupported {
+        raw,
+      } => {
+        polygons.extend_from_slice(raw);
+        material_indices.push(0);
+      }
     }
   }
   let polygons_at = append(data, &polygons)?;
@@ -733,80 +1050,6 @@ fn encode_geometry(
     put_u16(data, offset + 320, 0xffff)?;
   }
   Ok(())
-}
-
-fn geometry_polygon_bounds(
-  geometry: &Geometry,
-  bound: &Bound,
-) -> io::Result<([f32; 3], [f32; 3])> {
-  let mut minimum = [f32::INFINITY; 3];
-  let mut maximum = [f32::NEG_INFINITY; 3];
-  for polygon in &geometry.polygons {
-    let mut include_vertex = |index: usize, radius: f32| -> io::Result<()> {
-      let vertex = geometry
-        .vertices
-        .get(index)
-        .ok_or_else(|| invalid("YBN polygon vertex index is out of range"))?;
-      let mut point = [
-        vertex[0] + geometry.center[0],
-        vertex[1] + geometry.center[1],
-        vertex[2] + geometry.center[2],
-      ];
-      if let Some(matrix) = bound.transform {
-        point = [
-          point[0] * matrix[0] + point[1] * matrix[4] + point[2] * matrix[8] + matrix[12],
-          point[0] * matrix[1] + point[1] * matrix[5] + point[2] * matrix[9] + matrix[13],
-          point[0] * matrix[2] + point[1] * matrix[6] + point[2] * matrix[10] + matrix[14],
-        ];
-      }
-      for axis in 0..3 {
-        minimum[axis] = minimum[axis].min(point[axis] - radius);
-        maximum[axis] = maximum[axis].max(point[axis] + radius);
-      }
-      Ok(())
-    };
-    match polygon {
-      Polygon::Triangle(triangle) => {
-        for vertex in triangle.vertices {
-          include_vertex(vertex as usize, 0.0)?;
-        }
-      }
-      Polygon::Box {
-        vertices,
-        ..
-      } => {
-        for vertex in vertices {
-          include_vertex(*vertex as usize, 0.0)?;
-        }
-      }
-      Polygon::Sphere {
-        vertex,
-        radius,
-        ..
-      } => include_vertex(*vertex as usize, *radius)?,
-      Polygon::Capsule {
-        vertex1,
-        vertex2,
-        radius,
-        ..
-      }
-      | Polygon::Cylinder {
-        vertex1,
-        vertex2,
-        radius,
-        ..
-      } => {
-        include_vertex(*vertex1 as usize, *radius)?;
-        include_vertex(*vertex2 as usize, *radius)?;
-      }
-    }
-  }
-  if minimum.iter().any(|value| !value.is_finite())
-    || maximum.iter().any(|value| !value.is_finite())
-  {
-    return Err(invalid("YBN geometry has no polygon bounds"));
-  }
-  Ok((minimum, maximum))
 }
 
 fn write_bound_xml(
@@ -877,56 +1120,64 @@ fn write_bound_xml(
     if !geometry.vertex_colours.is_empty() {
       text_tag(xml, depth + 1, "VertexColours", &format_colors(&geometry.vertex_colours));
     }
-    write_array_open(xml, depth + 1, "Polygons");
-    for polygon in &geometry.polygons {
-      indent(xml, depth + 2);
-      match polygon {
-        Polygon::Triangle(triangle) => xml.push_str(&format!(
-          "<Triangle m=\"{}\" v1=\"{}\" v2=\"{}\" v3=\"{}\" f1=\"{}\" f2=\"{}\" f3=\"{}\" />\n",
-          triangle.material,
-          triangle.vertices[0],
-          triangle.vertices[1],
-          triangle.vertices[2],
-          u8::from(triangle.vertex_flags[0]),
-          u8::from(triangle.vertex_flags[1]),
-          u8::from(triangle.vertex_flags[2])
-        )),
-        Polygon::Box {
-          material,
-          vertices,
-        } => xml.push_str(&format!(
-          "<Box m=\"{}\" v1=\"{}\" v2=\"{}\" v3=\"{}\" v4=\"{}\" />\n",
-          material, vertices[0], vertices[1], vertices[2], vertices[3]
-        )),
-        Polygon::Sphere {
-          material,
-          vertex,
-          radius,
-        } => xml.push_str(&format!(
-          "<Sphere m=\"{}\" v=\"{}\" radius=\"{}\" />\n",
-          material, vertex, radius
-        )),
-        Polygon::Capsule {
-          material,
-          vertex1,
-          vertex2,
-          radius,
-        } => xml.push_str(&format!(
-          "<Capsule m=\"{}\" v1=\"{}\" v2=\"{}\" radius=\"{}\" />\n",
-          material, vertex1, vertex2, radius
-        )),
-        Polygon::Cylinder {
-          material,
-          vertex1,
-          vertex2,
-          radius,
-        } => xml.push_str(&format!(
-          "<Cylinder m=\"{}\" v1=\"{}\" v2=\"{}\" radius=\"{}\" />\n",
-          material, vertex1, vertex2, radius
-        )),
+    if geometry.polygons.iter().any(|polygon| !matches!(polygon, Polygon::Unsupported { .. })) {
+      write_array_open(xml, depth + 1, "Polygons");
+      for polygon in &geometry.polygons {
+        if matches!(polygon, Polygon::Unsupported { .. }) {
+          continue;
+        }
+        indent(xml, depth + 2);
+        match polygon {
+          Polygon::Triangle(triangle) => xml.push_str(&format!(
+            "<Triangle m=\"{}\" v1=\"{}\" v2=\"{}\" v3=\"{}\" f1=\"{}\" f2=\"{}\" f3=\"{}\" />\n",
+            triangle.material,
+            triangle.vertices[0],
+            triangle.vertices[1],
+            triangle.vertices[2],
+            u8::from(triangle.vertex_flags[0]),
+            u8::from(triangle.vertex_flags[1]),
+            u8::from(triangle.vertex_flags[2])
+          )),
+          Polygon::Box {
+            material,
+            vertices,
+          } => xml.push_str(&format!(
+            "<Box m=\"{}\" v1=\"{}\" v2=\"{}\" v3=\"{}\" v4=\"{}\" />\n",
+            material, vertices[0], vertices[1], vertices[2], vertices[3]
+          )),
+          Polygon::Sphere {
+            material,
+            vertex,
+            radius,
+          } => xml.push_str(&format!(
+            "<Sphere m=\"{}\" v=\"{}\" radius=\"{}\" />\n",
+            material, vertex, radius
+          )),
+          Polygon::Capsule {
+            material,
+            vertex1,
+            vertex2,
+            radius,
+          } => xml.push_str(&format!(
+            "<Capsule m=\"{}\" v1=\"{}\" v2=\"{}\" radius=\"{}\" />\n",
+            material, vertex1, vertex2, radius
+          )),
+          Polygon::Cylinder {
+            material,
+            vertex1,
+            vertex2,
+            radius,
+          } => xml.push_str(&format!(
+            "<Cylinder m=\"{}\" v1=\"{}\" v2=\"{}\" radius=\"{}\" />\n",
+            material, vertex1, vertex2, radius
+          )),
+          Polygon::Unsupported {
+            ..
+          } => unreachable!("unsupported polygons are omitted from XML"),
+        }
       }
+      write_array_close(xml, depth + 1, "Polygons");
     }
-    write_array_close(xml, depth + 1, "Polygons");
   }
   if !bound.children.is_empty() {
     write_array_open(xml, depth + 1, "Children");
@@ -959,12 +1210,24 @@ fn read_optional_address_table(
   pointer: u64,
   count: usize,
   stride: usize,
-) -> io::Result<&[u8]> {
+) -> io::Result<Vec<u8>> {
   if pointer == 0 || count == 0 {
-    return Ok(&[]);
+    return Ok(Vec::new());
   }
   let size = count.checked_mul(stride).ok_or_else(|| invalid("YBN table size overflows"))?;
-  resource.read_address(pointer, size)
+  let address =
+    u32::try_from(pointer).map_err(|_| invalid("YBN optional table pointer is invalid"))?;
+  let (data, offset) = match address & 0xf000_0000 {
+    0x5000_0000 => (&resource.system_data, (address & 0x0fff_ffff) as usize),
+    0x6000_0000 => (&resource.graphics_data, (address & 0x0fff_ffff) as usize),
+    _ => return Err(invalid("YBN optional table pointer uses an unknown page region")),
+  };
+  let available = if offset >= data.len() { 0 } else { size.min(data.len() - offset) };
+  let mut result = vec![0; size];
+  if available > 0 {
+    result[..available].copy_from_slice(&data[offset..offset + available]);
+  }
+  Ok(result)
 }
 fn read_pointer_array(
   resource: &Rsc7Resource,
@@ -1501,4 +1764,54 @@ fn identity() -> [f32; 16] {
 }
 fn invalid(message: &str) -> io::Error {
   io::Error::new(io::ErrorKind::InvalidData, message)
+}
+
+#[cfg(test)]
+mod tests {
+  use super::{child, merge_ybn_deltas, parse_xml, vec3, xml_to_ybn, ybn_to_xml};
+  use std::path::Path;
+
+  fn sample(name: &str) -> Vec<u8> {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("docs/sample/ybn_conflicts").join(name);
+    let xml = std::fs::read_to_string(path).unwrap();
+    xml_to_ybn(&xml).unwrap()
+  }
+
+  fn merged_children(bytes: &[u8]) -> (usize, [f32; 3], [f32; 3]) {
+    let xml = ybn_to_xml(bytes).unwrap();
+    let root = parse_xml(&xml).unwrap();
+    let bounds = child(&root, "Bounds").unwrap();
+    let children = child(bounds, "Children").unwrap();
+    (
+      children.children.len(),
+      vec3(child(bounds, "BoxMin").unwrap()).unwrap(),
+      vec3(child(bounds, "BoxMax").unwrap()).unwrap(),
+    )
+  }
+
+  #[test]
+  fn merges_mod_child_additions_and_removals_against_vanilla() {
+    let vanilla = sample("resource_a.ybn.xml");
+    let unchanged_mod = sample("resource_a.ybn.xml");
+    let changed_mod = sample("resource_b.ybn.xml");
+    let merged = merge_ybn_deltas(&vanilla, &[&unchanged_mod, &changed_mod]).unwrap();
+    let (children, minimum, maximum) = merged_children(&merged);
+
+    assert_eq!(children, 1, "the removed vanilla child must not survive");
+    assert_eq!(minimum[0], -1.0, "the root broadphase must retain the baseline extent");
+    assert_eq!(maximum[0], 11.0);
+  }
+
+  #[test]
+  fn merges_independent_additions_from_multiple_mods() {
+    let vanilla = sample("vanilla_empty.ybn.xml");
+    let first_mod = sample("resource_a.ybn.xml");
+    let second_mod = sample("resource_b.ybn.xml");
+    let merged = merge_ybn_deltas(&vanilla, &[&first_mod, &second_mod, &first_mod]).unwrap();
+    let (children, minimum, maximum) = merged_children(&merged);
+
+    assert_eq!(children, 2, "the same addition from two mods must be deduplicated");
+    assert_eq!(minimum[0], -1.0);
+    assert_eq!(maximum[0], 11.0);
+  }
 }
