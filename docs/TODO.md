@@ -12,6 +12,9 @@
 - [x] Prepare DLL rebuilds of the two in-game crash cases; both are byte-identical to the known-good GUI imports.
 - [x] Fix Native runtime metadata: preserve StructureKey/EnumKey and schema attributes, count actual pages, and prevent META blocks crossing RSC page boundaries.
 - [ ] Re-test corrected Native grass and `bkr_id1_09` in-game; fixed files are under `asset/merged_native_fixed`.
+- [x] Fix distant-light position loss from legacy `XmlPositionChildValueAttr` tags; emit `Item` elements and omit absent light error tags.
+- [x] Reject mismatched distant-light position/RGBI counts; verify six merged `vw_distlodlights_medium` files against the DLL.
+- [ ] Re-test corrected distant-light files (010, 012, 015, 019, 022, 028) in-game.
 
 ## Resource Conversion Tests
 

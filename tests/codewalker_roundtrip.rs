@@ -24,6 +24,68 @@ use mlo_merger::core::format::gamefile::{
 use mlo_merger::core::xmlconvert::Xml2Ymap;
 
 #[test]
+#[ignore = "requires local merged distant-light XML and CodeWalker.Core.dll"]
+fn native_merged_distant_lights_match_codewalker() {
+  let base = Path::new(env!("CARGO_MANIFEST_DIR"));
+  let bridge = std::env::var("CODEWALKER_BRIDGE_DLL").unwrap_or_else(|_| {
+    base.join("bridge/CodeWalker.Bridge/bin/publish/CodeWalker.Bridge.dll").display().to_string()
+  });
+  let codewalker = CodeWalker::init(Path::new(&bridge)).unwrap();
+  let output = base.join("asset/merged_native_fixed");
+  let reports = base.join("asset/merge_validation/distant_lights_fix");
+  std::fs::create_dir_all(&output).unwrap();
+  std::fs::create_dir_all(&reports).unwrap();
+  let mut paths = std::fs::read_dir(base.join("asset/merged.xml"))
+    .unwrap()
+    .map(|entry| entry.unwrap().path())
+    .filter(|path| {
+      path.file_name().and_then(|name| name.to_str()).is_some_and(|name| {
+        name.starts_with("vw_distlodlights_medium") && name.ends_with(".ymap.xml")
+      })
+    })
+    .collect::<Vec<_>>();
+  paths.sort();
+  assert!(!paths.is_empty(), "no merged distant-light fixtures");
+  let mut results = Vec::new();
+  for input in paths {
+    let file_name = input.file_name().unwrap().to_str().unwrap();
+    let name = file_name.strip_suffix(".xml").unwrap();
+    let bytes = std::fs::read(base.join("asset/vanilla/ymap").join(name)).unwrap();
+    let mut catalog = MetaSchemaCatalog::default();
+    catalog.add_resource(&MetaResource::parse(&Rsc7Resource::decode(&bytes).unwrap()).unwrap());
+    let xml = std::fs::read_to_string(&input).unwrap();
+    let native = xml_to_resource(NativeResourceFormat::Ymap, &xml, &catalog).unwrap();
+    let native_path = output.join(name);
+    std::fs::write(&native_path, &native).unwrap();
+    let dll_path = reports.join(name);
+    codewalker.xml_to_ymap(&input, &dll_path).unwrap();
+    let native_xml = reports.join(format!("{name}.native.xml"));
+    let dll_xml = reports.join(format!("{name}.dll.xml"));
+    codewalker.ymap_to_xml(&native_path, &native_xml).unwrap();
+    codewalker.ymap_to_xml(&dll_path, &dll_xml).unwrap();
+    assert_canonical_xml_eq(
+      &std::fs::read_to_string(native_xml).unwrap(),
+      &std::fs::read_to_string(dll_xml).unwrap(),
+      name,
+    )
+    .unwrap();
+    let meta = MetaResource::parse(&Rsc7Resource::decode(&native).unwrap()).unwrap();
+    let float_xyz = 0xE2CB_CFD4;
+    let positions = meta
+      .data_blocks
+      .iter()
+      .filter(|block| block.structure_name_hash == float_xyz)
+      .map(|block| block.data.len())
+      .sum::<usize>();
+    assert!(positions > 0, "distant-light position block missing: {name}");
+    results.push(serde_json::json!({ "ymap": name, "position_block_bytes": positions, "native_bytes": native.len(), "dll_bytes": std::fs::metadata(dll_path).unwrap().len() }));
+    eprintln!("{name}: positions retained, RGBI counts consistent, DLL XML matches");
+  }
+  std::fs::write(reports.join("results.json"), serde_json::to_vec_pretty(&results).unwrap())
+    .unwrap();
+}
+
+#[test]
 #[ignore = "requires local merged XML, extracted schemas, and CodeWalker.Core.dll"]
 fn native_crash_rebuilds_preserve_runtime_schemas() {
   let base = Path::new(env!("CARGO_MANIFEST_DIR"));

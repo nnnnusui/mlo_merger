@@ -13,7 +13,7 @@ use crate::core::{
 #[derive(Debug, Deserialize, Default, Serialize)]
 #[serde(rename = "LODLightsSOA", rename_all = "camelCase")]
 pub struct XmlYmapLodLightsSoa {
-  #[serde(default)]
+  #[serde(default, skip_serializing_if = "Option::is_none")]
   pub error: Option<String>,
   #[serde(default)]
   pub direction: XmlYmapDirectionList,
@@ -36,7 +36,7 @@ pub struct XmlYmapLodLightsSoa {
 impl From<XmlYmapLodLightsSoa> for Vec<YmapLodLight> {
   fn from(v: XmlYmapLodLightsSoa) -> Self {
     // If there's an error, log it and return empty data
-    if let Some(error) = v.error {
+    if let Some(error) = v.error.filter(|error| !error.trim().is_empty()) {
       log::warn!("LODLightsSOA error: {}", error);
       return Self::default();
     }
@@ -118,7 +118,7 @@ impl From<Vec<YmapLodLight>> for XmlYmapLodLightsSoa {
 
 #[derive(Debug, Deserialize, Default, Serialize)]
 pub struct XmlYmapDirectionList {
-  #[serde(rename = "$value", default)]
+  #[serde(rename = "Item", alias = "XmlPositionChildValueAttr", default)]
   pub items: Vec<XmlPositionChildValueAttr>,
 }
 

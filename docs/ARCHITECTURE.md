@@ -83,6 +83,25 @@ and `asset/merge_validation/native_crash_fix`.
 CODEWALKER_CORE_DLL=/workspace/asset/CodeWalker.Core.dll cargo test --test codewalker_roundtrip rebuild_crashing_merged_ymaps_with_codewalker -- --ignored --nocapture
 ```
 
+### Distant LOD Light Rebuilds
+
+The light XML serializer formerly emitted vector elements named
+`XmlPositionChildValueAttr` rather than `Item`. The Native META builder only
+counted `Item`, silently wrote an empty position descriptor, and retained a
+nonempty RGBI array. Six merged `vw_distlodlights_medium` resources (010, 012,
+015, 019, 022, 028) were affected. The builder now accepts the legacy vector
+tag for `FloatXYZ`, and the serializer emits standard `Item` elements.
+LOD/distant-light serializers omit absent `error` tags; an empty legacy
+`<error/>` no longer discards otherwise valid lights during XML/model reload.
+Unrecognized structure-array elements and mismatched distant-light
+position/RGBI counts are rejected instead of creating malformed binaries.
+
+`native_merged_distant_lights_match_codewalker` rebuilds the affected merged
+XML, verifies that position blocks exist, and compares DLL re-exports. All six
+cases passed. Corrected files are under `asset/merged_native_fixed`; DLL
+reference files, XML, and `results.json` are under
+`asset/merge_validation/distant_lights_fix`. In-game re-testing is still needed.
+
 ### PSO Conversion and Name Resolution
 
 `gamefile/pso.rs` parses big-endian PSIN, PMAP, PSCH, and string sections.

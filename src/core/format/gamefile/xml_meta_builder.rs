@@ -131,6 +131,13 @@ fn build_structure(
     }
     array_info = None;
   }
+  if structure_hash == jenk_hash("CDistantLODLight") {
+    let position_count = u16::from_le_bytes(data[16..18].try_into().unwrap());
+    let color_count = u16::from_le_bytes(data[32..34].try_into().unwrap());
+    if position_count != color_count {
+      return Err(invalid_data("distant LOD light position/RGBI array counts differ"));
+    }
+  }
   Ok(data)
 }
 
@@ -142,7 +149,19 @@ fn build_array(
   names: &HashMap<u32, String>,
   data_blocks: &mut Vec<MetaDataBlock>,
 ) -> io::Result<Vec<u8>> {
-  let items = node.children.iter().filter(|child| child.name == "Item").collect::<Vec<_>>();
+  let items = node
+    .children
+    .iter()
+    .filter(|child| {
+      child.name == "Item"
+        || (info.data_type == STRUCTURE
+          && info.reference_key == jenk_hash("FloatXYZ")
+          && child.name == "XmlPositionChildValueAttr")
+    })
+    .collect::<Vec<_>>();
+  if items.len() != node.children.len() && matches!(info.data_type, STRUCTURE | STRUCTURE_POINTER) {
+    return Err(invalid_data("META structure array contains unsupported XML item elements"));
+  }
   let primitive_array = matches!(info.data_type, 0x11 | 0x13 | 0x15 | 0x21 | 0x4a);
   let text_values = if primitive_array && items.is_empty() {
     node.text.split_whitespace().map(str::to_string).collect::<Vec<_>>()
@@ -577,5 +596,78 @@ mod tests {
     assert_eq!(reparsed.structures, rebuilt.structures);
     assert_eq!(reparsed.enums, rebuilt.enums);
     assert_eq!(reparsed.data_blocks, rebuilt.data_blocks);
+  }
+
+  #[test]
+  fn rebuilds_legacy_distant_light_position_elements() {
+    let base = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let bytes =
+      std::fs::read(base.join("asset/vanilla/ymap/vw_distlodlights_medium010.ymap")).unwrap();
+    let meta = MetaResource::parse(&Rsc7Resource::decode(&bytes).unwrap()).unwrap();
+    let mut catalog = MetaSchemaCatalog::default();
+    catalog.add_resource(&meta);
+    let xml =
+      std::fs::read_to_string(base.join("asset/merged.xml/vw_distlodlights_medium010.ymap.xml"))
+        .unwrap();
+    let mut root = super::parse_xml(&xml).unwrap();
+    let distant =
+      root.children.iter_mut().find(|child| child.name == "DistantLODLightsSOA").unwrap();
+    let position = distant.children.iter_mut().find(|child| child.name == "position").unwrap();
+    let expected = position.children.len();
+    assert!(expected > 0);
+    for child in &mut position.children {
+      child.name = "XmlPositionChildValueAttr".into();
+    }
+    let mut blocks = Vec::new();
+    super::build_structure(
+      distant,
+      super::jenk_hash("CDistantLODLight"),
+      &catalog.structures,
+      &catalog.enums,
+      &catalog.hash_names,
+      &mut blocks,
+    )
+    .unwrap();
+    let positions = blocks
+      .iter()
+      .find(|block| block.structure_name_hash == super::jenk_hash("FloatXYZ"))
+      .expect("distant light positions were discarded");
+    let stride = catalog.structures[&super::jenk_hash("FloatXYZ")].structure_size as usize;
+    assert_eq!(positions.data.len(), (expected * stride).next_multiple_of(16));
+  }
+
+  #[test]
+  fn rejects_incomplete_or_unrecognized_distant_light_positions() {
+    let base = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let bytes =
+      std::fs::read(base.join("asset/vanilla/ymap/vw_distlodlights_medium010.ymap")).unwrap();
+    let meta = MetaResource::parse(&Rsc7Resource::decode(&bytes).unwrap()).unwrap();
+    let mut catalog = MetaSchemaCatalog::default();
+    catalog.add_resource(&meta);
+    let xml =
+      std::fs::read_to_string(base.join("asset/merged.xml/vw_distlodlights_medium010.ymap.xml"))
+        .unwrap();
+    for unknown_tag in [false, true] {
+      let mut root = super::parse_xml(&xml).unwrap();
+      let distant =
+        root.children.iter_mut().find(|child| child.name == "DistantLODLightsSOA").unwrap();
+      let positions = distant.children.iter_mut().find(|child| child.name == "position").unwrap();
+      if unknown_tag {
+        positions.children[0].name = "UnknownVector".into();
+      } else {
+        positions.children.pop();
+      }
+      let error = super::build_structure(
+        distant,
+        super::jenk_hash("CDistantLODLight"),
+        &catalog.structures,
+        &catalog.enums,
+        &catalog.hash_names,
+        &mut Vec::new(),
+      )
+      .unwrap_err();
+      let expected = if unknown_tag { "unsupported XML item" } else { "counts differ" };
+      assert!(error.to_string().contains(expected));
+    }
   }
 }

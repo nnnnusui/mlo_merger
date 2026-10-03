@@ -11,7 +11,7 @@ use crate::core::format::{
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename = "DistantLODLightsSOA", rename_all = "camelCase")]
 pub struct XmlYmapDistantLodLightsSoa {
-  #[serde(default)]
+  #[serde(default, skip_serializing_if = "Option::is_none")]
   pub error: Option<String>,
   #[serde(default)]
   pub position: XmlYmapDistantLodLightsSoaPositions,
@@ -26,7 +26,7 @@ pub struct XmlYmapDistantLodLightsSoa {
 impl From<XmlYmapDistantLodLightsSoa> for YmapDistantLodLights {
   fn from(v: XmlYmapDistantLodLightsSoa) -> Self {
     // If there's an error, log it and return empty data
-    if let Some(error) = v.error {
+    if let Some(error) = v.error.filter(|error| !error.trim().is_empty()) {
       log::warn!("DistantLODLightsSOA error: {}", error);
       return Self::default();
     }
@@ -116,7 +116,7 @@ impl Default for XmlYmapDistantLodLightsSoa {
 
 #[derive(Debug, Deserialize, Default, Serialize)]
 pub struct XmlYmapDistantLodLightsSoaPositions {
-  #[serde(rename = "$value", default)]
+  #[serde(rename = "Item", alias = "XmlPositionChildValueAttr", default)]
   pub items: Vec<XmlPositionChildValueAttr>,
 }
 
@@ -128,4 +128,34 @@ pub struct XmlYmapNumberList {
 
 fn parse_number_list(text: &str) -> Vec<String> {
   text.split_whitespace().map(|s| s.to_string()).collect()
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn distant_light_positions_round_trip_as_item_elements() {
+    let original = YmapDistantLodLights {
+      items: vec![YmapDistantLodLight {
+        position: "1.25 -2.5 3.75".into(),
+        rgbi: "12345".into(),
+      }],
+      num_street_lights: 1,
+      category: 2,
+    };
+    let xml =
+      quick_xml::se::to_string(&XmlYmapDistantLodLightsSoa::from(original.clone())).unwrap();
+    assert!(xml.contains("<Item>"));
+    assert!(!xml.contains("XmlPositionChildValueAttr"));
+    assert!(!xml.contains("<error"));
+    let parsed: XmlYmapDistantLodLightsSoa = quick_xml::de::from_str(&xml).unwrap();
+    assert_eq!(YmapDistantLodLights::from(parsed), original);
+    let legacy = xml
+      .replacen("<position>", "<error/><position>", 1)
+      .replace("<Item>", "<XmlPositionChildValueAttr>")
+      .replace("</Item>", "</XmlPositionChildValueAttr>");
+    let parsed: XmlYmapDistantLodLightsSoa = quick_xml::de::from_str(&legacy).unwrap();
+    assert_eq!(YmapDistantLodLights::from(parsed), original);
+  }
 }
