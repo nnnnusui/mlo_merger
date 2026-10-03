@@ -5,8 +5,10 @@ use std::path::PathBuf;
 use crate::core::codewalker::CodeWalker;
 use crate::core::common::function::collect_files_with_suffix;
 use crate::core::format::gamefile::{
-  meta_resource::{MetaResource, MetaSchemaCatalog}, meta_xml::ymap_to_xml,
-  resource_file::Rsc7Resource, xml_meta_builder::meta_from_xml,
+  meta_resource::{MetaResource, MetaSchemaCatalog},
+  meta_xml::ymap_to_xml,
+  resource_file::Rsc7Resource,
+  xml_meta_builder::meta_from_xml,
 };
 
 /// Batch-converts binary `.ymap` files into `.ymap.xml`, using CodeWalker.Core
@@ -144,7 +146,9 @@ impl Xml2Ymap {
         .and_then(|resource| MetaResource::parse(&resource));
       match result {
         Ok(meta) => catalog.add_resource(&meta),
-        Err(error) => log::warn!("Failed to preload native META schemas from {}: {error}", source.display()),
+        Err(error) => {
+          log::warn!("Failed to preload native META schemas from {}: {error}", source.display())
+        }
       }
     }
 
@@ -165,7 +169,9 @@ impl Xml2Ymap {
           fs::write(&output, bytes)?;
           converted += 1;
         }
-        Err(error) => log::error!("Failed to convert {} to ymap natively: {error}", input.display()),
+        Err(error) => {
+          log::error!("Failed to convert {} to ymap natively: {error}", input.display())
+        }
       }
     }
 
@@ -225,10 +231,10 @@ mod tests {
 
     let output = output_dir.join("brofx_mansion_06___apa_ch2_occl_05.ymap");
     let bytes = std::fs::read(output).unwrap();
-    let resource = crate::core::format::gamefile::resource_file::Rsc7Resource::decode(&bytes)
-      .unwrap();
-    let meta = crate::core::format::gamefile::meta_resource::MetaResource::parse(&resource)
-      .unwrap();
+    let resource =
+      crate::core::format::gamefile::resource_file::Rsc7Resource::decode(&bytes).unwrap();
+    let meta =
+      crate::core::format::gamefile::meta_resource::MetaResource::parse(&resource).unwrap();
     assert_eq!(meta.root_block_index, 1);
 
     std::fs::remove_dir_all(temp_dir).unwrap();

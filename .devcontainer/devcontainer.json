@@ -24,7 +24,8 @@
         "serayuzgur.crates",
         "vadimcn.vscode-lldb",
         "GitHub.copilot",
-        "GitHub.copilot-chat"
+        "GitHub.copilot-chat",
+        "fill-labs.dependi"
       ],
       "settings": {
         "rust-analyzer.check.command": "clippy",

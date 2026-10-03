@@ -1,12 +1,11 @@
 use std::collections::HashMap;
 use std::io;
 
-use quick_xml::Reader;
-use quick_xml::events::Event;
-
 use super::meta_resource::{
-  MetaDataBlock, MetaEnumInfo, MetaResource, MetaSchemaCatalog, MetaStructureEntry, MetaStructureInfo,
+  MetaDataBlock, MetaEnumInfo, MetaResource, MetaSchemaCatalog, MetaStructureEntry,
+  MetaStructureInfo,
 };
+use super::xml_tree::{XmlElement, parse_xml};
 
 const ARRAY_INFO_HASH: u32 = 0x100;
 const STRUCTURE: u8 = 0x05;
@@ -20,14 +19,6 @@ const META_FLOAT_TYPE: u32 = 0x21;
 const META_HASH_TYPE: u32 = 0x4a;
 const META_POINTER_TYPE: u32 = 0x07;
 
-#[derive(Debug, Default)]
-struct XmlElement {
-  name: String,
-  attributes: HashMap<String, String>,
-  text: String,
-  children: Vec<XmlElement>,
-}
-
 /// Reconstructs META data blocks from YMAP XML using schemas collected from binary resources.
 pub fn meta_from_xml(
   xml: &str,
@@ -38,7 +29,7 @@ pub fn meta_from_xml(
   let enums = &catalog.enums;
   let names = &catalog.hash_names;
 
-  let root_hash = jenk_hash(&root.name);
+  let root_hash = parse_name_hash(&root.name)?;
   if !structures.contains_key(&root_hash) {
     return Err(invalid_data(&format!("YMAP root schema '{}' is unavailable", root.name)));
   }
@@ -47,14 +38,8 @@ pub fn meta_from_xml(
     structure_name_hash: root_hash,
     data: Vec::new(),
   }];
-  data_blocks[0].data = build_structure(
-    &root,
-    root_hash,
-    structures,
-    enums,
-    names,
-    &mut data_blocks,
-  )?;
+  data_blocks[0].data =
+    build_structure(&root, root_hash, structures, enums, names, &mut data_blocks)?;
 
   Ok(MetaResource {
     root_block_index: 1,
@@ -92,14 +77,7 @@ fn build_structure(
     match entry.data_type {
       ARRAY => {
         let info = array_info.ok_or_else(|| invalid_data("META array has no ARRAYINFO entry"))?;
-        let descriptor = build_array(
-          child,
-          info,
-          structures,
-          enums,
-          names,
-          data_blocks,
-        )?;
+        let descriptor = build_array(child, info, structures, enums, names, data_blocks)?;
         copy_at(&mut data, offset, &descriptor)?;
       }
       0x01 => data[offset] = u8::from(parse_bool(child)?),
@@ -122,7 +100,8 @@ fn build_structure(
       }
       0x4a => copy_at(&mut data, offset, &parse_hash(&text_or_value(child))?.to_le_bytes())?,
       0x50 => {
-        let info = array_info.ok_or_else(|| invalid_data("META inline array has no ARRAYINFO entry"))?;
+        let info =
+          array_info.ok_or_else(|| invalid_data("META inline array has no ARRAYINFO entry"))?;
         write_inline_array(&mut data, offset, entry.reference_key as usize, info.data_type, child)?;
       }
       0x59 => {
@@ -139,10 +118,16 @@ fn build_structure(
         }
       }
       STRUCTURE => {
-        let nested = build_structure(child, entry.reference_key, structures, enums, names, data_blocks)?;
+        let nested =
+          build_structure(child, entry.reference_key, structures, enums, names, data_blocks)?;
         copy_at(&mut data, offset, &nested)?;
       }
-      _ => return Err(invalid_data(&format!("unsupported XML META field type 0x{:02X}", entry.data_type))),
+      _ => {
+        return Err(invalid_data(&format!(
+          "unsupported XML META field type 0x{:02X}",
+          entry.data_type
+        )));
+      }
     }
     array_info = None;
   }
@@ -194,7 +179,7 @@ fn build_array(
           .attributes
           .get("type")
           .ok_or_else(|| invalid_data("META structure pointer array item has no type attribute"))?;
-        let type_hash = jenk_hash(type_name);
+        let type_hash = parse_name_hash(type_name)?;
         let bytes = build_structure(item, type_hash, structures, enums, names, data_blocks)?;
         let target_block = add_data_block(data_blocks, type_hash, bytes)?;
         pointers.extend_from_slice(&(target_block as u64).to_le_bytes());
@@ -210,10 +195,27 @@ fn build_array(
       };
       for value in &values {
         match info.data_type {
-          0x11 => bytes.push(value.parse::<u8>().map_err(|_| invalid_data("META byte array item is invalid"))?),
-          0x13 => bytes.extend_from_slice(&value.parse::<u16>().map_err(|_| invalid_data("META ushort array item is invalid"))?.to_le_bytes()),
-          0x15 => bytes.extend_from_slice(&value.parse::<u32>().map_err(|_| invalid_data("META uint array item is invalid"))?.to_le_bytes()),
-          0x21 => bytes.extend_from_slice(&value.parse::<f32>().map_err(|_| invalid_data("META float array item is invalid"))?.to_le_bytes()),
+          0x11 => bytes.push(
+            value.parse::<u8>().map_err(|_| invalid_data("META byte array item is invalid"))?,
+          ),
+          0x13 => bytes.extend_from_slice(
+            &value
+              .parse::<u16>()
+              .map_err(|_| invalid_data("META ushort array item is invalid"))?
+              .to_le_bytes(),
+          ),
+          0x15 => bytes.extend_from_slice(
+            &value
+              .parse::<u32>()
+              .map_err(|_| invalid_data("META uint array item is invalid"))?
+              .to_le_bytes(),
+          ),
+          0x21 => bytes.extend_from_slice(
+            &value
+              .parse::<f32>()
+              .map_err(|_| invalid_data("META float array item is invalid"))?
+              .to_le_bytes(),
+          ),
           0x4a => bytes.extend_from_slice(&parse_hash(value)?.to_le_bytes()),
           _ => unreachable!(),
         }
@@ -227,7 +229,12 @@ fn build_array(
       };
       (add_data_block(data_blocks, type_hash, bytes)?, 0usize)
     }
-    _ => return Err(invalid_data(&format!("unsupported XML META array type 0x{:02X}", info.data_type))),
+    _ => {
+      return Err(invalid_data(&format!(
+        "unsupported XML META array type 0x{:02X}",
+        info.data_type
+      )));
+    }
   };
 
   let pointer = ((offset as u64) << 12) | block_id as u64;
@@ -238,80 +245,19 @@ fn build_array(
   Ok(descriptor)
 }
 
-fn parse_xml(xml: &str) -> io::Result<XmlElement> {
-  let mut reader = Reader::from_str(xml);
-  reader.config_mut().trim_text(true);
-  let mut stack: Vec<XmlElement> = Vec::new();
-  let mut root = None;
-
-  loop {
-    match reader.read_event().map_err(|error| invalid_data(&error.to_string()))? {
-      Event::Start(event) => {
-        let mut node = XmlElement {
-          name: String::from_utf8_lossy(event.name().as_ref()).into_owned(),
-          ..XmlElement::default()
-        };
-        for attribute in event.attributes() {
-          let attribute = attribute.map_err(|error| invalid_data(&error.to_string()))?;
-          let key = String::from_utf8_lossy(attribute.key.as_ref()).into_owned();
-          let value = attribute
-            .decode_and_unescape_value(reader.decoder())
-            .map_err(|error| invalid_data(&error.to_string()))?
-            .into_owned();
-          node.attributes.insert(key, value);
-        }
-        stack.push(node);
-      }
-      Event::Empty(event) => {
-        let mut node = XmlElement {
-          name: String::from_utf8_lossy(event.name().as_ref()).into_owned(),
-          ..XmlElement::default()
-        };
-        for attribute in event.attributes() {
-          let attribute = attribute.map_err(|error| invalid_data(&error.to_string()))?;
-          let key = String::from_utf8_lossy(attribute.key.as_ref()).into_owned();
-          let value = attribute
-            .decode_and_unescape_value(reader.decoder())
-            .map_err(|error| invalid_data(&error.to_string()))?
-            .into_owned();
-          node.attributes.insert(key, value);
-        }
-        attach_node(&mut stack, &mut root, node)?;
-      }
-      Event::Text(event) => {
-        if let Some(node) = stack.last_mut() {
-          node.text.push_str(&event.decode().map_err(|error| invalid_data(&error.to_string()))?);
-        }
-      }
-      Event::End(_) => {
-        let node = stack.pop().ok_or_else(|| invalid_data("XML element nesting is invalid"))?;
-        attach_node(&mut stack, &mut root, node)?;
-      }
-      Event::Eof => break,
-      _ => {}
-    }
-  }
-  root.ok_or_else(|| invalid_data("YMAP XML has no root element"))
-}
-
-fn attach_node(
-  stack: &mut [XmlElement],
-  root: &mut Option<XmlElement>,
-  node: XmlElement,
-) -> io::Result<()> {
-  if let Some(parent) = stack.last_mut() {
-    parent.children.push(node);
-  } else if root.replace(node).is_some() {
-    return Err(invalid_data("YMAP XML has multiple root elements"));
-  }
-  Ok(())
-}
-
 fn find_child(
   node: &XmlElement,
   hash: u32,
 ) -> Option<&XmlElement> {
-  node.children.iter().find(|child| jenk_hash(&child.name) == hash)
+  node.children.iter().find(|child| parse_name_hash(&child.name).ok() == Some(hash))
+}
+
+fn parse_name_hash(name: &str) -> io::Result<u32> {
+  if let Some(hash) = name.strip_prefix("hash_") {
+    return u32::from_str_radix(hash, 16)
+      .map_err(|_| invalid_data("META hash tag contains an invalid hexadecimal hash"));
+  }
+  Ok(jenk_hash(name))
 }
 
 fn parse_bool(node: &XmlElement) -> io::Result<bool> {
@@ -324,9 +270,7 @@ fn parse_bool(node: &XmlElement) -> io::Result<bool> {
 }
 
 fn parse_i32(node: &XmlElement) -> io::Result<i32> {
-  text_or_value(node)
-    .parse()
-    .map_err(|_| invalid_data("META integer XML value is invalid"))
+  text_or_value(node).parse().map_err(|_| invalid_data("META integer XML value is invalid"))
 }
 
 fn parse_u32(node: &XmlElement) -> io::Result<u32> {
@@ -339,23 +283,20 @@ fn parse_u32(node: &XmlElement) -> io::Result<u32> {
 }
 
 fn parse_f32(node: &XmlElement) -> io::Result<f32> {
-  text_or_value(node)
-    .parse()
-    .map_err(|_| invalid_data("META float XML value is invalid"))
+  text_or_value(node).parse().map_err(|_| invalid_data("META float XML value is invalid"))
 }
 
 fn text_or_value(node: &XmlElement) -> String {
   node.attributes.get("value").cloned().unwrap_or_else(|| node.text.trim().to_string())
 }
 
-fn parse_hash(
-  value: &str,
-) -> io::Result<u32> {
+fn parse_hash(value: &str) -> io::Result<u32> {
   if value.is_empty() {
     return Ok(0);
   }
   if let Some(hash) = value.strip_prefix("hash_") {
-    return u32::from_str_radix(hash, 16).map_err(|_| invalid_data("META hash XML value is invalid"));
+    return u32::from_str_radix(hash, 16)
+      .map_err(|_| invalid_data("META hash XML value is invalid"));
   }
   if let Ok(hash) = value.parse::<u32>() {
     return Ok(hash);
@@ -380,21 +321,25 @@ fn parse_enum(
   if matches!(data_type, 0x63 | 0x65) {
     let mut flags = 0i32;
     for token in value.split(',').map(str::trim).filter(|token| !token.is_empty()) {
-      let hash = jenk_hash(token);
+      let hash = parse_name_hash(token)?;
       let item = enum_info
         .entries
         .iter()
-        .find(|entry| entry.name_hash == hash || names.get(&entry.name_hash).is_some_and(|name| name == token))
+        .find(|entry| {
+          entry.name_hash == hash || names.get(&entry.name_hash).is_some_and(|name| name == token)
+        })
         .ok_or_else(|| invalid_data(&format!("META enum entry '{token}' is unavailable")))?;
       flags |= 1 << item.value;
     }
     Ok(flags)
   } else {
-    let hash = jenk_hash(&value);
+    let hash = parse_name_hash(&value)?;
     enum_info
       .entries
       .iter()
-      .find(|entry| entry.name_hash == hash || names.get(&entry.name_hash).is_some_and(|name| name == &value))
+      .find(|entry| {
+        entry.name_hash == hash || names.get(&entry.name_hash).is_some_and(|name| name == &value)
+      })
       .map(|entry| entry.value)
       .ok_or_else(|| invalid_data(&format!("META enum entry '{value}' is unavailable")))
   }
@@ -448,17 +393,53 @@ fn write_inline_array(
     return Err(invalid_data("META inline array length does not match its schema"));
   }
   for (index, value) in values.iter().enumerate() {
-    let position = offset + index * match data_type { 0x12 | 0x13 => 2, 0x14 | 0x15 | 0x21 => 4, _ => 1 };
+    let position = offset
+      + index
+        * match data_type {
+          0x12 | 0x13 => 2,
+          0x14 | 0x15 | 0x21 => 4,
+          _ => 1,
+        };
     match data_type {
-      0x10 => copy_at(data, position, &(value.parse::<i8>().map_err(|_| invalid_data("META sbyte is invalid"))?).to_le_bytes())?,
-      0x11 => copy_at(data, position, &(value.parse::<u8>().map_err(|_| invalid_data("META byte is invalid"))?).to_le_bytes())?,
-      0x12 => copy_at(data, position, &(value.parse::<i16>().map_err(|_| invalid_data("META short is invalid"))?).to_le_bytes())?,
-      0x13 => copy_at(data, position, &(value.parse::<u16>().map_err(|_| invalid_data("META ushort is invalid"))?).to_le_bytes())?,
-      0x14 => copy_at(data, position, &(value.parse::<i32>().map_err(|_| invalid_data("META int is invalid"))?).to_le_bytes())?,
-      0x15 => copy_at(data, position, &(value.parse::<u32>().map_err(|_| invalid_data("META uint is invalid"))?).to_le_bytes())?,
-      0x21 => copy_at(data, position, &(value.parse::<f32>().map_err(|_| invalid_data("META float is invalid"))?).to_le_bytes())?,
+      0x10 => copy_at(
+        data,
+        position,
+        &(value.parse::<i8>().map_err(|_| invalid_data("META sbyte is invalid"))?).to_le_bytes(),
+      )?,
+      0x11 => copy_at(
+        data,
+        position,
+        &(value.parse::<u8>().map_err(|_| invalid_data("META byte is invalid"))?).to_le_bytes(),
+      )?,
+      0x12 => copy_at(
+        data,
+        position,
+        &(value.parse::<i16>().map_err(|_| invalid_data("META short is invalid"))?).to_le_bytes(),
+      )?,
+      0x13 => copy_at(
+        data,
+        position,
+        &(value.parse::<u16>().map_err(|_| invalid_data("META ushort is invalid"))?).to_le_bytes(),
+      )?,
+      0x14 => copy_at(
+        data,
+        position,
+        &(value.parse::<i32>().map_err(|_| invalid_data("META int is invalid"))?).to_le_bytes(),
+      )?,
+      0x15 => copy_at(
+        data,
+        position,
+        &(value.parse::<u32>().map_err(|_| invalid_data("META uint is invalid"))?).to_le_bytes(),
+      )?,
+      0x21 => copy_at(
+        data,
+        position,
+        &(value.parse::<f32>().map_err(|_| invalid_data("META float is invalid"))?).to_le_bytes(),
+      )?,
       0x4a => copy_at(data, position, &parse_hash(value)?.to_le_bytes())?,
-      _ => return Err(invalid_data(&format!("unsupported META inline array type 0x{data_type:02X}"))),
+      _ => {
+        return Err(invalid_data(&format!("unsupported META inline array type 0x{data_type:02X}")));
+      }
     }
   }
   Ok(())
@@ -471,7 +452,8 @@ fn parse_hex_bytes(text: &str) -> io::Result<Vec<u8>> {
       .iter()
       .map(|token| {
         let value = token.strip_prefix("0x").unwrap_or(token);
-        u8::from_str_radix(value, 16).map_err(|_| invalid_data("META byte array contains invalid hex"))
+        u8::from_str_radix(value, 16)
+          .map_err(|_| invalid_data("META byte array contains invalid hex"))
       })
       .collect();
   }
@@ -510,7 +492,10 @@ fn add_data_block(
   let id = (data_blocks.len() + 1) as u16;
   let padding = (16 - data.len() % 16) % 16;
   data.resize(data.len() + padding, 0);
-  data_blocks.push(MetaDataBlock { structure_name_hash, data });
+  data_blocks.push(MetaDataBlock {
+    structure_name_hash,
+    data,
+  });
   Ok(id)
 }
 
@@ -523,7 +508,10 @@ fn add_data_block_raw(
     return Err(invalid_data("META resource exceeds the supported data block count"));
   }
   let id = (data_blocks.len() + 1) as u16;
-  data_blocks.push(MetaDataBlock { structure_name_hash, data });
+  data_blocks.push(MetaDataBlock {
+    structure_name_hash,
+    data,
+  });
   Ok(id)
 }
 
@@ -532,7 +520,9 @@ fn copy_at(
   offset: usize,
   source: &[u8],
 ) -> io::Result<()> {
-  let end = offset.checked_add(source.len()).ok_or_else(|| invalid_data("META XML field offset overflows"))?;
+  let end = offset
+    .checked_add(source.len())
+    .ok_or_else(|| invalid_data("META XML field offset overflows"))?;
   target
     .get_mut(offset..end)
     .ok_or_else(|| invalid_data("META XML field exceeds its structure size"))?
@@ -560,7 +550,8 @@ fn jenk_hash(value: &str) -> u32 {
 mod tests {
   use super::meta_from_xml;
   use crate::core::format::gamefile::{
-    meta_resource::{MetaResource, MetaSchemaCatalog}, resource_file::Rsc7Resource,
+    meta_resource::{MetaResource, MetaSchemaCatalog},
+    resource_file::Rsc7Resource,
   };
 
   #[test]

@@ -86,6 +86,8 @@ pub struct CodeWalker {
   preload_names: PreloadNamesFn,
   ymap_to_xml: ConvertFn,
   xml_to_ymap: ConvertFn,
+  game_file_to_xml: ConvertFn,
+  game_file_from_xml: ConvertFn,
   get_last_error: GetLastErrorFn,
 }
 
@@ -122,6 +124,15 @@ impl CodeWalker {
     let xml_to_ymap = *loader
       .get_function_with_unmanaged_callers_only::<ConvertFn>(&type_name, &pdcstr("XmlToYmap")?)
       .map_err(hosting)?;
+    let game_file_to_xml = *loader
+      .get_function_with_unmanaged_callers_only::<ConvertFn>(&type_name, &pdcstr("GameFileToXml")?)
+      .map_err(hosting)?;
+    let game_file_from_xml = *loader
+      .get_function_with_unmanaged_callers_only::<ConvertFn>(
+        &type_name,
+        &pdcstr("GameFileFromXml")?,
+      )
+      .map_err(hosting)?;
     let get_last_error = *loader
       .get_function_with_unmanaged_callers_only::<GetLastErrorFn>(
         &type_name,
@@ -135,6 +146,8 @@ impl CodeWalker {
       preload_names,
       ymap_to_xml,
       xml_to_ymap,
+      game_file_to_xml,
+      game_file_from_xml,
       get_last_error,
     })
   }
@@ -167,6 +180,24 @@ impl CodeWalker {
     output: &Path,
   ) -> Result<(), CodeWalkerError> {
     self.convert(self.xml_to_ymap, input, output)
+  }
+
+  /// Converts a `.ybn`, `.ynd`, `.ymt`, or `.ytyp` resource to CodeWalker XML.
+  pub fn game_file_to_xml(
+    &self,
+    input: &Path,
+    output: &Path,
+  ) -> Result<(), CodeWalkerError> {
+    self.convert(self.game_file_to_xml, input, output)
+  }
+
+  /// Converts CodeWalker XML for `.ybn`, `.ynd`, `.ymt`, or `.ytyp` to a binary resource.
+  pub fn game_file_from_xml(
+    &self,
+    input: &Path,
+    output: &Path,
+  ) -> Result<(), CodeWalkerError> {
+    self.convert(self.game_file_from_xml, input, output)
   }
 
   fn convert(

@@ -61,6 +61,74 @@ public static unsafe class Exports
       File.WriteAllBytes(outputPath, data);
     });
 
+  [UnmanagedCallersOnly]
+  public static int GameFileToXml(byte* inputPathUtf8, byte* outputPathUtf8) =>
+    Try(() => {
+      string inputPath = PtrToString(inputPathUtf8);
+      string outputPath = PtrToString(outputPathUtf8);
+      byte[] data = File.ReadAllBytes(inputPath);
+      string xml = Path.GetExtension(inputPath).ToLowerInvariant() switch {
+        ".ybn" => ExportYbn(data),
+        ".ynd" => ExportYnd(data),
+        ".ymt" => ExportYmt(data),
+        ".ytyp" => ExportYtyp(data),
+        var extension => throw new NotSupportedException($"Unsupported game-file extension '{extension}'"),
+      };
+      File.WriteAllText(outputPath, xml, new UTF8Encoding(false));
+    });
+
+  [UnmanagedCallersOnly]
+  public static int GameFileFromXml(byte* inputPathUtf8, byte* outputPathUtf8) =>
+    Try(() => {
+      string inputPath = PtrToString(inputPathUtf8);
+      string outputPath = PtrToString(outputPathUtf8);
+      XmlDocument doc = new();
+      doc.Load(inputPath);
+      MetaFormat format = Path.GetExtension(outputPath).ToLowerInvariant() switch {
+        ".ybn" => MetaFormat.Ybn,
+        ".ynd" => MetaFormat.Ynd,
+        ".ymt" or ".ytyp" => MetaFormat.RSC,
+        var extension => throw new NotSupportedException($"Unsupported game-file extension '{extension}'"),
+      };
+      byte[] data = XmlMeta.GetData(doc, format, inputPath) ??
+        throw new InvalidOperationException($"XmlMeta.GetData returned null for '{inputPath}'");
+      File.WriteAllBytes(outputPath, data);
+    });
+
+  private static string ExportYbn(byte[] data)
+  {
+    YbnFile file = new();
+    file.Load(data);
+    return MetaXml.GetXml(file, out _);
+  }
+
+  private static string ExportYnd(byte[] data)
+  {
+    YndFile file = new();
+    file.Load(data);
+    return MetaXml.GetXml(file, out _);
+  }
+
+  private static string ExportYmt(byte[] data)
+  {
+    YmtFile file = new();
+    file.Load(data);
+    if (file.Meta != null) {
+      foreach (string name in MetaTypes.GetStrings(file.Meta) ?? Array.Empty<string>()) {
+        JenkIndex.Ensure(name);
+      }
+      return MetaXml.GetXml(file.Meta);
+    }
+    return MetaXml.GetXml(file, out _);
+  }
+
+  private static string ExportYtyp(byte[] data)
+  {
+    YtypFile file = new();
+    file.Load(data);
+    return file.Meta != null ? MetaXml.GetXml(file.Meta) : MetaXml.GetXml(file, out _);
+  }
+
   private static int Try(Action action)
   {
     try {

@@ -3,7 +3,10 @@ use mlo_merger::{
   core::{
     codewalker::CodeWalker,
     extract::ExtractYmap,
-    format::ymap::{model::Ymap, xml::XmlYmap},
+    format::{
+      gamefile::resource_convert,
+      ymap::{model::Ymap, xml::XmlYmap},
+    },
     merge::run::MergeYmapXml,
     xmlconvert::{Xml2Ymap, Ymap2Xml},
   },
@@ -49,6 +52,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Command::ExtractYmap(cmd) => cmd.run()?,
     Command::GetProp(cmd) => cmd.run()?,
     Command::CheckStreamConflicts(cmd) => cmd.run()?,
+    Command::ToXml(cmd) => {
+      let (converted, failed) =
+        resource_convert::convert_files_to_xml(&cmd.input, &cmd.output_dir)?;
+      log::info!("Converted {converted} files to XML; {failed} failed.");
+    }
+    Command::FromXml(cmd) => {
+      let (converted, failed) =
+        resource_convert::convert_files_from_xml(&cmd.input, &cmd.output_dir, &cmd.schema_dir)?;
+      log::info!("Converted {converted} XML files to binary; {failed} failed.");
+    }
     Command::Pipeline(cmd) => run_pipeline(&cmd)?,
   };
 

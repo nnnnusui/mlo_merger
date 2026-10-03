@@ -9,6 +9,7 @@ const STRUCTURE_POINTER: u8 = 0x07;
 const ARRAY: u8 = 0x52;
 
 const KNOWN_NAMES: &[&str] = &[
+  "CMapTypes",
   "CMapData",
   "CEntityDef",
   "CMloInstanceDef",
@@ -66,6 +67,37 @@ const KNOWN_NAMES: &[&str] = &[
   "Ao",
   "Pad",
   "ScenarioType",
+  "IgnoreMaxInRange",
+  "NoSpawn",
+  "StationaryReactions",
+  "OnlySpawnInSameInterior",
+  "SpawnedPedIsArrestable",
+  "ActivateVehicleSiren",
+  "AggressiveVehicleDriving",
+  "LandVehicleOnArrival",
+  "IgnoreThreatsIfLosNotClear",
+  "EventsInRadiusTriggerDisputes",
+  "AerialVehiclePoint",
+  "TerritorialScenario",
+  "EndScenarioIfPlayerWithinRadius",
+  "EventsInRadiusTriggerThreatResponse",
+  "TaxiPlaneOnGround",
+  "FlyOffToOblivion",
+  "InWater",
+  "AllowInvestigation",
+  "OpenDoor",
+  "PreciseUseTime",
+  "NoRespawnUntilStreamedOut",
+  "NoVehicleSpawnMaxDistance",
+  "ExtendedRange",
+  "ShortRange",
+  "HighPriority",
+  "IgnoreLoitering",
+  "UseSearchlight",
+  "ResetNoCollisionOnCleanUp",
+  "CheckCrossedArrivalPlane",
+  "UseVehicleFrontForArrival",
+  "IgnoreWeatherRestrictions",
   "Group",
   "ModelSet",
   "AvailabilityInMpSp",
@@ -958,7 +990,8 @@ fn fallback_structure(hash: u32) -> Option<MetaStructureInfo> {
 mod tests {
   use std::collections::HashMap;
 
-  use super::ymap_to_xml;
+  use super::{meta_to_xml, ymap_to_xml};
+  use crate::core::format::gamefile::{meta_resource::MetaResource, resource_file::Rsc7Resource};
 
   #[test]
   fn serializes_occlusion_ymap_using_embedded_schema() {
@@ -971,6 +1004,19 @@ mod tests {
     assert!(xml.contains("<boxOccluders itemType=\"BoxOccluder\">"));
     assert!(xml.contains("<iCenterX value=\"-1567\" />"));
     assert!(xml.contains("<occludeModels"));
+  }
+
+  #[test]
+  fn serializes_ytyp_rsc_meta_using_the_shared_meta_writer() {
+    let fixture = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+      .join("asset/source/sb_trainheistmap/stream/sb_train_addonprops.ytyp");
+    let bytes = std::fs::read(fixture).unwrap();
+    let resource = Rsc7Resource::decode(&bytes).unwrap();
+    let meta = MetaResource::parse(&resource).unwrap();
+    let xml = meta_to_xml(&meta, &meta.hash_names()).unwrap();
+
+    assert!(xml.starts_with("<?xml version=\"1.0\" encoding=\"UTF-8\"?>"));
+    assert!(xml.contains("<CMapTypes"));
   }
 
   #[test]

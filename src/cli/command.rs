@@ -15,6 +15,8 @@ pub enum Command {
   ExtractYmap(ExtractYmap),
   GetProp(GetProp),
   CheckStreamConflicts(CheckStreamConflicts),
+  ToXml(ConvertFiles),
+  FromXml(ConvertFilesFromXml),
   Pipeline(Pipeline),
 }
 
@@ -26,6 +28,8 @@ pub fn parse_args() -> Command {
     extract_ymap(),
     get_prop(),
     check_stream_conflicts(),
+    to_xml(),
+    from_xml(),
     pipeline(),
   ])
   .to_options()
@@ -141,6 +145,48 @@ fn check_stream_conflicts() -> impl Parser<Command> {
     Command::CheckStreamConflicts(CheckStreamConflicts {
       input_dir,
       output_file,
+    })
+  })
+}
+
+#[derive(Debug, Clone)]
+pub struct ConvertFiles {
+  pub input: PathBuf,
+  pub output_dir: PathBuf,
+}
+
+#[derive(Debug, Clone)]
+pub struct ConvertFilesFromXml {
+  pub input: PathBuf,
+  pub output_dir: PathBuf,
+  pub schema_dir: PathBuf,
+}
+
+fn to_xml() -> impl Parser<Command> {
+  let flag = long("to-xml").help("Convert supported native game files to XML").req_flag(());
+  let input = short('i').long("input").argument::<PathBuf>("FILE_OR_DIR");
+  let output_dir = short('o').long("output").argument::<PathBuf>("DIR");
+  construct!(flag, input, output_dir).map(|(_, input, output_dir)| {
+    Command::ToXml(ConvertFiles {
+      input,
+      output_dir,
+    })
+  })
+}
+
+fn from_xml() -> impl Parser<Command> {
+  let flag =
+    long("from-xml").help("Convert supported XML game files to native binaries").req_flag(());
+  let input = short('i').long("input").argument::<PathBuf>("FILE_OR_DIR");
+  let output_dir = short('o').long("output").argument::<PathBuf>("DIR");
+  let schema_dir = long("schema-dir")
+    .help("Directory containing source binary YMAP/YTYP/YMT resources for META schemas")
+    .argument::<PathBuf>("DIR");
+  construct!(flag, input, output_dir, schema_dir).map(|(_, input, output_dir, schema_dir)| {
+    Command::FromXml(ConvertFilesFromXml {
+      input,
+      output_dir,
+      schema_dir,
     })
   })
 }
