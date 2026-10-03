@@ -21,7 +21,120 @@ use mlo_merger::core::format::gamefile::{
   resource_file::Rsc7Resource,
   xml_meta_builder::meta_from_xml,
 };
+use mlo_merger::core::merge::run::MergeYmapXml;
 use mlo_merger::core::xmlconvert::Xml2Ymap;
+
+#[test]
+#[ignore = "requires local YMAP schemas and CodeWalker.Core.dll"]
+fn sample_parent_relink_survives_native_and_codewalker_rebuild() {
+  use mlo_merger::core::format::ymap::xml::XmlYmap;
+  let base = Path::new(env!("CARGO_MANIFEST_DIR"));
+  let staging = std::env::temp_dir().join(format!("mlo_parent_refs_binary_{}", std::process::id()));
+  let samples = base.join("docs/sample/parent_refs");
+  let vanilla_dir = staging.join("vanilla");
+  let mod_dir = staging.join("mods");
+  let mod_ymap_dir = staging.join("mod-binaries");
+  let output = staging.join("output/merged.xml");
+  let reports = staging.join("reports");
+  std::fs::create_dir_all(&vanilla_dir).unwrap();
+  std::fs::create_dir_all(&mod_dir).unwrap();
+  std::fs::create_dir_all(&mod_ymap_dir).unwrap();
+  std::fs::create_dir_all(&reports).unwrap();
+  std::fs::copy(samples.join("vanilla_parent.ymap.xml"), vanilla_dir.join("parent.ymap.xml"))
+    .unwrap();
+  std::fs::copy(samples.join("child.ymap.xml"), vanilla_dir.join("dependent.ymap.xml")).unwrap();
+  std::fs::copy(
+    samples.join("resource_a_parent.ymap.xml"),
+    mod_dir.join("resource_a___parent.ymap.xml"),
+  )
+  .unwrap();
+  std::fs::copy(
+    samples.join("resource_b_parent.ymap.xml"),
+    mod_dir.join("resource_b___parent.ymap.xml"),
+  )
+  .unwrap();
+  std::fs::copy(samples.join("child.ymap.xml"), mod_dir.join("resource_a___child.ymap.xml"))
+    .unwrap();
+  std::fs::write(mod_ymap_dir.join("resource_a___child.ymap"), b"placeholder clone binary")
+    .unwrap();
+  MergeYmapXml {
+    vanilla_dir,
+    mod_dir,
+    mod_ymap_dir,
+    output_dir: output.clone(),
+    rebuild_all: false,
+    blacklist_config: None,
+  }
+  .run()
+  .unwrap();
+  let bridge = std::env::var("CODEWALKER_BRIDGE_DLL").unwrap_or_else(|_| {
+    base.join("bridge/CodeWalker.Bridge/bin/publish/CodeWalker.Bridge.dll").display().to_string()
+  });
+  let codewalker = CodeWalker::init(Path::new(&bridge)).unwrap();
+  let mut catalog = MetaSchemaCatalog::default();
+  for entry in walkdir::WalkDir::new(base.join("asset/extracted")) {
+    let Ok(entry) = entry else {
+      continue;
+    };
+    if !entry.file_type().is_file()
+      || entry.path().extension().is_none_or(|extension| extension != "ymap")
+    {
+      continue;
+    }
+    let Ok(bytes) = std::fs::read(entry.path()) else {
+      continue;
+    };
+    let Ok(resource) = Rsc7Resource::decode(&bytes) else {
+      continue;
+    };
+    if let Ok(meta) = MetaResource::parse(&resource) {
+      catalog.add_resource(&meta);
+    }
+  }
+  let mut native_maps = Vec::new();
+  let mut dll_maps = Vec::new();
+  for name in ["parent", "child", "dependent"] {
+    let xml_path = output.join(format!("{name}.ymap.xml"));
+    let xml = std::fs::read_to_string(&xml_path).unwrap();
+    let source: XmlYmap = quick_xml::de::from_str(&xml).unwrap();
+    let native = xml_to_resource(NativeResourceFormat::Ymap, &xml, &catalog).unwrap();
+    let native_path = reports.join(format!("{name}.native.ymap"));
+    let dll_path = reports.join(format!("{name}.dll.ymap"));
+    std::fs::write(&native_path, native).unwrap();
+    codewalker.xml_to_ymap(&xml_path, &dll_path).unwrap();
+    let native_xml = reports.join(format!("{name}.native.xml"));
+    let dll_xml = reports.join(format!("{name}.dll.xml"));
+    codewalker.ymap_to_xml(&native_path, &native_xml).unwrap();
+    codewalker.ymap_to_xml(&dll_path, &dll_xml).unwrap();
+    let native_text = std::fs::read_to_string(native_xml).unwrap();
+    let dll_text = std::fs::read_to_string(dll_xml).unwrap();
+    let native_map: XmlYmap = quick_xml::de::from_str(&native_text).unwrap();
+    let dll_map: XmlYmap = quick_xml::de::from_str(&dll_text).unwrap();
+    let expected = source.entities.items.iter().map(|entity| entity.guid.value).collect::<Vec<_>>();
+    for rebuilt in [&native_map, &dll_map] {
+      assert_eq!(
+        rebuilt.entities.items.iter().map(|entity| entity.guid.value).collect::<Vec<_>>(),
+        expected,
+        "entity order differs after rebuilding {name}"
+      );
+    }
+    native_maps.push(native_map);
+    dll_maps.push(dll_map);
+  }
+  for maps in [&native_maps, &dll_maps] {
+    assert_eq!(maps[0].entities.items.len(), 1);
+    assert_eq!(maps[0].entities.items[0].guid.value, 200);
+    for child in [&maps[1].entities.items[0], &maps[2].entities.items[0]] {
+      assert_eq!(child.parent_index.value, 0);
+      assert_eq!(maps[0].entities.items[child.parent_index.value as usize].guid.value, 200);
+      assert_eq!(child.flags.value & 8, 8);
+    }
+  }
+  eprintln!(
+    "Native/DLL sample children resolve parent index 0 to GUID 200; XML matches and entity order is retained"
+  );
+  std::fs::remove_dir_all(staging).unwrap();
+}
 
 #[test]
 #[ignore = "requires local merged distant-light XML and CodeWalker.Core.dll"]

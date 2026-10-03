@@ -1,0 +1,39 @@
+<CMapData>
+  <name>parent</name>
+  <parent></parent>
+  <flags value="0"/>
+  <contentFlags value="0"/>
+  <streamingExtentsMin x="0" y="0" z="0"/>
+  <streamingExtentsMax x="0" y="0" z="0"/>
+  <entitiesExtentsMin x="0" y="0" z="0"/>
+  <entitiesExtentsMax x="0" y="0" z="0"/>
+  <entities>
+    <Item type="CEntityDef">
+      <archetypeName>sample_parent</archetypeName>
+      <flags value="0"/>
+      <guid value="200"/>
+      <position x="10" y="0" z="0"/>
+      <rotation x="0" y="0" z="0" w="1"/>
+      <scaleXY value="1"/>
+      <scaleZ value="1"/>
+      <parentIndex value="-1"/>
+      <lodDist value="100"/>
+      <childLodDist value="50"/>
+      <lodLevel>LODTYPES_DEPTH_SLOD1</lodLevel>
+      <numChildren value="0"/>
+      <priorityLevel>PRI_REQUIRED</priorityLevel>
+      <extensions/>
+      <ambientOcclusionMultiplier value="255"/>
+      <artificialAmbientOcclusion value="255"/>
+      <tintValue value="0"/>
+    </Item>
+  </entities>
+  <block>
+    <version value="0"/>
+    <flags value="0"/>
+    <name>parent</name>
+    <exportedBy>sample</exportedBy>
+    <owner></owner>
+    <time></time>
+  </block>
+</CMapData>

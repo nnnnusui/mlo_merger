@@ -8,4 +8,5 @@ mod ymap_instanced_data_diff;
 mod ymap_lod_light_diff;
 mod ymap_metadata_diff;
 mod ymap_occlude_model_diff;
+mod ymap_parent_refs;
 mod ymap_time_cycle_modifier_diff;

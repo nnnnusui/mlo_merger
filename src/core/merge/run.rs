@@ -4,11 +4,17 @@ use crate::core::extract::ExtractYmap;
 use crate::core::format::ymap::model::ymap::Ymap;
 use crate::core::format::ymap::xml::XmlYmap;
 use crate::core::merge::ymap_diff::YmapDiff;
-use quick_xml::de::from_str;
+use crate::core::merge::{
+  ymap_metadata_diff::reference_hash,
+  ymap_parent_refs::{
+    OriginalMap, ParentReferences, SourceMaps, patch_clone, runtime_entities, valid_local_pair,
+  },
+};
 use serde::Serialize;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::rc::Rc;
 
 #[derive(Debug, Clone)]
 pub struct MergeYmapXml {
@@ -46,61 +52,320 @@ impl MergeYmapXml {
     let modded_ymaps_map = collect_modded_ymaps_map(&self.mod_dir)?;
     log::info!("Found {} unique YMAP files across mods", modded_ymaps_map.len());
 
-    let mut copy_targets = Vec::new();
-
+    let mut sources = SourceMaps::default();
+    for path in &vanila_files {
+      let name = path.file_name().unwrap().to_str().ok_or("non-UTF8 vanilla filename")?;
+      sources.register(None, name, path.clone())?;
+    }
+    for references in modded_ymaps_map.values() {
+      for reference in references {
+        sources.register(
+          Some(&reference.mod_name),
+          &reference.ymap_name,
+          reference.mod_ymap_path.clone(),
+        )?;
+      }
+    }
+    let mut references = ParentReferences::default();
+    for (name, versions) in &modded_ymaps_map {
+      let hash = reference_hash(name.trim_end_matches(".ymap.xml"));
+      if let Some(original) = sources.get(None, hash)? {
+        references.register_entities(hash, &original.entities);
+      }
+      for version in versions {
+        if let Some(original) = sources.get(Some(&version.mod_name), hash)? {
+          references.register_entities(hash, &original.entities);
+        }
+      }
+    }
+    let mut planned = BTreeMap::<u32, PlannedMap>::new();
     for (ymap_name, mod_refs) in &modded_ymaps_map {
+      let hash = reference_hash(ymap_name.trim_end_matches(".ymap.xml"));
       if !self.rebuild_all && mod_refs.len() <= 1 {
         let mod_ref = mod_refs.first().unwrap();
-        copy_targets.push(mod_ref);
-        log::info!("Coppied YMAP: {} (only one mod reference: {})", ymap_name, mod_ref.mod_name);
+        let original =
+          sources.get(Some(&mod_ref.mod_name), hash)?.ok_or("clone XML unavailable")?;
+        let (model, entities) =
+          sources.normalize(&original, Some(&mod_ref.mod_name), hash, &mut references)?;
+        planned.insert(
+          hash,
+          PlannedMap {
+            name: ymap_name.clone(),
+            model,
+            clone_entities: Some(entities),
+            original,
+            copy_target: Some(mod_ref.clone()),
+            rebuild: false,
+          },
+        );
         continue;
       }
       let vanilla_ymap_path = self.vanilla_dir.join(ymap_name);
       log::info!("Processing YMAP: {}", vanilla_ymap_path.display());
 
-      let vanilla_ymap = parse_ymap_xml(&vanilla_ymap_path)?;
+      let original = sources
+        .get(None, hash)?
+        .ok_or_else(|| format!("vanilla XML unavailable: {}", vanilla_ymap_path.display()))?;
+      let (vanilla_ymap, _) = sources.normalize(&original, None, hash, &mut references)?;
+      if vanilla_ymap.entity_map.len() != original.entities.len() {
+        return Err(format!("ambiguous entity identity in {}", vanilla_ymap_path.display()).into());
+      }
 
       let mut ymap_diffs = Vec::new();
       for mod_info in mod_refs {
         log::info!("  Mod: {} ({})", mod_info.mod_name, mod_info.mod_ymap_path.display());
 
-        let mod_ymap = parse_ymap_xml(&mod_info.mod_ymap_path)?;
+        let source = sources.get(Some(&mod_info.mod_name), hash)?.ok_or("mod XML unavailable")?;
+        let (mod_ymap, _) =
+          sources.normalize(&source, Some(&mod_info.mod_name), hash, &mut references)?;
+        if mod_ymap.entity_map.len() != source.entities.len() {
+          return Err(
+            format!("ambiguous entity identity in {}", mod_info.mod_ymap_path.display()).into(),
+          );
+        }
         let ymap_diff = YmapDiff::extract_from(&vanilla_ymap, &mod_ymap);
         ymap_diffs.push(ymap_diff);
       }
 
       let merged_diff = ymap_diffs.into_iter().reduce(|acc, d| acc.merge(d)).unwrap();
-      let merged_ymap = merged_diff.apply_to(&vanilla_ymap, blacklist.as_ref());
-
-      // Convert Ymap to XmlYmap and serialize to XML with 2-space indentation
-      let xml_ymap: XmlYmap = merged_ymap.into();
-      let mut xml_string = String::new();
-      let mut serializer = quick_xml::se::Serializer::new(&mut xml_string);
-      serializer.indent(' ', 2);
-      xml_ymap.serialize(serializer)?;
-
-      // Write to file
-      let ymap_xml_path = self.output_dir.join(ymap_name);
-      fs::create_dir_all(ymap_xml_path.parent().unwrap())?;
-      fs::write(&ymap_xml_path, xml_string)?;
-      log::info!("  [Success] Wrote merged YMAP to: {}", ymap_xml_path.display());
+      let model = merged_diff.apply_to(&vanilla_ymap, blacklist.as_ref());
+      planned.insert(
+        hash,
+        PlannedMap {
+          name: ymap_name.clone(),
+          model,
+          clone_entities: None,
+          original,
+          copy_target: None,
+          rebuild: true,
+        },
+      );
     }
-
+    let mut changed_layouts = HashSet::new();
+    for (hash, output) in &planned {
+      if let Some(vanilla) = sources.get(None, *hash)? {
+        let original_layout = runtime_entities(vanilla.entities.iter())
+          .into_iter()
+          .map(|entity| references.entity_id(*hash, entity))
+          .collect::<Result<Vec<_>, _>>()?;
+        if output.guids() != original_layout {
+          changed_layouts.insert(*hash);
+        }
+      }
+    }
+    for (hash, path) in sources.vanilla_children(&changed_layouts)? {
+      if planned.contains_key(&hash) {
+        continue;
+      }
+      let original = sources.get(None, hash)?.ok_or("vanilla child unavailable")?;
+      let (model, entities) = sources.normalize(&original, None, hash, &mut references)?;
+      planned.insert(
+        hash,
+        PlannedMap {
+          name: path.file_name().unwrap().to_str().ok_or("non-UTF8 child filename")?.to_string(),
+          model,
+          clone_entities: Some(entities),
+          original,
+          copy_target: None,
+          rebuild: false,
+        },
+      );
+    }
+    let mut layouts =
+      planned.iter().map(|(hash, output)| (*hash, output.guids())).collect::<HashMap<_, _>>();
+    let mut child_counts = HashMap::<(u32, u32), u32>::new();
+    let mut resolved_links = Vec::new();
+    let mut repaired = 0usize;
+    for (hash, output) in &mut planned {
+      let parent_hash = reference_hash(&output.model.parent);
+      let entities = output.entities_mut();
+      for (child_index, entity) in entities.into_iter().enumerate() {
+        let handle = entity.parent_index;
+        if handle == -1 {
+          continue;
+        }
+        let owner = references.map_for(handle).ok_or("missing normalized parent handle")?;
+        if owner != *hash && owner != parent_hash {
+          return Err(format!("entity {} references parent YMAP {owner:08X}, but merged map declares {parent_hash:08X}", entity.guid).into());
+        }
+        if let std::collections::hash_map::Entry::Vacant(entry) = layouts.entry(owner)
+          && let Some(vanilla) = sources.get(None, owner)?
+        {
+          references.register_entities(owner, &vanilla.entities);
+          let layout = runtime_entities(vanilla.entities.iter())
+            .into_iter()
+            .map(|entity| references.entity_id(owner, entity))
+            .collect::<Result<Vec<_>, _>>()?;
+          entry.insert(layout);
+        }
+        let index = if let Some(layout) = layouts.get(&owner) {
+          references
+            .restore(handle, layout)
+            .map_err(|error| format!("entity {} parent map {owner:08X}: {error}", entity.guid))?
+        } else {
+          references
+            .unavailable_index(handle)
+            .ok_or_else(|| format!("resolved parent map {owner:08X} has no final output"))?
+        };
+        if let Some(target) = references.target(handle) {
+          if index >= 0 {
+            *child_counts.entry((target.map, target.guid)).or_default() += 1;
+            if owner == *hash {
+              entity.flags &= !8;
+            } else {
+              entity.flags |= 8;
+            }
+            resolved_links.push((*hash, child_index, target));
+          } else {
+            log::warn!(
+              "    Parent {} in map {:08X} removed; detaching entity {}",
+              target.guid,
+              target.map,
+              entity.guid
+            );
+            entity.flags &= !8;
+            if reference_hash(&entity.lod_level) == reference_hash("LODTYPES_DEPTH_HD") {
+              entity.lod_level = "LODTYPES_DEPTH_ORPHANHD".into();
+            }
+          }
+        }
+        entity.parent_index = index;
+      }
+    }
+    for (hash, index, target) in resolved_links {
+      if target.map != hash {
+        continue;
+      }
+      let map = &planned[&hash];
+      let child = map.entity_at(index).ok_or("final child entity missing")?;
+      let ordered = match &map.clone_entities {
+        Some(entities) => runtime_entities(entities.iter()),
+        None => runtime_entities(map.model.entity_map.values()),
+      };
+      let parent = ordered.get(child.parent_index as usize).ok_or("final local parent missing")?;
+      if !valid_local_pair(child, parent) {
+        return Err(
+          format!(
+            "invalid final local LOD hierarchy for entity {} and parent {}",
+            child.guid, parent.guid
+          )
+          .into(),
+        );
+      }
+    }
+    for (hash, output) in &mut planned {
+      if changed_layouts.contains(hash) {
+        for entity in output.entities_mut() {
+          entity.num_children = child_counts.get(&(*hash, entity.guid)).copied().unwrap_or(0);
+        }
+      }
+      for entity in output.entities_mut() {
+        entity.guid = references.original_guid(entity.guid)?;
+      }
+      if let Some(entities) = &output.clone_entities {
+        let changed = entities.iter().zip(&output.original.entities).any(|(after, before)| {
+          after.parent_index != before.parent_index
+            || after.flags != before.flags
+            || after.lod_level != before.lod_level
+            || after.num_children != before.num_children
+        });
+        if changed {
+          output.rebuild = true;
+          repaired += 1;
+        }
+      }
+    }
+    log::info!(
+      "Repaired parent references; promoted {repaired} clone/vanilla child YMAPs for rebuild"
+    );
     let copy_targets_txt = self.output_dir.join("_copy_targets.txt");
     fs::create_dir_all(copy_targets_txt.parent().unwrap())?;
     let clone_ymap_dir = self.output_dir.join("clone");
     fs::create_dir_all(&clone_ymap_dir)?;
     let mut copy_targets_file = fs::File::create(copy_targets_txt)?;
-    for target in copy_targets {
-      let ymap_xml_name = target.mod_ymap_path.file_name().unwrap().to_string_lossy();
-      let extracted_ymap_name = ymap_xml_name.trim_end_matches(".xml");
-      use std::io::Write;
-      writeln!(copy_targets_file, "{}", ymap_xml_name)?;
-      let dest_path = clone_ymap_dir.join(target.ymap_name.as_str());
-      fs::copy(self.mod_ymap_dir.join(extracted_ymap_name), &dest_path)?;
+    let managed = planned
+      .values()
+      .map(|output| output.name.trim_end_matches(".xml"))
+      .collect::<Vec<_>>()
+      .join("\n");
+    fs::write(self.output_dir.join("_managed_ymaps.txt"), managed)?;
+    for output in planned.into_values() {
+      let xml_path = self.output_dir.join(&output.name);
+      let binary_name = output.name.trim_end_matches(".xml");
+      let clone_path = clone_ymap_dir.join(binary_name);
+      if output.rebuild {
+        let xml_string = if let Some(entities) = &output.clone_entities {
+          patch_clone(&output.original, entities)?
+        } else {
+          let xml_ymap: XmlYmap = output.model.into();
+          let mut xml = String::new();
+          let mut serializer = quick_xml::se::Serializer::new(&mut xml);
+          serializer.indent(' ', 2);
+          xml_ymap.serialize(serializer)?;
+          xml
+        };
+        fs::write(&xml_path, xml_string)?;
+        if clone_path.exists() {
+          fs::remove_file(&clone_path)?;
+        }
+        log::info!("  [Success] Wrote merged/relinked YMAP to: {}", xml_path.display());
+      } else if let Some(target) = output.copy_target {
+        let ymap_xml_name = target.mod_ymap_path.file_name().unwrap().to_string_lossy();
+        let extracted_ymap_name = ymap_xml_name.trim_end_matches(".xml");
+        use std::io::Write;
+        writeln!(copy_targets_file, "{}", ymap_xml_name)?;
+        fs::copy(self.mod_ymap_dir.join(extracted_ymap_name), &clone_path)?;
+        if xml_path.exists() {
+          fs::remove_file(&xml_path)?;
+        }
+        log::info!("Copied unchanged YMAP: {binary_name}");
+      } else {
+        if xml_path.exists() {
+          fs::remove_file(&xml_path)?;
+        }
+        if clone_path.exists() {
+          fs::remove_file(&clone_path)?;
+        }
+      }
     }
 
     Ok(())
+  }
+}
+
+struct PlannedMap {
+  name: String,
+  model: Ymap,
+  clone_entities: Option<Vec<crate::core::format::ymap::model::YmapEntity>>,
+  original: Rc<OriginalMap>,
+  copy_target: Option<ModYmapReference>,
+  rebuild: bool,
+}
+
+impl PlannedMap {
+  fn entity_at(
+    &self,
+    index: usize,
+  ) -> Option<&crate::core::format::ymap::model::YmapEntity> {
+    match &self.clone_entities {
+      Some(entities) => entities.get(index),
+      None => self.model.entity_map.get_index(index).map(|(_, entity)| entity),
+    }
+  }
+
+  fn guids(&self) -> Vec<u32> {
+    let entities = match &self.clone_entities {
+      Some(entities) => runtime_entities(entities.iter()),
+      None => runtime_entities(self.model.entity_map.values()),
+    };
+    entities.into_iter().map(|entity| entity.guid).collect()
+  }
+
+  fn entities_mut(&mut self) -> Vec<&mut crate::core::format::ymap::model::YmapEntity> {
+    match &mut self.clone_entities {
+      Some(entities) => entities.iter_mut().collect(),
+      None => self.model.entity_map.values_mut().collect(),
+    }
   }
 }
 
@@ -143,9 +408,10 @@ fn collect_modded_ymaps_map(
   Ok(map)
 }
 
+#[cfg(test)]
 fn parse_ymap_xml(file_path: &Path) -> Result<Ymap, Box<dyn std::error::Error>> {
   let xml_content = fs::read_to_string(file_path)?;
-  let xml_ymap: XmlYmap = from_str(&xml_content)?;
+  let xml_ymap: XmlYmap = quick_xml::de::from_str(&xml_content)?;
   if let Some(error) = &xml_ymap.instanced_data.error {
     return Err(
       std::io::Error::new(
@@ -166,6 +432,59 @@ mod tests {
     merge::{ymap_instanced_data_diff::BatchKey, ymap_metadata_diff::reference_hash},
   };
   use std::collections::{BTreeSet, HashMap, HashSet};
+
+  #[test]
+  fn merge_reindexes_cloned_and_vanilla_children_from_sample_fixtures() {
+    let base = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let staging = std::env::temp_dir().join(format!("mlo_parent_refs_{}", std::process::id()));
+    let samples = base.join("docs/sample/parent_refs");
+    let vanilla_dir = staging.join("vanilla");
+    let mod_dir = staging.join("mods");
+    let mod_ymap_dir = staging.join("mod-binaries");
+    let output = staging.join("output/merged.xml");
+    fs::create_dir_all(&vanilla_dir).unwrap();
+    fs::create_dir_all(&mod_dir).unwrap();
+    fs::create_dir_all(&mod_ymap_dir).unwrap();
+    fs::copy(samples.join("vanilla_parent.ymap.xml"), vanilla_dir.join("parent.ymap.xml")).unwrap();
+    fs::copy(samples.join("child.ymap.xml"), vanilla_dir.join("dependent.ymap.xml")).unwrap();
+    fs::copy(
+      samples.join("resource_a_parent.ymap.xml"),
+      mod_dir.join("resource_a___parent.ymap.xml"),
+    )
+    .unwrap();
+    fs::copy(
+      samples.join("resource_b_parent.ymap.xml"),
+      mod_dir.join("resource_b___parent.ymap.xml"),
+    )
+    .unwrap();
+    fs::copy(samples.join("child.ymap.xml"), mod_dir.join("resource_a___child.ymap.xml")).unwrap();
+    fs::write(mod_ymap_dir.join("resource_a___child.ymap"), b"placeholder clone binary").unwrap();
+    MergeYmapXml {
+      vanilla_dir,
+      mod_dir,
+      mod_ymap_dir,
+      output_dir: output.clone(),
+      rebuild_all: false,
+      blacklist_config: None,
+    }
+    .run()
+    .unwrap();
+    let parent = OriginalMap::load(&output.join("parent.ymap.xml")).unwrap();
+    let child = OriginalMap::load(&output.join("child.ymap.xml")).unwrap();
+    let dependent = OriginalMap::load(&output.join("dependent.ymap.xml")).unwrap();
+    assert_eq!(parent.entities.len(), 1);
+    assert_eq!(parent.entities[0].guid, 200);
+    assert_eq!(parent.entities[0].num_children, 2);
+    assert_eq!(child.entities[0].parent_index, 0);
+    assert_eq!(dependent.entities[0].parent_index, 0);
+    assert_eq!(child.entities[0].flags & 8, 8);
+    assert_eq!(dependent.entities[0].flags & 8, 8);
+    assert_eq!(parent.entities[child.entities[0].parent_index as usize].guid, 200);
+    let clone = output.join("clone/child.ymap");
+    assert!(!clone.exists(), "relinked child must not remain in clone output");
+    assert!(!fs::read_to_string(output.join("_copy_targets.txt")).unwrap().contains("child"));
+    fs::remove_dir_all(staging).unwrap();
+  }
 
   #[test]
   #[ignore = "requires local vanilla XML, extracted mods, and the original pipeline log"]

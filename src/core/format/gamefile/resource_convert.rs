@@ -134,6 +134,9 @@ pub fn convert_files_from_xml(
 ) -> Result<(usize, usize), Box<dyn std::error::Error>> {
   let inputs = collect_inputs(input, &|path| NativeResourceFormat::from_xml_path(path).is_ok())?;
   fs::create_dir_all(output_dir)?;
+  if input.is_dir() {
+    prune_managed_ymap_outputs(input, output_dir)?;
+  }
 
   let mut catalog = MetaSchemaCatalog::default();
   let schema_inputs = collect_inputs(schema_dir, &|path| {
@@ -185,6 +188,37 @@ pub fn convert_files_from_xml(
     }
   }
   Ok((converted, failed))
+}
+
+/// Removes stale managed YMAP binaries when their XML has been demoted to a clone or vanilla.
+pub(crate) fn prune_managed_ymap_outputs(
+  input_dir: &Path,
+  output_dir: &Path,
+) -> io::Result<()> {
+  let manifest = input_dir.join("_managed_ymaps.txt");
+  if !manifest.is_file() {
+    return Ok(());
+  }
+  let content = fs::read_to_string(manifest)?;
+  let names = content.lines().filter(|name| !name.is_empty()).collect::<Vec<_>>();
+  for name in &names {
+    let path = Path::new(name);
+    let mut components = path.components();
+    if !matches!(components.next(), Some(std::path::Component::Normal(_)))
+      || components.next().is_some()
+      || path.extension().is_none_or(|extension| extension != "ymap")
+    {
+      return Err(invalid_data("invalid generated YMAP manifest entry"));
+    }
+  }
+  for name in names {
+    let xml = input_dir.join(name).with_extension("ymap.xml");
+    let binary = output_dir.join(name);
+    if !xml.is_file() && binary.is_file() {
+      fs::remove_file(binary)?;
+    }
+  }
+  Ok(())
 }
 
 fn collect_inputs(

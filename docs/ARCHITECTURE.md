@@ -6,7 +6,7 @@ This tool merges FiveM mod map (`.ymap`) files while avoiding conflicts between 
 
 1. **Extract** (`src/core/extract`) - pulls `.ymap` files out of MLO mod resource directories (`asset/source`) into `asset/extracted`, also writing `_extracted_ymaps.txt` (names of replaced vanilla ymaps) and `_notextracted_resources.txt`.
 2. **ymap -> xml** (`src/core/xmlconvert::Ymap2Xml`) - converts binary `.ymap` files into `.ymap.xml` via the native Rust serializer by default, or CodeWalker.Core with `--use-codewalker-dll`.
-3. **Merge** (`src/core/merge`) - combines vanilla and mod `.ymap.xml` files, tracking entity-level diffs (`src/core/format`, `structdiff`). Ymaps with only one mod reference (no merge needed) are copied as-is (still binary) into `asset/merged.xml/clone` instead of being re-emitted as xml.
+3. **Merge** (`src/core/merge`) - combines vanilla and mod `.ymap.xml` files, tracking entity-level diffs (`src/core/format`, `structdiff`). Single-mod YMAPs are copied as binary clones only when their final parent references and hierarchy fields remain unchanged; otherwise they are rebuilt from patched original XML.
 4. **xml -> ymap** (`src/core/xmlconvert::Xml2Ymap`) - converts merged `.ymap.xml` back into binary `.ymap` via the native Rust META/RSC7 writer by default, or CodeWalker.Core with `--use-codewalker-dll`.
 5. **Deploy** (optional, `--output-resource-dir`) - overwrites a FiveM resource directory's `stream/ymap/merged`, `stream/ymap/clone` and `omit.txt` with this run's output.
 
@@ -47,6 +47,62 @@ The initial run produced 11,472 RSC7 XML files. Four inputs
 `id2_17_strm_0.ymap`) are valid PSO/PSIN rather than RSC7 resources.
 Native export now produces their `.ymap.pso.xml` files as well; none belonged
 to the targeted merge set.
+
+### Stable Parent References
+
+`ymap_parent_refs` resolves each original `parentIndex` before entity diffing.
+An eligible local LOD parent is used unless flag bit 3 declares an external
+parent. Otherwise resolution uses the original parent YMAP from the same mod
+resource, falling back to vanilla. Entity arrays follow CodeWalker's runtime
+order: `CEntityDef` entries first, then `CMloInstanceDef` entries.
+
+The merge uses map-scoped internal entity identities and temporary negative
+parent handles, not positional indices. Unique nonzero GUIDs identify entities;
+zero or duplicate GUIDs use GUID, entity type, archetype, position, rotation,
+and scale as a conservative fallback. Exact indistinguishable duplicates are
+not guessed: a GUID-keyed merge that would discard them is rejected, while
+unchanged clones retain their full original array. Original GUID values are
+restored before output, including zero and duplicate values.
+
+After all merges, handles are resolved against final runtime entity arrays.
+Local LOD ordering and the declared external parent map are checked. Removed
+parents detach children (`parentIndex = -1`, bit 3 cleared); HD children become
+ORPHANHD. Unresolved indices are retained only when the original parent layout
+is unchanged, or when the parent is unavailable in both inputs and outputs.
+Other unresolved layout changes fail rather than silently linking another
+entity. Parents with changed layouts have `numChildren` recalculated using
+resolved links from planned maps, including dependent vanilla children.
+
+Changed parent layouts trigger discovery of their vanilla child YMAPs, even
+when those children have no mod override. Clone/vanilla children whose indices,
+flags, LOD levels, or child counts change are promoted to rebuilds. Their
+original XML is patched only for these fields, preserving entity order,
+extensions, and other opaque payloads. The existing modeled-field limitation
+still applies to ordinary multi-mod XML merges.
+
+`_copy_targets.txt` contains only unchanged binary clones.
+`_managed_ymaps.txt` scopes cleanup of obsolete generated binaries during both
+pipeline backends and Native `--from-xml`; unrelated files are not deleted.
+Promotion/demotion also removes obsolete same-name XML or clone output.
+
+The ignored `merge_relinks_cloned_road_child` regression reproduces the
+`hei_kt1_rd_strm_1` road GUID `3742112198`: its source parent index 198 resolves
+to GUID `4241491920`, which is index 200 in the merged parent. It also checks
+clone promotion, original entity counts, and stale clone removal.
+`relinked_road_parent_survives_native_and_codewalker_rebuild` verifies the
+Native/DLL binary rebuilds retain that link, their exports match, and entity
+GUID order is preserved. Run the workflow regression before the binary test:
+
+```sh
+cargo test --lib merge_relinks_cloned_road_child -- --ignored --nocapture
+CODEWALKER_CORE_DLL=/workspace/asset/CodeWalker.Core.dll cargo test --test codewalker_roundtrip relinked_road_parent_survives_native_and_codewalker_rebuild -- --ignored --nocapture
+```
+
+Local full-corpus validation covers 550 modded YMAP names, promotes 27
+clone/vanilla children, and rebuilds 95 XML files natively without conversion
+failures. Separate output is under `asset/merge_validation/lod_parent_all`
+(`merged.xml/clone` for unchanged binaries, `merged` for rebuilt binaries).
+No deployed resources are overwritten. In-game verification remains required.
 
 ### Native YMAP Runtime Verification
 
