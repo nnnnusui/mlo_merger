@@ -35,6 +35,7 @@ struct Geometry {
   center: [f32; 3],
   unknown_9c: f32,
   unknown_ac: f32,
+  vertex_quantum: Option<[f32; 3]>,
   vertices: Vec<[f32; 3]>,
   materials: Vec<Material>,
   material_colours: Vec<[u8; 4]>,
@@ -175,10 +176,30 @@ pub fn merge_ybn_deltas(
   if merged.kind != "Composite" {
     return Err(invalid("YBN delta merge requires a Composite vanilla root"));
   }
-  let baseline_keys = merged.children.iter().map(bound_identity).collect::<io::Result<Vec<_>>>()?;
-  let baseline_counts = counts(&baseline_keys);
+  let baseline_keys = merged
+    .children
+    .iter()
+    .map(
+      |child| {
+        if is_triangle_geometry(child) { Ok(None) } else { bound_identity(child).map(Some) }
+      },
+    )
+    .collect::<io::Result<Vec<_>>>()?;
+  let baseline_counts = counts(&baseline_keys.iter().flatten().cloned().collect::<Vec<_>>());
+  let baseline_triangles = merged
+    .children
+    .iter()
+    .filter(|child| is_triangle_geometry(child))
+    .map(triangle_identities)
+    .collect::<io::Result<Vec<_>>>()?
+    .into_iter()
+    .flatten()
+    .collect::<HashSet<_>>();
   let mut removed = HashSet::new();
   let mut added = HashMap::<Vec<u8>, (Bound, [f32; 16], [u32; 2])>::new();
+  let mut removed_triangles = HashSet::new();
+  let mut added_triangles = HashSet::new();
+  let mut triangle_children = Vec::<(Bound, [f32; 16], [u32; 2])>::new();
   let mut minimum = [f32::INFINITY; 3];
   let mut maximum = [f32::NEG_INFINITY; 3];
   let mut spheres = Vec::<([f32; 3], f32)>::new();
@@ -207,14 +228,40 @@ pub fn merge_ybn_deltas(
 
     if spheres.len() > 1 {
       let mut remaining = baseline_counts.clone();
+      let mod_triangles = root
+        .children
+        .iter()
+        .filter(|child| is_triangle_geometry(child))
+        .map(triangle_identities)
+        .collect::<io::Result<Vec<_>>>()?
+        .into_iter()
+        .flatten()
+        .collect::<HashSet<_>>();
+      removed_triangles
+        .extend(baseline_triangles.iter().filter(|key| !mod_triangles.contains(*key)).cloned());
       for (index, child) in root.children.iter().enumerate() {
-        let key = bound_identity(child)?;
-        if let Some(count) = remaining.get_mut(&key).filter(|count| **count > 0) {
-          *count -= 1;
+        if is_triangle_geometry(child) {
+          let keys = triangle_identities(child)?;
+          let child_additions = keys
+            .into_iter()
+            .filter(|key| !baseline_triangles.contains(key) && added_triangles.insert(key.clone()))
+            .collect::<HashSet<_>>();
+          if !child_additions.is_empty() {
+            triangle_children.push((
+              triangle_geometry_subset(child, &child_additions)?,
+              root.transforms[index],
+              root.flags[index],
+            ));
+          }
         } else {
-          added
-            .entry(key)
-            .or_insert_with(|| (child.clone(), root.transforms[index], root.flags[index]));
+          let key = bound_identity(child)?;
+          if let Some(count) = remaining.get_mut(&key).filter(|count| **count > 0) {
+            *count -= 1;
+          } else {
+            added
+              .entry(key)
+              .or_insert_with(|| (child.clone(), root.transforms[index], root.flags[index]));
+          }
         }
       }
       removed.extend(remaining.into_iter().filter_map(|(key, count)| (count > 0).then_some(key)));
@@ -225,7 +272,24 @@ pub fn merge_ybn_deltas(
   let mut transforms = Vec::new();
   let mut flags = Vec::new();
   for (index, child) in merged.children.drain(..).enumerate() {
-    if !removed.contains(&baseline_keys[index]) {
+    if let Some(key) = &baseline_keys[index]
+      && removed.contains(key)
+    {
+      continue;
+    }
+    if is_triangle_geometry(&child) {
+      let retained = triangle_identities(&child)?
+        .into_iter()
+        .filter(|key| !removed_triangles.contains(key))
+        .collect::<HashSet<_>>();
+      let child = triangle_geometry_subset(&child, &retained)?;
+      if child.geometry.as_ref().is_some_and(|geometry| geometry.polygons.is_empty()) {
+        continue;
+      }
+      children.push(child);
+      transforms.push(merged.transforms[index]);
+      flags.push(merged.flags[index]);
+    } else {
       children.push(child);
       transforms.push(merged.transforms[index]);
       flags.push(merged.flags[index]);
@@ -237,6 +301,11 @@ pub fn merge_ybn_deltas(
       transforms.push(transform);
       flags.push(child_flags);
     }
+  }
+  for (child, transform, child_flags) in triangle_children {
+    children.push(child);
+    transforms.push(transform);
+    flags.push(child_flags);
   }
   merged.children = children;
   merged.transforms = transforms;
@@ -272,6 +341,132 @@ fn counts(keys: &[Vec<u8>]) -> HashMap<Vec<u8>, usize> {
     *counts.entry(key.clone()).or_insert(0) += 1;
   }
   counts
+}
+
+fn is_triangle_geometry(bound: &Bound) -> bool {
+  bound.geometry.as_ref().is_some_and(|geometry| {
+    !geometry.polygons.is_empty()
+      && geometry.polygons.iter().all(|polygon| matches!(polygon, Polygon::Triangle(_)))
+  })
+}
+
+fn triangle_identities(bound: &Bound) -> io::Result<Vec<Vec<u8>>> {
+  let geometry = bound.geometry.as_ref().ok_or_else(|| invalid("YBN geometry is missing"))?;
+  geometry
+    .polygons
+    .iter()
+    .map(|polygon| match polygon {
+      Polygon::Triangle(triangle) => triangle_identity(bound, geometry, triangle),
+      _ => Err(invalid("YBN triangle diff encountered a non-triangle polygon")),
+    })
+    .collect()
+}
+
+fn triangle_identity(
+  bound: &Bound,
+  geometry: &Geometry,
+  triangle: &Triangle,
+) -> io::Result<Vec<u8>> {
+  let mut identity = Vec::new();
+  let material = geometry.materials.get(triangle.material as usize).copied().unwrap_or_default();
+  identity.extend_from_slice(&[
+    material.kind,
+    material.procedural_id,
+    material.room_id,
+    material.ped_density,
+  ]);
+  identity.extend_from_slice(&material.flags.to_le_bytes());
+  identity.push(material.colour_index);
+  identity.extend_from_slice(&material.unknown.to_le_bytes());
+
+  let mut vertices = Vec::with_capacity(3);
+  for (index, vertex_index) in triangle.vertices.iter().copied().enumerate() {
+    let vertex = geometry
+      .vertices
+      .get(vertex_index as usize)
+      .ok_or_else(|| invalid("triangle vertex index is out of range"))?;
+    let local = std::array::from_fn(|axis| vertex[axis] + geometry.center[axis]);
+    let world = transform_ybn_point(local, bound.transform);
+    let mut point = Vec::with_capacity(25);
+    for value in world {
+      append_quantized_float(&mut point, value)?;
+    }
+    point.push(u8::from(triangle.vertex_flags[index]));
+    vertices.push(point);
+  }
+  for vertex in vertices {
+    identity.extend_from_slice(&vertex);
+  }
+  Ok(identity)
+}
+
+fn transform_ybn_point(
+  point: [f32; 3],
+  transform: Option<[f32; 16]>,
+) -> [f32; 3] {
+  let Some(matrix) = transform else {
+    return point;
+  };
+  [
+    point[0] * matrix[0] + point[1] * matrix[4] + point[2] * matrix[8] + matrix[12],
+    point[0] * matrix[1] + point[1] * matrix[5] + point[2] * matrix[9] + matrix[13],
+    point[0] * matrix[2] + point[1] * matrix[6] + point[2] * matrix[10] + matrix[14],
+  ]
+}
+
+fn triangle_geometry_subset(
+  source: &Bound,
+  selected: &HashSet<Vec<u8>>,
+) -> io::Result<Bound> {
+  let source_geometry =
+    source.geometry.as_ref().ok_or_else(|| invalid("YBN geometry is missing"))?;
+  let mut polygons = Vec::new();
+  for polygon in &source_geometry.polygons {
+    let Polygon::Triangle(triangle) = polygon else {
+      continue;
+    };
+    if selected.contains(&triangle_identity(source, source_geometry, triangle)?) {
+      polygons.push(*polygon);
+    }
+  }
+
+  let mut result = source.clone();
+  let geometry = result.geometry.as_mut().ok_or_else(|| invalid("YBN geometry is missing"))?;
+  let has_vertex_colours = geometry.vertex_colours.len() == geometry.vertices.len();
+  let mut vertex_map = HashMap::<u16, u16>::new();
+  let mut vertices = Vec::new();
+  let mut vertex_colours = Vec::new();
+  for polygon in &mut polygons {
+    let Polygon::Triangle(triangle) = polygon else {
+      continue;
+    };
+    for vertex_index in &mut triangle.vertices {
+      let old_index = *vertex_index;
+      let new_index = if let Some(index) = vertex_map.get(&old_index) {
+        *index
+      } else {
+        let new_index = u16::try_from(vertices.len())
+          .map_err(|_| invalid("YBN geometry has too many vertices"))?;
+        let vertex = *geometry
+          .vertices
+          .get(old_index as usize)
+          .ok_or_else(|| invalid("triangle vertex index is out of range"))?;
+        vertices.push(vertex);
+        if has_vertex_colours {
+          vertex_colours.push(geometry.vertex_colours[old_index as usize]);
+        }
+        vertex_map.insert(old_index, new_index);
+        new_index
+      };
+      *vertex_index = new_index;
+    }
+  }
+  geometry.vertices = vertices;
+  if has_vertex_colours {
+    geometry.vertex_colours = vertex_colours;
+  }
+  geometry.polygons = polygons;
+  Ok(result)
 }
 
 fn bound_identity(bound: &Bound) -> io::Result<Vec<u8>> {
@@ -533,6 +728,7 @@ fn read_geometry(
   let polygon_material_indices =
     read_optional_address_table(resource, read_u64(record, 280)?, polygon_count, 1)?;
   let quantum = read_vec3(record, 144)?;
+  geometry.vertex_quantum = Some(quantum);
   let mut world_vertices = Vec::with_capacity(vertex_count);
   for index in 0..vertex_count {
     world_vertices.push([
@@ -829,8 +1025,11 @@ fn encode_bound(
   }
   data[offset..offset + 112].copy_from_slice(&common[..112]);
   let quantum = match &bound.geometry {
-    Some(geometry) if bound.kind == "GeometryBVH" => geometry_bvh_quantum(geometry, &common)?,
-    Some(_) => geometry_quantum(&common)?,
+    Some(geometry) => match geometry.vertex_quantum {
+      Some(quantum) => quantum,
+      None if bound.kind == "GeometryBVH" => geometry_bvh_quantum(geometry, &common)?,
+      None => geometry_quantum(&common)?,
+    },
     None => [0.0; 3],
   };
   let extension_end = offset + 112 + bound.extension.len();
@@ -928,7 +1127,9 @@ fn encode_geometry(
   let mut vertices = Vec::new();
   for vertex in &geometry.vertices {
     for axis in 0..3 {
-      vertices.extend_from_slice(&((vertex[axis] / quantum[axis]) as i16).to_le_bytes());
+      let scaled = if quantum[axis] == 0.0 { 0.0 } else { vertex[axis] / quantum[axis] };
+      let quantized = if geometry.vertex_quantum.is_some() { scaled.round() } else { scaled };
+      vertices.extend_from_slice(&(quantized as i16).to_le_bytes());
     }
   }
   let vertices_at = append(data, &vertices)?;
@@ -1768,7 +1969,11 @@ fn invalid(message: &str) -> io::Error {
 
 #[cfg(test)]
 mod tests {
-  use super::{child, merge_ybn_deltas, parse_xml, vec3, xml_to_ybn, ybn_to_xml};
+  use super::{
+    BOUNDS_SIZE, Bound, COMPOSITE_SIZE, GEOMETRY_BVH_SIZE, Geometry, Material, Polygon, Triangle,
+    child, encode_ybn_bound, identity, merge_ybn_deltas, parse_xml, read_ybn_root,
+    triangle_identities, vec3, write_f32, write_vec3, xml_to_ybn, ybn_to_xml,
+  };
   use std::path::Path;
 
   fn sample(name: &str) -> Vec<u8> {
@@ -1787,6 +1992,129 @@ mod tests {
       vec3(child(bounds, "BoxMin").unwrap()).unwrap(),
       vec3(child(bounds, "BoxMax").unwrap()).unwrap(),
     )
+  }
+
+  fn triangle_root(
+    vertices: &[[f32; 3]],
+    triangles: &[([u16; 3], [bool; 3])],
+  ) -> Vec<u8> {
+    let minimum = std::array::from_fn(|axis| {
+      vertices.iter().map(|vertex| vertex[axis]).fold(f32::INFINITY, f32::min)
+    });
+    let maximum = std::array::from_fn(|axis| {
+      vertices.iter().map(|vertex| vertex[axis]).fold(f32::NEG_INFINITY, f32::max)
+    });
+    let center = std::array::from_fn(|axis| (minimum[axis] + maximum[axis]) * 0.5);
+    let radius = (0..3).map(|axis| (maximum[axis] - center[axis]).powi(2)).sum::<f32>().sqrt();
+    let mut common = vec![0; BOUNDS_SIZE];
+    common[16] = 10;
+    write_f32(&mut common, 20, radius).unwrap();
+    write_vec3(&mut common, 32, maximum).unwrap();
+    write_vec3(&mut common, 48, minimum).unwrap();
+    write_vec3(&mut common, 64, center).unwrap();
+    write_vec3(&mut common, 80, center).unwrap();
+
+    let mut geometry_common = common.clone();
+    geometry_common[16] = 8;
+    let geometry = Geometry {
+      vertices: vertices.to_vec(),
+      materials: vec![Material {
+        kind: 1,
+        ..Material::default()
+      }],
+      polygons: triangles
+        .iter()
+        .map(|(vertices, vertex_flags)| {
+          Polygon::Triangle(Triangle {
+            material: 0,
+            vertices: *vertices,
+            vertex_flags: *vertex_flags,
+            ..Triangle::default()
+          })
+        })
+        .collect(),
+      ..Geometry::default()
+    };
+    let geometry_bound = Bound {
+      kind: "GeometryBVH".to_string(),
+      common: geometry_common,
+      extension: vec![0; GEOMETRY_BVH_SIZE - BOUNDS_SIZE],
+      geometry: Some(geometry),
+      children: Vec::new(),
+      transform: Some(identity()),
+      composite_flags: [0; 2],
+      transforms: Vec::new(),
+      flags: Vec::new(),
+    };
+    let root = Bound {
+      kind: "Composite".to_string(),
+      common,
+      extension: vec![0; COMPOSITE_SIZE - BOUNDS_SIZE],
+      geometry: None,
+      children: vec![geometry_bound],
+      transform: None,
+      composite_flags: [0; 2],
+      transforms: vec![identity()],
+      flags: vec![[0; 2]],
+    };
+    encode_ybn_bound(&root).unwrap()
+  }
+
+  #[test]
+  fn rebuilding_geometry_bvh_preserves_the_source_vertex_quantum() {
+    let source = triangle_root(
+      &[[-102.6387, 0.00031, 15.2345], [-101.1173, 0.00093, 15.2381], [-102.2251, 1.0177, 15.2319]],
+      &[([0, 1, 2], [false; 3])],
+    );
+    let original = read_ybn_root(&source).unwrap();
+    let expected = triangle_identities(&original.children[0]).unwrap();
+
+    let rebuilt = encode_ybn_bound(&original).unwrap();
+    let rebuilt_root = read_ybn_root(&rebuilt).unwrap();
+    let actual = triangle_identities(&rebuilt_root.children[0]).unwrap();
+
+    assert_eq!(actual, expected);
+  }
+
+  #[test]
+  fn merges_geometry_triangle_additions_and_removals_by_coordinates() {
+    let vanilla = triangle_root(
+      &[[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [1.0, 1.0, 0.0]],
+      &[([0, 1, 2], [false; 3]), ([1, 3, 2], [false; 3])],
+    );
+    let modded = triangle_root(
+      &[
+        [0.0, 1.0, 0.0],
+        [1.0, 1.0, 0.0],
+        [1.0, 0.0, 0.0],
+        [0.0, 0.0, 0.0],
+        [2.0, 0.0, 0.0],
+        [2.0, 1.0, 0.0],
+      ],
+      &[([2, 1, 0], [false; 3]), ([2, 4, 5], [false; 3])],
+    );
+
+    let merged = merge_ybn_deltas(&vanilla, &[&modded]).unwrap();
+    let root = read_ybn_root(&merged).unwrap();
+    let triangles = root
+      .children
+      .iter()
+      .flat_map(|child| triangle_identities(child).unwrap())
+      .collect::<Vec<_>>();
+    let expected = read_ybn_root(&modded)
+      .unwrap()
+      .children
+      .iter()
+      .flat_map(|child| triangle_identities(child).unwrap())
+      .collect::<std::collections::HashSet<_>>();
+
+    assert_eq!(
+      triangles.len(),
+      2,
+      "one vanilla triangle is removed, one survives, and one is added"
+    );
+    assert_eq!(triangles.into_iter().collect::<std::collections::HashSet<_>>(), expected);
+    assert_eq!(root.children.len(), 2, "only the added triangle should need a new geometry child");
   }
 
   #[test]

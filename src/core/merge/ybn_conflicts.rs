@@ -9,7 +9,7 @@ use walkdir::WalkDir;
 use crate::core::{
   codewalker::CodeWalker,
   extract::get_resource_directories,
-  format::gamefile::ybn::{merge_ybn_deltas, xml_to_ybn, ybn_to_xml},
+  format::gamefile::ybn::{merge_ybn_deltas, ybn_to_xml},
 };
 
 /// Merges same-named YBN resource overrides against vanilla Bounds data.
@@ -89,15 +89,15 @@ impl MergeYbnConflicts {
       let mod_bytes = paths.iter().map(fs::read).collect::<io::Result<Vec<_>>>()?;
       let mod_refs = mod_bytes.iter().map(Vec::as_slice).collect::<Vec<_>>();
       let merged = merge_ybn_deltas(&vanilla_bytes, &mod_refs)?;
-      let xml = ybn_to_xml(&merged)?;
-      let xml_path = temporary.join(format!("{name}.xml"));
-      fs::write(&xml_path, &xml)?;
       let output_name = vanilla_path.file_name().ok_or("vanilla YBN filename missing")?;
       let output = self.output_dir.join(output_name);
       if let Some(codewalker) = codewalker {
+        let xml = ybn_to_xml(&merged)?;
+        let xml_path = temporary.join(format!("{name}.xml"));
+        fs::write(&xml_path, &xml)?;
         codewalker.game_file_from_xml(&xml_path, &output)?;
       } else {
-        fs::write(output, xml_to_ybn(&xml)?)?;
+        fs::write(output, merged)?;
       }
       for path in paths {
         omitted.push(path.strip_prefix(&self.source_dir)?.to_string_lossy().replace('\\', "/"));
