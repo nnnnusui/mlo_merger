@@ -26,6 +26,62 @@ Instead of shelling out to CodeWalker.exe or a subprocess, this project hosts th
 - `src/core/xmlconvert` walks a directory of `.ymap`/`.ymap.xml` files. Native Rust is the default for both conversion directions. `--use-codewalker-dll` selects CodeWalker.Core for both directions. The Native XML-to-YMAP writer builds its schema catalog from the extracted binary YMAP directory.
 - `src/core/format/gamefile` decodes/encodes RSC7 pages, maps system/graphics virtual addresses, parses/writes META schemas/enums/data blocks, and provides shared XML-tree parsing. `--to-xml`/`--from-xml` support YMAP, RSC-META YTYP/YMT, YND NodeDictionary, and all declared YBN Bounds and polygon XML types. Plain XML YMT files are preserved; binary PSO/PSIN/RBF YMT variants remain unsupported. CodeWalker differential tests cover real YBN/YMT/YND/YTYP fixtures, and an ignored test scans active YBN resources. Some YBNs still exceed the stored-Quantum tolerance after Native rebuild; the corpus comparison currently reports those cases. Native YBN output also omits the GeometryBVH acceleration tree, so in-game collision performance/behavior is not yet verified. Bidirectional differential tests matched canonical CodeWalker XML for 623 checked-in YMAPs. Eight fixtures were excluded because their source CodeWalker XML contains `<error>` nodes for missing schema information.
 
+### Real-resource regression tests
+
+The `gamefile_samples` integration target lives in `src/core/format/gamefile/test`.
+Each format has a separate module and generated case list, with individual
+`to_xml` and `from_xml` tests for each actual source fixture. The tests call the
+same native adapters used by `--to-xml` and `--from-xml`. DLL/asset-dependent
+tests are ignored by default; comparator unit tests run normally.
+
+Extract local fixtures and regenerate the case lists:
+
+```sh
+cargo test --test gamefile_samples extract_source_samples -- --ignored --nocapture
+```
+
+Fixtures use `asset/sample/{fileType}/resourceName___filename`, with a JSON
+manifest recording the original source path. Discovery excludes `_backup` and
+`_omit`. Identical duplicates within a resource are deduplicated; differing
+same-name variants include their relative subdirectory in the resource label
+to avoid overwriting data. Assets remain gitignored and are not redistributed.
+
+Run each direction and then summarize the per-file JSON reports:
+
+```sh
+CODEWALKER_CORE_DLL=/workspace/asset/CodeWalker.Core.dll cargo test --test gamefile_samples ::to_xml -- --ignored
+CODEWALKER_CORE_DLL=/workspace/asset/CodeWalker.Core.dll cargo test --test gamefile_samples ::from_xml -- --ignored --test-threads=8
+cargo test --test gamefile_samples summarize_sample_results -- --ignored --nocapture
+```
+
+Export comparisons share one CLR worker thread. Rebuild comparisons use one
+isolated test process per fixture, with a 60-second limit configurable via
+`SAMPLE_TIMEOUT_SECONDS`; this prevents a costly DLL save from blocking the
+entire corpus. Each process hosts the DLL in-process on a single thread.
+`CODEWALKER_BRIDGE_DLL` can override the published bridge path.
+
+`asset/sample/reports/{fileType}` holds per-direction results;
+`asset/sample/reports/summary.json` aggregates failures without silently
+skipping unsupported resources or CodeWalker errors. Comparisons normalize
+XML whitespace, attribute order, numeric spelling (including hexadecimal
+integers), and resolved hash names. Direct YBN export compares vertex f32 bits;
+YBN rebuild compares stored-Quantum tolerances and polygon material contents,
+allowing BVH polygon reorder. This checks semantic XML parity, not identical
+XML formatting or in-game collision behavior.
+
+`from_xml` feeds the same CodeWalker source XML to both writers and compares
+their DLL re-exports. Reports separately record source XML preservation and
+exact byte identity. Byte identity is not required: XML does not retain RSC
+page layout, padding, compression choices, all unknown fields, or derived BVH
+data. Even CodeWalker's own rebuild is often not byte-identical.
+
+The initial local corpus contains 2,462 fixtures: 1,296 YMAP, 582 YBN, 233 YMT,
+41 YND, and 310 YTYP. Export comparison passed 2,127 and failed 335; rebuild
+comparison passed 1,866 and failed 596. Known failures include reference YMAP
+schema errors, reference YMT conversion errors, unsupported Native YTYP META
+arrays, and YBN rebuild differences. These ignored tests intentionally remain
+red for those cases rather than claiming full format coverage.
+
 ### Why in-process hosting instead of a subprocess
 
 Using a single hosted CLR process for the whole batch conversion is what makes the JenkIndex preload pass effective: cross-references between files only resolve to names if all relevant files were loaded into the *same* process before conversion. A subprocess-per-file design would lose this state between calls.
