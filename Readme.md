@@ -57,6 +57,12 @@ For detailed command information, please refer to:
 - `.cargo/config.toml` for command aliases
 - `src/cli/command.rs` for implementation details
 
+Convert a single native resource to XML in the same directory, or provide `-o` to choose an output directory:
+
+```bash
+cargo run -- --to-xml -i asset/merged_ybn/hi@sc1_18_0.ybn
+```
+
 `--check-stream-conflicts` uses the same manifest-aware resource discovery as extraction, then scans each resource's `stream/` recursively (or scans a `stream/` directory directly). It groups files by case-insensitive basename and writes duplicate names with their relative paths to the requested JSON file.
 
 ### Example: Extract

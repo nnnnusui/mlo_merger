@@ -1,5 +1,5 @@
 use mlo_merger::{
-  cli::command::{Command, Pipeline, parse_args},
+  cli::command::{Command, MergeYbn, Pipeline, parse_args},
   core::{
     codewalker::CodeWalker,
     extract::ExtractYmap,
@@ -54,8 +54,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Command::GetProp(cmd) => cmd.run()?,
     Command::CheckStreamConflicts(cmd) => cmd.run()?,
     Command::ToXml(cmd) => {
-      let (converted, failed) =
-        resource_convert::convert_files_to_xml(&cmd.input, &cmd.output_dir)?;
+      let output_dir = match cmd.output_dir {
+        Some(output_dir) => output_dir,
+        None if cmd.input.is_file() => {
+          cmd.input.parent().unwrap_or_else(|| Path::new(".")).to_path_buf()
+        }
+        None => return Err("--output is required when --input is a directory".into()),
+      };
+      let (converted, failed) = resource_convert::convert_files_to_xml(&cmd.input, &output_dir)?;
       log::info!("Converted {converted} files to XML; {failed} failed.");
     }
     Command::FromXml(cmd) => {
@@ -63,11 +69,38 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         resource_convert::convert_files_from_xml(&cmd.input, &cmd.output_dir, &cmd.schema_dir)?;
       log::info!("Converted {converted} XML files to binary; {failed} failed.");
     }
+    Command::MergeYbn(cmd) => run_merge_ybn(&cmd)?,
     Command::Pipeline(cmd) => run_pipeline(&cmd)?,
   };
 
   log::info!("✓ Command completed successfully");
   Ok(())
+}
+
+fn run_merge_ybn(cmd: &MergeYbn) -> Result<(), Box<dyn std::error::Error>> {
+  let codewalker = cmd.use_codewalker_dll.then(init_codewalker).transpose()?;
+  MergeYbnConflicts {
+    source_dir: cmd.source_dir.clone(),
+    vanilla_dir: cmd.vanilla_dir.clone(),
+    output_dir: cmd.output_dir.clone(),
+    omitted_files_path: cmd.omitted_files_path.clone(),
+  }
+  .run(codewalker.as_ref())?;
+  Ok(())
+}
+
+fn init_codewalker() -> Result<CodeWalker, Box<dyn std::error::Error>> {
+  let bridge_dll =
+    std::env::var("CODEWALKER_BRIDGE_DLL").map(std::path::PathBuf::from).unwrap_or_else(|_| {
+      std::path::PathBuf::from("bridge/CodeWalker.Bridge/bin/publish/CodeWalker.Bridge.dll")
+    });
+  CodeWalker::init(&bridge_dll).map_err(|e| {
+    format!(
+      "Failed to load CodeWalker.Bridge from {} ({e}). Build it with `dotnet publish bridge/CodeWalker.Bridge -c Release -o bridge/CodeWalker.Bridge/bin/publish -p:CodeWalkerCoreDllPath=<path to CodeWalker.Core.dll>`, or set CODEWALKER_BRIDGE_DLL.",
+      bridge_dll.display()
+    )
+    .into()
+  })
 }
 
 fn run_pipeline(cmd: &Pipeline) -> Result<(), Box<dyn std::error::Error>> {
@@ -105,20 +138,7 @@ fn run_pipeline(cmd: &Pipeline) -> Result<(), Box<dyn std::error::Error>> {
     return Ok(());
   }
 
-  let codewalker = if cmd.use_codewalker_dll {
-    let bridge_dll =
-      std::env::var("CODEWALKER_BRIDGE_DLL").map(std::path::PathBuf::from).unwrap_or_else(|_| {
-        std::path::PathBuf::from("bridge/CodeWalker.Bridge/bin/publish/CodeWalker.Bridge.dll")
-      });
-    Some(CodeWalker::init(&bridge_dll).map_err(|e| {
-      format!(
-        "Failed to load CodeWalker.Bridge from {} ({e}). Build it with `dotnet publish bridge/CodeWalker.Bridge -c Release -o bridge/CodeWalker.Bridge/bin/publish -p:CodeWalkerCoreDllPath=<path to CodeWalker.Core.dll>`, or set CODEWALKER_BRIDGE_DLL.",
-        bridge_dll.display()
-      )
-    })?)
-  } else {
-    None
-  };
+  let codewalker = if cmd.use_codewalker_dll { Some(init_codewalker()?) } else { None };
 
   log::info!("Step 1/4: extract");
   ExtractYmap {

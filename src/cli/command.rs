@@ -17,6 +17,7 @@ pub enum Command {
   CheckStreamConflicts(CheckStreamConflicts),
   ToXml(ConvertFiles),
   FromXml(ConvertFilesFromXml),
+  MergeYbn(MergeYbn),
   Pipeline(Pipeline),
 }
 
@@ -30,6 +31,7 @@ pub fn parse_args() -> Command {
     check_stream_conflicts(),
     to_xml(),
     from_xml(),
+    merge_ybn(),
     pipeline(),
   ])
   .to_options()
@@ -152,7 +154,7 @@ fn check_stream_conflicts() -> impl Parser<Command> {
 #[derive(Debug, Clone)]
 pub struct ConvertFiles {
   pub input: PathBuf,
-  pub output_dir: PathBuf,
+  pub output_dir: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone)]
@@ -165,7 +167,7 @@ pub struct ConvertFilesFromXml {
 fn to_xml() -> impl Parser<Command> {
   let flag = long("to-xml").help("Convert supported native game files to XML").req_flag(());
   let input = short('i').long("input").argument::<PathBuf>("FILE_OR_DIR");
-  let output_dir = short('o').long("output").argument::<PathBuf>("DIR");
+  let output_dir = short('o').long("output").argument::<PathBuf>("DIR").optional();
   construct!(flag, input, output_dir).map(|(_, input, output_dir)| {
     Command::ToXml(ConvertFiles {
       input,
@@ -189,6 +191,44 @@ fn from_xml() -> impl Parser<Command> {
       schema_dir,
     })
   })
+}
+
+#[derive(Debug, Clone)]
+pub struct MergeYbn {
+  pub source_dir: PathBuf,
+  pub vanilla_dir: PathBuf,
+  pub output_dir: PathBuf,
+  pub omitted_files_path: PathBuf,
+  pub use_codewalker_dll: bool,
+}
+
+fn merge_ybn() -> impl Parser<Command> {
+  let flag = long("merge-ybn")
+    .help("Merge conflicting YBN resources against vanilla without running the full pipeline")
+    .req_flag(());
+  let workspace = long("workspace")
+    .help("Root directory holding source, vanilla, and merged_ybn (default: asset)")
+    .argument::<PathBuf>("DIR")
+    .fallback(PathBuf::from("asset"));
+  let source_dir = long("source-dir")
+    .help("MLO source directory (default: <workspace>/source)")
+    .argument::<PathBuf>("DIR")
+    .optional();
+  let use_codewalker_dll =
+    long("use-codewalker-dll").help("Use CodeWalker.Core.dll to rebuild merged YBN files").switch();
+
+  construct!(flag, workspace, source_dir, use_codewalker_dll).map(
+    |(_, workspace, source_dir, use_codewalker_dll)| {
+      let source_dir = source_dir.unwrap_or_else(|| workspace.join("source"));
+      Command::MergeYbn(MergeYbn {
+        source_dir,
+        vanilla_dir: workspace.join("vanilla/ybn"),
+        output_dir: workspace.join("merged_ybn"),
+        omitted_files_path: workspace.join("extracted/_extracted_ybns.txt"),
+        use_codewalker_dll,
+      })
+    },
+  )
 }
 
 /// Default command run with no flags: extract -> ymap2xml -> merge -> xml2ymap,
