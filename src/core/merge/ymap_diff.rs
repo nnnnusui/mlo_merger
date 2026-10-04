@@ -113,7 +113,6 @@ impl YmapDiff {
     let entity_diffs_map: HashMap<u32, Vec<YmapEntityDiff>> =
       unique_entity_diffs.into_iter().fold(HashMap::new(), |mut map, diff| {
         let guid = match &diff {
-          YmapEntityDiff::Removed(e) => e.guid,
           YmapEntityDiff::Added(e) => e.guid,
           YmapEntityDiff::Modified {
             vanilla,
@@ -136,9 +135,6 @@ impl YmapDiff {
         );
       }
       match diff {
-        YmapEntityDiff::Removed(it) => {
-          modded.entity_map.shift_remove(&it.guid);
-        }
         YmapEntityDiff::Added(it) => {
           modded.entity_map.insert(it.guid, it.clone());
         }

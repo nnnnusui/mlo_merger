@@ -14,7 +14,7 @@ A tool for merging FiveM mod map `.ymap` files to avoid conflicts between multip
 
 ### Automated Pipeline (recommended)
 
-Running `cargo run` with no arguments executes the full workflow in one go: extract -> convert to xml -> merge YMAPs -> rebuild YMAPs -> merge colliding YBN bounds against vanilla. All intermediate paths (`vanilla/ymap.xml`, `vanilla/ybn`, `extracted`, `extracted.xml`, `merged.xml`, `merged`, `merged_ybn`, `blacklist.toml`, `log`) are resolved relative to a workspace directory (`asset` by default). It prompts for confirmation before running.
+Running `cargo run` with no arguments executes the full workflow in one go: extract -> convert to xml -> merge YMAPs -> rebuild YMAPs -> merge colliding YBN bounds against vanilla. All intermediate paths (`vanilla/ymap.xml`, `vanilla/ybn`, `extracted`, `extracted.xml`, `merged.xml`, `merged`, `merged_ybn`, `blacklist.toml`, `log`) are resolved relative to a workspace directory (`asset` by default). Existing generated outputs are listed and replaced after confirmation; pass `-y` to skip the prompt.
 
 ```bash
 # defaults: workspace=asset, source-dir=<workspace>/source
@@ -22,6 +22,9 @@ cargo run
 
 # also deploy into a FiveM resource directory (overwrites merged YMAP/YBN streams and omit.txt)
 cargo run -- --workspace asset --source-dir asset/source --output-resource-dir asset/merged_mlo
+
+# skip confirmation before replacing generated outputs
+cargo run -- -y --workspace asset --source-dir asset/source --output-resource-dir asset/merged_mlo
 
 # opt in to CodeWalker.Core.dll for both conversion directions
 cargo run -- --use-codewalker-dll

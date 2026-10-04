@@ -12,6 +12,7 @@ pub enum Command {
   ParseYmapXml(ParseYmapXml),
   // ParseYmap(ParseYmap),
   MergeYmapXml(MergeYmapXml),
+  BuildYmapCache(BuildYmapCache),
   ExtractYmap(ExtractYmap),
   GetProp(GetProp),
   CheckStreamConflicts(CheckStreamConflicts),
@@ -26,6 +27,7 @@ pub fn parse_args() -> Command {
     parse_ymap_xml(),
     // parse_ymap(),
     merge_ymap_xml(),
+    build_ymap_cache(),
     extract_ymap(),
     get_prop(),
     check_stream_conflicts(),
@@ -86,6 +88,24 @@ fn merge_ymap_xml() -> impl Parser<Command> {
         blacklist_config,
       })
     })
+}
+
+#[derive(Debug, Clone)]
+pub struct BuildYmapCache {
+  pub vanilla_dir: PathBuf,
+}
+
+fn build_ymap_cache() -> impl Parser<Command> {
+  let flag =
+    long("build-ymap-cache").help("Build or update the vanilla YMAP parent cache").req_flag(());
+  let vanilla_dir = long("vanilla-dir")
+    .help("Directory containing vanilla YMAP XML files")
+    .argument::<PathBuf>("DIR");
+  construct!(flag, vanilla_dir).map(|(_, vanilla_dir)| {
+    Command::BuildYmapCache(BuildYmapCache {
+      vanilla_dir,
+    })
+  })
 }
 
 fn extract_ymap() -> impl Parser<Command> {
@@ -249,6 +269,7 @@ pub struct Pipeline {
   pub log_dir: PathBuf,
   pub blacklist_config: Option<PathBuf>,
   pub use_codewalker_dll: bool,
+  pub yes: bool,
 }
 
 fn pipeline() -> impl Parser<Command> {
@@ -270,9 +291,11 @@ fn pipeline() -> impl Parser<Command> {
   let use_codewalker_dll = long("use-codewalker-dll")
     .help("Use CodeWalker.Core.dll for YMAP conversion and YBN BVH rebuilding; Native YMAP conversion is the default")
     .switch();
+  let yes =
+    short('y').long("yes").help("Skip confirmation before replacing generated outputs").switch();
 
-  construct!(workspace, source_dir, output_resource_dir, use_codewalker_dll).map(
-    |(workspace, source_dir, output_resource_dir, use_codewalker_dll)| {
+  construct!(workspace, source_dir, output_resource_dir, use_codewalker_dll, yes).map(
+    |(workspace, source_dir, output_resource_dir, use_codewalker_dll, yes)| {
       let blacklist_config = workspace.join("blacklist.toml");
       Command::Pipeline(Pipeline {
         source_dir: source_dir.unwrap_or_else(|| workspace.join("source")),
@@ -285,6 +308,7 @@ fn pipeline() -> impl Parser<Command> {
         log_dir: workspace.join("log"),
         blacklist_config: blacklist_config.exists().then_some(blacklist_config),
         use_codewalker_dll,
+        yes,
         workspace,
       })
     },

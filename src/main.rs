@@ -1,5 +1,5 @@
 use mlo_merger::{
-  cli::command::{Command, MergeYbn, Pipeline, parse_args},
+  cli::command::{BuildYmapCache, Command, MergeYbn, Pipeline, parse_args},
   core::{
     codewalker::CodeWalker,
     extract::ExtractYmap,
@@ -7,8 +7,8 @@ use mlo_merger::{
       gamefile::resource_convert,
       ymap::{model::Ymap, xml::XmlYmap},
     },
-    merge::run::MergeYmapXml,
     merge::ybn_conflicts::MergeYbnConflicts,
+    merge::{build_ymap_parent_cache, run::MergeYmapXml},
     xmlconvert::{Xml2Ymap, Ymap2Xml},
   },
 };
@@ -61,6 +61,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
   match opts {
     Command::ParseYmapXml(cmd) => run_parse_ymap_xml(&cmd.input)?,
     Command::MergeYmapXml(cmd) => cmd.run()?,
+    Command::BuildYmapCache(cmd) => build_ymap_cache(&cmd)?,
     Command::ExtractYmap(cmd) => cmd.run()?,
     Command::GetProp(cmd) => cmd.run()?,
     Command::CheckStreamConflicts(cmd) => cmd.run()?,
@@ -88,6 +89,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
   };
 
   log::info!("✓ Command completed successfully");
+  Ok(())
+}
+
+fn build_ymap_cache(cmd: &BuildYmapCache) -> Result<(), Box<dyn std::error::Error>> {
+  build_ymap_parent_cache(&cmd.vanilla_dir)?;
   Ok(())
 }
 
@@ -143,16 +149,29 @@ fn run_pipeline(cmd: &Pipeline) -> Result<(), Box<dyn std::error::Error>> {
   if let Some(resource_dir) = &cmd.output_resource_dir {
     println!("  6. deploy    {} -> {}", cmd.merged_dir.display(), resource_dir.display());
   }
-  print!("Proceed? [y/N] ");
-  io::stdout().flush()?;
   let mut answer = String::new();
-  io::stdin().read_line(&mut answer)?;
-  if !matches!(answer.trim().to_lowercase().as_str(), "y" | "yes") {
-    log::info!("Pipeline cancelled by user.");
-    return Ok(());
+  if !cmd.yes {
+    let existing =
+      pipeline_output_dirs(cmd).into_iter().filter(|path| path.exists()).collect::<Vec<_>>();
+    if !existing.is_empty() {
+      println!("The following generated outputs will be deleted and recreated:");
+      for path in existing {
+        println!("  {}", path.display());
+      }
+    }
+    print!("Proceed? [y/N] ");
+    io::stdout().flush()?;
+    io::stdin().read_line(&mut answer)?;
+    if !matches!(answer.trim().to_lowercase().as_str(), "y" | "yes") {
+      log::info!("Pipeline cancelled by user.");
+      return Ok(());
+    }
+  } else {
+    log::info!("Skipping pipeline confirmation because --yes was specified.");
   }
 
   let codewalker = if cmd.use_codewalker_dll { Some(init_codewalker()?) } else { None };
+  clear_pipeline_outputs(cmd)?;
 
   log::info!("Step 1/4: extract");
   ExtractYmap {
@@ -210,6 +229,36 @@ fn run_pipeline(cmd: &Pipeline) -> Result<(), Box<dyn std::error::Error>> {
     deploy_resource(cmd, resource_dir)?;
   }
 
+  Ok(())
+}
+
+fn pipeline_output_dirs(cmd: &Pipeline) -> Vec<std::path::PathBuf> {
+  let mut outputs = vec![
+    cmd.extracted_dir.clone(),
+    cmd.extracted_xml_dir.clone(),
+    cmd.merged_dir.clone(),
+    cmd.workspace.join("merged_ybn"),
+    cmd.merged_xml_dir.clone(),
+    cmd.workspace.join("merged_mlo/stream"),
+  ];
+  if let Some(resource_dir) = &cmd.output_resource_dir {
+    outputs.push(resource_dir.join("stream"));
+  }
+  outputs
+}
+
+fn clear_pipeline_outputs(cmd: &Pipeline) -> io::Result<()> {
+  let mut cleared = Vec::new();
+  for path in pipeline_output_dirs(cmd) {
+    if cleared.contains(&path) {
+      continue;
+    }
+    if path.exists() {
+      fs::remove_dir_all(&path)?;
+      log::info!("Removed previous generated output: {}", path.display());
+    }
+    cleared.push(path);
+  }
   Ok(())
 }
 
@@ -284,6 +333,37 @@ mod tests {
   use super::*;
 
   #[test]
+  fn clears_generated_pipeline_outputs_and_stream_directories() {
+    let root = std::env::temp_dir().join(format!("pipeline_outputs_{}", std::process::id()));
+    let workspace = root.join("asset");
+    let resource_dir = root.join("custom_resource");
+    let cmd = Pipeline {
+      workspace: workspace.clone(),
+      source_dir: workspace.join("source"),
+      output_resource_dir: Some(resource_dir),
+      vanilla_xml_dir: workspace.join("vanilla/ymap.xml"),
+      extracted_dir: workspace.join("extracted"),
+      extracted_xml_dir: workspace.join("extracted.xml"),
+      merged_xml_dir: workspace.join("merged.xml"),
+      merged_dir: workspace.join("merged"),
+      log_dir: workspace.join("log"),
+      blacklist_config: None,
+      use_codewalker_dll: false,
+      yes: false,
+    };
+
+    let outputs = pipeline_output_dirs(&cmd);
+    for output in &outputs {
+      fs::create_dir_all(output).unwrap();
+      fs::write(output.join("stale"), "old output").unwrap();
+    }
+    clear_pipeline_outputs(&cmd).unwrap();
+
+    assert!(outputs.iter().all(|output| !output.exists()));
+    fs::remove_dir_all(root).unwrap();
+  }
+
+  #[test]
   fn deploy_resource_overwrites_stream_and_omit() {
     let tmp = std::env::temp_dir().join("mlo_merger_deploy_resource_test");
     let _ = fs::remove_dir_all(&tmp);
@@ -323,6 +403,7 @@ mod tests {
       log_dir: tmp.join("asset/log"),
       blacklist_config: None,
       use_codewalker_dll: false,
+      yes: false,
     };
 
     deploy_resource(&cmd, &resource_dir).unwrap();

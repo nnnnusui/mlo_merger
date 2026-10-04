@@ -11,7 +11,13 @@ This tool merges FiveM mod map (`.ymap`) files while avoiding conflicts between 
 5. **YBN merge** (`src/core/merge/ybn_conflicts`) - compares colliding source YBN Bounds against `asset/vanilla/ybn`, applies child-bound additions/removals keyed by vertex/polygon geometry, and rebuilds merged binaries with the Native GeometryBVH writer by default. CodeWalker.Core is an optional rebuild backend.
 6. **Deploy** (optional, `--output-resource-dir`) - overwrites a FiveM resource directory's `stream/ymap/merged`, `stream/ymap/clone`, `stream/ybn/merged` and `omit.txt` with this run's output.
 
-`cargo run` with no arguments (`Command::Pipeline` in [src/cli/command.rs](../src/cli/command.rs)) runs all steps in order after a confirmation prompt (step 6 only if `--output-resource-dir` is given). Each of steps 1-4 is also available as an individual flag-based subcommand (`--extract-ymap`, `--merge-ymap-xml`, etc.) for manual use.
+`cargo run` with no arguments (`Command::Pipeline` in [src/cli/command.rs](../src/cli/command.rs)) runs all steps in order after a confirmation prompt (step 6 only if `--output-resource-dir` is given). Each of steps 1-4 is also available as an individual flag-based subcommand (`--extract-ymap`, `--merge-ymap-xml`, etc.) for manual use. `--build-ymap-cache --vanilla-dir <DIR>` builds or updates the vanilla parent index independently.
+
+Before the pipeline runs, existing `extracted`, `extracted.xml`, `merged`,
+`merged_ybn`, and `merged.xml` outputs plus `merged_mlo/stream` are removed and
+regenerated. A custom `--output-resource-dir` also has its `stream/` replaced.
+Without `-y`/`--yes`, existing outputs are listed and confirmation is required;
+the flag skips that prompt.
 
 `--check-stream-conflicts --input <DIR> --output <FILE>` uses the same manifest-aware resource discovery as extraction, scans each resource's `stream/` (or a stream directory directly), groups files by case-insensitive basename, and writes conflicting relative paths as JSON.
 
@@ -82,6 +88,16 @@ flags, LOD levels, or child counts change are promoted to rebuilds. Their
 original XML is patched only for these fields, preserving entity order,
 extensions, and other opaque payloads. The existing modeled-field limitation
 still applies to ordinary multi-mod XML merges.
+
+The merger maintains `.vanilla_ymap_parent_cache.json` in the parent directory
+of the vanilla XML directory (for the default workspace, `asset/vanilla/`). It
+indexes each file's parent hash and modification time, reparsing
+only new or changed files; unchanged children are discovered from the index
+without scanning their XML contents. Full YMAP XML is still loaded lazily only
+for maps needed by the merge. Build or refresh the same cache separately with
+`cargo run -- --build-ymap-cache --vanilla-dir asset/vanilla/ymap.xml`.
+Vanilla entities omitted from a mod XML are not treated as deletions; they
+remain in merged output.
 
 `_copy_targets.txt` contains only unchanged binary clones.
 `_managed_ymaps.txt` scopes cleanup of obsolete generated binaries during both

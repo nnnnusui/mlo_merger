@@ -260,43 +260,6 @@ pub(super) struct SourceMaps {
 }
 
 impl SourceMaps {
-  /// Finds vanilla children whose parent arrays will be replaced or reordered.
-  pub(super) fn vanilla_children(
-    &self,
-    parents: &std::collections::HashSet<u32>,
-  ) -> io::Result<Vec<(u32, PathBuf)>> {
-    use quick_xml::{Reader, events::Event};
-    let mut children = Vec::new();
-    for ((namespace, hash), path) in &self.paths {
-      if namespace.is_some() {
-        continue;
-      }
-      let mut reader = Reader::from_reader(std::io::BufReader::new(std::fs::File::open(path)?));
-      reader.config_mut().trim_text(true);
-      let mut buffer = Vec::new();
-      let mut inside_parent = false;
-      loop {
-        match reader.read_event_into(&mut buffer).map_err(|error| invalid(&error.to_string()))? {
-          Event::Start(element) if element.name().as_ref() == b"parent" => inside_parent = true,
-          Event::Text(text) if inside_parent => {
-            let text = text.decode().map_err(|error| invalid(&error.to_string()))?;
-            if parents.contains(&reference_hash(&text)) {
-              children.push((*hash, path.clone()));
-            }
-          }
-          Event::End(element) if element.name().as_ref() == b"parent" => break,
-          Event::Empty(element) if element.name().as_ref() == b"parent" => break,
-          Event::Start(element) if element.name().as_ref() == b"entities" => break,
-          Event::Eof => break,
-          _ => {}
-        }
-        buffer.clear();
-      }
-    }
-    children.sort_by(|first, second| first.1.cmp(&second.1));
-    Ok(children)
-  }
-
   /// Registers a map by its stream filename, not its potentially unresolved XML name.
   pub(super) fn register(
     &mut self,

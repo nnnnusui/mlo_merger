@@ -1,5 +1,11 @@
 # TODO
 
+## YMAP Merge Performance
+
+- [x] Cache vanilla YMAP parent hashes by file modification time; update only changed files and support standalone cache builds.
+- [x] Preserve vanilla entities omitted by mod XML instead of merging entity deletions.
+- [x] Replace generated pipeline outputs after confirmation, with `-y` to skip the prompt.
+
 ## Resource Conversion Tests
 
 - [x] Support embedded-schema PSO export and bounded template-based `.pso.xml` rebuilds.

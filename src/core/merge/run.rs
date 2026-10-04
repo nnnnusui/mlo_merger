@@ -6,6 +6,7 @@ use crate::core::format::ymap::xml::XmlYmap;
 use crate::core::merge::ymap_diff::YmapDiff;
 use crate::core::merge::{
   ymap_metadata_diff::reference_hash,
+  ymap_parent_cache::VanillaParentCache,
   ymap_parent_refs::{
     OriginalMap, ParentReferences, SourceMaps, patch_clone, runtime_entities, valid_local_pair,
   },
@@ -46,7 +47,8 @@ impl MergeYmapXml {
       None
     };
 
-    let vanila_files = collect_files_with_suffix(&self.vanilla_dir, ".ymap.xml");
+    let (vanilla_cache, _) = VanillaParentCache::update(&self.vanilla_dir)?;
+    let vanila_files = vanilla_cache.paths(&self.vanilla_dir).collect::<Vec<_>>();
     log::info!("Found {} YMAP XML files in vanilla directory", vanila_files.len());
 
     let modded_ymaps_map = collect_modded_ymaps_map(&self.mod_dir)?;
@@ -155,7 +157,7 @@ impl MergeYmapXml {
         }
       }
     }
-    for (hash, path) in sources.vanilla_children(&changed_layouts)? {
+    for (hash, path) in vanilla_cache.children(&self.vanilla_dir, &changed_layouts) {
       if planned.contains_key(&hash) {
         continue;
       }
@@ -438,7 +440,7 @@ mod tests {
   use std::collections::{BTreeSet, HashMap, HashSet};
 
   #[test]
-  fn merge_reindexes_cloned_and_vanilla_children_from_sample_fixtures() {
+  fn merge_preserves_vanilla_entities_omitted_by_mods() {
     let base = Path::new(env!("CARGO_MANIFEST_DIR"));
     let staging = std::env::temp_dir().join(format!("mlo_parent_refs_{}", std::process::id()));
     let samples = base.join("docs/sample/parent_refs");
@@ -463,6 +465,15 @@ mod tests {
     .unwrap();
     fs::copy(samples.join("child.ymap.xml"), mod_dir.join("resource_a___child.ymap.xml")).unwrap();
     fs::write(mod_ymap_dir.join("resource_a___child.ymap"), b"placeholder clone binary").unwrap();
+    let (cache, _) = VanillaParentCache::update(&vanilla_dir).unwrap();
+    assert_eq!(
+      cache
+        .children(&vanilla_dir, &[reference_hash("parent")].into_iter().collect())
+        .iter()
+        .map(|(_, path)| path.file_name().unwrap().to_str().unwrap())
+        .collect::<Vec<_>>(),
+      ["dependent.ymap.xml"]
+    );
     MergeYmapXml {
       vanilla_dir,
       mod_dir,
@@ -474,19 +485,12 @@ mod tests {
     .run()
     .unwrap();
     let parent = OriginalMap::load(&output.join("parent.ymap.xml")).unwrap();
-    let child = OriginalMap::load(&output.join("child.ymap.xml")).unwrap();
-    let dependent = OriginalMap::load(&output.join("dependent.ymap.xml")).unwrap();
-    assert_eq!(parent.entities.len(), 1);
-    assert_eq!(parent.entities[0].guid, 200);
-    assert_eq!(parent.entities[0].num_children, 2);
-    assert_eq!(child.entities[0].parent_index, 0);
-    assert_eq!(dependent.entities[0].parent_index, 0);
-    assert_eq!(child.entities[0].flags & 8, 8);
-    assert_eq!(dependent.entities[0].flags & 8, 8);
-    assert_eq!(parent.entities[child.entities[0].parent_index as usize].guid, 200);
+    assert_eq!(parent.entities.len(), 2);
+    assert_eq!(parent.entities.iter().map(|entity| entity.guid).collect::<Vec<_>>(), [100, 200]);
     let clone = output.join("clone/child.ymap");
-    assert!(!clone.exists(), "relinked child must not remain in clone output");
-    assert!(!fs::read_to_string(output.join("_copy_targets.txt")).unwrap().contains("child"));
+    assert!(clone.exists(), "unchanged child should remain a binary clone");
+    assert!(fs::read_to_string(output.join("_copy_targets.txt")).unwrap().contains("child"));
+    assert!(!output.join("dependent.ymap.xml").exists());
     fs::remove_dir_all(staging).unwrap();
   }
 

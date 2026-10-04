@@ -7,7 +7,6 @@ use structdiff::StructDiff;
 #[derive(Debug)]
 pub enum YmapEntityDiff {
   Added(YmapEntity),
-  Removed(YmapEntity),
   Modified {
     vanilla: YmapEntity,
     diffs: Vec<YmapEntityStructDiffEnum>,
@@ -28,9 +27,6 @@ impl YmapEntityDiff {
       match diff {
         Self::Added(e) => {
           log::info!("      [Added] Entity: {} {}", e.guid, e.archetype_name);
-        }
-        Self::Removed(e) => {
-          log::info!("      [Removed] Entity: {} {}", e.guid, e.archetype_name);
         }
         Self::Modified {
           vanilla: _,
@@ -70,7 +66,7 @@ pub fn check_entity_diff(
             diffs,
           })
         }
-        (Some(vanilla), None) => Some(YmapEntityDiff::Removed(vanilla.clone())),
+        (Some(_), None) => None,
         (None, Some(modded)) => Some(YmapEntityDiff::Added(modded.clone())),
         (None, None) => None,
       }
