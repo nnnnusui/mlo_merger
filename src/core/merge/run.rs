@@ -83,6 +83,8 @@ impl MergeYmapXml {
       let hash = reference_hash(ymap_name.trim_end_matches(".ymap.xml"));
       if !self.rebuild_all && mod_refs.len() <= 1 {
         let mod_ref = mod_refs.first().unwrap();
+        log::info!("Processing YMAP: {}", self.vanilla_dir.join(ymap_name).display());
+        log::info!("  Mod: {} ({})", mod_ref.mod_name, mod_ref.mod_ymap_path.display());
         let original =
           sources.get(Some(&mod_ref.mod_name), hash)?.ok_or("clone XML unavailable")?;
         let (model, entities) =
@@ -318,7 +320,9 @@ impl MergeYmapXml {
         if xml_path.exists() {
           fs::remove_file(&xml_path)?;
         }
-        log::info!("Copied unchanged YMAP: {binary_name}");
+        log::info!(
+          "Copied single-mod YMAP to clone output (vanilla diff merge skipped): {binary_name}"
+        );
       } else {
         if xml_path.exists() {
           fs::remove_file(&xml_path)?;

@@ -40,11 +40,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     fs::rename(log_path, archived_log_path)?;
   }
 
+  let active_log_path = match &opts {
+    Command::Pipeline(cmd) => {
+      fs::create_dir_all(&cmd.log_dir)?;
+      cmd
+        .log_dir
+        .join(format!("mlo_merger_{}.log", chrono::Local::now().format("%Y%m%d_%H%M%S_%3f")))
+    }
+    _ => log_path.to_path_buf(),
+  };
+
   CombinedLogger::init(vec![
     TermLogger::new(LevelFilter::Info, Config::default(), TerminalMode::Mixed, ColorChoice::Auto),
-    WriteLogger::new(LevelFilter::Info, Config::default(), File::create("mlo_merger.log")?),
+    WriteLogger::new(LevelFilter::Info, Config::default(), File::create(&active_log_path)?),
   ])?;
 
+  log::info!("Writing log to {}", active_log_path.display());
   log::info!("Options: {:?}", opts);
 
   match opts {
@@ -65,8 +76,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
       log::info!("Converted {converted} files to XML; {failed} failed.");
     }
     Command::FromXml(cmd) => {
-      let (converted, failed) =
-        resource_convert::convert_files_from_xml(&cmd.input, &cmd.output_dir, &cmd.schema_dir)?;
+      let (converted, failed) = resource_convert::convert_files_from_xml(
+        &cmd.input,
+        &cmd.output_dir,
+        cmd.schema_dir.as_deref(),
+      )?;
       log::info!("Converted {converted} XML files to binary; {failed} failed.");
     }
     Command::MergeYbn(cmd) => run_merge_ybn(&cmd)?,

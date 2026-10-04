@@ -1,5 +1,5 @@
 use std::{
-  collections::HashMap,
+  collections::{BTreeSet, HashMap},
   fs, io,
   path::{Path, PathBuf},
 };
@@ -130,21 +130,49 @@ pub fn convert_files_to_xml(
 pub fn convert_files_from_xml(
   input: &Path,
   output_dir: &Path,
-  schema_dir: &Path,
+  schema_dir: Option<&Path>,
 ) -> Result<(usize, usize), Box<dyn std::error::Error>> {
   let inputs = collect_inputs(input, &|path| NativeResourceFormat::from_xml_path(path).is_ok())?;
+  if schema_dir.is_none() && inputs.iter().any(|path| is_pso_xml(path)) {
+    return Err(
+      io::Error::new(
+        io::ErrorKind::InvalidInput,
+        "--schema-dir is required when converting .pso.xml files",
+      )
+      .into(),
+    );
+  }
   fs::create_dir_all(output_dir)?;
   if input.is_dir() {
     prune_managed_ymap_outputs(input, output_dir)?;
   }
 
   let mut catalog = MetaSchemaCatalog::default();
-  let schema_inputs = collect_inputs(schema_dir, &|path| {
-    matches!(
-      NativeResourceFormat::from_path(path),
-      Ok(NativeResourceFormat::Ymap | NativeResourceFormat::Ytyp | NativeResourceFormat::YmtRsc)
-    )
-  })?;
+  let schema_inputs = if let Some(schema_dir) = schema_dir {
+    collect_inputs(schema_dir, &|path| {
+      matches!(
+        NativeResourceFormat::from_path(path),
+        Ok(NativeResourceFormat::Ymap | NativeResourceFormat::Ytyp | NativeResourceFormat::YmtRsc)
+      )
+    })?
+  } else {
+    discover_schema_inputs(input, &inputs)?
+  };
+  if schema_dir.is_none()
+    && schema_inputs.is_empty()
+    && inputs.iter().any(|path| {
+      NativeResourceFormat::from_xml_path(path)
+        .is_ok_and(|format| format.is_generic_meta() && !is_pso_xml(path))
+    })
+  {
+    return Err(
+      io::Error::new(
+        io::ErrorKind::NotFound,
+        "no matching binary META schemas found; provide --schema-dir",
+      )
+      .into(),
+    );
+  }
   for source in schema_inputs {
     let result = fs::read(&source)
       .and_then(|bytes| Rsc7Resource::decode(&bytes))
@@ -166,6 +194,7 @@ pub fn convert_files_from_xml(
     let format = NativeResourceFormat::from_xml_path(source)?;
     let result = fs::read_to_string(source).and_then(|xml| {
       if is_pso_xml(source) {
+        let schema_dir = schema_dir.expect("PSO schema directory was validated");
         let template = if schema_dir.is_file() {
           schema_dir.to_path_buf()
         } else {
@@ -283,6 +312,36 @@ fn is_pso_xml(path: &Path) -> bool {
     .file_name()
     .and_then(|name| name.to_str())
     .is_some_and(|name| name.to_ascii_lowercase().ends_with(".pso.xml"))
+}
+
+fn discover_schema_inputs(
+  input: &Path,
+  sources: &[PathBuf],
+) -> io::Result<Vec<PathBuf>> {
+  let mut schemas = BTreeSet::new();
+  for source in sources {
+    let format = NativeResourceFormat::from_xml_path(source)?;
+    let vanilla_family = match format {
+      NativeResourceFormat::Ymap => "ymap",
+      NativeResourceFormat::Ytyp => "ytyp",
+      NativeResourceFormat::YmtRsc => "ymt",
+      _ => continue,
+    };
+    let relative = relative_input_path(input, source)?;
+    let binary_name = strip_xml_suffix(&relative)?;
+    let Some(file_name) = binary_name.file_name() else {
+      continue;
+    };
+    let mut candidates = vec![source.with_file_name(file_name)];
+    for ancestor in input.ancestors() {
+      candidates.push(ancestor.join("extracted").join(file_name));
+      candidates.push(ancestor.join("vanilla").join(vanilla_family).join(file_name));
+    }
+    if let Some(schema) = candidates.into_iter().find(|candidate| candidate.is_file()) {
+      schemas.insert(schema);
+    }
+  }
+  Ok(schemas.into_iter().collect())
 }
 
 /// Converts an RSC-META resource to its generic CodeWalker META XML representation.
@@ -528,8 +587,8 @@ mod tests {
   use std::collections::HashMap;
 
   use super::{
-    NativeResourceFormat, convert_files_from_xml, convert_files_to_xml, resource_to_xml,
-    xml_to_resource,
+    NativeResourceFormat, convert_files_from_xml, convert_files_to_xml, discover_schema_inputs,
+    resource_to_xml, xml_to_resource,
   };
   use crate::core::format::gamefile::{
     meta_resource::{MetaResource, MetaSchemaCatalog},
@@ -554,7 +613,8 @@ mod tests {
         .unwrap(),
       NativeResourceFormat::Ymap
     );
-    assert_eq!(convert_files_from_xml(&xml_dir, &rebuilt_dir, &input).unwrap(), (1, 0));
+    assert!(convert_files_from_xml(&xml_dir, &rebuilt_dir, None).is_err());
+    assert_eq!(convert_files_from_xml(&xml_dir, &rebuilt_dir, Some(&input)).unwrap(), (1, 0));
     let bytes = std::fs::read(rebuilt_dir.join("nested/cs1_railwyc.ymap")).unwrap();
     assert!(bytes.starts_with(b"PSIN"));
     let xml = resource_to_xml(NativeResourceFormat::Ymap, &bytes, &HashMap::new()).unwrap();
@@ -563,6 +623,34 @@ mod tests {
       std::fs::read_to_string(xml_dir.join("nested/cs1_railwyc.ymap.pso.xml")).unwrap()
     );
     std::fs::remove_dir_all(temp).unwrap();
+  }
+
+  #[test]
+  fn ybn_xml_does_not_require_a_schema_directory() {
+    let base = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let input = base.join("docs/sample/ybn_conflicts/resource_a.ybn.xml");
+    let output = std::env::temp_dir().join(format!("ybn_from_xml_{}", std::process::id()));
+
+    assert_eq!(convert_files_from_xml(&input, &output, None).unwrap(), (1, 0));
+    assert!(output.join("resource_a.ybn").is_file());
+    std::fs::remove_dir_all(output).unwrap();
+  }
+
+  #[test]
+  fn discovers_matching_vanilla_ymap_schema_for_source_xml() {
+    let root = std::env::temp_dir().join(format!("ymap_schema_discovery_{}", std::process::id()));
+    let input_dir = root.join("asset/source/resource/stream/ymap");
+    let xml = input_dir.join("hei_sc1_18_strm_0.ymap.xml");
+    let schema = root.join("asset/vanilla/ymap/hei_sc1_18_strm_0.ymap");
+    std::fs::create_dir_all(&input_dir).unwrap();
+    std::fs::create_dir_all(schema.parent().unwrap()).unwrap();
+    std::fs::write(&xml, "<CMapData />").unwrap();
+    std::fs::write(&schema, []).unwrap();
+
+    let found = discover_schema_inputs(&xml, std::slice::from_ref(&xml)).unwrap();
+
+    assert_eq!(found, vec![schema]);
+    std::fs::remove_dir_all(root).unwrap();
   }
 
   #[test]
@@ -768,7 +856,7 @@ mod tests {
     assert!(std::fs::read_to_string(&xml_path).unwrap().contains("<CMapTypes"));
 
     assert_eq!(
-      convert_files_from_xml(&xml_output_dir, &binary_output_dir, &binary_input_dir).unwrap(),
+      convert_files_from_xml(&xml_output_dir, &binary_output_dir, Some(&binary_input_dir)).unwrap(),
       (1, 0)
     );
     let output_path = binary_output_dir.join("sb_train_addonprops.ytyp");

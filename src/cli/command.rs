@@ -161,7 +161,7 @@ pub struct ConvertFiles {
 pub struct ConvertFilesFromXml {
   pub input: PathBuf,
   pub output_dir: PathBuf,
-  pub schema_dir: PathBuf,
+  pub schema_dir: Option<PathBuf>,
 }
 
 fn to_xml() -> impl Parser<Command> {
@@ -182,8 +182,9 @@ fn from_xml() -> impl Parser<Command> {
   let input = short('i').long("input").argument::<PathBuf>("FILE_OR_DIR");
   let output_dir = short('o').long("output").argument::<PathBuf>("DIR");
   let schema_dir = long("schema-dir")
-    .help("Directory containing source binary YMAP/YTYP/YMT resources for META schemas")
+    .help("META schema directory; required for .pso.xml, otherwise matching binaries are auto-discovered")
     .argument::<PathBuf>("DIR");
+  let schema_dir = schema_dir.optional();
   construct!(flag, input, output_dir, schema_dir).map(|(_, input, output_dir, schema_dir)| {
     Command::FromXml(ConvertFilesFromXml {
       input,
