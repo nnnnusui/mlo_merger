@@ -23,6 +23,68 @@ the flag skips that prompt.
 
 YBN conflicts are merged only when a vanilla baseline with the same basename exists. The merger preserves vanilla children not removed by any mod, applies mod-relative removals, unions distinct added Bounds, and deduplicates identical additions. Conflicting source paths are appended to `_extracted_ybns.txt`, which deploy combines with the YMAP omit list. The Native YBN writer generates GeometryBVH node/tree data, updates polygon order, and remaps triangle edge indices. CodeWalker.Core remains available as an alternate rebuild backend.
 
+## GTA V Archive Cache
+
+`--generate-gtav-cache -i <GAME_DIR> -o <CACHE_DIR>` runs independently of the merge pipeline.
+Both paths are required. The Cargo alias `cargo generate-gtav-cache -i <GAME_DIR> -o <CACHE_DIR>` is defined in `.cargo/config.toml`.
+Rust (`src/core/gtav_cache.rs`) owns stage ordering and content-addressed storage;
+the managed bridge owns CodeWalker key loading, RPF scanning/decryption,
+recursive extraction and RSC7 header restoration. Keys are derived from the
+local Legacy executable using CodeWalker and are never saved in the cache.
+Explicit executable loading avoids CodeWalker's Windows-only path concatenation.
+
+The extraction order is all installed root .rpf files in filename order
+(including common.rpf and x64*.rpf), standalone update.rpf YMAPs, then dlclist.xml
+items in document order. Missing alphabet letters are not assumed to exist.
+Embedded dlcpacks entries are excluded from the base stage and processed at
+their DLC stage. `platform:` DLCs may be nested in root x64*.rpf
+archives; `dlcpacks:` resolves to update/x64/dlcpacks. Title-update entries under
+dlc_patch/<name> overlay that DLC at its stage, not the base stage. Entries are
+identified by lowercase filename, matching the future MLO lookup. Within a
+stage, the last archive-traversal occurrence wins; DLC patches are applied last.
+
+`cache_info.json` schema 2 stores the game directory and ordered stages. Each
+<stage>/version_info.json stores that stage's ID, parent, contributing archives,
+unchanged count and additions/replacements with previous/new SHA-256 hashes,
+artifact paths and full archive provenance. <stage>/ymap/<name>.ymap stores a
+new filename's standalone native bytes; <name>.ymap.diff.json stores serialized
+YmapDiff for content replacements. Unchanged content is not saved again. Even
+empty stages have metadata, a log, and a ymap directory. Cache schema 1's
+objects/ and manifest.json are obsolete; existing legacy files are not deleted.
+
+Native resources are converted to XmlYmap and then the existing Ymap model for
+YmapDiff::extract_from. Comparison always uses the immediately preceding
+cumulative **native bytes**, retained in scratch storage and updated after each
+stage. It never applies a merge diff to approximate the next comparison input.
+YmapDiff retains its existing merge semantics: it can omit entity deletions,
+skip unsupported metadata and collapse duplicate GUIDs in the Ymap model.
+These JSON files are semantic reports, not lossless reconstruction patches.
+GtavCacheManifest::resolve_version(id) resolves the latest **artifact** index,
+which may point to diff JSON, not a complete native-file snapshot.
+
+VersionLog selects a thread-local file; version_logger() integrates with the
+existing CombinedLogger to capture actual diff INFO/WARN/DEBUG records in
+<stage>/create_cache.log. The stage log opens before scanning/extraction and
+records failures. Application hosts using BuildGtavCache::run must register
+version_logger() with their logger. No routing changes affect other threads.
+
+A rebuild rescans archives into scratch storage. Completed directories and the
+root metadata are published only after every listed DLC succeeds. Existing
+recognized version directories are backed up during publication; rename errors
+restore them. Unknown directories are not overwritten. Failed-run logs are
+copied to failed-<timestamp>/<stage>/create_cache.log before scratch cleanup.
+Missing archives, unknown mounts, decryption, parsing and extraction errors
+fail the command instead of substituting binary data for a requested diff.
+Unreferenced older stage directories and legacy files are not garbage-collected.
+
+Limits: Legacy only. update2.rpf, content.xml enable/disable rules, setup2.xml mount ordering,
+and engine-level deletions are not modeled. Stage IDs describe ordered overlays
+of the **currently installed** files, not historical release snapshots: patched
+installed DLCs and today's update.rpf cannot reconstruct an original old build.
+Build-number-to-stage mapping, additional native types, and MLO comparison are
+future work. Exact historical comparisons require separate game installations
+or independently captured caches for those builds.
+
 ## YMAP Metadata Merging
 
 The XML pipeline remains in place. `YmapDiff` also merges `parent`,

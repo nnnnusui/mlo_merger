@@ -5,6 +5,7 @@ use crate::core::common::{position::Position, rotation::Rotation};
 /// Entity definition in YMAP
 #[derive(Debug, Clone, PartialEq, Difference)]
 #[difference(expose)]
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct YmapEntity {
   pub entity_type: String,
   pub archetype_name: String,

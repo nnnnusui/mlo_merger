@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use bpaf::*;
 
 use crate::core::{
-  extract::ExtractYmap, getprop::GetProp, merge::run::MergeYmapXml,
+  extract::ExtractYmap, getprop::GetProp, gtav_cache::BuildGtavCache, merge::run::MergeYmapXml,
   stream_conflicts::CheckStreamConflicts,
 };
 
@@ -13,6 +13,7 @@ pub enum Command {
   // ParseYmap(ParseYmap),
   MergeYmapXml(MergeYmapXml),
   BuildYmapCache(BuildYmapCache),
+  BuildGtavCache(BuildGtavCache),
   ExtractYmap(ExtractYmap),
   GetProp(GetProp),
   CheckStreamConflicts(CheckStreamConflicts),
@@ -28,6 +29,7 @@ pub fn parse_args() -> Command {
     // parse_ymap(),
     merge_ymap_xml(),
     build_ymap_cache(),
+    build_gtav_cache(),
     extract_ymap(),
     get_prop(),
     check_stream_conflicts(),
@@ -106,6 +108,58 @@ fn build_ymap_cache() -> impl Parser<Command> {
       vanilla_dir,
     })
   })
+}
+
+fn build_gtav_cache() -> impl Parser<Command> {
+  let flag = long("generate-gtav-cache")
+    .help("Build ordered vanilla YMAP caches from the installed GTA V Legacy RPF archives")
+    .req_flag(());
+  let game_dir =
+    short('i').long("input").help("Installed GTA V Legacy directory").argument::<PathBuf>("DIR");
+  let output_dir = short('o')
+    .long("output")
+    .help("Vanilla archive cache output directory")
+    .argument::<PathBuf>("DIR");
+  construct!(flag, game_dir, output_dir).map(|(_, game_dir, output_dir)| {
+    Command::BuildGtavCache(BuildGtavCache {
+      game_dir,
+      output_dir,
+    })
+  })
+}
+
+#[cfg(test)]
+mod gtav_tests {
+  use super::*;
+
+  #[test]
+  fn gtav_selects_archive_cache_without_pipeline_flags() {
+    let command = build_gtav_cache()
+      .to_options()
+      .run_inner(&["--generate-gtav-cache", "-i", "/mnt/gtav", "-o", "asset/gtav-cache"])
+      .unwrap();
+    let Command::BuildGtavCache(command) = command else {
+      panic!("Expected archive cache command")
+    };
+    assert_eq!(command.game_dir, PathBuf::from("/mnt/gtav"));
+    assert_eq!(command.output_dir, PathBuf::from("asset/gtav-cache"));
+    let command = build_gtav_cache()
+      .to_options()
+      .run_inner(&["--generate-gtav-cache", "--input", "game", "--output", "cache"])
+      .unwrap();
+    let Command::BuildGtavCache(command) = command else {
+      panic!("Expected archive cache command")
+    };
+    assert_eq!(command.output_dir, PathBuf::from("cache"));
+    assert!(
+      build_gtav_cache().to_options().run_inner(&["--generate-gtav-cache", "-i", "game"]).is_err()
+    );
+    assert!(
+      build_gtav_cache().to_options().run_inner(&["--generate-gtav-cache", "-o", "cache"]).is_err()
+    );
+    assert!(build_gtav_cache().to_options().run_inner(&["-i", "game", "-o", "cache"]).is_err());
+    assert!(build_gtav_cache().to_options().run_inner(&["--gtav", "game"]).is_err());
+  }
 }
 
 fn extract_ymap() -> impl Parser<Command> {

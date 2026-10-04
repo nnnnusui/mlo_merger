@@ -6,6 +6,7 @@ use crate::{
 };
 use structdiff::StructDiff;
 
+#[derive(serde::Serialize, serde::Deserialize)]
 pub enum YmapTimeCycleModifierDiff {
   Added(YmapTimeCycleModifier),
   Removed(YmapTimeCycleModifier),

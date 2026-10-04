@@ -7,6 +7,7 @@ use mlo_merger::{
       gamefile::resource_convert,
       ymap::{model::Ymap, xml::XmlYmap},
     },
+    gtav_cache::version_logger,
     merge::ybn_conflicts::MergeYbnConflicts,
     merge::{build_ymap_parent_cache, run::MergeYmapXml},
     xmlconvert::{Xml2Ymap, Ymap2Xml},
@@ -53,6 +54,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
   CombinedLogger::init(vec![
     TermLogger::new(LevelFilter::Info, Config::default(), TerminalMode::Mixed, ColorChoice::Auto),
     WriteLogger::new(LevelFilter::Info, Config::default(), File::create(&active_log_path)?),
+    version_logger(),
   ])?;
 
   log::info!("Writing log to {}", active_log_path.display());
@@ -62,6 +64,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Command::ParseYmapXml(cmd) => run_parse_ymap_xml(&cmd.input)?,
     Command::MergeYmapXml(cmd) => cmd.run()?,
     Command::BuildYmapCache(cmd) => build_ymap_cache(&cmd)?,
+    Command::BuildGtavCache(cmd) => cmd.run(&init_codewalker()?)?,
     Command::ExtractYmap(cmd) => cmd.run()?,
     Command::GetProp(cmd) => cmd.run()?,
     Command::CheckStreamConflicts(cmd) => cmd.run()?,

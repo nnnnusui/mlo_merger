@@ -5,6 +5,7 @@ use crate::core::common::{position::Position, triangle::Triangle};
 /// Occlude model definition in YMAP
 #[derive(Debug, Clone, PartialEq, Difference)]
 #[difference(expose)]
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct YmapOccludeModel {
   pub bmin: Position,
   pub bmax: Position,

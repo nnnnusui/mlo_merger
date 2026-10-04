@@ -6,6 +6,7 @@ use crate::core::common::position::Position;
 #[derive(Debug, Clone, PartialEq, Difference)]
 #[difference(expose)]
 #[derive(Default)]
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct YmapLodLight {
   pub direction: Position,
   pub falloff: f32,

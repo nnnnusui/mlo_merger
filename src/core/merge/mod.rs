@@ -13,6 +13,8 @@ mod ymap_parent_cache;
 mod ymap_parent_refs;
 mod ymap_time_cycle_modifier_diff;
 
+pub use ymap_diff::YmapDiff;
+
 /// Builds or updates the cached parent index for vanilla YMAP XML files.
 pub fn build_ymap_parent_cache(vanilla_dir: &std::path::Path) -> std::io::Result<()> {
   ymap_parent_cache::VanillaParentCache::update(vanilla_dir).map(|_| ())

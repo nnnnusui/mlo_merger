@@ -3,6 +3,7 @@ use structdiff::{Difference, StructDiff};
 /// Box occluder definition in YMAP
 #[derive(Debug, Clone, PartialEq, Difference)]
 #[difference(expose)]
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct YmapBoxOccluder {
   pub i_center_x: i32,
   pub i_center_y: i32,

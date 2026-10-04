@@ -4,6 +4,7 @@ use crate::core::{
 };
 use std::collections::{HashMap, HashSet};
 
+#[derive(serde::Serialize, serde::Deserialize)]
 pub enum YmapLodLightDiff {
   Added(YmapLodLight),
   Removed(YmapLodLight),

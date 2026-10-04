@@ -771,6 +771,8 @@ checksum = "7714e70437a7dc3ac8eb7e6f8df75fd8eb422675fc7678aff7364301092b1017"
 dependencies = [
  "equivalent",
  "hashbrown",
+ "serde",
+ "serde_core",
 ]
 
 [[package]]
@@ -1312,6 +1314,7 @@ version = "0.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0ded2e61f645b60f23f1ee69c122a77ba68dd187abb751c67ad2387bcb773f0b"
 dependencies = [
+ "serde",
  "structdiff-derive",
 ]
 
@@ -1320,6 +1323,9 @@ name = "structdiff-derive"
 version = "0.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9cec3cf082379c048a963041e18a8e741a4e0a1afb14b825bd4bd771366b9a6e"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "subtle"

@@ -4,6 +4,7 @@ pub mod config;
 pub mod extract;
 pub mod format;
 pub mod getprop;
+pub mod gtav_cache;
 pub mod merge;
 pub mod stream_conflicts;
 pub mod xmlconvert;

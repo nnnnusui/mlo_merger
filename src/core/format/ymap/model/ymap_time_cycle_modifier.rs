@@ -5,6 +5,7 @@ use crate::core::common::position::Position;
 /// Time cycle modifier definition in YMAP
 #[derive(Debug, Clone, PartialEq, Difference)]
 #[difference(expose)]
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct YmapTimeCycleModifier {
   pub name: String,
   pub min_extents: Position,

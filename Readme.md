@@ -44,6 +44,50 @@ cargo run
 
 When `--use-codewalker-dll` is selected, `cargo build`/`cargo run` builds `bridge/CodeWalker.Bridge` automatically via `build.rs` if `CODEWALKER_CORE_DLL` and `dotnet` are available. The default Native pipeline does not require the .NET SDK or DLL.
 
+### GTA V Vanilla Archive Cache
+
+With the CodeWalker bridge built as described above:
+
+```bash
+cargo run -- --generate-gtav-cache -i /mnt/gtav -o asset/gtav-cache
+# Cargo alias defined in .cargo/config.toml
+cargo generate-gtav-cache -i /mnt/gtav -o asset/gtav-cache
+```
+
+Both input and output directories are required (`--input`/`--output` are also accepted).
+
+Reads all installed root `.rpf` files (`common.rpf`, `x64a.rpf`, etc.) in filename
+order, then `update/update.rpf` and the DLC archives listed in
+`common/data/dlclist.xml`, in XML order. Nested platform DLCs are resolved from
+the root RPFs; modern DLCs are read from `update/x64/dlcpacks`. YMAP resources
+are exported as standalone native files with their resource headers restored.
+GTA V Legacy and a local `GTA5.exe` are required; the game directory is read-only.
+
+The cache uses decoded native filenames rather than hash filenames:
+
+```text
+gtav-cache/
+  cache_info.json
+  0000-base/
+    create_cache.log
+    version_info.json
+    ymap/ch1_01.ymap
+  0001-update/
+    create_cache.log
+    version_info.json
+    ymap/ch1_01.ymap.diff.json
+    ymap/new_map.ymap
+```
+
+New filenames are saved unchanged as `.ymap`; content replacements are compared
+against the preceding cumulative version and saved as serialized `YmapDiff`
+reports in `.ymap.diff.json`. Unchanged content is omitted. Version logs include
+the existing diff-detection logs. Failed-run logs are retained under `failed-*`.
+Stage IDs (`0000-base`, `0001-update`, then position-prefixed DLC names) are
+**not historical game build numbers**, and YmapDiff reports are not complete
+binary reconstruction patches. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+Selecting an MLO and comparing against a stage is planned, not yet a CLI command.
+
 ### Basic Workflow (manual / individual steps)
 
 1. **Extract** - Extract MLO data from `.ymap` files

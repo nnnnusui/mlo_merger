@@ -17,6 +17,7 @@ use netcorehost::pdcstring::PdCString;
 
 type PreloadNamesFn = extern "system" fn(*const u8) -> i32;
 type ConvertFn = extern "system" fn(*const u8, *const u8) -> i32;
+type ExtractSubtreeFn = extern "system" fn(*const u8, *const u8, *const u8) -> i32;
 type GetLastErrorFn = extern "system" fn(*mut u8, i32) -> i32;
 
 #[derive(Debug)]
@@ -198,6 +199,81 @@ impl CodeWalker {
     output: &Path,
   ) -> Result<(), CodeWalkerError> {
     self.convert(self.game_file_from_xml, input, output)
+  }
+
+  /// Loads archive decryption keys from the installed GTA V Legacy executable.
+  pub fn load_game_keys(
+    &self,
+    game_dir: &Path,
+  ) -> Result<(), CodeWalkerError> {
+    let function = *self
+      ._loader
+      .get_function_with_unmanaged_callers_only::<PreloadNamesFn>(
+        &pdcstr("CodeWalker.Bridge.Exports, CodeWalker.Bridge")?,
+        &pdcstr("LoadGameKeys")?,
+      )
+      .map_err(hosting)?;
+    let path = path_to_cstring(game_dir)?;
+    self.check(function(path.as_ptr() as *const u8), game_dir)
+  }
+
+  /// Recursively extracts YMAPs and dlclist.xml, writing a `files.json` source index.
+  pub fn extract_rpf(
+    &self,
+    archive: &Path,
+    output: &Path,
+  ) -> Result<(), CodeWalkerError> {
+    let function = *self
+      ._loader
+      .get_function_with_unmanaged_callers_only::<ConvertFn>(
+        &pdcstr("CodeWalker.Bridge.Exports, CodeWalker.Bridge")?,
+        &pdcstr("ExtractRpf")?,
+      )
+      .map_err(hosting)?;
+    self.convert(function, archive, output)
+  }
+
+  /// Extracts YMAPs from a nested RPF identified by its full virtual archive path.
+  pub fn extract_rpf_subtree(
+    &self,
+    archive: &Path,
+    subtree: &str,
+    output: &Path,
+  ) -> Result<(), CodeWalkerError> {
+    let function = *self
+      ._loader
+      .get_function_with_unmanaged_callers_only::<ExtractSubtreeFn>(
+        &pdcstr("CodeWalker.Bridge.Exports, CodeWalker.Bridge")?,
+        &pdcstr("ExtractRpfSubtree")?,
+      )
+      .map_err(hosting)?;
+    let input = path_to_cstring(archive)?;
+    let subtree = path_to_cstring(Path::new(subtree))?;
+    let output = path_to_cstring(output)?;
+    self.check(
+      function(
+        input.as_ptr() as *const u8,
+        subtree.as_ptr() as *const u8,
+        output.as_ptr() as *const u8,
+      ),
+      archive,
+    )
+  }
+
+  /// Writes a JSON array of nested RPF virtual paths without extracting file payloads.
+  pub fn list_rpf_paths(
+    &self,
+    archive: &Path,
+    output: &Path,
+  ) -> Result<(), CodeWalkerError> {
+    let function = *self
+      ._loader
+      .get_function_with_unmanaged_callers_only::<ConvertFn>(
+        &pdcstr("CodeWalker.Bridge.Exports, CodeWalker.Bridge")?,
+        &pdcstr("ListRpfPaths")?,
+      )
+      .map_err(hosting)?;
+    self.convert(function, archive, output)
   }
 
   fn convert(

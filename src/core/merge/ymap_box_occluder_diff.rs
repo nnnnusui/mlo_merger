@@ -8,6 +8,7 @@ use crate::{
 use std::collections::{HashMap, HashSet};
 use structdiff::StructDiff;
 
+#[derive(serde::Serialize, serde::Deserialize)]
 pub enum YmapBoxOccluderDiff {
   Added(YmapBoxOccluder),
   Removed(YmapBoxOccluder),

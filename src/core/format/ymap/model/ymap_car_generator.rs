@@ -5,6 +5,7 @@ use crate::core::common::position::Position;
 /// Car generator definition in YMAP
 #[derive(Debug, Clone, PartialEq, Difference)]
 #[difference(expose)]
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct YmapCarGenerator {
   pub position: Position,
   pub orient_x: f32,

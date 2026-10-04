@@ -9,6 +9,7 @@ use crate::{
 };
 use structdiff::StructDiff;
 
+#[derive(serde::Serialize, serde::Deserialize)]
 pub enum YmapOccludeModelDiff {
   Added(YmapOccludeModel),
   Removed(YmapOccludeModel),
@@ -105,6 +106,7 @@ pub fn check_occlude_models_diff(
 }
 
 #[derive(Debug)]
+#[derive(serde::Serialize, serde::Deserialize)]
 pub enum YmapOccludeModelTriangleDiff {
   Added(Triangle),
   Removed(Triangle),

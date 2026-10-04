@@ -4,6 +4,7 @@ use crate::core::format::{gamefile::meta_resource::jenk_hash, ymap::model::Ymap}
 
 #[derive(Default)]
 /// Vanilla-relative parent and physics-dictionary changes.
+#[derive(serde::Serialize, serde::Deserialize)]
 pub(super) struct YmapMetadataDiff {
   parent: Option<String>,
   dictionaries: ReferenceListDiff,
@@ -79,6 +80,7 @@ pub(super) fn merge_reference(
 
 #[derive(Default)]
 /// Additions and removals to a list of hash-based references.
+#[derive(serde::Serialize, serde::Deserialize)]
 pub(super) struct ReferenceListDiff {
   removed: HashSet<u32>,
   added: Vec<String>,

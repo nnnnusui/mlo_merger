@@ -4,6 +4,7 @@ use structdiff::{Difference, StructDiff};
 #[derive(Debug, Clone, PartialEq, Difference)]
 #[difference(expose)]
 #[derive(Default)]
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct YmapInstancedData {
   pub imap_link: String,
   pub prop_instance_list: Vec<String>,
@@ -13,6 +14,7 @@ pub struct YmapInstancedData {
 /// Grass instance batch definition
 #[derive(Debug, Clone, PartialEq, Difference)]
 #[difference(expose)]
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct GrassInstanceBatch {
   pub batch_aabb: BoundingBox,
   pub scale_range: Vector3,
@@ -27,6 +29,7 @@ pub struct GrassInstanceBatch {
 /// Bounding box with min and max vectors
 #[derive(Debug, Clone, PartialEq, Difference)]
 #[difference(expose)]
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct BoundingBox {
   pub min: Vector4,
   pub max: Vector4,
@@ -35,6 +38,7 @@ pub struct BoundingBox {
 /// 3D vector
 #[derive(Debug, Clone, PartialEq, Difference)]
 #[difference(expose)]
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct Vector3 {
   pub x: f32,
   pub y: f32,
@@ -44,6 +48,7 @@ pub struct Vector3 {
 /// 4D vector
 #[derive(Debug, Clone, PartialEq, Difference)]
 #[difference(expose)]
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct Vector4 {
   pub x: f32,
   pub y: f32,
@@ -54,6 +59,7 @@ pub struct Vector4 {
 /// Individual grass instance data
 #[derive(Debug, Clone, PartialEq, Difference)]
 #[difference(expose)]
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct GrassInstance {
   pub position: Vec<f32>,
   pub normal_x: u32,

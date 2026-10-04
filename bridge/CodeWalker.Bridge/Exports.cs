@@ -1,7 +1,11 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
+using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using System.Xml;
 using CodeWalker.GameFiles;
 
@@ -15,6 +19,101 @@ namespace CodeWalker.Bridge;
 public static unsafe class Exports
 {
   private static string _lastError = string.Empty;
+
+  /// <summary>Loads GTA V archive keys from the locally installed game.</summary>
+  [UnmanagedCallersOnly]
+  public static int LoadGameKeys(byte* gamePathUtf8) =>
+    Try(() => {
+      string gamePath = PtrToString(gamePathUtf8);
+      string executable = Directory.EnumerateFiles(gamePath)
+        .SingleOrDefault(file => Path.GetFileName(file).Equals("GTA5.exe", StringComparison.OrdinalIgnoreCase)) ??
+        throw new FileNotFoundException("GTA5.exe is required (GTA V Legacy archives only).", gamePath);
+      GTA5Keys.GenerateV2(File.ReadAllBytes(executable), _ => { });
+      if (GTA5Keys.PC_AES_KEY == null) {
+        throw new InvalidDataException("CodeWalker could not locate the archive key in GTA5.exe.");
+      }
+      var load = typeof(GTA5Keys).GetMethod("LoadFromPath") ??
+        throw new MissingMethodException("GTA5Keys.LoadFromPath is unavailable.");
+      var parameters = load.GetParameters();
+      if (!parameters.Any(parameter => parameter.Name == "key")) {
+        throw new NotSupportedException("This CodeWalker DLL cannot accept an executable-derived key; rebuild CodeWalker.Core.");
+      }
+      object[] arguments = parameters.Select(parameter => parameter.Name switch {
+        "path" => (object)gamePath,
+        "gen9" => false,
+        "key" => Convert.ToBase64String(GTA5Keys.PC_AES_KEY),
+        _ => throw new NotSupportedException($"Unknown key-loading parameter: {parameter.Name}"),
+      }).ToArray();
+      load.Invoke(null, arguments);
+    });
+
+  /// <summary>Extracts YMAPs and dlclist.xml recursively, preserving archive provenance.</summary>
+  [UnmanagedCallersOnly]
+  public static int ExtractRpf(byte* inputPathUtf8, byte* outputPathUtf8) =>
+    Try(() => ExtractRpfFiles(PtrToString(inputPathUtf8), PtrToString(outputPathUtf8), null));
+
+  /// <summary>Extracts only the selected nested archive subtree.</summary>
+  [UnmanagedCallersOnly]
+  public static int ExtractRpfSubtree(byte* inputPathUtf8, byte* subtreeUtf8, byte* outputPathUtf8) =>
+    Try(() => ExtractRpfFiles(PtrToString(inputPathUtf8), PtrToString(outputPathUtf8), PtrToString(subtreeUtf8)));
+
+  /// <summary>Lists virtual paths of all nested archives without extracting their contents.</summary>
+  [UnmanagedCallersOnly]
+  public static int ListRpfPaths(byte* inputPathUtf8, byte* outputPathUtf8) =>
+    Try(() => {
+      List<string> paths = new();
+      void Visit(RpfFile archive) {
+        paths.Add(archive.Path.Replace('\\', '/'));
+        foreach (RpfFile child in archive.Children) {
+          Visit(child);
+        }
+      }
+      Visit(ScanRpf(PtrToString(inputPathUtf8)));
+      File.WriteAllText(PtrToString(outputPathUtf8), JsonSerializer.Serialize(paths));
+    });
+
+  private static RpfFile ScanRpf(string inputPath)
+  {
+    RpfFile root = new(inputPath, Path.GetFileName(inputPath));
+    List<string> errors = new();
+    root.ScanStructure(_ => { }, errors.Add);
+    if (errors.Count != 0) {
+      throw new InvalidDataException(string.Join(Environment.NewLine, errors));
+    }
+    return root;
+  }
+
+  private static void ExtractRpfFiles(string inputPath, string outputPath, string subtree)
+  {
+      Directory.CreateDirectory(outputPath);
+      RpfFile root = ScanRpf(inputPath);
+      List<object> files = new();
+      void Extract(RpfFile archive) {
+        foreach (RpfFileEntry entry in archive.AllEntries.OfType<RpfFileEntry>()) {
+          if (subtree != null && !entry.Path.Replace('\\', '/').StartsWith(subtree + "/", StringComparison.OrdinalIgnoreCase)) {
+            continue;
+          }
+          if (!entry.NameLower.EndsWith(".ymap") &&
+              !entry.Path.Replace('\\', '/').EndsWith("/common/data/dlclist.xml")) {
+            continue;
+          }
+          byte[] data = archive.ExtractFile(entry) ??
+            throw new InvalidDataException($"Could not extract {entry.Path}: {archive.LastError}");
+          if (entry is RpfResourceFileEntry resource) {
+            data = ResourceBuilder.AddResourceHeader(resource, ResourceBuilder.Compress(data));
+          }
+          string stored = $"{files.Count:D8}{Path.GetExtension(entry.NameLower)}";
+          File.WriteAllBytes(Path.Combine(outputPath, stored), data);
+          string sha256 = Convert.ToHexString(SHA256.HashData(data)).ToLowerInvariant();
+          files.Add(new { name = entry.NameLower, source = entry.Path.Replace('\\', '/'), stored, sha256 });
+        }
+        foreach (RpfFile child in archive.Children) {
+          Extract(child);
+        }
+      }
+      Extract(root);
+      File.WriteAllText(Path.Combine(outputPath, "files.json"), JsonSerializer.Serialize(files));
+  }
 
   [UnmanagedCallersOnly]
   public static int GetLastError(byte* buffer, int bufferSize)

@@ -6,6 +6,7 @@ use super::ymap_metadata_diff::{ReferenceListDiff, merge_reference, reference_ha
 
 #[derive(Default)]
 /// Vanilla-relative instance changes with batch-local packed coordinates.
+#[derive(serde::Serialize, serde::Deserialize)]
 pub(super) struct YmapInstancedDataDiff {
   imap_link: Option<String>,
   props: ReferenceListDiff,
@@ -15,6 +16,7 @@ pub(super) struct YmapInstancedDataDiff {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 /// Metadata defining the coordinate system and rendering settings of a batch.
+#[derive(serde::Serialize, serde::Deserialize)]
 pub(super) struct BatchKey {
   archetype: u32,
   bounds: [u32; 8],
@@ -38,6 +40,7 @@ impl BatchKey {
   }
 }
 
+#[derive(serde::Serialize, serde::Deserialize)]
 struct BatchDiff {
   key: BatchKey,
   template: GrassInstanceBatch,

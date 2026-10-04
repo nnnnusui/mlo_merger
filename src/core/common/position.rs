@@ -1,6 +1,6 @@
 use structdiff::{Difference, StructDiff};
 
-#[derive(Clone, Debug, Default, Difference, PartialEq)]
+#[derive(Clone, Debug, Default, Difference, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Position {
   pub x: f32,
   pub y: f32,

@@ -44,7 +44,8 @@
   "remoteUser": "vscode",
 
   "mounts": [
-    "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=cached"
+    "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=cached",
+    "source=/mnt/c/Program Files (x86)/Steam/steamapps/common/Grand Theft Auto V,target=/mnt/gtav,type=bind,consistency=cached"
   ],
 
   "workspaceFolder": "/workspace",

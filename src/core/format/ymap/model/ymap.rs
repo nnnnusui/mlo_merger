@@ -12,6 +12,7 @@ use super::{
 
 #[derive(Debug, Clone, PartialEq, Difference)]
 #[difference(expose)]
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct Ymap {
   pub name: String,
   pub parent: String,

@@ -1,10 +1,17 @@
 # TODO
 
-## YMAP Merge Performance
+## GTA V Vanilla Archive Cache
 
-- [x] Cache vanilla YMAP parent hashes by file modification time; update only changed files and support standalone cache builds.
-- [x] Preserve vanilla entities omitted by mod XML instead of merging entity deletions.
-- [x] Replace generated pipeline outputs after confirmation, with `-y` to skip the prompt.
+- [x] Add `--generate-gtav-cache -i <GAME_DIR> -o <CACHE_DIR>` with a Cargo command alias, using CodeWalker RPF decryption and recursive YMAP extraction.
+- [x] Discover and read all installed root base RPFs, then update.rpf and ordered dlclist.xml DLC overlays, including nested platform DLCs and title-update DLC patches.
+- [x] Store named native additions and serialized YmapDiff replacements in each version's ymap directory, with cache_info.json/version_info.json metadata.
+- [x] Preserve actual diff-processing logs per version in create_cache.log, including retained logs for failed runs.
+- [x] Test cumulative comparison inputs, unchanged skipping, diff JSON round-trips, version log isolation and root RPF discovery.
+- [x] Validate /mnt/gtav with all root RPFs: 103 version directories, 10,647 native additions and 1,937 deserializable YmapDiff JSON reports with per-version logs.
+- [ ] Compare a selected MLO against a selected vanilla stage.
+- [ ] Define vanillaVersion/build-number mapping and support independently captured historical builds.
+- [ ] Extend extraction and cache objects to native types other than YMAP.
+- [ ] Support update2.rpf and content/setup mount rules for complete engine snapshots.
 
 ## Resource Conversion Tests
 

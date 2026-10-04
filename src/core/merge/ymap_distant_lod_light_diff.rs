@@ -1,6 +1,7 @@
 use crate::core::format::ymap::model::{Ymap, YmapDistantLodLight};
 use std::collections::{HashMap, HashSet};
 
+#[derive(serde::Serialize, serde::Deserialize)]
 pub enum YmapDistantLodLightDiff {
   Added(YmapDistantLodLight),
   Removed(YmapDistantLodLight),

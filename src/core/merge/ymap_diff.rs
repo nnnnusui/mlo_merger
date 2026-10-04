@@ -17,6 +17,8 @@ use crate::core::{
 };
 use structdiff::StructDiff;
 
+/// Vanilla-relative changes used by merging and versioned cache reports.
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct YmapDiff {
   pub entity_diffs: Vec<YmapEntityDiff>,
   pub box_occluder_diffs: Vec<YmapBoxOccluderDiff>,
