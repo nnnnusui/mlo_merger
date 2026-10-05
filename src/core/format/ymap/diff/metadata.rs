@@ -48,7 +48,7 @@ impl YmapMetadataDiff {
 }
 
 /// Resolves a named or explicitly hashed reference, including null references.
-pub(super) fn reference_hash(value: &str) -> u32 {
+pub(crate) fn reference_hash(value: &str) -> u32 {
   let value = value.trim();
   if value.is_empty() {
     return 0;

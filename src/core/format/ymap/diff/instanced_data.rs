@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use crate::core::format::ymap::model::{GrassInstance, GrassInstanceBatch, YmapInstancedData};
 
-use super::ymap_metadata_diff::{ReferenceListDiff, merge_reference, reference_hash};
+use super::metadata::{ReferenceListDiff, merge_reference, reference_hash};
 
 #[derive(Default)]
 /// Vanilla-relative instance changes with batch-local packed coordinates.
@@ -17,7 +17,7 @@ pub(super) struct YmapInstancedDataDiff {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 /// Metadata defining the coordinate system and rendering settings of a batch.
 #[derive(serde::Serialize, serde::Deserialize)]
-pub(super) struct BatchKey {
+pub(crate) struct BatchKey {
   archetype: u32,
   bounds: [u32; 8],
   scale: [u32; 3],
@@ -27,7 +27,7 @@ pub(super) struct BatchKey {
 
 impl BatchKey {
   /// Identifies a batch independently of its name/hash spelling and instances.
-  pub(super) fn from_batch(batch: &GrassInstanceBatch) -> Self {
+  pub(crate) fn from_batch(batch: &GrassInstanceBatch) -> Self {
     let min = &batch.batch_aabb.min;
     let max = &batch.batch_aabb.max;
     Self {

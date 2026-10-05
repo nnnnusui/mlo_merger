@@ -1,11 +1,10 @@
 use crate::core::common::function::collect_files_with_suffix;
 use crate::core::config::blacklist::BlacklistConfig;
 use crate::core::extract::ExtractYmap;
+use crate::core::format::ymap::diff::{YmapDiff, reference_hash};
 use crate::core::format::ymap::model::ymap::Ymap;
 use crate::core::format::ymap::xml::XmlYmap;
-use crate::core::merge::ymap_diff::YmapDiff;
 use crate::core::merge::{
-  ymap_metadata_diff::reference_hash,
   ymap_parent_cache::VanillaParentCache,
   ymap_parent_refs::{
     OriginalMap, ParentReferences, SourceMaps, patch_clone, runtime_entities, valid_local_pair,
@@ -434,8 +433,8 @@ fn parse_ymap_xml(file_path: &Path) -> Result<Ymap, Box<dyn std::error::Error>> 
 mod tests {
   use super::*;
   use crate::core::{
+    format::ymap::diff::{BatchKey, reference_hash},
     format::ymap::model::{GrassInstance, GrassInstanceBatch},
-    merge::{ymap_instanced_data_diff::BatchKey, ymap_metadata_diff::reference_hash},
   };
   use std::collections::{BTreeSet, HashMap, HashSet};
 

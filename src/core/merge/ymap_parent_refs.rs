@@ -5,7 +5,7 @@ use std::{
   rc::Rc,
 };
 
-use super::ymap_metadata_diff::reference_hash;
+use crate::core::format::ymap::diff::reference_hash;
 use crate::core::format::ymap::{
   model::{Ymap, YmapEntity},
   xml::XmlYmap,

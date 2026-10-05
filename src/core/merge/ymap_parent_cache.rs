@@ -10,8 +10,7 @@ use quick_xml::{Reader, events::Event};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-  core::common::function::collect_files_with_suffix,
-  core::merge::ymap_metadata_diff::reference_hash,
+  core::common::function::collect_files_with_suffix, core::format::ymap::diff::reference_hash,
 };
 
 const CACHE_VERSION: u32 = 1;

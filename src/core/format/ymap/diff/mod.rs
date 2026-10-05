@@ -3,19 +3,32 @@ use std::collections::{HashMap, HashSet};
 use crate::core::{
   config::blacklist::BlacklistConfig,
   format::ymap::model::{Ymap, YmapStructDiffEnum},
-  merge::{
-    ymap_box_occluder_diff::YmapBoxOccluderDiff,
-    ymap_car_generator_diff::YmapCarGeneratorDiff,
-    ymap_distant_lod_light_diff::YmapDistantLodLightDiff,
-    ymap_entitiy_diff::YmapEntityDiff,
-    ymap_instanced_data_diff::YmapInstancedDataDiff,
-    ymap_lod_light_diff::YmapLodLightDiff,
-    ymap_metadata_diff::YmapMetadataDiff,
-    ymap_occlude_model_diff::{YmapOccludeModelDiff, YmapOccludeModelTriangleDiff},
-    ymap_time_cycle_modifier_diff::YmapTimeCycleModifierDiff,
-  },
 };
+mod box_occluder;
+mod car_generator;
+mod distant_lod_light;
+mod entity;
+mod instanced_data;
+mod lod_light;
+mod metadata;
+mod occlude_model;
+mod time_cycle_modifier;
+
 use structdiff::StructDiff;
+
+#[cfg(test)]
+pub(crate) use self::instanced_data::BatchKey;
+pub(crate) use self::metadata::reference_hash;
+pub use self::{
+  box_occluder::YmapBoxOccluderDiff,
+  car_generator::YmapCarGeneratorDiff,
+  distant_lod_light::YmapDistantLodLightDiff,
+  entity::YmapEntityDiff,
+  lod_light::YmapLodLightDiff,
+  occlude_model::{YmapOccludeModelDiff, YmapOccludeModelTriangleDiff},
+  time_cycle_modifier::YmapTimeCycleModifierDiff,
+};
+use self::{instanced_data::YmapInstancedDataDiff, metadata::YmapMetadataDiff};
 
 /// Vanilla-relative changes used by merging and versioned cache reports.
 #[derive(serde::Serialize, serde::Deserialize)]

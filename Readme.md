@@ -77,7 +77,8 @@ including nested bracket groups. The output directory must be empty. Use `--inpu
 for a single resource or another resources root.
 Each resource selects a vanilla baseline from its files' closest versions, then
 saves YMAP/YBN differences, selection metadata and logs. Unmatched or unsupported
-files are recorded rather than compared. YBN reports contain semantic Bounds/
+files are recorded rather than compared. These reports are not yet consumed by
+the main merge pipeline. YBN reports contain semantic Bounds/
 Polygon changes, with the decoded model stored when semantic comparison cannot
 represent a file.
 

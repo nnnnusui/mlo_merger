@@ -31,6 +31,11 @@ are resolved before merging and repaired after the final entity layout is known.
 Files affected by those repairs are rebuilt even when their own mod data is
 otherwise unchanged. Ambiguous references are rejected rather than guessed.
 
+YMAP difference types and extraction live under `format/ymap/diff` and are
+shared by merge and diff-cache generation. The pipeline currently extracts and
+combines differences at runtime; it does not yet consume precomputed
+`source-cache` reports.
+
 YBN merging requires a same-named vanilla baseline. Supported collision shapes
 are compared geometrically rather than by binary table order. Removals and
 additions are combined; unsupported shapes use conservative handling.

@@ -10,8 +10,8 @@ use super::{
   vanilla::NativeVariants,
 };
 use crate::core::{
+  format::ymap::diff::YmapDiff,
   format::{gamefile::meta_resource::jenk_hash, ymap::model::Ymap},
-  merge::YmapDiff,
   vanilla_cache::{CacheVersion, CachedFile, VanillaCacheManifest, read_ymap, write_json},
 };
 use serde_json::Value;

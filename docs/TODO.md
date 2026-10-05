@@ -27,6 +27,8 @@
 - [x] Organize indexed YBN models under format/ybn/model, XML import/export under format/ybn/xml, native codecs under binary, and migrate all callers to format::ybn after removing the gamefile compatibility exports.
 - [x] Add structured YbnDiff/PolygonDiff extraction with duplicate-aware additions/removals, resolved material/vertex values, hierarchy ownership, Bounds metadata, tolerance and JSON serialization; verify the real mansion collision model.
 - [x] Generate semantic YBN MLO diff-cache reports with a decoded-model fallback when a semantic comparison cannot represent a file.
+- [x] Move YMAP diff models and extraction under `src/core/format/ymap/diff` for use by merge and diff-cache generation.
+- [ ] Update merge pipeline to read vanilla-cache and precomputed source-cache differences instead of extracting them at runtime.
 - [ ] Integrate semantic YBN diff reports into conflict merge.
 - [ ] Support update2.rpf and content/setup mount rules for complete engine snapshots.
 
