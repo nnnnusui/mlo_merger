@@ -80,13 +80,55 @@ gtav-cache/
 ```
 
 New filenames are saved unchanged as `.ymap`; content replacements are compared
-against the preceding cumulative version and saved as serialized `YmapDiff`
-reports in `.ymap.diff.json`. Unchanged content is omitted. Version logs include
+against the preceding cumulative version and saved as exact vanilla-model
+deltas in `.ymap.diff.json` (GTAV cache schema 3). Unchanged content is omitted. Version logs include
 the existing diff-detection logs. Failed-run logs are retained under `failed-*`.
 Stage IDs (`0000-base`, `0001-update`, then position-prefixed DLC names) are
-**not historical game build numbers**, and YmapDiff reports are not complete
-binary reconstruction patches. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
-Selecting an MLO and comparing against a stage is planned, not yet a CLI command.
+**not historical game build numbers**. Vanilla deltas record a predecessor,
+all modeled field changes, entity order, and before/after model hashes. The
+original YMAP plus JSON deltas reconstructs each parsed model without the game
+or replacement snapshots. This does not recreate byte-identical compressed files.
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). New generation does not create
+`native/` directories or snapshot references. Original/new YMAPs are retained
+under `ymap/`; replacement binaries exist only in temporary comparison storage.
+Older cache snapshot references remain readable. Existing schema-2 merge-diff caches must
+be regenerated to enable exact JSON-only history reconstruction.
+
+### MLO Diff Cache
+
+```bash
+cargo run -- --generate-diff-cache --gtav-cache asset/gtav-cache \
+  -i 'asset/source/[patron]/brofx_mansion_06' -o asset/diff-cache
+# --gtav-cache defaults to asset/gtav-cache
+cargo generate-diff-cache -i asset/source -o asset/all-diff-cache
+```
+
+Input may be one resource or a resources root with nested bracket groups. The
+shared manifest-aware explorer discovers resources, then `stream/` and `streams/`
+files are matched case-insensitively by basename against vanilla cache entries.
+YMAP is currently the supported comparison format; unmatched files are listed
+in metadata instead of copied or compared.
+
+For each matched file, distinct changed-stage vanilla states are ranked by
+model field differences (excluding name and block metadata). Ties choose the
+newer changed stage. The latest of these per-file best stages becomes the
+resource's baseline; all its matched files are then compared against that
+stage's cumulative vanilla state. Each resource is inferred independently.
+
+The empty output directory receives `diff_cache_info.json`, `create_cache.log`,
+and `<resource>/resource_info.json` plus `<resource>/ymap/<stream-relative-path>.diff.json`.
+Metadata includes UTC generation time, chosen version, all candidate scores,
+hashes/provenance and unmatched paths. Failures are recorded as incomplete.
+The example processed 198 stream files and generated two YmapDiff reports
+against `0029-mpapartment`.
+
+Comparison uses exact parsed states: schema-3 vanilla deltas are composed from
+the original YMAP with full-model hash checks, while MLO merge diffs are never
+used as exact history patches. Older caches can use retained
+native objects or recover replacements from the original installed game and
+CodeWalker, verifying SHA-256. A missing root `cache_info.json` can be recovered
+from per-version metadata; stale schema-1 manifests provide game-directory
+information only when newer per-version metadata exists.
 
 ### Basic Workflow (manual / individual steps)
 

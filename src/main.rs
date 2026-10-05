@@ -65,6 +65,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Command::MergeYmapXml(cmd) => cmd.run()?,
     Command::BuildYmapCache(cmd) => build_ymap_cache(&cmd)?,
     Command::BuildGtavCache(cmd) => cmd.run(&init_codewalker()?)?,
+    Command::BuildDiffCache(cmd) => cmd.run()?,
     Command::ExtractYmap(cmd) => cmd.run()?,
     Command::GetProp(cmd) => cmd.run()?,
     Command::CheckStreamConflicts(cmd) => cmd.run()?,

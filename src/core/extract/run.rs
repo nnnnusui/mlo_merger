@@ -4,6 +4,17 @@ use std::path::{Path, PathBuf};
 
 use crate::core::common::function::collect_files_with_suffix;
 
+/// Discovers one resource or a resources root using the shared manifest-aware explorer.
+#[allow(
+  clippy::ptr_arg,
+  reason = "Preserve the existing extraction API while the shared explorer accepts &Path."
+)]
+pub fn get_resource_directories(
+  base_dir: &PathBuf
+) -> Result<Vec<PathBuf>, Box<dyn std::error::Error>> {
+  crate::core::common::function::get_resource_directories(base_dir).map_err(Into::into)
+}
+
 #[derive(Debug, Clone)]
 pub struct ExtractYmap {
   pub input_dir: PathBuf,
@@ -84,47 +95,6 @@ impl ExtractYmap {
 
     log::info!("Extraction completed.");
     Ok(())
-  }
-}
-
-/// Explores FiveM resource directories
-///
-/// - Targets directories directly under the specified path
-/// - Recursively explores directories enclosed in `[...]`
-/// - Supports nested `[...]/[...]` structures
-pub fn get_resource_directories(
-  base_dir: &PathBuf
-) -> Result<Vec<PathBuf>, Box<dyn std::error::Error>> {
-  let mut resources = explore_directory(base_dir);
-  resources.sort_by_key(|a| a.to_string_lossy().to_lowercase());
-  Ok(resources)
-}
-
-fn explore_directory(dir: &PathBuf) -> Vec<PathBuf> {
-  match fs::read_dir(dir) {
-    Err(_) => Vec::new(),
-    Ok(read_dir) => read_dir.filter_map(|e| e.ok()).map(|e| e.path()).filter(|p| p.is_dir()).fold(
-      Vec::new(),
-      |mut acc, path| {
-        let is_bracket = path
-          .file_name()
-          .and_then(|n| n.to_str())
-          .map(|name| name.starts_with('[') && name.ends_with(']'))
-          .unwrap_or(false);
-
-        if is_bracket {
-          acc.extend(explore_directory(&path));
-        } else {
-          // Only include directories with fxmanifest.lua or __resource.lua
-          let has_fxmanifest = path.join("fxmanifest.lua").exists();
-          let has_resource = path.join("__resource.lua").exists();
-          if has_fxmanifest || has_resource {
-            acc.push(path);
-          }
-        }
-        acc
-      },
-    ),
   }
 }
 

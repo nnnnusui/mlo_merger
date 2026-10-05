@@ -29,7 +29,7 @@ fn sample_parent_refs_dir() -> std::path::PathBuf {
 }
 
 #[test]
-#[ignore = "requires a successfully generated asset/gtav-cache schema 2 cache"]
+#[ignore = "requires a successfully generated asset/gtav-cache schema 2 or 3 cache"]
 fn gtav_generated_version_cache_has_complete_artifacts_and_diff_logs() {
   use mlo_merger::core::{gtav_cache::GtavCacheManifest, merge::YmapDiff};
   use std::io::BufRead;
@@ -40,7 +40,7 @@ fn gtav_generated_version_cache_has_complete_artifacts_and_diff_logs() {
 
   let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("asset/gtav-cache");
   let manifest: GtavCacheManifest = read_json(&root.join("cache_info.json"));
-  assert_eq!(manifest.format_version, 2);
+  assert!(matches!(manifest.format_version, 2 | 3));
   assert!(manifest.versions[0].archives.contains(&"common.rpf".into()));
   assert!(manifest.versions[0].archives.contains(&"x64a.rpf".into()));
   let mut added = 0;
@@ -64,7 +64,15 @@ fn gtav_generated_version_cache_has_complete_artifacts_and_diff_logs() {
         modified += 1;
         assert!(has_diff, "missing diff log in {}", version.id);
         assert_eq!(artifact.file_name().unwrap().to_string_lossy(), format!("{name}.diff.json"));
-        let _: YmapDiff = read_json(&artifact);
+        if manifest.format_version == 3 {
+          let delta: serde_json::Value = read_json(&artifact);
+          assert_eq!(delta["format"], "vanilla_ymap_delta_v1");
+          assert_eq!(delta["target_native_sha256"], change.file.sha256);
+          assert!(delta["changes"].is_array());
+          assert!(delta["entity_order"].is_array());
+        } else {
+          let _: YmapDiff = read_json(&artifact);
+        }
       } else {
         added += 1;
         assert_eq!(artifact.file_name().unwrap().to_string_lossy(), *name);

@@ -8,7 +8,17 @@
 - [x] Preserve actual diff-processing logs per version in create_cache.log, including retained logs for failed runs.
 - [x] Test cumulative comparison inputs, unchanged skipping, diff JSON round-trips, version log isolation and root RPF discovery.
 - [x] Validate /mnt/gtav with all root RPFs: 103 version directories, 10,647 native additions and 1,937 deserializable YmapDiff JSON reports with per-version logs.
-- [ ] Compare a selected MLO against a selected vanilla stage.
+- [x] Generate MLO diff caches with `--generate-diff-cache`, optional GTAV cache path, shared single/multiple resource discovery, per-file closest-stage inference and per-resource latest-stage baselines.
+- [x] Save inference scores, chosen vanilla stages, UTC generation times, hashes/provenance and generation logs with serialized YmapDiff output.
+- [x] Preserve legacy snapshot reading and recover missing old-cache snapshots from verified RPF provenance.
+- [x] Validate brofx_mansion_06: 198 scanned files, two YMAP diff reports against 0029-mpapartment; test multiple resources, ties, cumulative baselines, metadata fallback, corruption failures and real RPF recovery.
+- [x] Test real RSC7 fixtures for complete native snapshot states, supported original-plus-diff chain replay, and closest middle-stage selection with final diff round-trip.
+- [x] Keep merge-oriented YmapDiff semantics separate from lossless vanilla history deltas, preserving MLO merge behavior.
+- [x] Implement schema-3 vanilla state reconstruction from original YMAP plus exact JSON deltas, with removals, cleared flags, metadata, entity order and predecessor/result integrity checks.
+- [x] Remove the diff-only reconstruction test's ignore and verify zero full-model difference against real DLC-derived state without snapshots or game access; split diff-cache loading and tests into modules.
+- [x] Move all GTAV cache implementation under src/core/gtav_cache/ and split generation, archive resolution, metadata, logging, I/O, stage storage, publication and tests while preserving existing API paths.
+- [x] Stop generating native/ replacement snapshots and native metadata references; verify original YMAP plus JSON-only history reconstruction after temporary binaries are deleted.
+- [x] Move all diff-cache implementation under src/core/diff_cache/ and split orchestration, resource processing, comparison, history metadata, I/O and report types while preserving the existing command API.
 - [ ] Define vanillaVersion/build-number mapping and support independently captured historical builds.
 - [ ] Extend extraction and cache objects to native types other than YMAP.
 - [ ] Support update2.rpf and content/setup mount rules for complete engine snapshots.

@@ -27,11 +27,18 @@ YBN conflicts are merged only when a vanilla baseline with the same basename exi
 
 `--generate-gtav-cache -i <GAME_DIR> -o <CACHE_DIR>` runs independently of the merge pipeline.
 Both paths are required. The Cargo alias `cargo generate-gtav-cache -i <GAME_DIR> -o <CACHE_DIR>` is defined in `.cargo/config.toml`.
-Rust (`src/core/gtav_cache.rs`) owns stage ordering and content-addressed storage;
+Rust (`src/core/gtav_cache/`) owns stage ordering and versioned storage;
 the managed bridge owns CodeWalker key loading, RPF scanning/decryption,
 recursive extraction and RSC7 header restoration. Keys are derived from the
 local Legacy executable using CodeWalker and are never saved in the cache.
 Explicit executable loading avoids CodeWalker's Windows-only path concatenation.
+
+The directory's entry module re-exports the existing GTAV cache API. Command
+orchestration, archive discovery/extraction, manifest types, scoped logging,
+buffered model/JSON I/O, stage materialization, and publication/rollback each
+have their own module. Regression tests are separate from production code;
+the existing exact YMAP delta module remains alongside them. Callers continue
+using `core::gtav_cache` without changes to commands or storage formats.
 
 The extraction order is all installed root .rpf files in filename order
 (including common.rpf and x64*.rpf), standalone update.rpf YMAPs, then dlclist.xml
@@ -43,22 +50,36 @@ dlc_patch/<name> overlay that DLC at its stage, not the base stage. Entries are
 identified by lowercase filename, matching the future MLO lookup. Within a
 stage, the last archive-traversal occurrence wins; DLC patches are applied last.
 
-`cache_info.json` schema 2 stores the game directory and ordered stages. Each
+`cache_info.json` schema 3 stores the game directory and ordered stages. Each
 <stage>/version_info.json stores that stage's ID, parent, contributing archives,
 unchanged count and additions/replacements with previous/new SHA-256 hashes,
 artifact paths and full archive provenance. <stage>/ymap/<name>.ymap stores a
 new filename's standalone native bytes; <name>.ymap.diff.json stores serialized
-YmapDiff for content replacements. Unchanged content is not saved again. Even
+VanillaYmapDelta for content replacements. Unchanged content is not saved again. Even
 empty stages have metadata, a log, and a ymap directory. Cache schema 1's
 objects/ and manifest.json are obsolete; existing legacy files are not deleted.
+New generation does not create native/ snapshot directories. Original/new
+files use their regular ymap/ artifact and replacements use only exact JSON
+deltas. The optional CachedFile.native field is omitted from new manifests,
+version metadata and delta predecessor references, but remains readable for
+older schema-2/3 caches. Temporary native comparison files are kept only in
+scratch storage and are removed after generation.
 
-Native resources are converted to XmlYmap and then the existing Ymap model for
-YmapDiff::extract_from. Comparison always uses the immediately preceding
+Native resources are converted to XmlYmap and then the existing Ymap model.
+Comparison always uses the immediately preceding
 cumulative **native bytes**, retained in scratch storage and updated after each
 stage. It never applies a merge diff to approximate the next comparison input.
-YmapDiff retains its existing merge semantics: it can omit entity deletions,
-skip unsupported metadata and collapse duplicate GUIDs in the Ymap model.
-These JSON files are semantic reports, not lossless reconstruction patches.
+The dedicated `src/core/gtav_cache/ymap_delta.rs` stores generated full-model
+YmapStructDiffEnum changes, predecessor CachedFile, target native SHA-256,
+before/after model hashes and entity GUID order. It restores removals, cleared
+flags and metadata independently of MLO merge policy. Typed deserialization
+avoids sorting through serde_json::Value or untagged-enum buffers, which can
+lose numeric map keys/order. Hash checks reject wrong predecessors and corrupt
+results; cycle checks reject recursive predecessor chains. Entity order is
+reapplied even when otherwise equal IndexMaps have changed order.
+These deltas restore the parsed model, not original compressed bytes. Existing
+Ymap adapter limits (including duplicate GUID collapse) still apply. YmapDiff
+retains its original merge semantics and remains the MLO report format.
 GtavCacheManifest::resolve_version(id) resolves the latest **artifact** index,
 which may point to diff JSON, not a complete native-file snapshot.
 
@@ -81,9 +102,64 @@ Limits: Legacy only. update2.rpf, content.xml enable/disable rules, setup2.xml m
 and engine-level deletions are not modeled. Stage IDs describe ordered overlays
 of the **currently installed** files, not historical release snapshots: patched
 installed DLCs and today's update.rpf cannot reconstruct an original old build.
-Build-number-to-stage mapping, additional native types, and MLO comparison are
+Build-number-to-stage mapping and additional native types are
 future work. Exact historical comparisons require separate game installations
 or independently captured caches for those builds.
+
+## MLO Diff Cache
+
+`--generate-diff-cache [--gtav-cache <DIR>] -i <RESOURCE_OR_ROOT> -o <EMPTY_DIR>`
+defaults the GTAV cache to asset/gtav-cache. `src/core/diff_cache/` uses the
+common manifest-aware explorer in `src/core/common/function/resource_directories.rs`.
+Native history loading/replay is in `src/core/diff_cache/vanilla.rs`; fixtures
+and regression tests are in `src/core/diff_cache/tests.rs`.
+The entry module re-exports BuildDiffCache with its existing API path. Separate
+modules own generation orchestration, per-resource processing, model comparison
+and candidate selection, manifest/history loading, I/O and internal report types.
+The directory replaces the former top-level diff_cache.rs without command or
+output-format changes.
+The existing extraction explorer API delegates to it. Single resources and
+resources roots with nested bracket groups use the same discovery logic.
+Only files under stream/ or streams/ are considered; basename matching is
+case-insensitive and supported vanilla matches are currently YMAP-only.
+
+Candidate histories contain the introduction and content replacement stages,
+not repeated unchanged snapshots. Parsed states are loaded lazily and
+shared by SHA-256 across resources. Schema-3 deltas recursively resolve their
+predecessors from the original native YMAP and validate both model hashes; this
+path is preferred even when a replacement snapshot is available. Legacy
+schema-2 files have no lossless history and must be regenerated for JSON-only
+replay. Existing native additions, optional native
+snapshots, and legacy objects/ files are checked by hash. Missing snapshots
+are extracted from their full RPF provenance using the original game directory
+and CodeWalker. A changed game installation that cannot supply the cached hash
+fails explicitly; lossy YmapDiff replay is never used to invent a candidate.
+Root metadata precedence is cache_info.json, schema-2/3 manifest.json, then
+per-version version_info.json (with game-directory hints from an old manifest),
+then a schema-1 manifest if no newer directory metadata exists. Parent and
+content-hash chains are validated before comparisons.
+
+The model_field_changes_v1 distance compares serialized Ymap model fields,
+excluding name and block. Each unequal scalar or added/removed object entry or
+array element counts once; objects compare by key and arrays remain ordered.
+Explicit hash strings and equivalent named references compare equally. Entity
+removals contribute to ranking even though merge-oriented YmapDiff can omit
+them. Existing model limits, including duplicate-GUID collapse, still apply.
+Tie-breaking uses the newest content-change stage, not the final unchanged DLC.
+Each resource selects the maximum stage index of its files' best candidates,
+then generates every final YmapDiff against its effective state at that stage.
+Resources with no matches have a null selected version and metadata only.
+
+Output contains diff_cache_info.json (completion/error, UTC generation time,
+cache/input paths, scoring policy and resource reports), create_cache.log with
+candidate selection and actual diff logs, plus per-resource resource_info.json
+and ymap/<resource-relative-stream-path>.diff.json. Relative resource group paths
+and nested stream paths are retained to avoid basename collisions. Each file
+records all candidate scores, its own best stage, final baseline content stage,
+SHA-256/source and artifact path. Existing nonempty outputs are rejected;
+failed runs retain logs and incomplete metadata. Scratch RPF extractions are
+removed. Application library hosts must register version_logger() to capture
+log records, just as for GTAV cache generation.
 
 ## YMAP Metadata Merging
 

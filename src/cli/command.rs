@@ -3,8 +3,8 @@ use std::path::PathBuf;
 use bpaf::*;
 
 use crate::core::{
-  extract::ExtractYmap, getprop::GetProp, gtav_cache::BuildGtavCache, merge::run::MergeYmapXml,
-  stream_conflicts::CheckStreamConflicts,
+  diff_cache::BuildDiffCache, extract::ExtractYmap, getprop::GetProp, gtav_cache::BuildGtavCache,
+  merge::run::MergeYmapXml, stream_conflicts::CheckStreamConflicts,
 };
 
 #[derive(Debug, Clone)]
@@ -14,6 +14,7 @@ pub enum Command {
   MergeYmapXml(MergeYmapXml),
   BuildYmapCache(BuildYmapCache),
   BuildGtavCache(BuildGtavCache),
+  BuildDiffCache(BuildDiffCache),
   ExtractYmap(ExtractYmap),
   GetProp(GetProp),
   CheckStreamConflicts(CheckStreamConflicts),
@@ -30,6 +31,7 @@ pub fn parse_args() -> Command {
     merge_ymap_xml(),
     build_ymap_cache(),
     build_gtav_cache(),
+    build_diff_cache(),
     extract_ymap(),
     get_prop(),
     check_stream_conflicts(),
@@ -128,9 +130,59 @@ fn build_gtav_cache() -> impl Parser<Command> {
   })
 }
 
+fn build_diff_cache() -> impl Parser<Command> {
+  let flag = long("generate-diff-cache")
+    .help("Infer vanilla versions and cache MLO YMAP differences")
+    .req_flag(());
+  let input_dir = short('i')
+    .long("input")
+    .help("Resource directory or resources root")
+    .argument::<PathBuf>("DIR");
+  let output_dir = short('o')
+    .long("output")
+    .help("Empty output directory for diff caches")
+    .argument::<PathBuf>("DIR");
+  let gtav_cache_dir = long("gtav-cache")
+    .help("GTAV cache root (default: asset/gtav-cache)")
+    .argument::<PathBuf>("DIR")
+    .fallback(PathBuf::from("asset/gtav-cache"));
+  construct!(flag, input_dir, output_dir, gtav_cache_dir).map(
+    |(_, input_dir, output_dir, gtav_cache_dir)| {
+      Command::BuildDiffCache(BuildDiffCache {
+        input_dir,
+        output_dir,
+        gtav_cache_dir,
+      })
+    },
+  )
+}
+
 #[cfg(test)]
 mod gtav_tests {
   use super::*;
+
+  #[test]
+  fn diff_cache_arguments_allow_default_or_explicit_gtav_cache() {
+    let Command::BuildDiffCache(command) = build_diff_cache()
+      .to_options()
+      .run_inner(&["--generate-diff-cache", "-i", "mlo", "-o", "output"])
+      .unwrap()
+    else {
+      panic!("Expected diff cache command")
+    };
+    assert_eq!(command.gtav_cache_dir, PathBuf::from("asset/gtav-cache"));
+    let Command::BuildDiffCache(command) = build_diff_cache()
+      .to_options()
+      .run_inner(&["--generate-diff-cache", "--gtav-cache", "custom", "-i", "mlo", "-o", "output"])
+      .unwrap()
+    else {
+      panic!("Expected diff cache command")
+    };
+    assert_eq!(command.gtav_cache_dir, PathBuf::from("custom"));
+    assert!(
+      build_diff_cache().to_options().run_inner(&["--generate-diff-cache", "-i", "mlo"]).is_err()
+    );
+  }
 
   #[test]
   fn gtav_selects_archive_cache_without_pipeline_flags() {

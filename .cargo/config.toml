@@ -3,6 +3,8 @@
 [alias]
 # Generate versioned GTA V caches; pass -i <game directory> and -o <cache directory>
 generate-gtav-cache = "run -- --generate-gtav-cache -i /mnt/gtav -o asset/gtav-cache"
+# Generate MLO diff caches; pass -i <resource or resources root> and -o <output>
+generate-diff-cache = "run -- --generate-diff-cache"
 # Run the full pipeline (extract -> ymap2xml -> merge -> xml2ymap) against asset/
 pipeline = "run -- --workspace asset --source-dir asset/source --output-resource-dir asset/merged_mlo"
 # Run MLO batch processing with sample data
