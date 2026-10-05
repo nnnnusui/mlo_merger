@@ -160,6 +160,29 @@ CodeWalker, verifying SHA-256. A missing root `cache_info.json` can be recovered
 from per-version metadata; stale schema-1 manifests provide game-directory
 information only when newer per-version metadata exists.
 
+### Structured YBN API
+
+YBN models, XML codecs and semantic differences live under `src/core/format/ybn`.
+The existing conversion commands are unchanged. Rust callers can inspect
+resolved polygon additions/removals and Bounds metadata separately:
+
+```rust
+use mlo_merger::core::format::ybn::{read_ybn, diff::YbnDiff};
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+  let before = read_ybn(&std::fs::read("vanilla.ybn")?)?;
+  let after = read_ybn(&std::fs::read("mod.ybn")?)?;
+  let diff = YbnDiff::extract_from(&before, &after)?;
+  println!("{}", serde_json::to_string_pretty(&diff)?);
+  Ok(())
+}
+```
+
+Matching resolves vertex/material references, retains duplicate occurrences
+and Bounds ownership, and ignores derived BVH/triangle metadata. These are
+semantic reports, not the byte-identical GTAV cache patches. MLO YBN diff-cache
+generation and applying/merging structured reports are not yet wired into CLI.
+
 ### Basic Workflow (manual / individual steps)
 
 1. **Extract** - Extract MLO data from `.ymap` files

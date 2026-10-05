@@ -32,6 +32,35 @@ tag aligns with the opening tag. This includes Vertices, MaterialColours and
 VertexColours, not just YBN vertex lists. Inline values and empty-tag styles
 remain unchanged. Numeric-list readers remain whitespace tolerant.
 
+## Structured YBN Modules
+
+`src/core/format/ybn/` owns the YBN implementation. `model/` contains serializable
+Bounds, shared Geometry tables, Material, Polygon and Triangle types. Common
+and extension record bytes are retained where fields are not yet named; this
+does not imply preservation of every pointer-linked native block. `binary/`
+owns record decoding/encoding, checked pointer helpers and stable BVH rebuilds.
+`xml/` owns XML import/export, numeric/flag parsing and multiline formatting.
+The former `gamefile/ybn.rs` retains compatibility exports for existing callers.
+
+`read_ybn(bytes)` and `xml::read_xml(text)` expose the same indexed model.
+`diff::YbnDiff::extract_from(before, after)` returns serializable Bounds metadata
+changes and PolygonDiff::Added/Removed occurrences. Reference indices are
+resolved to Bounds-local positions after GeometryCenter, actual materials,
+palette colours and per-vertex flags/colours. Composite transforms/filter flags
+remain metadata changes, not falsely flattened world-space polygon matches.
+Triangle area, edge references, vertex quantization and generated BVH data are
+excluded from semantic polygon identity.
+
+Matching is per child path, uses spatial buckets and consumes occurrences to
+retain duplicate multiplicity. Exact matches are preferred before the default
+5 mm coordinate/radius tolerance. Triangle cyclic shifts preserve identity,
+but reversed winding does not. Capsule/cylinder endpoint reversal is accepted;
+Box defining reference order remains conservative. Child reordering is treated
+by path rather than guessed stable identity. Unknown polygons and invalid
+references fail explicitly. Semantic diffs are reports, not exact native history
+patches or a general apply/merge API. Existing merge behavior remains separate
+in diff/legacy.rs; GTAV byte deltas and MLO CLI behavior are unchanged.
+
 ## YBN Rebuild Stability
 
 Native YBN XML exports the optional VertexQuantum vector so the original

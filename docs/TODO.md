@@ -25,7 +25,9 @@
 - [x] Regenerate /mnt/gtav cache: 103 stages, 12,024 YBN additions and 472 replacements; verify byte-identical bh1_08_0.ybn reconstruction, version listing and all 22,671 native additions / 2,409 mixed diff artifacts.
 - [x] Keep YMAP MLO diff-cache generation working with YBN-inclusive caches; record vanilla-matched unsupported types explicitly.
 - [ ] Extend extraction and cache objects to native types other than YMAP/YBN.
-- [ ] Add semantic YBN comparison and MLO YBN diff-cache generation.
+- [x] Organize indexed YBN models under format/ybn/model, XML import/export under format/ybn/xml, native codecs under binary, and preserve old gamefile API exports.
+- [x] Add structured YbnDiff/PolygonDiff extraction with duplicate-aware additions/removals, resolved material/vertex values, hierarchy ownership, Bounds metadata, tolerance and JSON serialization; verify the real mansion collision model.
+- [ ] Add semantic YBN MLO diff-cache generation and structured delta apply/merge integration.
 - [ ] Support update2.rpf and content/setup mount rules for complete engine snapshots.
 
 ## Resource Conversion Tests
