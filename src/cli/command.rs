@@ -3,8 +3,12 @@ use std::path::PathBuf;
 use bpaf::*;
 
 use crate::core::{
-  diff_cache::BuildDiffCache, extract::ExtractYmap, getprop::GetProp, gtav_cache::BuildGtavCache,
-  merge::run::MergeYmapXml, stream_conflicts::CheckStreamConflicts,
+  diff_cache::BuildDiffCache,
+  extract::ExtractYmap,
+  getprop::GetProp,
+  gtav_cache::{BuildGtavCache, ListVanillaVersions},
+  merge::run::MergeYmapXml,
+  stream_conflicts::CheckStreamConflicts,
 };
 
 #[derive(Debug, Clone)]
@@ -15,6 +19,7 @@ pub enum Command {
   BuildYmapCache(BuildYmapCache),
   BuildGtavCache(BuildGtavCache),
   BuildDiffCache(BuildDiffCache),
+  ListVanillaVersions(ListVanillaVersions),
   ExtractYmap(ExtractYmap),
   GetProp(GetProp),
   CheckStreamConflicts(CheckStreamConflicts),
@@ -32,6 +37,7 @@ pub fn parse_args() -> Command {
     build_ymap_cache(),
     build_gtav_cache(),
     build_diff_cache(),
+    list_vanilla_versions(),
     extract_ymap(),
     get_prop(),
     check_stream_conflicts(),
@@ -162,6 +168,29 @@ mod gtav_tests {
   use super::*;
 
   #[test]
+  fn vanilla_version_list_arguments_allow_default_or_explicit_cache() {
+    let Command::ListVanillaVersions(command) = list_vanilla_versions()
+      .to_options()
+      .run_inner(&["--list-vanilla-versions", "example.ymap"])
+      .unwrap()
+    else {
+      panic!("Expected version listing command")
+    };
+    assert_eq!(command.file_name, "example.ymap");
+    assert_eq!(command.gtav_cache_dir, PathBuf::from("asset/gtav-cache"));
+    let Command::ListVanillaVersions(command) = list_vanilla_versions()
+      .to_options()
+      .run_inner(&["--list-vanilla-versions", "example.ybn", "--gtav-cache", "custom"])
+      .unwrap()
+    else {
+      panic!("Expected version listing command")
+    };
+    assert_eq!(command.gtav_cache_dir, PathBuf::from("custom"));
+    assert_eq!(command.file_name, "example.ybn");
+    assert!(list_vanilla_versions().to_options().run_inner(&["--list-vanilla-versions"]).is_err());
+  }
+
+  #[test]
   fn diff_cache_arguments_allow_default_or_explicit_gtav_cache() {
     let Command::BuildDiffCache(command) = build_diff_cache()
       .to_options()
@@ -212,6 +241,22 @@ mod gtav_tests {
     assert!(build_gtav_cache().to_options().run_inner(&["-i", "game", "-o", "cache"]).is_err());
     assert!(build_gtav_cache().to_options().run_inner(&["--gtav", "game"]).is_err());
   }
+}
+
+fn list_vanilla_versions() -> impl Parser<Command> {
+  let file_name = long("list-vanilla-versions")
+    .help("List vanilla stages that added or modified a cached filename")
+    .argument::<String>("FILE");
+  let gtav_cache_dir = long("gtav-cache")
+    .help("GTAV cache root (default: asset/gtav-cache)")
+    .argument::<PathBuf>("DIR")
+    .fallback(PathBuf::from("asset/gtav-cache"));
+  construct!(file_name, gtav_cache_dir).map(|(file_name, gtav_cache_dir)| {
+    Command::ListVanillaVersions(ListVanillaVersions {
+      file_name,
+      gtav_cache_dir,
+    })
+  })
 }
 
 fn extract_ymap() -> impl Parser<Command> {

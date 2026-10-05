@@ -22,6 +22,10 @@ use std::path::Path;
 fn main() -> Result<(), Box<dyn std::error::Error>> {
   let opts = parse_args();
 
+  if let Command::ListVanillaVersions(command) = &opts {
+    return command.run();
+  }
+
   // Archive existing log file if it exists
   let log_path = Path::new("mlo_merger.log");
   if log_path.exists() {
@@ -66,6 +70,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Command::BuildYmapCache(cmd) => build_ymap_cache(&cmd)?,
     Command::BuildGtavCache(cmd) => cmd.run(&init_codewalker()?)?,
     Command::BuildDiffCache(cmd) => cmd.run()?,
+    Command::ListVanillaVersions(cmd) => cmd.run()?,
     Command::ExtractYmap(cmd) => cmd.run()?,
     Command::GetProp(cmd) => cmd.run()?,
     Command::CheckStreamConflicts(cmd) => cmd.run()?,

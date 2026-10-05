@@ -1,6 +1,7 @@
 # Cargo configuration and aliases
 
 [alias]
+list-vanilla-versions = "run -- --list-vanilla-versions"
 # Generate versioned GTA V caches; pass -i <game directory> and -o <cache directory>
 generate-gtav-cache = "run -- --generate-gtav-cache -i /mnt/gtav -o asset/gtav-cache"
 # Generate MLO diff caches; pass -i <resource or resources root> and -o <output>

@@ -106,6 +106,21 @@ Build-number-to-stage mapping and additional native types are
 future work. Exact historical comparisons require separate game installations
 or independently captured caches for those builds.
 
+## Vanilla Version Lookup
+
+`--list-vanilla-versions <FILENAME> [--gtav-cache <DIR>]` uses the read-only
+query in `src/core/gtav_cache/versions.rs`. The shared manifest loader now lives
+in the GTAV manifest module; diff-cache retains its existing internal import.
+Only stages with a filename entry in changes are returned, with added/modified
+classification, version ID, artifact and provenance. Name matching is
+case-insensitive; version and requested-file hash chains are validated.
+Unknown names return an empty JSON array. The CLI handles this command before
+logger initialization, so stdout is JSON-only and no application logs or cache
+files are changed. Root and per-version metadata fallback matches diff-cache.
+The query and result types are extension-neutral; YBN and other resource
+metadata use the same path without format-specific parsing. This does not
+extend the current YMAP-only GTAV archive extraction or MLO diff generation.
+
 ## MLO Diff Cache
 
 `--generate-diff-cache [--gtav-cache <DIR>] -i <RESOURCE_OR_ROOT> -o <EMPTY_DIR>`

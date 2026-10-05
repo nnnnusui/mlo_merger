@@ -19,6 +19,7 @@
 - [x] Move all GTAV cache implementation under src/core/gtav_cache/ and split generation, archive resolution, metadata, logging, I/O, stage storage, publication and tests while preserving existing API paths.
 - [x] Stop generating native/ replacement snapshots and native metadata references; verify original YMAP plus JSON-only history reconstruction after temporary binaries are deleted.
 - [x] Move all diff-cache implementation under src/core/diff_cache/ and split orchestration, resource processing, comparison, history metadata, I/O and report types while preserving the existing command API.
+- [x] Add read-only --list-vanilla-versions filename lookup with optional GTAV cache path, ordered added/modified JSON output and shared metadata loading; verify extension-independent YMAP/YBN lookup.
 - [ ] Define vanillaVersion/build-number mapping and support independently captured historical builds.
 - [ ] Extend extraction and cache objects to native types other than YMAP.
 - [ ] Support update2.rpf and content/setup mount rules for complete engine snapshots.

@@ -2,7 +2,9 @@
 
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
-use std::path::PathBuf;
+use std::fs;
+use std::io::BufReader;
+use std::path::{Path, PathBuf};
 
 use super::Result;
 
@@ -83,4 +85,48 @@ impl GtavCacheManifest {
     }
     Err(format!("Unknown vanilla stage: {id}").into())
   }
+}
+
+/// Loads root or legacy/per-version metadata without opening game archives.
+pub(crate) fn load_manifest(cache: &Path) -> Result<GtavCacheManifest> {
+  let root = cache.join("cache_info.json");
+  if root.is_file() {
+    return Ok(serde_json::from_reader(BufReader::new(fs::File::open(root)?))?);
+  }
+  let legacy = cache.join("manifest.json");
+  let legacy: Option<GtavCacheManifest> = if legacy.is_file() {
+    Some(serde_json::from_reader(BufReader::new(fs::File::open(legacy)?))?)
+  } else {
+    None
+  };
+  if legacy.as_ref().is_some_and(|manifest| matches!(manifest.format_version, 2 | 3)) {
+    return legacy.ok_or_else(|| "Missing GTAV manifest".into());
+  }
+  let mut versions: Vec<CacheVersion> = Vec::new();
+  for entry in fs::read_dir(cache)? {
+    let entry = entry?;
+    if !entry.file_type()?.is_dir() {
+      continue;
+    }
+    let info = entry.path().join("version_info.json");
+    if info.is_file() {
+      let version: CacheVersion = serde_json::from_reader(BufReader::new(fs::File::open(info)?))?;
+      if entry.file_name().to_string_lossy() != version.id {
+        return Err("Version directory does not match metadata ID".into());
+      }
+      versions.push(version);
+    }
+  }
+  if !versions.is_empty() {
+    versions.sort_by_key(|version| {
+      version.id.split_once('-').and_then(|(index, _)| index.parse::<usize>().ok())
+    });
+    log::warn!("cache_info.json is missing; using per-version metadata from {}", cache.display());
+    return Ok(GtavCacheManifest {
+      format_version: 2,
+      game_dir: legacy.map(|manifest| manifest.game_dir).unwrap_or_default(),
+      versions,
+    });
+  }
+  legacy.ok_or_else(|| format!("No GTAV cache metadata found in {}", cache.display()).into())
 }

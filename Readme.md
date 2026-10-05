@@ -94,6 +94,23 @@ under `ymap/`; replacement binaries exist only in temporary comparison storage.
 Older cache snapshot references remain readable. Existing schema-2 merge-diff caches must
 be regenerated to enable exact JSON-only history reconstruction.
 
+### Vanilla Version Lookup
+
+```bash
+cargo run -- --list-vanilla-versions example.ymap
+# Cargo alias; --gtav-cache defaults to asset/gtav-cache
+cargo list-vanilla-versions example.ybn --gtav-cache asset/gtav-cache
+```
+
+Returns a JSON array of stages that introduced (`added`) or replaced (`modified`)
+the filename, in cache order, with artifact paths and archive provenance.
+Matching is case-insensitive. Unchanged stages are omitted and an unknown name
+returns `[]`. This is a read-only metadata query: it does not extract RPFs,
+generate caches, or create/rotate application logs.
+Lookup is extension-independent and accepts `.ymap`, `.ybn`, or other cached
+filenames. GTAV cache generation currently extracts only YMAPs; other types
+will appear once their metadata is available.
+
 ### MLO Diff Cache
 
 ```bash
