@@ -336,7 +336,7 @@ fn real_ybn_cache_restores_exact_binary_and_lists_change_versions() {
   let (name, file) = first_replacement.expect("requires a YBN replacement delta");
   let bytes = restore(&root, file, &mut std::collections::BTreeSet::new()).unwrap();
   assert!(bytes.starts_with(b"RSC7"));
-  let xml = crate::core::format::gamefile::ybn::ybn_to_xml(&bytes).unwrap();
+  let xml = crate::core::format::ybn::ybn_to_xml(&bytes).unwrap();
   assert!(xml.contains("<BoundsFile>"));
   let versions = ListVanillaVersions {
     file_name: name.clone(),

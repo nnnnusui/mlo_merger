@@ -9,7 +9,7 @@ use walkdir::WalkDir;
 use crate::core::{
   codewalker::CodeWalker,
   extract::get_resource_directories,
-  format::gamefile::ybn::{merge_ybn_deltas, ybn_to_xml},
+  format::ybn::{merge_ybn_deltas, ybn_to_xml},
 };
 
 /// Merges same-named YBN resource overrides against vanilla Bounds data.

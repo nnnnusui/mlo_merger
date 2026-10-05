@@ -5,7 +5,6 @@ pub mod resource_convert;
 pub mod resource_file;
 pub mod xml_meta_builder;
 pub mod xml_tree;
-pub mod ybn;
 pub mod ynd;
 
 #[cfg(test)]

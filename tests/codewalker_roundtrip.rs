@@ -420,8 +420,7 @@ fn sample_ybn_conflicts_merge_vanilla_deltas_and_omit_source_files() {
 
   let merged_path = output.join("sc1_18_0.ybn");
   let merged_xml =
-    mlo_merger::core::format::gamefile::ybn::ybn_to_xml(&std::fs::read(&merged_path).unwrap())
-      .unwrap();
+    mlo_merger::core::format::ybn::ybn_to_xml(&std::fs::read(&merged_path).unwrap()).unwrap();
   assert_eq!(merged_xml.matches("<Item type=\"Box\">").count(), 1);
   assert!(merged_xml.contains("<BoxMin x=\"9\" y=\"-1\" z=\"-1\" />"));
   assert!(merged_xml.contains("<BoundsFile>"));

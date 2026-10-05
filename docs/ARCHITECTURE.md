@@ -40,7 +40,8 @@ and extension record bytes are retained where fields are not yet named; this
 does not imply preservation of every pointer-linked native block. `binary/`
 owns record decoding/encoding, checked pointer helpers and stable BVH rebuilds.
 `xml/` owns XML import/export, numeric/flag parsing and multiline formatting.
-The former `gamefile/ybn.rs` retains compatibility exports for existing callers.
+The obsolete `gamefile::ybn` compatibility module is removed; conversion,
+merge and test callers use `core::format::ybn` directly.
 
 `read_ybn(bytes)` and `xml::read_xml(text)` expose the same indexed model.
 `diff::YbnDiff::extract_from(before, after)` returns serializable Bounds metadata

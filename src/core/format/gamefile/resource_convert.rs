@@ -10,9 +10,9 @@ use super::{
   resource_file::Rsc7Resource,
   xml_meta_builder::meta_from_xml,
   xml_tree::parse_xml,
-  ybn::{xml_to_ybn, ybn_to_xml},
   ynd::{xml_to_ynd, ynd_to_xml},
 };
+use crate::core::format::ybn::{xml_to_ybn, ybn_to_xml};
 use walkdir::WalkDir;
 
 /// Supported native conversion families selected by the input extension.
