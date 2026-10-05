@@ -9,14 +9,13 @@ use super::{
   types::{CandidateScore, Variant},
   vanilla::NativeVariants,
 };
-use crate::core::vanilla_cache::ymap_delta::VanillaYmapDelta;
 use crate::core::{
   format::{gamefile::meta_resource::jenk_hash, ymap::model::Ymap},
   merge::YmapDiff,
   vanilla_cache::{CacheVersion, CachedFile, VanillaCacheManifest, read_ymap, write_json},
 };
 use serde_json::Value;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::fs;
 use std::io::BufReader;
 use std::path::Path;
@@ -51,7 +50,6 @@ impl NativeVersionFixture {
     use crate::core::{format::ymap::xml::XmlYmap, vanilla_cache::FileChange};
     let root =
       Scratch(std::env::temp_dir().join(format!("vanilla_version_{label}_{}", std::process::id())));
-    fs::create_dir_all(root.0.join("scratch")).unwrap();
     let xml: XmlYmap = quick_xml::de::from_str(include_str!(concat!(
       env!("CARGO_MANIFEST_DIR"),
       "/docs/sample/parent_refs/vanilla_parent.ymap.xml"
@@ -76,26 +74,12 @@ impl NativeVersionFixture {
         model.name = "renamed_map".into();
         model.streaming_extents_min.x += 4.0;
       }
-      let original = format!("{id}/ymap/map.ymap");
-      let path = if index == 0 {
-        root.0.join(&original)
-      } else {
-        root.0.join("scratch").join(format!("{id}.ymap"))
-      };
-      let decoded = write_native_model(&path, &model);
+      let object = format!("{id}/ymap/map.ymap");
+      let path = root.0.join(&object);
+      fs::create_dir_all(path.parent().unwrap()).unwrap();
+      fs::write(&path, serde_json::to_vec(&model).unwrap()).unwrap();
+      let decoded = model.clone();
       let sha256 = content_hash(&path).unwrap();
-      let object = if let Some(before) = expected.last() {
-        let object = format!("{id}/ymap/map.ymap.diff.json");
-        let previous = versions.last().unwrap().changes["map.ymap"].file.clone();
-        let diff =
-          VanillaYmapDelta::extract_from(before, &decoded, previous, sha256.clone()).unwrap();
-        let destination = root.0.join(&object);
-        fs::create_dir_all(destination.parent().unwrap()).unwrap();
-        write_json(&destination, &diff).unwrap();
-        object
-      } else {
-        original
-      };
       versions.push(CacheVersion {
         id: id.into(),
         parent: index.checked_sub(1).map(|index| versions[index].id.clone()),
@@ -108,7 +92,6 @@ impl NativeVersionFixture {
             file: CachedFile {
               sha256: sha256.clone(),
               object,
-              native: None,
               source: "fixture.rpf/map.ymap".into(),
             },
           },
@@ -125,7 +108,7 @@ impl NativeVersionFixture {
       unchanged: 1,
     });
     let manifest = VanillaCacheManifest {
-      format_version: 3,
+      format_version: 1,
       game_dir: root.0.join("missing-game"),
       versions,
     };
@@ -140,20 +123,15 @@ impl NativeVersionFixture {
   fn provider(&self) -> NativeVariants<'_> {
     NativeVariants {
       cache: &self.root.0,
-      game_dir: &self.manifest.game_dir,
-      scratch: &self.root.0,
-      reader: read_ymap,
-      codewalker: None,
-      recovered: BTreeMap::new(),
+      reader: |path| Ok(serde_json::from_reader(fs::File::open(path)?)?),
       models: BTreeMap::new(),
-      extractions: 0,
-      replaying: BTreeSet::new(),
+      ybn_models: BTreeMap::new(),
     }
   }
 }
 
 #[test]
-fn vanilla_version_state_from_original_and_deltas_matches_complete_models() {
+fn vanilla_version_state_from_raw_stage_files_matches_complete_models() {
   let fixture = NativeVersionFixture::new("complete_states");
   let mut provider = fixture.provider();
   for (index, version) in fixture.manifest.versions.iter().enumerate() {
@@ -161,39 +139,23 @@ fn vanilla_version_state_from_original_and_deltas_matches_complete_models() {
     let actual = provider.model(&files["map.ymap"]).unwrap();
     assert_eq!(actual.model, fixture.expected[index.min(2)], "vanilla state at {}", version.id);
   }
-  assert!(provider.codewalker.is_none());
   assert_eq!(provider.models.len(), 3);
 }
 
 #[test]
-fn vanilla_version_original_and_diff_chain_replays_supported_model_changes() {
-  let fixture = NativeVersionFixture::new("supported_replay");
-  let base = &fixture.manifest.versions[0].changes["map.ymap"].file;
-  let mut actual = read_ymap(&fixture.root.0.join(&base.object)).unwrap();
-  assert_eq!(actual, fixture.expected[0]);
-  for (index, version) in fixture.manifest.versions.iter().enumerate().skip(1) {
-    if let Some(change) = version.changes.get("map.ymap") {
-      let diff: VanillaYmapDelta = serde_json::from_reader(BufReader::new(
-        fs::File::open(fixture.root.0.join(&change.file.object)).unwrap(),
-      ))
-      .unwrap();
-      actual = diff.apply_to(&actual).unwrap();
-    }
-    assert_eq!(actual, fixture.expected[index.min(2)], "original + diff state at {}", version.id);
-  }
-}
-
-#[test]
-fn vanilla_version_state_from_original_and_diff_only_requires_replay() {
-  let fixture = NativeVersionFixture::new("diff_only");
-  fs::remove_dir_all(fixture.root.0.join("scratch")).unwrap();
+fn vanilla_version_state_uses_raw_file_from_latest_changed_stage() {
+  let fixture = NativeVersionFixture::new("raw_latest");
   for version in &fixture.manifest.versions {
-    assert!(!fixture.root.0.join(&version.id).join("native").exists());
-    assert!(version.changes.values().all(|change| change.file.native.is_none()));
+    for change in version.changes.values() {
+      assert!(change.file.object.ends_with(".ymap"));
+      assert!(fixture.root.0.join(&change.file.object).is_file());
+    }
   }
   let files = fixture.manifest.resolve_version("0003-unchanged").unwrap();
-  let actual = fixture.provider().model(&files["map.ymap"])
-    .expect("vanilla version must be reconstructed from the original YMAP and diff JSON without snapshots or game files");
+  let actual = fixture
+    .provider()
+    .model(&files["map.ymap"])
+    .expect("every changed YMAP stage must have its raw file");
   assert_eq!(actual.model, fixture.expected[2]);
   assert_eq!(
     distance(&actual.comparison, &ModelState::new(fixture.expected[2].clone()).unwrap().comparison),
@@ -203,29 +165,17 @@ fn vanilla_version_state_from_original_and_diff_only_requires_replay() {
 }
 
 #[test]
-fn vanilla_delta_reader_rejects_target_mismatch_and_predecessor_cycles() {
-  let fixture = NativeVersionFixture::new("invalid_delta");
+fn vanilla_raw_reader_rejects_missing_and_corrupted_files() {
+  let fixture = NativeVersionFixture::new("invalid_raw");
   let file = &fixture.manifest.versions[2].changes["map.ymap"].file;
   let path = fixture.root.0.join(&file.object);
-  let mut value: Value =
-    serde_json::from_reader(BufReader::new(fs::File::open(&path).unwrap())).unwrap();
-  value["target_native_sha256"] = Value::String("0".repeat(64));
-  write_json(&path, &value).unwrap();
+  fs::write(&path, b"corrupted raw bytes").unwrap();
   let mut provider = fixture.provider();
   let error = provider.model(file).err().unwrap().to_string();
-  assert!(error.contains("target native hash mismatch"));
-  assert!(provider.replaying.is_empty());
-  let cycle = VanillaYmapDelta::extract_from(
-    &fixture.expected[1],
-    &fixture.expected[2],
-    file.clone(),
-    file.sha256.clone(),
-  )
-  .unwrap();
-  write_json(&path, &cycle).unwrap();
+  assert!(error.contains("hash mismatch"));
+  fs::remove_file(path).unwrap();
   let error = provider.model(file).err().unwrap().to_string();
-  assert!(error.contains("Cyclic vanilla delta"));
-  assert!(provider.replaying.is_empty());
+  assert!(error.contains("Raw vanilla artifact is missing"));
 }
 
 #[test]
@@ -351,14 +301,13 @@ fn diff_cache_selects_per_resource_latest_and_compares_its_cumulative_baseline()
   let reader: ModelReader =
     |path| Ok(serde_json::from_reader(BufReader::new(fs::File::open(path)?))?);
   let snapshot = |id: &str, name: &str, model: &Ymap| {
-    let native = format!("{id}/native/ymap/{name}");
-    let path = cache.join(&native);
+    let object = format!("{id}/ymap/{name}");
+    let path = cache.join(&object);
     fs::create_dir_all(path.parent().unwrap()).unwrap();
     write_json(&path, model).unwrap();
     CachedFile {
       sha256: content_hash(&path).unwrap(),
-      native: Some(native.clone()),
-      object: native,
+      object,
       source: format!("fixture.rpf/{name}"),
     }
   };
@@ -388,7 +337,7 @@ fn diff_cache_selects_per_resource_latest_and_compares_its_cumulative_baseline()
       }
     };
   let manifest = VanillaCacheManifest {
-    format_version: 2,
+    format_version: 1,
     game_dir: root.join("missing-game"),
     versions: vec![
       version(
@@ -403,7 +352,6 @@ fn diff_cache_selects_per_resource_latest_and_compares_its_cumulative_baseline()
             CachedFile {
               sha256: "3".repeat(64),
               object: "0000-base/ybn/collision.ybn".into(),
-              native: None,
               source: "fixture.rpf/collision.ybn".into(),
             },
           ),
@@ -459,10 +407,10 @@ fn diff_cache_selects_per_resource_latest_and_compares_its_cumulative_baseline()
       .unwrap()
       .contains("Selected vanilla version for [group]/first: 0002-patch")
   );
-  assert!(!command.output_dir.join(".working").exists());
   assert!(command.run_with_reader(reader).is_err());
   fs::remove_file(cache.join("cache_info.json")).unwrap();
-  assert_eq!(load_manifest(&cache).unwrap().versions.len(), 4);
+  assert!(load_manifest(&cache).is_err());
+  write_json(&cache.join("cache_info.json"), &manifest).unwrap();
   let single = BuildDiffCache {
     input_dir: first,
     output_dir: root.join("single"),
@@ -490,7 +438,7 @@ fn diff_cache_selects_per_resource_latest_and_compares_its_cumulative_baseline()
     })
     .collect();
   assert_eq!(best_candidate(&scores, &tied).unwrap(), 1);
-  fs::write(cache.join(a0.native.as_ref().unwrap()), b"corrupt").unwrap();
+  fs::write(cache.join(&a0.object), b"corrupt").unwrap();
   let failed = BuildDiffCache {
     input_dir: single.input_dir,
     output_dir: root.join("failed"),
@@ -503,6 +451,119 @@ fn diff_cache_selects_per_resource_latest_and_compares_its_cumulative_baseline()
   .unwrap();
   assert_eq!(failure["completed"], false);
   assert!(failure["error"].as_str().unwrap().contains("hash mismatch"));
+}
+
+#[test]
+fn diff_cache_generates_ybn_reports_from_raw_vanilla_history() {
+  use super::types::YbnDiffReport;
+  use crate::core::format::ybn::{diff::YbnDiff, read_ybn, xml::xml_to_ybn};
+  use crate::core::vanilla_cache::{FileChange, init_test_version_logger};
+  use sha2::{Digest, Sha256};
+
+  init_test_version_logger();
+  let root = std::env::temp_dir().join(format!("diff_cache_ybn_{}", std::process::id()));
+  let _cleanup = Scratch(root.clone());
+  let resource = root.join("resources").join("[group]").join("collision-resource");
+  let cache = root.join("vanilla-cache");
+  fs::create_dir_all(resource.join("stream")).unwrap();
+  fs::create_dir_all(cache.join("0000-base/ybn")).unwrap();
+  fs::create_dir_all(cache.join("0001-patch/ybn")).unwrap();
+  fs::write(resource.join("fxmanifest.lua"), "fx_version 'cerulean'").unwrap();
+
+  let source_xml = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/docs/sample/ybn_conflicts/geometry_bvh.ybn.xml"
+  ));
+  let patch_xml = source_xml.replacen("<Margin value=\"0\" />", "<Margin value=\"0.1\" />", 1);
+  let mod_xml = source_xml.replacen("<Margin value=\"0\" />", "<Margin value=\"0.2\" />", 1);
+  let base_binary = xml_to_ybn(source_xml).unwrap();
+  let patch_binary = xml_to_ybn(&patch_xml).unwrap();
+  let mod_binary = xml_to_ybn(&mod_xml).unwrap();
+  let digest = |bytes: &[u8]| format!("{:x}", Sha256::digest(bytes));
+  let base_sha = digest(&base_binary);
+  let patch_sha = digest(&patch_binary);
+  fs::write(cache.join("0000-base/ybn/collision.ybn"), &base_binary).unwrap();
+  fs::write(cache.join("0001-patch/ybn/collision.ybn"), &patch_binary).unwrap();
+  fs::write(resource.join("stream/collision.ybn"), &mod_binary).unwrap();
+
+  let base_file = CachedFile {
+    sha256: base_sha.clone(),
+    object: "0000-base/ybn/collision.ybn".into(),
+    source: "base.rpf/collision.ybn".into(),
+  };
+  let manifest = VanillaCacheManifest {
+    format_version: 1,
+    game_dir: root.join("missing-game"),
+    versions: vec![
+      CacheVersion {
+        id: "0000-base".into(),
+        parent: None,
+        archives: vec!["base.rpf".into()],
+        changes: BTreeMap::from([(
+          "collision.ybn".into(),
+          FileChange {
+            previous_sha256: None,
+            file: base_file,
+          },
+        )]),
+        unchanged: 0,
+      },
+      CacheVersion {
+        id: "0001-patch".into(),
+        parent: Some("0000-base".into()),
+        archives: vec!["patch.rpf".into()],
+        changes: BTreeMap::from([(
+          "collision.ybn".into(),
+          FileChange {
+            previous_sha256: Some(base_sha),
+            file: CachedFile {
+              sha256: patch_sha,
+              object: "0001-patch/ybn/collision.ybn".into(),
+              source: "patch.rpf/collision.ybn".into(),
+            },
+          },
+        )]),
+        unchanged: 0,
+      },
+    ],
+  };
+  for version in &manifest.versions {
+    write_json(&cache.join(&version.id).join("version_info.json"), version).unwrap();
+  }
+  write_json(&cache.join("cache_info.json"), &manifest).unwrap();
+
+  let command = BuildDiffCache {
+    input_dir: root.join("resources"),
+    output_dir: root.join("source-cache"),
+    vanilla_cache_dir: cache,
+  };
+  command.run().unwrap();
+
+  let report: Value = serde_json::from_reader(BufReader::new(
+    fs::File::open(command.output_dir.join("diff_cache_info.json")).unwrap(),
+  ))
+  .unwrap();
+  let resource_report = &report["resources"][0];
+  assert_eq!(resource_report["vanilla_version"], "0001-patch");
+  assert!(resource_report["unsupported_files"].as_array().is_none_or(Vec::is_empty));
+  assert_eq!(resource_report["files"].as_array().unwrap().len(), 1);
+  assert_eq!(resource_report["files"][0]["best_version"], "0001-patch");
+  assert_eq!(resource_report["files"][0]["baseline_content_version"], "0001-patch");
+  let diff_path =
+    command.output_dir.join("[group]/collision-resource/ybn/stream/collision.ybn.diff.json");
+  let changes: YbnDiffReport =
+    serde_json::from_reader(BufReader::new(fs::File::open(diff_path).unwrap())).unwrap();
+  let YbnDiffReport::Semantic {
+    diff,
+  } = changes
+  else {
+    panic!("expected semantic YBN diff");
+  };
+  assert_eq!(diff.bound_diffs.len(), 1);
+  assert!(diff.polygon_diffs.is_empty());
+  let baseline = read_ybn(&patch_binary).unwrap();
+  let modified = read_ybn(&mod_binary).unwrap();
+  assert!(!YbnDiff::extract_from(&baseline, &modified).unwrap().is_empty());
 }
 
 #[test]
@@ -538,91 +599,4 @@ fn diff_cache_real_brofx_output_is_readable_and_records_selected_version() {
   assert!(log.contains("Candidate stream/apa_ch2_06_strm_2.ymap"));
   assert!(log.contains("Generating diff"));
   assert!(!output.join(".working").exists());
-}
-
-#[test]
-#[ignore = "requires old GTAV cache replacements, /mnt/gtav and CodeWalker bridge"]
-fn diff_cache_recovers_exact_old_cache_replacement_from_its_rpf_source() {
-  let cache = Path::new(env!("CARGO_MANIFEST_DIR")).join("asset/vanilla-cache");
-  let manifest = load_manifest(&cache).unwrap();
-  let histories = history(&manifest).unwrap();
-  let pair = histories
-    .values()
-    .find_map(|variants| {
-      variants.windows(2).find(|pair| {
-        let file = &pair[1].file;
-        file.native.is_none()
-          && !file.object.ends_with(".ymap")
-          && file.source.contains("/dlc.rpf/")
-          && !cache.join("objects").join(format!("{}.ymap", file.sha256)).exists()
-      })
-    })
-    .expect("requires an unsnapshotted DLC replacement with its predecessor");
-  let variant = &pair[1];
-  let directory = std::env::temp_dir().join(format!("diff_cache_recover_{}", std::process::id()));
-  fs::create_dir(&directory).unwrap();
-  let scratch = Scratch(directory);
-  let mut provider = NativeVariants {
-    cache: &cache,
-    game_dir: &manifest.game_dir,
-    scratch: &scratch.0,
-    reader: read_ymap,
-    codewalker: None,
-    recovered: BTreeMap::new(),
-    models: BTreeMap::new(),
-    extractions: 0,
-    replaying: BTreeSet::new(),
-  };
-  let model = provider.model(&variant.file).unwrap();
-  assert!(model.comparison.is_object());
-  assert!(provider.models.contains_key(&variant.file.sha256));
-  assert_eq!(
-    content_hash(provider.recovered.get(&variant.file.sha256).unwrap()).unwrap(),
-    variant.file.sha256
-  );
-  let before = provider.model(&pair[0].file).unwrap();
-  let original = cache.join(pair[0].file.native.as_deref().unwrap_or(&pair[0].file.object));
-  let original = if original.is_file() {
-    original
-  } else {
-    provider
-      .recovered
-      .get(&pair[0].file.sha256)
-      .cloned()
-      .unwrap_or_else(|| cache.join("objects").join(format!("{}.ymap", pair[0].file.sha256)))
-  };
-  fs::copy(original, scratch.0.join("original.ymap")).unwrap();
-  let base = CachedFile {
-    sha256: pair[0].file.sha256.clone(),
-    object: "original.ymap".into(),
-    native: None,
-    source: pair[0].file.source.clone(),
-  };
-  let delta =
-    VanillaYmapDelta::extract_from(&before.model, &model.model, base, variant.file.sha256.clone())
-      .unwrap();
-  write_json(&scratch.0.join("map.ymap.diff.json"), &delta).unwrap();
-  let target = CachedFile {
-    sha256: variant.file.sha256.clone(),
-    object: "map.ymap.diff.json".into(),
-    native: None,
-    source: variant.file.source.clone(),
-  };
-  let missing_game = scratch.0.join("missing-game");
-  let mut replay = NativeVariants {
-    cache: &scratch.0,
-    game_dir: &missing_game,
-    scratch: &scratch.0,
-    reader: read_ymap,
-    codewalker: None,
-    recovered: BTreeMap::new(),
-    models: BTreeMap::new(),
-    extractions: 0,
-    replaying: BTreeSet::new(),
-  };
-  let composed = replay.model(&target).unwrap();
-  assert_eq!(composed.model, model.model);
-  assert_eq!(composed.comparison, model.comparison);
-  assert!(structdiff::StructDiff::diff(&composed.model, &model.model).is_empty());
-  assert!(replay.codewalker.is_none());
 }

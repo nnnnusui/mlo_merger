@@ -2,7 +2,6 @@
 
 use super::{
   ModelReader, Result,
-  io::Scratch,
   metadata::{history, load_manifest},
   resource::generate_resource,
   types::GenerationReport,
@@ -12,7 +11,7 @@ use crate::core::{
   common::function::get_resource_directories,
   vanilla_cache::{VersionLog, read_ymap, write_json},
 };
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::PathBuf;
 
@@ -23,7 +22,7 @@ pub struct BuildDiffCache {
   pub input_dir: PathBuf,
   /// Empty destination for generation metadata, logs and per-resource reports.
   pub output_dir: PathBuf,
-  /// GTAV cache root; the CLI defaults to asset/vanilla-cache when omitted.
+  /// Vanilla archive cache root; the CLI defaults to asset/vanilla-cache.
   pub vanilla_cache_dir: PathBuf,
 }
 
@@ -33,7 +32,7 @@ impl BuildDiffCache {
   /// ```no_run
   /// simplelog::CombinedLogger::init(vec![mlo_merger::core::vanilla_cache::version_logger()])?;
   /// let command = mlo_merger::core::diff_cache::BuildDiffCache {
-  ///   input_dir: "asset/source".into(), output_dir: "asset/diff-cache".into(),
+  ///   input_dir: "asset/source".into(), output_dir: "asset/source-cache".into(),
   ///   vanilla_cache_dir: "asset/vanilla-cache".into(),
   /// };
   /// command.run()?;
@@ -68,23 +67,15 @@ impl BuildDiffCache {
       generated_at: generated_at.clone(),
       completed: false,
       error: None,
-      distance_metric: "model_field_changes_v1; ignore name/block; latest changed stage wins ties",
+      distance_metric: "per_format_changes_v1; YMAP field changes or YBN Bounds/Polygon changes; latest changed stage wins ties",
       resources: Vec::new(),
     };
     let result = (|| -> Result<()> {
-      let scratch_path = self.output_dir.join(".working");
-      fs::create_dir(&scratch_path)?;
-      let scratch = Scratch(scratch_path);
       let mut provider = NativeVariants {
         cache: &cache,
-        game_dir: &manifest.game_dir,
-        scratch: &scratch.0,
         reader,
-        codewalker: None,
-        recovered: BTreeMap::new(),
         models: BTreeMap::new(),
-        extractions: 0,
-        replaying: BTreeSet::new(),
+        ybn_models: BTreeMap::new(),
       };
       for resource in resources {
         let relative = resource.strip_prefix(&input)?;

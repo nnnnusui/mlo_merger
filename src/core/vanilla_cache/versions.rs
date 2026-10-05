@@ -34,7 +34,7 @@ pub struct VanillaVersionEntry {
   pub version: String,
   /// Whether the file was introduced or replaced at this version.
   pub change: VanillaVersionChange,
-  /// Cache-relative path to the native addition or JSON delta.
+  /// Cache-relative path to the native file stored for that stage.
   pub artifact: String,
   /// Original game-relative RPF entry provenance.
   pub source: String,
@@ -57,7 +57,7 @@ impl ListVanillaVersions {
       return Err("Expected a vanilla basename such as example.ymap or example.ybn".into());
     }
     let manifest = load_manifest(&self.vanilla_cache_dir)?;
-    if !matches!(manifest.format_version, 1..=3) {
+    if manifest.format_version != 1 {
       return Err(format!("Unsupported GTAV cache schema {}", manifest.format_version).into());
     }
     let mut ids = BTreeSet::new();
@@ -121,12 +121,11 @@ mod tests {
       file: CachedFile {
         sha256: hash.into(),
         object: artifact.into(),
-        native: None,
         source: format!("fixture.rpf/{artifact}"),
       },
     };
     let mut manifest = VanillaCacheManifest {
-      format_version: 3,
+      format_version: 1,
       game_dir: root.join("missing-game"),
       versions: vec![
         CacheVersion {
@@ -154,13 +153,10 @@ mod tests {
           changes: BTreeMap::from([
             (
               "example.ymap".into(),
-              change(Some("first"), "second", "0002-patch/ymap/example.ymap.diff.json"),
+              change(Some("first"), "second", "0002-patch/ymap/example.ymap"),
             ),
             ("other.ymap".into(), change(None, "other", "0002-patch/ymap/other.ymap")),
-            (
-              "a.ybn".into(),
-              change(Some("ybn-first"), "ybn-second", "0002-patch/ybn/a.ybn.diff.json"),
-            ),
+            ("a.ybn".into(), change(Some("ybn-first"), "ybn-second", "0002-patch/ybn/a.ybn")),
           ]),
         },
       ],
@@ -177,7 +173,7 @@ mod tests {
     );
     assert_eq!(versions[0].change, VanillaVersionChange::Added);
     assert_eq!(versions[1].change, VanillaVersionChange::Modified);
-    assert!(versions[1].artifact.ends_with(".ymap.diff.json"));
+    assert!(versions[1].artifact.ends_with(".ymap"));
     query.file_name = "A.YBN".into();
     let bounds = query.versions().unwrap();
     assert_eq!(
@@ -186,7 +182,7 @@ mod tests {
     );
     assert_eq!(bounds[0].change, VanillaVersionChange::Added);
     assert_eq!(bounds[1].change, VanillaVersionChange::Modified);
-    assert!(bounds[1].artifact.ends_with(".ybn.diff.json"));
+    assert!(bounds[1].artifact.ends_with(".ybn"));
     query.file_name = "missing.ymap".into();
     assert!(query.versions().unwrap().is_empty());
     for name in ["", ".", "..", "../a.ybn", "folder\\a.ybn"] {
@@ -196,15 +192,6 @@ mod tests {
     query.file_name = "../example.ymap".into();
     assert!(query.versions().is_err());
     query.file_name = "example.ymap".into();
-    for version in &manifest.versions {
-      fs::create_dir(root.join(&version.id)).unwrap();
-      write_json(&root.join(&version.id).join("version_info.json"), version).unwrap();
-    }
-    fs::remove_file(root.join("cache_info.json")).unwrap();
-    assert_eq!(query.versions().unwrap(), versions);
-    manifest.format_version = 1;
-    write_json(&root.join("manifest.json"), &manifest).unwrap();
-    assert_eq!(query.versions().unwrap(), versions);
     manifest.versions[2].changes.get_mut("example.ymap").unwrap().previous_sha256 =
       Some("wrong".into());
     write_json(&root.join("cache_info.json"), &manifest).unwrap();

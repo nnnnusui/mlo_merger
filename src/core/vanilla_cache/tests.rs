@@ -12,7 +12,6 @@ use super::{
   publication::{Staging, preserve_failed_logs, publish_cache, reset_output_directory},
   stage::stage,
 };
-use crate::core::format::ymap::{model::Ymap, xml::XmlYmap};
 
 #[test]
 fn dlclist_keeps_order_and_normalizes_mounts() {
@@ -56,28 +55,37 @@ fn resets_only_cache_output_and_refuses_game_or_workspace_paths() {
 }
 
 #[test]
-fn stages_store_only_changes_and_resolve_prior_versions() {
+fn cache_manifest_requires_schema_one_and_root_metadata() {
+  let root = std::env::temp_dir().join(format!("vanilla_schema_test_{}", std::process::id()));
+  fs::create_dir_all(&root).unwrap();
+  let _cleanup = Staging(root.clone());
+  let mut manifest = VanillaCacheManifest {
+    format_version: 1,
+    game_dir: "game".into(),
+    versions: vec![],
+  };
+  write_json(&root.join("cache_info.json"), &manifest).unwrap();
+  assert_eq!(load_manifest(&root).unwrap().format_version, 1);
+  manifest.format_version = 2;
+  write_json(&root.join("cache_info.json"), &manifest).unwrap();
+  assert!(
+    load_manifest(&root).unwrap_err().to_string().contains("Unsupported GTA V cache schema 2")
+  );
+  fs::remove_file(root.join("cache_info.json")).unwrap();
+  assert!(load_manifest(&root).is_err());
+}
+
+#[test]
+fn stages_store_only_changed_raw_files_and_resolve_prior_versions() {
   init_test_version_logger();
   let root = std::env::temp_dir().join(format!("vanilla_cache_test_{}", std::process::id()));
   fs::create_dir_all(&root).unwrap();
   let _cleanup = Staging(root.clone());
-  let xml: XmlYmap = quick_xml::de::from_str(include_str!(concat!(
-    env!("CARGO_MANIFEST_DIR"),
-    "/docs/sample/parent_refs/vanilla_parent.ymap.xml"
-  )))
-  .unwrap();
-  let before: Ymap = xml.into();
-  let mut after = before.clone();
-  after.parent = "changed_parent".into();
-  fs::write(root.join("first"), serde_json::to_vec(&before).unwrap()).unwrap();
-  fs::write(root.join("second"), serde_json::to_vec(&after).unwrap()).unwrap();
-  let mut third = after.clone();
-  third.parent = "next_parent".into();
-  fs::write(root.join("third"), serde_json::to_vec(&third).unwrap()).unwrap();
-  let reader =
-    |path: &Path| -> Result<Ymap> { Ok(serde_json::from_reader(fs::File::open(path)?)?) };
+  fs::write(root.join("first"), b"first map version").unwrap();
+  fs::write(root.join("second"), b"second map version").unwrap();
+  fs::write(root.join("third"), b"third map version").unwrap();
   let mut manifest = VanillaCacheManifest {
-    format_version: 3,
+    format_version: 1,
     game_dir: "game".into(),
     versions: vec![],
   };
@@ -93,34 +101,22 @@ fn stages_store_only_changes_and_resolve_prior_versions() {
       root.clone(),
     )
   };
-  stage(
-    &mut manifest,
-    &mut current,
-    &root,
-    "base",
-    || Ok((vec![], vec![file("a.ymap", "111", "first"), file("b.ymap", "111", "first")])),
-    &reader,
-  )
+  stage(&mut manifest, &mut current, &root, "base", || {
+    Ok((vec![], vec![file("a.ymap", "111", "first"), file("b.ymap", "111", "first")]))
+  })
   .unwrap();
-  stage(
-    &mut manifest,
-    &mut current,
-    &root,
-    "dlc",
-    || {
-      Ok((
-        vec![],
-        vec![
-          file("a.ymap", "222", "second"),
-          file("b.ymap", "111", "first"),
-          file("c.ymap", "222", "second"),
-        ],
-      ))
-    },
-    &reader,
-  )
+  stage(&mut manifest, &mut current, &root, "dlc", || {
+    Ok((
+      vec![],
+      vec![
+        file("a.ymap", "222", "second"),
+        file("b.ymap", "111", "first"),
+        file("c.ymap", "222", "second"),
+      ],
+    ))
+  })
   .unwrap();
-  stage(&mut manifest, &mut current, &root, "empty", || Ok((vec![], vec![])), &reader).unwrap();
+  stage(&mut manifest, &mut current, &root, "empty", || Ok((vec![], vec![]))).unwrap();
   assert_eq!(manifest.versions[1].changes.len(), 2);
   assert_eq!(manifest.versions[1].changes["a.ymap"].previous_sha256.as_deref(), Some("111"));
   assert_eq!(manifest.versions[1].changes["c.ymap"].previous_sha256, None);
@@ -131,71 +127,35 @@ fn stages_store_only_changes_and_resolve_prior_versions() {
   assert!(manifest.resolve_version("unknown").is_err());
   assert_eq!(manifest.versions[1].unchanged, 1);
   assert!(root.join("0000-base/ymap/a.ymap").is_file());
-  assert!(root.join("0001-dlc/ymap/a.ymap.diff.json").is_file());
-  assert!(
-    manifest
-      .versions
-      .iter()
-      .flat_map(|version| version.changes.values())
-      .all(|change| change.file.native.is_none())
-  );
-  assert!(!root.join("0001-dlc/ymap/a.ymap").exists());
+  assert!(root.join("0001-dlc/ymap/a.ymap").is_file());
   assert!(!root.join("0001-dlc/ymap/b.ymap").exists());
   assert!(root.join("0001-dlc/ymap/c.ymap").is_file());
-  let diff: ymap_delta::VanillaYmapDelta =
-    serde_json::from_reader(fs::File::open(root.join("0001-dlc/ymap/a.ymap.diff.json")).unwrap())
-      .unwrap();
-  assert_eq!(diff.apply_to(&before).unwrap(), after);
-  assert_eq!(
-    fs::read(root.join("0001-dlc/ymap/c.ymap")).unwrap(),
-    fs::read(root.join("second")).unwrap()
-  );
+  assert_eq!(fs::read(root.join("0000-base/ymap/a.ymap")).unwrap(), b"first map version");
+  assert_eq!(fs::read(root.join("0001-dlc/ymap/a.ymap")).unwrap(), b"second map version");
+  assert_eq!(fs::read(root.join("0001-dlc/ymap/c.ymap")).unwrap(), b"second map version");
   for version in &manifest.versions {
     assert!(root.join(&version.id).join("version_info.json").is_file());
     assert!(root.join(&version.id).join("create_cache.log").is_file());
     assert!(root.join(&version.id).join("ymap").is_dir());
     assert!(!root.join(&version.id).join("native").exists());
-    let info: serde_json::Value = serde_json::from_reader(
-      fs::File::open(root.join(&version.id).join("version_info.json")).unwrap(),
-    )
-    .unwrap();
-    for change in info["changes"].as_object().unwrap().values() {
-      assert!(change["file"].get("native").is_none());
-    }
   }
-  let delta: serde_json::Value =
-    serde_json::from_reader(fs::File::open(root.join("0001-dlc/ymap/a.ymap.diff.json")).unwrap())
-      .unwrap();
-  assert!(delta["base"].get("native").is_none());
   let log = fs::read_to_string(root.join("0001-dlc/create_cache.log")).unwrap();
-  assert!(log.contains("Diff a.ymap"));
+  assert!(log.contains("Modified a.ymap"));
   assert!(log.contains("Added c.ymap"));
   assert!(log.contains("Unchanged b.ymap"));
   assert!(
-    !fs::read_to_string(root.join("0002-empty/create_cache.log")).unwrap().contains("Diff a.ymap")
+    !fs::read_to_string(root.join("0002-empty/create_cache.log"))
+      .unwrap()
+      .contains("Modified a.ymap")
   );
-  stage(
-    &mut manifest,
-    &mut current,
-    &root,
-    "next",
-    || Ok((vec![], vec![file("a.ymap", "333", "third")])),
-    &reader,
-  )
+  stage(&mut manifest, &mut current, &root, "next", || {
+    Ok((vec![], vec![file("a.ymap", "333", "third")]))
+  })
   .unwrap();
   assert_eq!(manifest.versions[3].changes["a.ymap"].previous_sha256.as_deref(), Some("222"));
-  let diff: ymap_delta::VanillaYmapDelta =
-    serde_json::from_reader(fs::File::open(root.join("0003-next/ymap/a.ymap.diff.json")).unwrap())
-      .unwrap();
-  assert_eq!(diff.apply_to(&after).unwrap(), third);
-  let failed = stage(
-    &mut manifest,
-    &mut current,
-    &root,
-    "failed",
-    || Err("test extraction failure".into()),
-    &reader,
-  );
+  assert_eq!(fs::read(root.join("0003-next/ymap/a.ymap")).unwrap(), b"third map version");
+  let failed =
+    stage(&mut manifest, &mut current, &root, "failed", || Err("test extraction failure".into()));
   assert!(failed.is_err());
   assert!(
     fs::read_to_string(root.join("0004-failed/create_cache.log"))
@@ -207,7 +167,7 @@ fn stages_store_only_changes_and_resolve_prior_versions() {
 }
 
 #[test]
-fn stages_cache_ybn_additions_and_structured_replacements_alongside_ymap() {
+fn stages_cache_raw_ybn_replacements_and_ymap_files() {
   use crate::core::format::ybn::xml::xml_to_ybn;
   use sha2::{Digest, Sha256};
 
@@ -235,57 +195,29 @@ fn stages_cache_ybn_additions_and_structured_replacements_alongside_ymap() {
       root.clone(),
     )
   };
-  let reader = |_: &Path| -> Result<Ymap> { Err("YBN files must not use the YMAP reader".into()) };
   let mut manifest = VanillaCacheManifest {
-    format_version: 3,
+    format_version: 1,
     game_dir: "missing-game".into(),
     versions: vec![],
   };
   let mut current = BTreeMap::new();
-  stage(
-    &mut manifest,
-    &mut current,
-    &root,
-    "base",
-    || Ok((vec![], vec![file("same.ybn", "before.ybn"), file("same.ymap", "fake.ymap")])),
-    &reader,
-  )
+  stage(&mut manifest, &mut current, &root, "base", || {
+    Ok((vec![], vec![file("same.ybn", "before.ybn"), file("same.ymap", "fake.ymap")]))
+  })
   .unwrap();
-  stage(
-    &mut manifest,
-    &mut current,
-    &root,
-    "patch",
-    || Ok((vec![], vec![file("same.ybn", "after.ybn"), file("new.ybn", "after.ybn")])),
-    &reader,
-  )
+  stage(&mut manifest, &mut current, &root, "patch", || {
+    Ok((vec![], vec![file("same.ybn", "after.ybn"), file("new.ybn", "after.ybn")]))
+  })
   .unwrap();
-  stage(
-    &mut manifest,
-    &mut current,
-    &root,
-    "unchanged",
-    || Ok((vec![], vec![file("same.ybn", "after.ybn")])),
-    &reader,
-  )
+  stage(&mut manifest, &mut current, &root, "unchanged", || {
+    Ok((vec![], vec![file("same.ybn", "after.ybn")]))
+  })
   .unwrap();
   assert_eq!(fs::read(root.join("0000-base/ybn/same.ybn")).unwrap(), before);
   assert!(root.join("0000-base/ymap/same.ymap").is_file());
   assert_eq!(fs::read(root.join("0001-patch/ybn/new.ybn")).unwrap(), after);
-  let json: serde_json::Value = serde_json::from_reader(
-    fs::File::open(root.join("0001-patch/ybn/same.ybn.diff.json")).unwrap(),
-  )
-  .unwrap();
-  assert_eq!(json["changes"]["kind"], "model_replacement");
-  assert_eq!(json["target_native_sha256"], manifest.versions[1].changes["same.ybn"].file.sha256);
-  for field in ["canonical_xml_sha256", "canonical_binary_sha256"] {
-    assert_eq!(json[field].as_str().unwrap().len(), 64);
-  }
-  for field in
-    ["format", "before_size", "after_size", "prefix_length", "suffix_length", "replacement"]
-  {
-    assert!(json.get(field).is_none(), "unexpected field {field}");
-  }
+  assert_eq!(fs::read(root.join("0001-patch/ybn/same.ybn")).unwrap(), after);
+  assert!(!root.join("0001-patch/ybn/same.ybn.diff.json").exists());
   assert!(manifest.versions[2].changes.is_empty());
   assert_eq!(manifest.versions[2].unchanged, 1);
   assert_eq!(manifest.resolve_version("0002-unchanged").unwrap().len(), 3);
@@ -318,8 +250,10 @@ fn discovers_all_installed_base_archives_without_assuming_a_final_letter() {
 }
 
 #[test]
-#[ignore = "requires regenerated structured YBN cache under asset/vanilla-cache"]
-fn real_ybn_cache_applies_a_delta_with_stable_xml_and_binary() {
+#[ignore = "requires regenerated schema-1 cache under asset/vanilla-cache"]
+fn real_ybn_cache_stores_raw_replacements() {
+  use sha2::{Digest, Sha256};
+
   let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("asset/vanilla-cache");
   let manifest = load_manifest(&root).unwrap();
   let (name, change) = manifest
@@ -327,29 +261,11 @@ fn real_ybn_cache_applies_a_delta_with_stable_xml_and_binary() {
     .iter()
     .flat_map(|version| version.changes.iter())
     .find(|(name, change)| name.ends_with(".ybn") && change.previous_sha256.is_some())
-    .expect("requires a YBN replacement delta");
+    .expect("requires a YBN replacement");
   let file = &change.file;
-  let json: serde_json::Value =
-    serde_json::from_reader(fs::File::open(root.join(&file.object)).unwrap()).unwrap();
-  assert_eq!(json["target_native_sha256"], file.sha256);
-  for field in ["canonical_xml_sha256", "canonical_binary_sha256"] {
-    assert_eq!(json[field].as_str().unwrap().len(), 64);
-  }
-  assert!(matches!(json["changes"]["kind"].as_str(), Some("semantic" | "model_replacement")));
-  for field in
-    ["format", "before_size", "after_size", "prefix_length", "suffix_length", "replacement"]
-  {
-    assert!(json.get(field).is_none(), "unexpected field {field}");
-  }
-  let delta: ybn_delta::VanillaYbnDelta = serde_json::from_value(json).unwrap();
-  let predecessor = fs::read(root.join(&delta.base.object)).unwrap();
-  let reconstructed =
-    delta.apply_to(&crate::core::format::ybn::read_ybn(&predecessor).unwrap()).unwrap();
-  assert!(matches!(
-    delta.changes,
-    ybn_delta::StructuredYbnChanges::Semantic { .. }
-      | ybn_delta::StructuredYbnChanges::ModelReplacement { .. }
-  ));
+  let raw = fs::read(root.join(&file.object)).unwrap();
+  assert!(file.object.ends_with(".ybn"));
+  assert_eq!(format!("{:x}", Sha256::digest(&raw)), file.sha256);
   let versions = ListVanillaVersions {
     file_name: name.clone(),
     vanilla_cache_dir: root.clone(),
@@ -358,9 +274,9 @@ fn real_ybn_cache_applies_a_delta_with_stable_xml_and_binary() {
   .unwrap();
   assert!(versions.iter().any(|version| version.change == VanillaVersionChange::Modified));
   println!(
-    "Applied structured YBN replacement {name} across {} cache stages (reconstructed {})",
+    "Verified raw YBN replacement {name} across {} cache stages ({} bytes)",
     manifest.versions.len(),
-    reconstructed.kind
+    raw.len()
   );
 }
 
@@ -380,7 +296,7 @@ fn publication_restores_existing_versions_if_root_metadata_cannot_be_replaced() 
     unchanged: 0,
   };
   let manifest = VanillaCacheManifest {
-    format_version: 2,
+    format_version: 1,
     game_dir: "game".into(),
     versions: vec![version],
   };

@@ -145,7 +145,7 @@ fn build_vanilla_cache() -> impl Parser<Command> {
 
 fn build_diff_cache() -> impl Parser<Command> {
   let flag = long("generate-diff-cache")
-    .help("Infer vanilla versions and cache MLO YMAP differences")
+    .help("Infer vanilla versions and cache MLO YMAP/YBN differences")
     .req_flag(());
   let input_dir = short('i')
     .long("input")

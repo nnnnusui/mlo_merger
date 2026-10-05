@@ -9,14 +9,14 @@ use super::{
   archives::{
     DlcList, base_archives, dlc_archive, extract, game_path, patch_dlc, platform_archives,
   },
-  io::{read_ymap, write_json},
+  io::write_json,
   manifest::VanillaCacheManifest,
   publication::{Staging, preserve_failed_logs, publish_cache, reset_output_directory},
   stage::stage,
 };
 use crate::core::codewalker::CodeWalker;
 
-/// Builds a vanilla archive cache independently of the MLO merge pipeline.
+/// Builds a vanilla archive cache of changed native files independently of the MLO merge pipeline.
 #[derive(Debug, Clone)]
 pub struct BuildVanillaCache {
   /// Installed GTA V Legacy directory containing base RPFs and update/.
@@ -28,7 +28,7 @@ pub struct BuildVanillaCache {
 }
 
 impl BuildVanillaCache {
-  /// Reads all installed root RPFs and ordered DLCs, saving additions, diffs, and version logs.
+  /// Reads installed root RPFs and ordered DLCs, saving changed raw files and version logs.
   /// Register `version_logger()` with the application logger to capture diff log records.
   pub fn run(
     &self,
@@ -65,33 +65,26 @@ impl BuildVanillaCache {
   ) -> Result<()> {
     let through_version = self.through_version.as_deref().map(str::to_ascii_lowercase);
     let mut manifest = VanillaCacheManifest {
-      format_version: 3,
+      format_version: 1,
       game_dir: game_dir.into(),
       versions: vec![],
     };
     let mut current = BTreeMap::new();
     let base_dir = scratch.join("base");
-    stage(
-      &mut manifest,
-      &mut current,
-      build,
-      "base",
-      || {
-        let mut files = Vec::new();
-        for relative in &roots {
-          let directory = base_dir.join(relative);
-          let extracted = extract(codewalker, game_dir, relative, &directory, None)?;
-          files.extend(
-            extracted
-              .into_iter()
-              .filter(|file| !file.source.contains("/dlcpacks/"))
-              .map(|file| (file, directory.clone())),
-          );
-        }
-        Ok((roots.clone(), files))
-      },
-      &read_ymap,
-    )?;
+    stage(&mut manifest, &mut current, build, "base", || {
+      let mut files = Vec::new();
+      for relative in &roots {
+        let directory = base_dir.join(relative);
+        let extracted = extract(codewalker, game_dir, relative, &directory, None)?;
+        files.extend(
+          extracted
+            .into_iter()
+            .filter(|file| !file.source.contains("/dlcpacks/"))
+            .map(|file| (file, directory.clone())),
+        );
+      }
+      Ok((roots.clone(), files))
+    })?;
     fs::remove_dir_all(&base_dir)?;
     if through_version.as_deref() == Some("base") {
       return self.publish_cache(build, output_dir, &manifest);
@@ -100,33 +93,26 @@ impl BuildVanillaCache {
     let update_dir = scratch.join("update");
     let mut update = Vec::new();
     let mut dlc_items = Vec::new();
-    stage(
-      &mut manifest,
-      &mut current,
-      build,
-      "update",
-      || {
-        update = extract(codewalker, game_dir, "update/update.rpf", &update_dir, None)?;
-        let list = update
+    stage(&mut manifest, &mut current, build, "update", || {
+      update = extract(codewalker, game_dir, "update/update.rpf", &update_dir, None)?;
+      let list = update
+        .iter()
+        .find(|file| file.source == "update/update.rpf/common/data/dlclist.xml")
+        .ok_or("update/update.rpf/common/data/dlclist.xml is missing")?;
+      let dlcs: DlcList = quick_xml::de::from_reader(std::io::BufReader::new(fs::File::open(
+        update_dir.join(&list.stored),
+      )?))?;
+      dlc_items = dlcs.paths.items;
+      Ok((
+        vec!["update/update.rpf".into()],
+        update
           .iter()
-          .find(|file| file.source == "update/update.rpf/common/data/dlclist.xml")
-          .ok_or("update/update.rpf/common/data/dlclist.xml is missing")?;
-        let dlcs: DlcList = quick_xml::de::from_reader(std::io::BufReader::new(fs::File::open(
-          update_dir.join(&list.stored),
-        )?))?;
-        dlc_items = dlcs.paths.items;
-        Ok((
-          vec!["update/update.rpf".into()],
-          update
-            .iter()
-            .filter(|file| patch_dlc(&file.source).is_none())
-            .cloned()
-            .map(|file| (file, update_dir.clone()))
-            .collect(),
-        ))
-      },
-      &read_ymap,
-    )?;
+          .filter(|file| patch_dlc(&file.source).is_none())
+          .cloned()
+          .map(|file| (file, update_dir.clone()))
+          .collect(),
+      ))
+    })?;
     if through_version.as_deref() == Some("update") {
       return self.publish_cache(build, output_dir, &manifest);
     }
@@ -155,43 +141,36 @@ impl BuildVanillaCache {
       let stop_after =
         through_version.as_deref().is_some_and(|requested| label.eq_ignore_ascii_case(requested));
       let directory = scratch.join("dlc");
-      stage(
-        &mut manifest,
-        &mut current,
-        build,
-        &label,
-        || {
-          let (physical, subtree) =
-            if relative.starts_with("x64/") && game_path(game_dir, Path::new(&relative)).is_err() {
-              if platform_index.is_none() {
-                platform_index = Some(platform_archives(codewalker, game_dir, scratch)?);
-              }
-              let (physical, subtree) = platform_index
-                .as_ref()
-                .unwrap()
-                .get(&relative)
-                .ok_or_else(|| format!("Listed platform DLC archive not found: {item}"))?;
-              (physical.clone(), Some(subtree.clone()))
-            } else {
-              (relative.clone(), None)
-            };
-          let extracted = extract(codewalker, game_dir, &physical, &directory, subtree.as_deref())?;
-          let mut files: Vec<_> =
-            extracted.into_iter().map(|file| (file, directory.clone())).collect();
-          let patches: Vec<_> = update
-            .iter()
-            .filter(|file| patch_dlc(&file.source) == Some(label.as_str()))
-            .cloned()
-            .collect();
-          let mut archives = vec![subtree.unwrap_or(physical)];
-          if !patches.is_empty() {
-            archives.push(format!("update/update.rpf/dlc_patch/{label}"));
-            files.extend(patches.into_iter().map(|file| (file, update_dir.clone())));
-          }
-          Ok((archives, files))
-        },
-        &read_ymap,
-      )?;
+      stage(&mut manifest, &mut current, build, &label, || {
+        let (physical, subtree) =
+          if relative.starts_with("x64/") && game_path(game_dir, Path::new(&relative)).is_err() {
+            if platform_index.is_none() {
+              platform_index = Some(platform_archives(codewalker, game_dir, scratch)?);
+            }
+            let (physical, subtree) = platform_index
+              .as_ref()
+              .unwrap()
+              .get(&relative)
+              .ok_or_else(|| format!("Listed platform DLC archive not found: {item}"))?;
+            (physical.clone(), Some(subtree.clone()))
+          } else {
+            (relative.clone(), None)
+          };
+        let extracted = extract(codewalker, game_dir, &physical, &directory, subtree.as_deref())?;
+        let mut files: Vec<_> =
+          extracted.into_iter().map(|file| (file, directory.clone())).collect();
+        let patches: Vec<_> = update
+          .iter()
+          .filter(|file| patch_dlc(&file.source) == Some(label.as_str()))
+          .cloned()
+          .collect();
+        let mut archives = vec![subtree.unwrap_or(physical)];
+        if !patches.is_empty() {
+          archives.push(format!("update/update.rpf/dlc_patch/{label}"));
+          files.extend(patches.into_iter().map(|file| (file, update_dir.clone())));
+        }
+        Ok((archives, files))
+      })?;
       fs::remove_dir_all(directory)?;
       if stop_after {
         break;

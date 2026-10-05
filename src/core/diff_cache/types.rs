@@ -1,7 +1,10 @@
 //! Internal candidate and generation-report data structures.
 
-use crate::core::vanilla_cache::CachedFile;
-use serde::Serialize;
+use crate::core::{
+  format::ybn::{diff::YbnDiff, model::Bound},
+  vanilla_cache::CachedFile,
+};
+use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
 #[derive(Clone)]
@@ -55,4 +58,16 @@ pub(super) struct GenerationReport {
   pub(super) error: Option<String>,
   pub(super) distance_metric: &'static str,
   pub(super) resources: Vec<ResourceReport>,
+}
+
+#[derive(Deserialize, Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub(super) enum YbnDiffReport {
+  Semantic {
+    diff: YbnDiff,
+  },
+  ModelReplacement {
+    reason: String,
+    model: Box<Bound>,
+  },
 }

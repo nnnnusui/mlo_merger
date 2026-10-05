@@ -23,7 +23,9 @@ pub(super) fn content_hash(path: &Path) -> Result<String> {
   Ok(format!("{:x}", Sha256::digest(fs::read(path)?)))
 }
 
+#[cfg(test)]
 pub(super) struct Scratch(pub(super) PathBuf);
+#[cfg(test)]
 impl Drop for Scratch {
   fn drop(&mut self) {
     let _ = fs::remove_dir_all(&self.0);

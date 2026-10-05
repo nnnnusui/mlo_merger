@@ -10,11 +10,6 @@ use super::{
   io::write_json,
   logging::VersionLog,
   manifest::{CacheVersion, CachedFile, FileChange, VanillaCacheManifest},
-  ybn_delta, ymap_delta,
-};
-use crate::core::{
-  format::{ybn::read_ybn, ymap::model::Ymap},
-  merge::YmapDiff,
 };
 
 pub(super) fn stage(
@@ -23,14 +18,12 @@ pub(super) fn stage(
   output: &Path,
   label: &str,
   files: impl FnOnce() -> Result<(Vec<String>, Vec<(ExtractedFile, PathBuf)>)>,
-  reader: &impl Fn(&Path) -> Result<Ymap>,
 ) -> Result<()> {
   let id = format!("{:04}-{label}", manifest.versions.len());
   let directory = output.join(&id);
   fs::create_dir(&directory)?;
   fs::create_dir(directory.join("ymap"))?;
   fs::create_dir(directory.join("ybn"))?;
-  fs::create_dir_all(output.join(".working"))?;
   let version_log = VersionLog::start(&directory)?;
   let result = (|| -> Result<()> {
     log::info!("Creating cache {id}");
@@ -66,50 +59,18 @@ pub(super) fn stage(
         continue;
       }
       let input = directory.join(&file.stored);
-      let working = output.join(".working").join(&name);
       let family = if name.ends_with(".ybn") { "ybn" } else { "ymap" };
-      let object = if previous.is_some() {
-        format!("{id}/{family}/{name}.diff.json")
-      } else {
-        format!("{id}/{family}/{name}")
-      };
+      let object = format!("{id}/{family}/{name}");
       let destination = output.join(&object);
       if let Some(previous) = previous {
-        log::info!("Diff {name}: {} -> {}", previous.source, file.source);
-        if family == "ybn" {
-          let before = fs::read(&working)?;
-          let after = fs::read(&input)?;
-          let delta = ybn_delta::VanillaYbnDelta::extract_from(&before, &after, previous.clone())?;
-          delta.apply_to(&read_ybn(&before)?)?;
-          if delta.target_native_sha256 != file.sha256 {
-            return Err(format!("YBN structured diff target hash mismatch for {name}").into());
-          }
-          log::info!("Structured YBN diff generated");
-          write_json(&destination, &delta)?;
-        } else {
-          let before =
-            reader(&working).map_err(|error| format!("Reading previous {name}: {error}"))?;
-          let after =
-            reader(&input).map_err(|error| format!("Reading replacement {name}: {error}"))?;
-          let diff = YmapDiff::extract_from(&before, &after);
-          drop(diff);
-          let delta = ymap_delta::VanillaYmapDelta::extract_from(
-            &before,
-            &after,
-            previous.clone(),
-            file.sha256.clone(),
-          )?;
-          write_json(&destination, &delta)?;
-        }
+        log::info!("Modified {name}: {} -> {}", previous.source, file.source);
       } else {
         log::info!("Added {name}: {}", file.source);
-        fs::copy(&input, &destination)?;
       }
-      fs::copy(&input, &working)?;
+      fs::copy(&input, &destination)?;
       let cached = CachedFile {
         sha256: file.sha256,
         object,
-        native: None,
         source: file.source,
       };
       changes.insert(

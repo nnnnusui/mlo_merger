@@ -35,9 +35,9 @@ YBN merging requires a same-named vanilla baseline. Supported collision shapes
 are compared geometrically rather than by binary table order. Removals and
 additions are combined; unsupported shapes use conservative handling.
 
-Structural YBN differences are available separately from binary history
-patches. They describe primitive occurrences and Bounds metadata, but are not
-yet an apply/merge API or an MLO YBN diff-cache workflow.
+YBN semantic differences are used by MLO diff-cache generation. They describe
+primitive occurrences and Bounds metadata; conflict merge does not yet consume
+these reports. Vanilla history stores raw native files instead.
 
 ## Vanilla History
 
@@ -45,14 +45,11 @@ The vanilla cache applies base archives, the title update and listed DLCs in
 order. DLC title-update patches are applied with their corresponding DLC. A build
 starts with an empty output directory; an optional stage limit emits a complete
 prefix and avoids reading later DLC archives. Each stage records provenance,
-metadata and generation logs.
-
-New files are stored directly; changed files are stored as deltas and unchanged
-content is reused. YMAP deltas reconstruct parsed models, while YBN deltas
-store semantic Bounds/Polygon changes when applying them reproduces the target's
-stable XML and binary output. Otherwise the complete decoded model is stored.
-The binary check is against canonical conversion output, not the source
-resource's original encoding.
+metadata and generation logs. New or changed YMAP/YBN files are stored as raw
+native files in that stage; unchanged files are omitted. The manifest records
+the predecessor hash and source, and cumulative lookup selects the most recent
+stored file for each name. This preserves source bytes without replaying history
+deltas. The manifest schema is currently version 1.
 
 Cache publication occurs after all stages complete. Failures retain diagnostic
 logs without publishing an incomplete cache. Version lookup is a read-only

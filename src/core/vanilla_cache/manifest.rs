@@ -3,7 +3,6 @@
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fs;
-use std::io::BufReader;
 use std::path::{Path, PathBuf};
 
 use super::Result;
@@ -13,21 +12,18 @@ use super::Result;
 pub struct CachedFile {
   /// SHA-256 of the extracted, standalone native file.
   pub sha256: String,
-  /// Cache-relative path to a native addition or structured replacement artifact.
+  /// Cache-relative path to the raw native file stored for this stage.
   pub object: String,
-  /// Optional legacy native snapshot reference; omitted by new cache generation.
-  #[serde(default, skip_serializing_if = "Option::is_none")]
-  pub native: Option<String>,
   /// Game-relative archive and entry path, including nested RPFs.
   pub source: String,
 }
 
-/// An addition or content replacement relative to the preceding stage.
+/// A raw file addition or replacement relative to the preceding stage.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct FileChange {
   /// Previous content hash, or None for an added file.
   pub previous_sha256: Option<String>,
-  /// New cache artifact and provenance; replacements reference a structured .diff.json.
+  /// New raw-file artifact and provenance for this stage.
   pub file: CachedFile,
 }
 
@@ -47,10 +43,10 @@ pub struct CacheVersion {
   pub unchanged: usize,
 }
 
-/// Ordered delta manifest for a particular installed game's archives.
+/// Ordered manifest of changed raw files from a particular installed game's archives.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct VanillaCacheManifest {
-  /// Cache schema version, currently 3; schema 2 remains readable.
+  /// Cache schema version, currently 1.
   pub format_version: u32,
   /// Installed game directory from which this cache was generated.
   pub game_dir: PathBuf,
@@ -59,19 +55,18 @@ pub struct VanillaCacheManifest {
 }
 
 impl VanillaCacheManifest {
-  /// Resolves the latest artifact per filename at a stage, retaining unchanged parent entries.
-  /// Replacement artifacts are diff reports, not standalone native binaries.
+  /// Resolves the latest raw file per filename at a stage, retaining unchanged parent entries.
   ///
   /// ```
   /// # use mlo_merger::core::vanilla_cache::VanillaCacheManifest;
-  /// # let cache = VanillaCacheManifest { format_version: 2, game_dir: ".".into(), versions: vec![] };
+  /// # let cache = VanillaCacheManifest { format_version: 1, game_dir: ".".into(), versions: vec![] };
   /// assert!(cache.resolve_version("unknown").is_err());
   /// ```
   pub fn resolve_version(
     &self,
     id: &str,
   ) -> Result<BTreeMap<String, CachedFile>> {
-    if !matches!(self.format_version, 2 | 3) {
+    if self.format_version != 1 {
       return Err(format!("Unsupported GTA V cache schema {}", self.format_version).into());
     }
     let mut files = BTreeMap::new();
@@ -87,47 +82,15 @@ impl VanillaCacheManifest {
   }
 }
 
-/// Prefer current root metadata, then per-version records over a stale schema-1
-/// manifest; the latter may still supply the original game-directory hint.
+/// Loads the schema-1 cache manifest from the cache root.
 pub(crate) fn load_manifest(cache: &Path) -> Result<VanillaCacheManifest> {
   let root = cache.join("cache_info.json");
-  if root.is_file() {
-    return Ok(serde_json::from_reader(BufReader::new(fs::File::open(root)?))?);
+  if !root.is_file() {
+    return Err(format!("No vanilla cache manifest found in {}", cache.display()).into());
   }
-  let legacy = cache.join("manifest.json");
-  let legacy: Option<VanillaCacheManifest> = if legacy.is_file() {
-    Some(serde_json::from_reader(BufReader::new(fs::File::open(legacy)?))?)
-  } else {
-    None
-  };
-  if legacy.as_ref().is_some_and(|manifest| matches!(manifest.format_version, 2 | 3)) {
-    return legacy.ok_or_else(|| "Missing GTAV manifest".into());
+  let manifest: VanillaCacheManifest = serde_json::from_reader(fs::File::open(root)?)?;
+  if manifest.format_version != 1 {
+    return Err(format!("Unsupported GTA V cache schema {}", manifest.format_version).into());
   }
-  let mut versions: Vec<CacheVersion> = Vec::new();
-  for entry in fs::read_dir(cache)? {
-    let entry = entry?;
-    if !entry.file_type()?.is_dir() {
-      continue;
-    }
-    let info = entry.path().join("version_info.json");
-    if info.is_file() {
-      let version: CacheVersion = serde_json::from_reader(BufReader::new(fs::File::open(info)?))?;
-      if entry.file_name().to_string_lossy() != version.id {
-        return Err("Version directory does not match metadata ID".into());
-      }
-      versions.push(version);
-    }
-  }
-  if !versions.is_empty() {
-    versions.sort_by_key(|version| {
-      version.id.split_once('-').and_then(|(index, _)| index.parse::<usize>().ok())
-    });
-    log::warn!("cache_info.json is missing; using per-version metadata from {}", cache.display());
-    return Ok(VanillaCacheManifest {
-      format_version: 2,
-      game_dir: legacy.map(|manifest| manifest.game_dir).unwrap_or_default(),
-      versions,
-    });
-  }
-  legacy.ok_or_else(|| format!("No GTAV cache metadata found in {}", cache.display()).into())
+  Ok(manifest)
 }

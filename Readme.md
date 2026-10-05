@@ -56,9 +56,11 @@ the game installation. `--through-version` accepts `base`, `update`, or a DLC
 label and generates the complete history prefix through that stage, skipping
 later archives. Earlier overlays are included because they determine the selected
 stage's cumulative state. Version IDs are installed-file stages, not build numbers.
-YBN replacements store semantic changes when they reproduce stable XML and
-binary output; otherwise they store the complete decoded model. This does not
-preserve the source resource's original binary encoding.
+Each stage stores the extracted raw YMAP/YBN file when it is new or differs from
+the preceding cumulative state; unchanged files are omitted. This preserves the
+exact bytes from the source archive.
+The cache manifest currently accepts schema 1 only. Regenerate a cache to use
+this raw-per-stage layout.
 
 Version lookup returns a JSON list of introductions and changes. Matching is
 case-insensitive; unchanged stages are omitted and an unknown name returns `[]`.
@@ -74,9 +76,10 @@ The default `generate-diff-cache` Cargo alias scans all resources in `asset/sour
 including nested bracket groups. The output directory must be empty. Use `--input`
 for a single resource or another resources root.
 Each resource selects a vanilla baseline from its files' closest versions, then
-saves YMAP differences, selection metadata and logs. Unmatched or unsupported
-files are recorded rather than compared. YBN MLO diff-cache generation is not
-yet supported.
+saves YMAP/YBN differences, selection metadata and logs. Unmatched or unsupported
+files are recorded rather than compared. YBN reports contain semantic Bounds/
+Polygon changes, with the decoded model stored when semantic comparison cannot
+represent a file.
 
 ## Individual Commands
 
@@ -106,7 +109,7 @@ Run `cargo run -- --help` for all options. Convenience commands are defined in
 ## Limitations
 
 - Cache stages do not reproduce the complete game-engine mount rules or historical installations.
-- YMAP history restores parsed state; YBN history restores exact binary content. Semantic MLO differences are not lossless history patches.
+- MLO semantic differences are reports, not lossless history patches.
 - Conversion support depends on the resource family and available schemas. PSO rebuilding cannot grow arrays or allocated strings; RBF YMT is unsupported.
 - Matching XML or stable rebuilds does not establish in-game load safety. Validate generated resources in the target game environment.
 

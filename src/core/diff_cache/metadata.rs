@@ -5,8 +5,8 @@ use crate::core::vanilla_cache::VanillaCacheManifest;
 use std::collections::{BTreeMap, BTreeSet};
 
 pub(super) fn history(manifest: &VanillaCacheManifest) -> Result<BTreeMap<String, Vec<Variant>>> {
-  if !matches!(manifest.format_version, 1..=3) || manifest.versions.is_empty() {
-    return Err("A nonempty GTAV cache with schema 1, 2 or 3 is required".into());
+  if manifest.format_version != 1 || manifest.versions.is_empty() {
+    return Err("A nonempty GTAV cache with schema 1 is required".into());
   }
   let mut files: BTreeMap<String, Vec<Variant>> = BTreeMap::new();
   let mut ids = BTreeSet::new();
