@@ -13,7 +13,7 @@ use super::Result;
 pub struct CachedFile {
   /// SHA-256 of the extracted, standalone native file.
   pub sha256: String,
-  /// Cache-relative path to a new native file or a replacement's exact vanilla JSON delta.
+  /// Cache-relative path to a native addition or structured replacement artifact.
   pub object: String,
   /// Optional legacy native snapshot reference; omitted by new cache generation.
   #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -27,7 +27,7 @@ pub struct CachedFile {
 pub struct FileChange {
   /// Previous content hash, or None for an added file.
   pub previous_sha256: Option<String>,
-  /// New cache artifact and provenance; replacements reference .ymap.diff.json.
+  /// New cache artifact and provenance; replacements reference a structured .diff.json.
   pub file: CachedFile,
 }
 

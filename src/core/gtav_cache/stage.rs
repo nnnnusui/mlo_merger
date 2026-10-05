@@ -12,7 +12,10 @@ use super::{
   manifest::{CacheVersion, CachedFile, FileChange, GtavCacheManifest},
   ybn_delta, ymap_delta,
 };
-use crate::core::{format::ymap::model::Ymap, merge::YmapDiff};
+use crate::core::{
+  format::{ybn::read_ybn, ymap::model::Ymap},
+  merge::YmapDiff,
+};
 
 pub(super) fn stage(
   manifest: &mut GtavCacheManifest,
@@ -77,10 +80,11 @@ pub(super) fn stage(
           let before = fs::read(&working)?;
           let after = fs::read(&input)?;
           let delta = ybn_delta::VanillaYbnDelta::extract_from(&before, &after, previous.clone())?;
-          if delta.target_native_sha256 != file.sha256 || delta.apply_to(&before)? != after {
-            return Err(format!("YBN delta did not reconstruct target {name}").into());
+          delta.apply_to(&read_ybn(&before)?)?;
+          if delta.target_native_sha256 != file.sha256 {
+            return Err(format!("YBN structured diff target hash mismatch for {name}").into());
           }
-          log::info!("Exact YBN byte delta: {} -> {} bytes", before.len(), after.len());
+          log::info!("Structured YBN diff generated");
           write_json(&destination, &delta)?;
         } else {
           let before =

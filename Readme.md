@@ -45,14 +45,20 @@ Vanilla merge inputs normally live in `asset/vanilla/ymap.xml` and
 ## Vanilla Cache
 
 ```bash
-cargo run -- --generate-gtav-cache -i /mnt/gtav -o asset/gtav-cache
+cargo run -- --generate-vanilla-cache -i /mnt/gtav -o asset/gtav-cache
+cargo run -- --generate-vanilla-cache -i /mnt/gtav -o asset/gtav-cache --through-version patchday1ng
 cargo run -- --list-vanilla-versions example.ybn --gtav-cache asset/gtav-cache
 ```
 
-Cache generation reads base archives, the title update, and DLCs in `dlclist.xml`
-order without modifying the game installation. It saves YMAP/YBN additions and
-changes by version, together with metadata and logs. Version IDs are overlay
-stages from the installed files, not historical game build numbers.
+Each run removes and recreates the selected output directory. Generation reads
+base archives, the title update, and DLCs in `dlclist.xml` order without modifying
+the game installation. `--through-version` accepts `base`, `update`, or a DLC
+label and generates the complete history prefix through that stage, skipping
+later archives. Earlier overlays are included because they determine the selected
+stage's cumulative state. Version IDs are installed-file stages, not build numbers.
+YBN replacements store semantic changes when they reproduce stable XML and
+binary output; otherwise they store the complete decoded model. This does not
+preserve the source resource's original binary encoding.
 
 Version lookup returns a JSON list of introductions and changes. Matching is
 case-insensitive; unchanged stages are omitted and an unknown name returns `[]`.

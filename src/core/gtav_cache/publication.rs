@@ -2,7 +2,7 @@
 
 use std::fs;
 use std::io::BufReader;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 
 use super::{
   Result,
@@ -15,6 +15,65 @@ impl Drop for Staging {
   fn drop(&mut self) {
     let _ = fs::remove_dir_all(&self.0);
   }
+}
+
+pub(super) fn reset_output_directory(
+  output: &Path,
+  game_dir: &Path,
+) -> Result<PathBuf> {
+  let output = normalize_absolute(output)?;
+  let game_dir = game_dir.canonicalize()?;
+  let current_dir = std::env::current_dir()?.canonicalize()?;
+  validate_output_location(&output, &game_dir, &current_dir)?;
+  let parent = output.parent().ok_or("Cache output has no parent directory")?;
+  let name = output.file_name().ok_or("Cache output has no directory name")?;
+  fs::create_dir_all(parent)?;
+  let parent = parent.canonicalize()?;
+  let output = parent.join(name);
+  validate_output_location(&output, &game_dir, &current_dir)?;
+  if let Ok(metadata) = fs::symlink_metadata(&output) {
+    if metadata.file_type().is_symlink() {
+      return Err(format!("Refusing to remove symlink cache output {}", output.display()).into());
+    }
+    if !metadata.is_dir() {
+      return Err(format!("Cache output is not a directory: {}", output.display()).into());
+    }
+    fs::remove_dir_all(&output)?;
+  }
+  fs::create_dir_all(&output)?;
+  Ok(output.canonicalize()?)
+}
+
+fn normalize_absolute(path: &Path) -> Result<PathBuf> {
+  let path =
+    if path.is_absolute() { path.to_path_buf() } else { std::env::current_dir()?.join(path) };
+  let mut normalized = PathBuf::new();
+  for component in path.components() {
+    match component {
+      Component::CurDir => {}
+      Component::ParentDir => {
+        if normalized.file_name().is_some() {
+          normalized.pop();
+        }
+      }
+      component => normalized.push(component.as_os_str()),
+    }
+  }
+  Ok(normalized)
+}
+
+fn validate_output_location(
+  output: &Path,
+  game_dir: &Path,
+  current_dir: &Path,
+) -> Result<()> {
+  if output == game_dir || output.starts_with(game_dir) || game_dir.starts_with(output) {
+    return Err("Cache output must not overlap the installed game directory".into());
+  }
+  if output == current_dir || current_dir.starts_with(output) {
+    return Err("Refusing to clear the workspace directory or one of its parents".into());
+  }
+  Ok(())
 }
 
 /// Reject unknown output directories and retain backups until root metadata

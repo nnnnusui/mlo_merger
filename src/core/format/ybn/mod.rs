@@ -26,6 +26,11 @@ pub use binary::read_ybn_root as read_ybn;
 pub use diff::merge_ybn_deltas;
 pub use xml::{xml_to_ybn, ybn_to_xml};
 
+/// Encodes a structured Bounds model into a Native RSC7 YBN resource.
+pub fn write_ybn(root: &Bound) -> io::Result<Vec<u8>> {
+  encode_ybn_bound(root)
+}
+
 const BASE: u64 = 0x5000_0000;
 const ROOT_OFFSET: usize = 0;
 const BOUNDS_SIZE: usize = 112;

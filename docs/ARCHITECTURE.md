@@ -42,13 +42,17 @@ yet an apply/merge API or an MLO YBN diff-cache workflow.
 ## Vanilla History
 
 The vanilla cache applies base archives, the title update and listed DLCs in
-order. DLC title-update patches are applied with their corresponding DLC.
-Each stage records provenance, metadata and generation logs.
+order. DLC title-update patches are applied with their corresponding DLC. A build
+starts with an empty output directory; an optional stage limit emits a complete
+prefix and avoids reading later DLC archives. Each stage records provenance,
+metadata and generation logs.
 
 New files are stored directly; changed files are stored as deltas and unchanged
 content is reused. YMAP deltas reconstruct parsed models, while YBN deltas
-reconstruct exact binary content. These history formats are distinct from
-merge-oriented semantic differences.
+store semantic Bounds/Polygon changes when applying them reproduces the target's
+stable XML and binary output. Otherwise the complete decoded model is stored.
+The binary check is against canonical conversion output, not the source
+resource's original encoding.
 
 Cache publication occurs after all stages complete. Failures retain diagnostic
 logs without publishing an incomplete cache. Version lookup is a read-only

@@ -229,16 +229,10 @@ fn resolved(
     .get(polygon.material() as usize)
     .copied()
     .ok_or_else(|| invalid("YBN material index out of range"))?;
-  let material_colour = if geometry.material_colours.is_empty() {
-    None
-  } else {
-    let colour = *geometry
-      .material_colours
-      .get(material.colour_index as usize)
-      .ok_or_else(|| invalid("YBN material colour index out of range"))?;
+  let material_colour = geometry.material_colours.get(material.colour_index as usize).copied();
+  if material_colour.is_some() {
     material.colour_index = 0;
-    Some(colour)
-  };
+  }
   Ok(ResolvedPolygon {
     shape,
     material,

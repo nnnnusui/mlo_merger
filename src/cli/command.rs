@@ -119,8 +119,8 @@ fn build_ymap_cache() -> impl Parser<Command> {
 }
 
 fn build_gtav_cache() -> impl Parser<Command> {
-  let flag = long("generate-gtav-cache")
-    .help("Build ordered vanilla YMAP/YBN caches from the installed GTA V Legacy RPF archives")
+  let flag = long("generate-vanilla-cache")
+    .help("Build ordered vanilla YMAP/YBN caches from installed GTA V Legacy RPF archives")
     .req_flag(());
   let game_dir =
     short('i').long("input").help("Installed GTA V Legacy directory").argument::<PathBuf>("DIR");
@@ -128,12 +128,19 @@ fn build_gtav_cache() -> impl Parser<Command> {
     .long("output")
     .help("Vanilla archive cache output directory")
     .argument::<PathBuf>("DIR");
-  construct!(flag, game_dir, output_dir).map(|(_, game_dir, output_dir)| {
-    Command::BuildGtavCache(BuildGtavCache {
-      game_dir,
-      output_dir,
-    })
-  })
+  let through_version = long("through-version")
+    .help("Stop after base, update, or this DLC label; preceding stages are included")
+    .argument::<String>("VERSION")
+    .optional();
+  construct!(flag, game_dir, output_dir, through_version).map(
+    |(_, game_dir, output_dir, through_version)| {
+      Command::BuildGtavCache(BuildGtavCache {
+        game_dir,
+        output_dir,
+        through_version,
+      })
+    },
+  )
 }
 
 fn build_diff_cache() -> impl Parser<Command> {
@@ -214,31 +221,53 @@ mod gtav_tests {
   }
 
   #[test]
-  fn gtav_selects_archive_cache_without_pipeline_flags() {
+  fn vanilla_cache_supports_prefix_selection_without_pipeline_flags() {
     let command = build_gtav_cache()
       .to_options()
-      .run_inner(&["--generate-gtav-cache", "-i", "/mnt/gtav", "-o", "asset/gtav-cache"])
+      .run_inner(&["--generate-vanilla-cache", "-i", "/mnt/gtav", "-o", "asset/gtav-cache"])
       .unwrap();
     let Command::BuildGtavCache(command) = command else {
       panic!("Expected archive cache command")
     };
     assert_eq!(command.game_dir, PathBuf::from("/mnt/gtav"));
     assert_eq!(command.output_dir, PathBuf::from("asset/gtav-cache"));
+    assert_eq!(command.through_version, None);
     let command = build_gtav_cache()
       .to_options()
-      .run_inner(&["--generate-gtav-cache", "--input", "game", "--output", "cache"])
+      .run_inner(&[
+        "--generate-vanilla-cache",
+        "--input",
+        "game",
+        "--output",
+        "cache",
+        "--through-version",
+        "mpheist",
+      ])
       .unwrap();
     let Command::BuildGtavCache(command) = command else {
       panic!("Expected archive cache command")
     };
     assert_eq!(command.output_dir, PathBuf::from("cache"));
+    assert_eq!(command.through_version.as_deref(), Some("mpheist"));
     assert!(
-      build_gtav_cache().to_options().run_inner(&["--generate-gtav-cache", "-i", "game"]).is_err()
+      build_gtav_cache()
+        .to_options()
+        .run_inner(&["--generate-vanilla-cache", "-i", "game"])
+        .is_err()
     );
     assert!(
-      build_gtav_cache().to_options().run_inner(&["--generate-gtav-cache", "-o", "cache"]).is_err()
+      build_gtav_cache()
+        .to_options()
+        .run_inner(&["--generate-vanilla-cache", "-o", "cache"])
+        .is_err()
     );
     assert!(build_gtav_cache().to_options().run_inner(&["-i", "game", "-o", "cache"]).is_err());
+    assert!(
+      build_gtav_cache()
+        .to_options()
+        .run_inner(&["--generate-gtav-cache", "-i", "game", "-o", "cache"])
+        .is_err()
+    );
     assert!(build_gtav_cache().to_options().run_inner(&["--gtav", "game"]).is_err());
   }
 }

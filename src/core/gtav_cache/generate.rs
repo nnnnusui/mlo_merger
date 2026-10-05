@@ -11,7 +11,7 @@ use super::{
   },
   io::{read_ymap, write_json},
   manifest::GtavCacheManifest,
-  publication::{Staging, preserve_failed_logs, publish_cache},
+  publication::{Staging, preserve_failed_logs, publish_cache, reset_output_directory},
   stage::stage,
 };
 use crate::core::codewalker::CodeWalker;
@@ -23,6 +23,8 @@ pub struct BuildGtavCache {
   pub game_dir: PathBuf,
   /// Cache directory containing cache_info.json and version directories.
   pub output_dir: PathBuf,
+  /// Stop after this cumulative stage; preceding overlays remain in the cache.
+  pub through_version: Option<String>,
 }
 
 impl BuildGtavCache {
@@ -36,15 +38,15 @@ impl BuildGtavCache {
     let roots = base_archives(&game_dir)?;
     game_path(&game_dir, Path::new("update/update.rpf"))?;
     codewalker.load_game_keys(&game_dir)?;
-    fs::create_dir_all(&self.output_dir)?;
-    let staging_path = self.output_dir.join(format!(".staging-{}", std::process::id()));
+    let output_dir = reset_output_directory(&self.output_dir, &game_dir)?;
+    let staging_path = output_dir.join(format!(".staging-{}", std::process::id()));
     fs::create_dir(&staging_path)?;
     let staging = Staging(staging_path);
     let build = staging.0.join("cache");
     fs::create_dir(&build)?;
-    let result = self.build(codewalker, &game_dir, roots, &staging.0, &build);
+    let result = self.build(codewalker, &game_dir, roots, &staging.0, &build, &output_dir);
     if result.is_err() {
-      match preserve_failed_logs(&build, &self.output_dir) {
+      match preserve_failed_logs(&build, &output_dir) {
         Ok(path) => log::error!("Preserved failed cache logs at {}", path.display()),
         Err(error) => log::error!("Could not preserve failed cache logs: {error}"),
       }
@@ -59,7 +61,9 @@ impl BuildGtavCache {
     roots: Vec<String>,
     scratch: &Path,
     build: &Path,
+    output_dir: &Path,
   ) -> Result<()> {
+    let through_version = self.through_version.as_deref().map(str::to_ascii_lowercase);
     let mut manifest = GtavCacheManifest {
       format_version: 3,
       game_dir: game_dir.into(),
@@ -89,6 +93,9 @@ impl BuildGtavCache {
       &read_ymap,
     )?;
     fs::remove_dir_all(&base_dir)?;
+    if through_version.as_deref() == Some("base") {
+      return self.publish_cache(build, output_dir, &manifest);
+    }
 
     let update_dir = scratch.join("update");
     let mut update = Vec::new();
@@ -120,21 +127,39 @@ impl BuildGtavCache {
       },
       &read_ymap,
     )?;
+    if through_version.as_deref() == Some("update") {
+      return self.publish_cache(build, output_dir, &manifest);
+    }
+
+    let dlc_stages = dlc_items
+      .into_iter()
+      .map(|item| -> Result<_> {
+        let relative = dlc_archive(&item)?.to_string_lossy().replace('\\', "/");
+        let label = Path::new(&relative)
+          .parent()
+          .and_then(Path::file_name)
+          .and_then(|name| name.to_str())
+          .ok_or("DLC name is missing")?
+          .to_owned();
+        Ok((item, relative, label))
+      })
+      .collect::<Result<Vec<_>>>()?;
+    if let Some(requested) = through_version.as_deref()
+      && !dlc_stages.iter().any(|(_, _, label)| label.eq_ignore_ascii_case(requested))
+    {
+      return Err(format!("Unknown DLC stage requested: {requested}").into());
+    }
 
     let mut platform_index = None;
-    for item in dlc_items {
-      let relative = dlc_archive(&item)?.to_string_lossy().replace('\\', "/");
-      let label = Path::new(&relative)
-        .parent()
-        .and_then(Path::file_name)
-        .and_then(|name| name.to_str())
-        .ok_or("DLC name is missing")?;
+    for (item, relative, label) in dlc_stages {
+      let stop_after =
+        through_version.as_deref().is_some_and(|requested| label.eq_ignore_ascii_case(requested));
       let directory = scratch.join("dlc");
       stage(
         &mut manifest,
         &mut current,
         build,
-        label,
+        &label,
         || {
           let (physical, subtree) =
             if relative.starts_with("x64/") && game_path(game_dir, Path::new(&relative)).is_err() {
@@ -153,8 +178,11 @@ impl BuildGtavCache {
           let extracted = extract(codewalker, game_dir, &physical, &directory, subtree.as_deref())?;
           let mut files: Vec<_> =
             extracted.into_iter().map(|file| (file, directory.clone())).collect();
-          let patches: Vec<_> =
-            update.iter().filter(|file| patch_dlc(&file.source) == Some(label)).cloned().collect();
+          let patches: Vec<_> = update
+            .iter()
+            .filter(|file| patch_dlc(&file.source) == Some(label.as_str()))
+            .cloned()
+            .collect();
           let mut archives = vec![subtree.unwrap_or(physical)];
           if !patches.is_empty() {
             archives.push(format!("update/update.rpf/dlc_patch/{label}"));
@@ -165,10 +193,22 @@ impl BuildGtavCache {
         &read_ymap,
       )?;
       fs::remove_dir_all(directory)?;
+      if stop_after {
+        break;
+      }
     }
+    self.publish_cache(build, output_dir, &manifest)
+  }
+
+  fn publish_cache(
+    &self,
+    build: &Path,
+    output_dir: &Path,
+    manifest: &GtavCacheManifest,
+  ) -> Result<()> {
     write_json(&build.join("cache_info.json"), &manifest)?;
-    publish_cache(build, &self.output_dir, &manifest)?;
-    log::info!("Saved {} vanilla stages to {}", manifest.versions.len(), self.output_dir.display());
+    publish_cache(build, output_dir, manifest)?;
+    log::info!("Saved {} vanilla stages to {}", manifest.versions.len(), output_dir.display());
     Ok(())
   }
 }

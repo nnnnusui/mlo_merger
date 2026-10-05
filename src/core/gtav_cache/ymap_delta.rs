@@ -159,4 +159,47 @@ mod tests {
       expected.entity_map.keys().collect::<Vec<_>>()
     );
   }
+
+  #[test]
+  fn applied_delta_preserves_repeated_xml_and_binary_conversion() {
+    use crate::core::format::gamefile::{
+      resource_convert::{NativeResourceFormat, resource_to_xml, xml_to_resource},
+      test_support::{sample_ymap_catalog, sample_ymap_xml},
+    };
+
+    fn stable_conversion(
+      xml: &str,
+      catalog: &crate::core::format::gamefile::meta_resource::MetaSchemaCatalog,
+    ) -> (Vec<u8>, String) {
+      let first_binary = xml_to_resource(NativeResourceFormat::Ymap, xml, catalog).unwrap();
+      let first_xml =
+        resource_to_xml(NativeResourceFormat::Ymap, &first_binary, &catalog.hash_names).unwrap();
+      let second_binary = xml_to_resource(NativeResourceFormat::Ymap, &first_xml, catalog).unwrap();
+      let second_xml =
+        resource_to_xml(NativeResourceFormat::Ymap, &second_binary, &catalog.hash_names).unwrap();
+      assert_eq!(first_binary, second_binary);
+      assert_eq!(first_xml, second_xml);
+      (second_binary, second_xml)
+    }
+
+    let source_xml = sample_ymap_xml("parent_refs/vanilla_parent.ymap.xml");
+    let catalog = sample_ymap_catalog();
+    let xml: XmlYmap = quick_xml::de::from_str(&source_xml).unwrap();
+    let before: Ymap = xml.into();
+    let mut expected = before.clone();
+    expected.flags ^= 1;
+    let expected_xml = quick_xml::se::to_string(&XmlYmap::from(expected.clone())).unwrap();
+    let (expected_binary, expected_xml) = stable_conversion(&expected_xml, catalog);
+
+    let delta =
+      VanillaYmapDelta::extract_from(&before, &expected, predecessor(), "2".repeat(64)).unwrap();
+    let json = serde_json::to_vec(&delta).unwrap();
+    let loaded: VanillaYmapDelta = serde_json::from_slice(&json).unwrap();
+    let actual = loaded.apply_to(&before).unwrap();
+    let actual_xml = quick_xml::se::to_string(&XmlYmap::from(actual)).unwrap();
+    let (actual_binary, actual_xml) = stable_conversion(&actual_xml, catalog);
+
+    assert_eq!(actual_xml, expected_xml);
+    assert_eq!(actual_binary, expected_binary);
+  }
 }
