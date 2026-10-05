@@ -10,7 +10,7 @@ use super::{
 };
 use crate::core::{
   common::function::get_resource_directories,
-  gtav_cache::{VersionLog, read_ymap, write_json},
+  vanilla_cache::{VersionLog, read_ymap, write_json},
 };
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
@@ -23,18 +23,18 @@ pub struct BuildDiffCache {
   pub input_dir: PathBuf,
   /// Empty destination for generation metadata, logs and per-resource reports.
   pub output_dir: PathBuf,
-  /// GTAV cache root; the CLI defaults to asset/gtav-cache when omitted.
-  pub gtav_cache_dir: PathBuf,
+  /// GTAV cache root; the CLI defaults to asset/vanilla-cache when omitted.
+  pub vanilla_cache_dir: PathBuf,
 }
 
 impl BuildDiffCache {
   /// Infers the latest of each resource's per-file best stages and saves differences and metadata.
   ///
   /// ```no_run
-  /// simplelog::CombinedLogger::init(vec![mlo_merger::core::gtav_cache::version_logger()])?;
+  /// simplelog::CombinedLogger::init(vec![mlo_merger::core::vanilla_cache::version_logger()])?;
   /// let command = mlo_merger::core::diff_cache::BuildDiffCache {
   ///   input_dir: "asset/source".into(), output_dir: "asset/diff-cache".into(),
-  ///   gtav_cache_dir: "asset/gtav-cache".into(),
+  ///   vanilla_cache_dir: "asset/vanilla-cache".into(),
   /// };
   /// command.run()?;
   /// # Ok::<(), Box<dyn std::error::Error>>(())
@@ -52,7 +52,7 @@ impl BuildDiffCache {
     if resources.is_empty() {
       return Err(format!("No FiveM resources found in {}", input.display()).into());
     }
-    let cache = self.gtav_cache_dir.canonicalize()?;
+    let cache = self.vanilla_cache_dir.canonicalize()?;
     let manifest = load_manifest(&cache)?;
     let histories = history(&manifest)?;
     if self.output_dir.exists() && fs::read_dir(&self.output_dir)?.next().is_some() {
@@ -64,7 +64,7 @@ impl BuildDiffCache {
     let mut report = GenerationReport {
       format_version: 1,
       input: input.clone(),
-      gtav_cache: cache.clone(),
+      vanilla_cache: cache.clone(),
       generated_at: generated_at.clone(),
       completed: false,
       error: None,

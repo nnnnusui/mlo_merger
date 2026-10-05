@@ -9,11 +9,11 @@ use super::{
   types::{CandidateScore, Variant},
   vanilla::NativeVariants,
 };
-use crate::core::gtav_cache::ymap_delta::VanillaYmapDelta;
+use crate::core::vanilla_cache::ymap_delta::VanillaYmapDelta;
 use crate::core::{
   format::{gamefile::meta_resource::jenk_hash, ymap::model::Ymap},
-  gtav_cache::{CacheVersion, CachedFile, GtavCacheManifest, read_ymap, write_json},
   merge::YmapDiff,
+  vanilla_cache::{CacheVersion, CachedFile, VanillaCacheManifest, read_ymap, write_json},
 };
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
@@ -23,7 +23,7 @@ use std::path::Path;
 
 struct NativeVersionFixture {
   root: Scratch,
-  manifest: GtavCacheManifest,
+  manifest: VanillaCacheManifest,
   expected: Vec<Ymap>,
 }
 
@@ -48,7 +48,7 @@ fn write_native_model(
 
 impl NativeVersionFixture {
   fn new(label: &str) -> Self {
-    use crate::core::{format::ymap::xml::XmlYmap, gtav_cache::FileChange};
+    use crate::core::{format::ymap::xml::XmlYmap, vanilla_cache::FileChange};
     let root =
       Scratch(std::env::temp_dir().join(format!("vanilla_version_{label}_{}", std::process::id())));
     fs::create_dir_all(root.0.join("scratch")).unwrap();
@@ -124,7 +124,7 @@ impl NativeVersionFixture {
       changes: BTreeMap::new(),
       unchanged: 1,
     });
-    let manifest = GtavCacheManifest {
+    let manifest = VanillaCacheManifest {
       format_version: 3,
       game_dir: root.0.join("missing-game"),
       versions,
@@ -251,7 +251,7 @@ fn vanilla_diff_replay_cannot_restore_entity_deletion_or_cleared_content_flags()
 
 #[test]
 fn diff_cache_identifies_middle_version_with_least_changes_and_diffs_against_it() {
-  crate::core::gtav_cache::init_test_version_logger();
+  crate::core::vanilla_cache::init_test_version_logger();
   let fixture = NativeVersionFixture::new("closest");
   let resource = fixture.root.0.join("resource");
   let mut target = fixture.expected[1].clone();
@@ -327,7 +327,7 @@ fn diff_cache_distance_is_symmetric_and_counts_model_changes() {
 #[test]
 fn diff_cache_selects_per_resource_latest_and_compares_its_cumulative_baseline() {
   use crate::core::format::ymap::xml::XmlYmap;
-  use crate::core::gtav_cache::{FileChange, init_test_version_logger};
+  use crate::core::vanilla_cache::{FileChange, init_test_version_logger};
   init_test_version_logger();
   let root = std::env::temp_dir().join(format!("diff_cache_run_{}", std::process::id()));
   let cache = root.join("cache");
@@ -387,7 +387,7 @@ fn diff_cache_selects_per_resource_latest_and_compares_its_cumulative_baseline()
           .collect(),
       }
     };
-  let manifest = GtavCacheManifest {
+  let manifest = VanillaCacheManifest {
     format_version: 2,
     game_dir: root.join("missing-game"),
     versions: vec![
@@ -428,7 +428,7 @@ fn diff_cache_selects_per_resource_latest_and_compares_its_cumulative_baseline()
   let command = BuildDiffCache {
     input_dir: resources,
     output_dir: root.join("output"),
-    gtav_cache_dir: cache.clone(),
+    vanilla_cache_dir: cache.clone(),
   };
   command.run_with_reader(reader).unwrap();
   let report: Value = serde_json::from_reader(BufReader::new(
@@ -466,7 +466,7 @@ fn diff_cache_selects_per_resource_latest_and_compares_its_cumulative_baseline()
   let single = BuildDiffCache {
     input_dir: first,
     output_dir: root.join("single"),
-    gtav_cache_dir: cache.clone(),
+    vanilla_cache_dir: cache.clone(),
   };
   single.run_with_reader(reader).unwrap();
   assert!(single.output_dir.join("first/resource_info.json").is_file());
@@ -494,7 +494,7 @@ fn diff_cache_selects_per_resource_latest_and_compares_its_cumulative_baseline()
   let failed = BuildDiffCache {
     input_dir: single.input_dir,
     output_dir: root.join("failed"),
-    gtav_cache_dir: cache,
+    vanilla_cache_dir: cache,
   };
   assert!(failed.run_with_reader(reader).is_err());
   let failure: Value = serde_json::from_reader(BufReader::new(
@@ -543,7 +543,7 @@ fn diff_cache_real_brofx_output_is_readable_and_records_selected_version() {
 #[test]
 #[ignore = "requires old GTAV cache replacements, /mnt/gtav and CodeWalker bridge"]
 fn diff_cache_recovers_exact_old_cache_replacement_from_its_rpf_source() {
-  let cache = Path::new(env!("CARGO_MANIFEST_DIR")).join("asset/gtav-cache");
+  let cache = Path::new(env!("CARGO_MANIFEST_DIR")).join("asset/vanilla-cache");
   let manifest = load_manifest(&cache).unwrap();
   let histories = history(&manifest).unwrap();
   let pair = histories

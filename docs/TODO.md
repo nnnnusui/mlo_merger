@@ -11,7 +11,7 @@
 - [x] Preserve actual diff-processing logs per version in create_cache.log, including retained logs for failed runs.
 - [x] Test cumulative comparison inputs, unchanged skipping, diff JSON round-trips, version log isolation and root RPF discovery.
 - [x] Validate /mnt/gtav with all root RPFs: 103 version directories, 10,647 native additions and 1,937 deserializable YmapDiff JSON reports with per-version logs.
-- [x] Generate MLO diff caches with `--generate-diff-cache`, optional GTAV cache path, shared single/multiple resource discovery, per-file closest-stage inference and per-resource latest-stage baselines.
+- [x] Generate MLO diff caches with `--generate-diff-cache`, optional vanilla cache path, shared single/multiple resource discovery, per-file closest-stage inference and per-resource latest-stage baselines.
 - [x] Save inference scores, chosen vanilla stages, UTC generation times, hashes/provenance and generation logs with serialized YmapDiff output.
 - [x] Preserve legacy snapshot reading and recover missing old-cache snapshots from verified RPF provenance.
 - [x] Validate brofx_mansion_06: 198 scanned files, two YMAP diff reports against 0029-mpapartment; test multiple resources, ties, cumulative baselines, metadata fallback, corruption failures and real RPF recovery.
@@ -19,13 +19,13 @@
 - [x] Keep merge-oriented YmapDiff semantics separate from lossless vanilla history deltas, preserving MLO merge behavior.
 - [x] Implement schema-3 vanilla state reconstruction from original YMAP plus exact JSON deltas, with removals, cleared flags, metadata, entity order and predecessor/result integrity checks.
 - [x] Remove the diff-only reconstruction test's ignore and verify zero full-model difference against real DLC-derived state without snapshots or game access; split diff-cache loading and tests into modules.
-- [x] Move all GTAV cache implementation under src/core/gtav_cache/ and split generation, archive resolution, metadata, logging, I/O, stage storage, publication and tests while preserving existing API paths.
+- [x] Move the vanilla cache implementation under src/core/vanilla_cache/ and split generation, archive resolution, metadata, logging, I/O, stage storage, publication and tests.
 - [x] Stop generating native/ replacement snapshots and native metadata references; verify original YMAP plus JSON-only history reconstruction after temporary binaries are deleted.
 - [x] Move all diff-cache implementation under src/core/diff_cache/ and split orchestration, resource processing, comparison, history metadata, I/O and report types while preserving the existing command API.
 - [x] Add read-only --list-vanilla-versions filename lookup with optional GTAV cache path, ordered added/modified JSON output and shared metadata loading; verify extension-independent YMAP/YBN lookup.
 - [ ] Define vanillaVersion/build-number mapping and support independently captured historical builds.
 - [x] Cache YBN additions and structured Bounds/Polygon changes alongside YMAP, with a complete decoded-model fallback when semantic comparison cannot represent a change.
-- [x] Regenerate asset/gtav-cache with structured YBN artifacts and verify version listing and all staged YBN replacements.
+- [x] Regenerate asset/vanilla-cache with structured YBN artifacts and verify version listing and all staged YBN replacements.
 - [x] Keep YMAP MLO diff-cache generation working with YBN-inclusive caches; record vanilla-matched unsupported types explicitly.
 - [ ] Extend extraction and cache objects to native types other than YMAP/YBN.
 - [x] Organize indexed YBN models under format/ybn/model, XML import/export under format/ybn/xml, native codecs under binary, and migrate all callers to format::ybn after removing the gamefile compatibility exports.

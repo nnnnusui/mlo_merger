@@ -49,7 +49,7 @@ pub struct CacheVersion {
 
 /// Ordered delta manifest for a particular installed game's archives.
 #[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct GtavCacheManifest {
+pub struct VanillaCacheManifest {
   /// Cache schema version, currently 3; schema 2 remains readable.
   pub format_version: u32,
   /// Installed game directory from which this cache was generated.
@@ -58,13 +58,13 @@ pub struct GtavCacheManifest {
   pub versions: Vec<CacheVersion>,
 }
 
-impl GtavCacheManifest {
+impl VanillaCacheManifest {
   /// Resolves the latest artifact per filename at a stage, retaining unchanged parent entries.
   /// Replacement artifacts are diff reports, not standalone native binaries.
   ///
   /// ```
-  /// # use mlo_merger::core::gtav_cache::GtavCacheManifest;
-  /// # let cache = GtavCacheManifest { format_version: 2, game_dir: ".".into(), versions: vec![] };
+  /// # use mlo_merger::core::vanilla_cache::VanillaCacheManifest;
+  /// # let cache = VanillaCacheManifest { format_version: 2, game_dir: ".".into(), versions: vec![] };
   /// assert!(cache.resolve_version("unknown").is_err());
   /// ```
   pub fn resolve_version(
@@ -89,13 +89,13 @@ impl GtavCacheManifest {
 
 /// Prefer current root metadata, then per-version records over a stale schema-1
 /// manifest; the latter may still supply the original game-directory hint.
-pub(crate) fn load_manifest(cache: &Path) -> Result<GtavCacheManifest> {
+pub(crate) fn load_manifest(cache: &Path) -> Result<VanillaCacheManifest> {
   let root = cache.join("cache_info.json");
   if root.is_file() {
     return Ok(serde_json::from_reader(BufReader::new(fs::File::open(root)?))?);
   }
   let legacy = cache.join("manifest.json");
-  let legacy: Option<GtavCacheManifest> = if legacy.is_file() {
+  let legacy: Option<VanillaCacheManifest> = if legacy.is_file() {
     Some(serde_json::from_reader(BufReader::new(fs::File::open(legacy)?))?)
   } else {
     None
@@ -123,7 +123,7 @@ pub(crate) fn load_manifest(cache: &Path) -> Result<GtavCacheManifest> {
       version.id.split_once('-').and_then(|(index, _)| index.parse::<usize>().ok())
     });
     log::warn!("cache_info.json is missing; using per-version metadata from {}", cache.display());
-    return Ok(GtavCacheManifest {
+    return Ok(VanillaCacheManifest {
       format_version: 2,
       game_dir: legacy.map(|manifest| manifest.game_dir).unwrap_or_default(),
       versions,

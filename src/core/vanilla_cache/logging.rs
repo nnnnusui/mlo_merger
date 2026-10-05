@@ -75,7 +75,7 @@ impl simplelog::SharedLogger for VersionLogger {
 /// Adds per-thread cache log routing to an application's existing CombinedLogger.
 ///
 /// ```no_run
-/// simplelog::CombinedLogger::init(vec![mlo_merger::core::gtav_cache::version_logger()])?;
+/// simplelog::CombinedLogger::init(vec![mlo_merger::core::vanilla_cache::version_logger()])?;
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
 pub fn version_logger() -> Box<dyn simplelog::SharedLogger> {

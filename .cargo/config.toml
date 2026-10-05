@@ -3,9 +3,9 @@
 [alias]
 list-vanilla-versions = "run -- --list-vanilla-versions"
 # Generate a fresh vanilla prefix cache; optionally pass --through-version <base|update|DLC>
-generate-vanilla-cache = "run -- --generate-vanilla-cache -i /mnt/gtav -o asset/gtav-cache"
-# Generate MLO diff caches; pass -i <resource or resources root> and -o <output>
-generate-diff-cache = "run -- --generate-diff-cache"
+generate-vanilla-cache = "run -- --generate-vanilla-cache -i /mnt/gtav -o asset/vanilla-cache"
+# Generate diff caches for every resource below asset/source
+generate-diff-cache = "run -- --generate-diff-cache -i asset/source -o asset/source-cache --vanilla-cache asset/vanilla-cache"
 # Run the full pipeline (extract -> ymap2xml -> merge -> xml2ymap) against asset/
 pipeline = "run -- --workspace asset --source-dir asset/source --output-resource-dir asset/merged_mlo"
 # Run MLO batch processing with sample data

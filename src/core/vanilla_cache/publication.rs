@@ -6,7 +6,7 @@ use std::path::{Component, Path, PathBuf};
 
 use super::{
   Result,
-  manifest::{CacheVersion, GtavCacheManifest},
+  manifest::{CacheVersion, VanillaCacheManifest},
 };
 
 pub(super) struct Staging(pub(super) PathBuf);
@@ -81,7 +81,7 @@ fn validate_output_location(
 pub(super) fn publish_cache(
   build: &Path,
   output: &Path,
-  manifest: &GtavCacheManifest,
+  manifest: &VanillaCacheManifest,
 ) -> Result<()> {
   for version in &manifest.versions {
     let destination = output.join(&version.id);

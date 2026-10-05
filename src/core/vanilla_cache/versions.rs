@@ -14,7 +14,7 @@ pub struct ListVanillaVersions {
   /// Vanilla filename including its extension; matching is case-insensitive.
   pub file_name: String,
   /// GTAV cache root containing root or per-version metadata.
-  pub gtav_cache_dir: PathBuf,
+  pub vanilla_cache_dir: PathBuf,
 }
 
 /// The kind of recorded file change at a vanilla version.
@@ -45,8 +45,8 @@ impl ListVanillaVersions {
   /// Missing filenames produce an empty list; game files are never read.
   ///
   /// ```no_run
-  /// let query = mlo_merger::core::gtav_cache::ListVanillaVersions {
-  ///   file_name: "ch1_01.ymap".into(), gtav_cache_dir: "asset/gtav-cache".into(),
+  /// let query = mlo_merger::core::vanilla_cache::ListVanillaVersions {
+  ///   file_name: "ch1_01.ymap".into(), vanilla_cache_dir: "asset/vanilla-cache".into(),
   /// };
   /// let versions = query.versions()?;
   /// # Ok::<(), Box<dyn std::error::Error>>(())
@@ -56,7 +56,7 @@ impl ListVanillaVersions {
     if name.is_empty() || matches!(name, "." | "..") || name.contains(['/', '\\', ':']) {
       return Err("Expected a vanilla basename such as example.ymap or example.ybn".into());
     }
-    let manifest = load_manifest(&self.gtav_cache_dir)?;
+    let manifest = load_manifest(&self.vanilla_cache_dir)?;
     if !matches!(manifest.format_version, 1..=3) {
       return Err(format!("Unsupported GTAV cache schema {}", manifest.format_version).into());
     }
@@ -106,8 +106,8 @@ impl ListVanillaVersions {
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::core::gtav_cache::{
-    CacheVersion, CachedFile, FileChange, GtavCacheManifest, write_json,
+  use crate::core::vanilla_cache::{
+    CacheVersion, CachedFile, FileChange, VanillaCacheManifest, write_json,
   };
   use std::collections::BTreeMap;
   use std::fs;
@@ -125,7 +125,7 @@ mod tests {
         source: format!("fixture.rpf/{artifact}"),
       },
     };
-    let mut manifest = GtavCacheManifest {
+    let mut manifest = VanillaCacheManifest {
       format_version: 3,
       game_dir: root.join("missing-game"),
       versions: vec![
@@ -168,7 +168,7 @@ mod tests {
     write_json(&root.join("cache_info.json"), &manifest).unwrap();
     let mut query = ListVanillaVersions {
       file_name: "EXAMPLE.YMAP".into(),
-      gtav_cache_dir: root.clone(),
+      vanilla_cache_dir: root.clone(),
     };
     let versions = query.versions().unwrap();
     assert_eq!(

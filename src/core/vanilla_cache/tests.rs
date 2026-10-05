@@ -58,7 +58,7 @@ fn resets_only_cache_output_and_refuses_game_or_workspace_paths() {
 #[test]
 fn stages_store_only_changes_and_resolve_prior_versions() {
   init_test_version_logger();
-  let root = std::env::temp_dir().join(format!("gtav_cache_test_{}", std::process::id()));
+  let root = std::env::temp_dir().join(format!("vanilla_cache_test_{}", std::process::id()));
   fs::create_dir_all(&root).unwrap();
   let _cleanup = Staging(root.clone());
   let xml: XmlYmap = quick_xml::de::from_str(include_str!(concat!(
@@ -76,7 +76,7 @@ fn stages_store_only_changes_and_resolve_prior_versions() {
   fs::write(root.join("third"), serde_json::to_vec(&third).unwrap()).unwrap();
   let reader =
     |path: &Path| -> Result<Ymap> { Ok(serde_json::from_reader(fs::File::open(path)?)?) };
-  let mut manifest = GtavCacheManifest {
+  let mut manifest = VanillaCacheManifest {
     format_version: 3,
     game_dir: "game".into(),
     versions: vec![],
@@ -236,7 +236,7 @@ fn stages_cache_ybn_additions_and_structured_replacements_alongside_ymap() {
     )
   };
   let reader = |_: &Path| -> Result<Ymap> { Err("YBN files must not use the YMAP reader".into()) };
-  let mut manifest = GtavCacheManifest {
+  let mut manifest = VanillaCacheManifest {
     format_version: 3,
     game_dir: "missing-game".into(),
     versions: vec![],
@@ -297,7 +297,7 @@ fn stages_cache_ybn_additions_and_structured_replacements_alongside_ymap() {
   write_json(&root.join("cache_info.json"), &manifest).unwrap();
   let listed = ListVanillaVersions {
     file_name: "SAME.YBN".into(),
-    gtav_cache_dir: root.clone(),
+    vanilla_cache_dir: root.clone(),
   }
   .versions()
   .unwrap();
@@ -318,9 +318,9 @@ fn discovers_all_installed_base_archives_without_assuming_a_final_letter() {
 }
 
 #[test]
-#[ignore = "requires regenerated structured YBN cache under asset/gtav-cache"]
+#[ignore = "requires regenerated structured YBN cache under asset/vanilla-cache"]
 fn real_ybn_cache_applies_a_delta_with_stable_xml_and_binary() {
-  let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("asset/gtav-cache");
+  let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("asset/vanilla-cache");
   let manifest = load_manifest(&root).unwrap();
   let (name, change) = manifest
     .versions
@@ -352,7 +352,7 @@ fn real_ybn_cache_applies_a_delta_with_stable_xml_and_binary() {
   ));
   let versions = ListVanillaVersions {
     file_name: name.clone(),
-    gtav_cache_dir: root.clone(),
+    vanilla_cache_dir: root.clone(),
   }
   .versions()
   .unwrap();
@@ -379,7 +379,7 @@ fn publication_restores_existing_versions_if_root_metadata_cannot_be_replaced() 
     changes: BTreeMap::new(),
     unchanged: 0,
   };
-  let manifest = GtavCacheManifest {
+  let manifest = VanillaCacheManifest {
     format_version: 2,
     game_dir: "game".into(),
     versions: vec![version],

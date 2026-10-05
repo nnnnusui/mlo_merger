@@ -10,7 +10,7 @@ use super::{
     DlcList, base_archives, dlc_archive, extract, game_path, patch_dlc, platform_archives,
   },
   io::{read_ymap, write_json},
-  manifest::GtavCacheManifest,
+  manifest::VanillaCacheManifest,
   publication::{Staging, preserve_failed_logs, publish_cache, reset_output_directory},
   stage::stage,
 };
@@ -18,7 +18,7 @@ use crate::core::codewalker::CodeWalker;
 
 /// Builds a vanilla archive cache independently of the MLO merge pipeline.
 #[derive(Debug, Clone)]
-pub struct BuildGtavCache {
+pub struct BuildVanillaCache {
   /// Installed GTA V Legacy directory containing base RPFs and update/.
   pub game_dir: PathBuf,
   /// Cache directory containing cache_info.json and version directories.
@@ -27,7 +27,7 @@ pub struct BuildGtavCache {
   pub through_version: Option<String>,
 }
 
-impl BuildGtavCache {
+impl BuildVanillaCache {
   /// Reads all installed root RPFs and ordered DLCs, saving additions, diffs, and version logs.
   /// Register `version_logger()` with the application logger to capture diff log records.
   pub fn run(
@@ -64,7 +64,7 @@ impl BuildGtavCache {
     output_dir: &Path,
   ) -> Result<()> {
     let through_version = self.through_version.as_deref().map(str::to_ascii_lowercase);
-    let mut manifest = GtavCacheManifest {
+    let mut manifest = VanillaCacheManifest {
       format_version: 3,
       game_dir: game_dir.into(),
       versions: vec![],
@@ -204,7 +204,7 @@ impl BuildGtavCache {
     &self,
     build: &Path,
     output_dir: &Path,
-    manifest: &GtavCacheManifest,
+    manifest: &VanillaCacheManifest,
   ) -> Result<()> {
     write_json(&build.join("cache_info.json"), &manifest)?;
     publish_cache(build, output_dir, manifest)?;

@@ -9,7 +9,7 @@ use super::{
   archives::ExtractedFile,
   io::write_json,
   logging::VersionLog,
-  manifest::{CacheVersion, CachedFile, FileChange, GtavCacheManifest},
+  manifest::{CacheVersion, CachedFile, FileChange, VanillaCacheManifest},
   ybn_delta, ymap_delta,
 };
 use crate::core::{
@@ -18,7 +18,7 @@ use crate::core::{
 };
 
 pub(super) fn stage(
-  manifest: &mut GtavCacheManifest,
+  manifest: &mut VanillaCacheManifest,
   current: &mut BTreeMap<String, CachedFile>,
   output: &Path,
   label: &str,

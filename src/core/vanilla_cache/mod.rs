@@ -11,9 +11,9 @@ mod versions;
 pub(crate) mod ybn_delta;
 pub(crate) mod ymap_delta;
 
-pub use generate::BuildGtavCache;
+pub use generate::BuildVanillaCache;
 pub use logging::version_logger;
-pub use manifest::{CacheVersion, CachedFile, FileChange, GtavCacheManifest};
+pub use manifest::{CacheVersion, CachedFile, FileChange, VanillaCacheManifest};
 pub use versions::{ListVanillaVersions, VanillaVersionChange, VanillaVersionEntry};
 
 pub(crate) use archives::game_path;

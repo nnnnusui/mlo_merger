@@ -45,9 +45,9 @@ Vanilla merge inputs normally live in `asset/vanilla/ymap.xml` and
 ## Vanilla Cache
 
 ```bash
-cargo run -- --generate-vanilla-cache -i /mnt/gtav -o asset/gtav-cache
-cargo run -- --generate-vanilla-cache -i /mnt/gtav -o asset/gtav-cache --through-version patchday1ng
-cargo run -- --list-vanilla-versions example.ybn --gtav-cache asset/gtav-cache
+cargo run -- --generate-vanilla-cache -i /mnt/gtav -o asset/vanilla-cache
+cargo run -- --generate-vanilla-cache -i /mnt/gtav -o asset/vanilla-cache --through-version patchday1ng
+cargo run -- --list-vanilla-versions example.ybn --vanilla-cache asset/vanilla-cache
 ```
 
 Each run removes and recreates the selected output directory. Generation reads
@@ -67,11 +67,12 @@ case-insensitive; unchanged stages are omitted and an unknown name returns `[]`.
 
 ```bash
 cargo run -- --generate-diff-cache \
-  -i 'asset/source/[patron]/brofx_mansion_06' -o asset/diff-cache
+  -i asset/source -o asset/source-cache --vanilla-cache asset/vanilla-cache
 ```
 
-Input can be one resource or a resources root, including nested bracket groups.
-`--gtav-cache` defaults to `asset/gtav-cache`; the output directory must be empty.
+The default `generate-diff-cache` Cargo alias scans all resources in `asset/source`,
+including nested bracket groups. The output directory must be empty. Use `--input`
+for a single resource or another resources root.
 Each resource selects a vanilla baseline from its files' closest versions, then
 saves YMAP differences, selection metadata and logs. Unmatched or unsupported
 files are recorded rather than compared. YBN MLO diff-cache generation is not

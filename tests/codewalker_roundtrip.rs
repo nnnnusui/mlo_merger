@@ -62,17 +62,17 @@ fn codewalker_accepts_native_ybn_xml_with_vertex_quantum() {
 }
 
 #[test]
-#[ignore = "requires a successfully generated asset/gtav-cache schema 2 or 3 cache"]
+#[ignore = "requires a successfully generated asset/vanilla-cache schema 2 or 3 cache"]
 fn gtav_generated_version_cache_has_complete_artifacts_and_diff_logs() {
-  use mlo_merger::core::{gtav_cache::GtavCacheManifest, merge::YmapDiff};
+  use mlo_merger::core::{merge::YmapDiff, vanilla_cache::VanillaCacheManifest};
   use std::io::BufRead;
 
   fn read_json<T: serde::de::DeserializeOwned>(path: &Path) -> T {
     serde_json::from_reader(std::io::BufReader::new(std::fs::File::open(path).unwrap())).unwrap()
   }
 
-  let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("asset/gtav-cache");
-  let manifest: GtavCacheManifest = read_json(&root.join("cache_info.json"));
+  let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("asset/vanilla-cache");
+  let manifest: VanillaCacheManifest = read_json(&root.join("cache_info.json"));
   assert!(matches!(manifest.format_version, 2 | 3));
   assert!(manifest.versions[0].archives.contains(&"common.rpf".into()));
   assert!(manifest.versions[0].archives.contains(&"x64a.rpf".into()));

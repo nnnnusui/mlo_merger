@@ -8,8 +8,8 @@ use super::{
   vanilla::NativeVariants,
 };
 use crate::core::{
-  gtav_cache::{GtavCacheManifest, write_json},
   merge::YmapDiff,
+  vanilla_cache::{VanillaCacheManifest, write_json},
 };
 use std::collections::BTreeMap;
 use std::fs;
@@ -49,7 +49,7 @@ pub(super) fn generate_resource(
   id: &str,
   generated_at: &str,
   output: &Path,
-  manifest: &GtavCacheManifest,
+  manifest: &VanillaCacheManifest,
   histories: &BTreeMap<String, Vec<Variant>>,
   provider: &mut NativeVariants<'_>,
 ) -> Result<ResourceReport> {

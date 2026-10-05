@@ -6,9 +6,9 @@ use crate::core::{
   diff_cache::BuildDiffCache,
   extract::ExtractYmap,
   getprop::GetProp,
-  gtav_cache::{BuildGtavCache, ListVanillaVersions},
   merge::run::MergeYmapXml,
   stream_conflicts::CheckStreamConflicts,
+  vanilla_cache::{BuildVanillaCache, ListVanillaVersions},
 };
 
 #[derive(Debug, Clone)]
@@ -17,7 +17,7 @@ pub enum Command {
   // ParseYmap(ParseYmap),
   MergeYmapXml(MergeYmapXml),
   BuildYmapCache(BuildYmapCache),
-  BuildGtavCache(BuildGtavCache),
+  BuildVanillaCache(BuildVanillaCache),
   BuildDiffCache(BuildDiffCache),
   ListVanillaVersions(ListVanillaVersions),
   ExtractYmap(ExtractYmap),
@@ -35,7 +35,7 @@ pub fn parse_args() -> Command {
     // parse_ymap(),
     merge_ymap_xml(),
     build_ymap_cache(),
-    build_gtav_cache(),
+    build_vanilla_cache(),
     build_diff_cache(),
     list_vanilla_versions(),
     extract_ymap(),
@@ -118,7 +118,7 @@ fn build_ymap_cache() -> impl Parser<Command> {
   })
 }
 
-fn build_gtav_cache() -> impl Parser<Command> {
+fn build_vanilla_cache() -> impl Parser<Command> {
   let flag = long("generate-vanilla-cache")
     .help("Build ordered vanilla YMAP/YBN caches from installed GTA V Legacy RPF archives")
     .req_flag(());
@@ -134,7 +134,7 @@ fn build_gtav_cache() -> impl Parser<Command> {
     .optional();
   construct!(flag, game_dir, output_dir, through_version).map(
     |(_, game_dir, output_dir, through_version)| {
-      Command::BuildGtavCache(BuildGtavCache {
+      Command::BuildVanillaCache(BuildVanillaCache {
         game_dir,
         output_dir,
         through_version,
@@ -155,16 +155,16 @@ fn build_diff_cache() -> impl Parser<Command> {
     .long("output")
     .help("Empty output directory for diff caches")
     .argument::<PathBuf>("DIR");
-  let gtav_cache_dir = long("gtav-cache")
-    .help("GTAV cache root (default: asset/gtav-cache)")
+  let vanilla_cache_dir = long("vanilla-cache")
+    .help("Vanilla archive cache root (default: asset/vanilla-cache)")
     .argument::<PathBuf>("DIR")
-    .fallback(PathBuf::from("asset/gtav-cache"));
-  construct!(flag, input_dir, output_dir, gtav_cache_dir).map(
-    |(_, input_dir, output_dir, gtav_cache_dir)| {
+    .fallback(PathBuf::from("asset/vanilla-cache"));
+  construct!(flag, input_dir, output_dir, vanilla_cache_dir).map(
+    |(_, input_dir, output_dir, vanilla_cache_dir)| {
       Command::BuildDiffCache(BuildDiffCache {
         input_dir,
         output_dir,
-        gtav_cache_dir,
+        vanilla_cache_dir,
       })
     },
   )
@@ -184,21 +184,21 @@ mod gtav_tests {
       panic!("Expected version listing command")
     };
     assert_eq!(command.file_name, "example.ymap");
-    assert_eq!(command.gtav_cache_dir, PathBuf::from("asset/gtav-cache"));
+    assert_eq!(command.vanilla_cache_dir, PathBuf::from("asset/vanilla-cache"));
     let Command::ListVanillaVersions(command) = list_vanilla_versions()
       .to_options()
-      .run_inner(&["--list-vanilla-versions", "example.ybn", "--gtav-cache", "custom"])
+      .run_inner(&["--list-vanilla-versions", "example.ybn", "--vanilla-cache", "custom"])
       .unwrap()
     else {
       panic!("Expected version listing command")
     };
-    assert_eq!(command.gtav_cache_dir, PathBuf::from("custom"));
+    assert_eq!(command.vanilla_cache_dir, PathBuf::from("custom"));
     assert_eq!(command.file_name, "example.ybn");
     assert!(list_vanilla_versions().to_options().run_inner(&["--list-vanilla-versions"]).is_err());
   }
 
   #[test]
-  fn diff_cache_arguments_allow_default_or_explicit_gtav_cache() {
+  fn diff_cache_arguments_allow_default_or_explicit_vanilla_cache() {
     let Command::BuildDiffCache(command) = build_diff_cache()
       .to_options()
       .run_inner(&["--generate-diff-cache", "-i", "mlo", "-o", "output"])
@@ -206,15 +206,23 @@ mod gtav_tests {
     else {
       panic!("Expected diff cache command")
     };
-    assert_eq!(command.gtav_cache_dir, PathBuf::from("asset/gtav-cache"));
+    assert_eq!(command.vanilla_cache_dir, PathBuf::from("asset/vanilla-cache"));
     let Command::BuildDiffCache(command) = build_diff_cache()
       .to_options()
-      .run_inner(&["--generate-diff-cache", "--gtav-cache", "custom", "-i", "mlo", "-o", "output"])
+      .run_inner(&[
+        "--generate-diff-cache",
+        "--vanilla-cache",
+        "custom",
+        "-i",
+        "mlo",
+        "-o",
+        "output",
+      ])
       .unwrap()
     else {
       panic!("Expected diff cache command")
     };
-    assert_eq!(command.gtav_cache_dir, PathBuf::from("custom"));
+    assert_eq!(command.vanilla_cache_dir, PathBuf::from("custom"));
     assert!(
       build_diff_cache().to_options().run_inner(&["--generate-diff-cache", "-i", "mlo"]).is_err()
     );
@@ -222,17 +230,17 @@ mod gtav_tests {
 
   #[test]
   fn vanilla_cache_supports_prefix_selection_without_pipeline_flags() {
-    let command = build_gtav_cache()
+    let command = build_vanilla_cache()
       .to_options()
-      .run_inner(&["--generate-vanilla-cache", "-i", "/mnt/gtav", "-o", "asset/gtav-cache"])
+      .run_inner(&["--generate-vanilla-cache", "-i", "/mnt/gtav", "-o", "asset/vanilla-cache"])
       .unwrap();
-    let Command::BuildGtavCache(command) = command else {
+    let Command::BuildVanillaCache(command) = command else {
       panic!("Expected archive cache command")
     };
     assert_eq!(command.game_dir, PathBuf::from("/mnt/gtav"));
-    assert_eq!(command.output_dir, PathBuf::from("asset/gtav-cache"));
+    assert_eq!(command.output_dir, PathBuf::from("asset/vanilla-cache"));
     assert_eq!(command.through_version, None);
-    let command = build_gtav_cache()
+    let command = build_vanilla_cache()
       .to_options()
       .run_inner(&[
         "--generate-vanilla-cache",
@@ -244,31 +252,31 @@ mod gtav_tests {
         "mpheist",
       ])
       .unwrap();
-    let Command::BuildGtavCache(command) = command else {
+    let Command::BuildVanillaCache(command) = command else {
       panic!("Expected archive cache command")
     };
     assert_eq!(command.output_dir, PathBuf::from("cache"));
     assert_eq!(command.through_version.as_deref(), Some("mpheist"));
     assert!(
-      build_gtav_cache()
+      build_vanilla_cache()
         .to_options()
         .run_inner(&["--generate-vanilla-cache", "-i", "game"])
         .is_err()
     );
     assert!(
-      build_gtav_cache()
+      build_vanilla_cache()
         .to_options()
         .run_inner(&["--generate-vanilla-cache", "-o", "cache"])
         .is_err()
     );
-    assert!(build_gtav_cache().to_options().run_inner(&["-i", "game", "-o", "cache"]).is_err());
+    assert!(build_vanilla_cache().to_options().run_inner(&["-i", "game", "-o", "cache"]).is_err());
     assert!(
-      build_gtav_cache()
+      build_vanilla_cache()
         .to_options()
         .run_inner(&["--generate-gtav-cache", "-i", "game", "-o", "cache"])
         .is_err()
     );
-    assert!(build_gtav_cache().to_options().run_inner(&["--gtav", "game"]).is_err());
+    assert!(build_vanilla_cache().to_options().run_inner(&["--gtav", "game"]).is_err());
   }
 }
 
@@ -276,14 +284,14 @@ fn list_vanilla_versions() -> impl Parser<Command> {
   let file_name = long("list-vanilla-versions")
     .help("List vanilla stages that added or modified a cached filename")
     .argument::<String>("FILE");
-  let gtav_cache_dir = long("gtav-cache")
-    .help("GTAV cache root (default: asset/gtav-cache)")
+  let vanilla_cache_dir = long("vanilla-cache")
+    .help("Vanilla archive cache root (default: asset/vanilla-cache)")
     .argument::<PathBuf>("DIR")
-    .fallback(PathBuf::from("asset/gtav-cache"));
-  construct!(file_name, gtav_cache_dir).map(|(file_name, gtav_cache_dir)| {
+    .fallback(PathBuf::from("asset/vanilla-cache"));
+  construct!(file_name, vanilla_cache_dir).map(|(file_name, vanilla_cache_dir)| {
     Command::ListVanillaVersions(ListVanillaVersions {
       file_name,
-      gtav_cache_dir,
+      vanilla_cache_dir,
     })
   })
 }

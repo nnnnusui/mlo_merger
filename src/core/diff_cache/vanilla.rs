@@ -16,7 +16,7 @@ use super::{
 use crate::core::{
   codewalker::CodeWalker,
   format::ymap::model::Ymap,
-  gtav_cache::{CachedFile, game_path, ymap_delta::VanillaYmapDelta},
+  vanilla_cache::{CachedFile, game_path, ymap_delta::VanillaYmapDelta},
 };
 
 #[derive(Deserialize)]

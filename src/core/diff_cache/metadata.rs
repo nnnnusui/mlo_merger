@@ -1,10 +1,10 @@
 //! Loads GTAV manifests and validates ordered vanilla content histories.
 
 use super::{Result, types::Variant};
-use crate::core::gtav_cache::GtavCacheManifest;
+use crate::core::vanilla_cache::VanillaCacheManifest;
 use std::collections::{BTreeMap, BTreeSet};
 
-pub(super) fn history(manifest: &GtavCacheManifest) -> Result<BTreeMap<String, Vec<Variant>>> {
+pub(super) fn history(manifest: &VanillaCacheManifest) -> Result<BTreeMap<String, Vec<Variant>>> {
   if !matches!(manifest.format_version, 1..=3) || manifest.versions.is_empty() {
     return Err("A nonempty GTAV cache with schema 1, 2 or 3 is required".into());
   }
@@ -33,4 +33,4 @@ pub(super) fn history(manifest: &GtavCacheManifest) -> Result<BTreeMap<String, V
   Ok(files)
 }
 
-pub(super) use crate::core::gtav_cache::load_manifest;
+pub(super) use crate::core::vanilla_cache::load_manifest;
