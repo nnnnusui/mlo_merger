@@ -4,8 +4,7 @@ use crate::{
 };
 use structdiff::StructDiff;
 
-#[derive(Debug)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub enum YmapEntityDiff {
   Added(YmapEntity),
   Modified {

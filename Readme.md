@@ -59,7 +59,7 @@ Both input and output directories are required (`--input`/`--output` are also ac
 Reads all installed root `.rpf` files (`common.rpf`, `x64a.rpf`, etc.) in filename
 order, then `update/update.rpf` and the DLC archives listed in
 `common/data/dlclist.xml`, in XML order. Nested platform DLCs are resolved from
-the root RPFs; modern DLCs are read from `update/x64/dlcpacks`. YMAP resources
+the root RPFs; modern DLCs are read from `update/x64/dlcpacks`. YMAP and YBN resources
 are exported as standalone native files with their resource headers restored.
 GTA V Legacy and a local `GTA5.exe` are required; the game directory is read-only.
 
@@ -72,11 +72,14 @@ gtav-cache/
     create_cache.log
     version_info.json
     ymap/ch1_01.ymap
+    ybn/collision.ybn
   0001-update/
     create_cache.log
     version_info.json
     ymap/ch1_01.ymap.diff.json
     ymap/new_map.ymap
+    ybn/collision.ybn.diff.json
+    ybn/new_collision.ybn
 ```
 
 New filenames are saved unchanged as `.ymap`; content replacements are compared
@@ -94,6 +97,14 @@ under `ymap/`; replacement binaries exist only in temporary comparison storage.
 Older cache snapshot references remain readable. Existing schema-2 merge-diff caches must
 be regenerated to enable exact JSON-only history reconstruction.
 
+YBN additions are saved as standalone `.ybn` files in each version's `ybn/`.
+YBN replacements use `.ybn.diff.json` with `vanilla_ybn_delta_v1`: exact byte-span
+changes, predecessor metadata, sizes and SHA-256 checks. Applying this delta to
+its original YBN recreates the byte-identical target, including headers and
+unknown collision data. This is a binary history delta, not a geometry merge
+report; compressed changes may store most of the target payload. Unchanged
+YBNs are omitted, and no replacement `native/` snapshots are created.
+
 ### Vanilla Version Lookup
 
 ```bash
@@ -108,8 +119,8 @@ Matching is case-insensitive. Unchanged stages are omitted and an unknown name
 returns `[]`. This is a read-only metadata query: it does not extract RPFs,
 generate caches, or create/rotate application logs.
 Lookup is extension-independent and accepts `.ymap`, `.ybn`, or other cached
-filenames. GTAV cache generation currently extracts only YMAPs; other types
-will appear once their metadata is available.
+filenames. GTAV cache generation now extracts YMAPs and YBNs; other types will
+appear once their metadata is available.
 
 ### MLO Diff Cache
 
@@ -125,6 +136,8 @@ shared manifest-aware explorer discovers resources, then `stream/` and `streams/
 files are matched case-insensitively by basename against vanilla cache entries.
 YMAP is currently the supported comparison format; unmatched files are listed
 in metadata instead of copied or compared.
+Vanilla-matched YBNs are logged and recorded in `unsupported_files` until MLO
+YBN diff-cache generation is implemented; they do not abort YMAP processing.
 
 For each matched file, distinct changed-stage vanilla states are ranked by
 model field differences (excluding name and block metadata). Ties choose the

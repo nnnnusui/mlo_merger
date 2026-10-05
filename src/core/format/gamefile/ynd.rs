@@ -621,7 +621,9 @@ fn text_tag(
   value: &str,
 ) {
   indent(xml, depth);
-  xml.push_str(&format!("<{name}>{value}</{name}>\n"));
+  xml.push_str(&format!("<{name}>"));
+  super::xml_tree::write_text_content(xml, depth, value);
+  xml.push_str(&format!("</{name}>\n"));
 }
 fn open(
   xml: &mut String,

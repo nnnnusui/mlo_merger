@@ -47,7 +47,7 @@ public static unsafe class Exports
       load.Invoke(null, arguments);
     });
 
-  /// <summary>Extracts YMAPs and dlclist.xml recursively, preserving archive provenance.</summary>
+  /// <summary>Extracts YMAPs, YBNs and dlclist.xml recursively, preserving archive provenance.</summary>
   [UnmanagedCallersOnly]
   public static int ExtractRpf(byte* inputPathUtf8, byte* outputPathUtf8) =>
     Try(() => ExtractRpfFiles(PtrToString(inputPathUtf8), PtrToString(outputPathUtf8), null));
@@ -93,7 +93,7 @@ public static unsafe class Exports
           if (subtree != null && !entry.Path.Replace('\\', '/').StartsWith(subtree + "/", StringComparison.OrdinalIgnoreCase)) {
             continue;
           }
-          if (!entry.NameLower.EndsWith(".ymap") &&
+          if (!entry.NameLower.EndsWith(".ymap") && !entry.NameLower.EndsWith(".ybn") &&
               !entry.Path.Replace('\\', '/').EndsWith("/common/data/dlclist.xml")) {
             continue;
           }

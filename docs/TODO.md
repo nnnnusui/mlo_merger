@@ -21,11 +21,19 @@
 - [x] Move all diff-cache implementation under src/core/diff_cache/ and split orchestration, resource processing, comparison, history metadata, I/O and report types while preserving the existing command API.
 - [x] Add read-only --list-vanilla-versions filename lookup with optional GTAV cache path, ordered added/modified JSON output and shared metadata loading; verify extension-independent YMAP/YBN lookup.
 - [ ] Define vanillaVersion/build-number mapping and support independently captured historical builds.
-- [ ] Extend extraction and cache objects to native types other than YMAP.
+- [x] Cache YBN additions and exact binary-span JSON replacements alongside YMAP, restore byte-identical targets with SHA-256 checks, and include YBNs in vanilla version lookup.
+- [x] Regenerate /mnt/gtav cache: 103 stages, 12,024 YBN additions and 472 replacements; verify byte-identical bh1_08_0.ybn reconstruction, version listing and all 22,671 native additions / 2,409 mixed diff artifacts.
+- [x] Keep YMAP MLO diff-cache generation working with YBN-inclusive caches; record vanilla-matched unsupported types explicitly.
+- [ ] Extend extraction and cache objects to native types other than YMAP/YBN.
+- [ ] Add semantic YBN comparison and MLO YBN diff-cache generation.
 - [ ] Support update2.rpf and content/setup mount rules for complete engine snapshots.
 
 ## Resource Conversion Tests
 
+- [x] Add explicit XML -> YBN/YMAP -> XML -> binary stability tests comparing first/second rebuilt bytes and re-exported XML; verify four META YMAP XML fixtures.
+- [x] Resolve repeated YBN rebuild instability using preserved VertexQuantum, quantized-vertex BVH input, deterministic BVH ordering and final-order material/edge rebuilding; all six YBN/YMAP stability tests pass with exact binary/XML equality.
+- [x] Verify shared-edge selection for three triangles against CodeWalker.Core behavior and confirm CodeWalker accepts Native XML with the optional VertexQuantum extension.
+- [x] Format multiline text elements consistently in Native YBN/YND/META/PSO XML; verify YBN vertex/colour arrays remain rebuildable and preserve inline/empty values.
 - [x] Support embedded-schema PSO export and bounded template-based `.pso.xml` rebuilds.
 - [ ] Add general PSO allocation/rebuilding for array growth, longer strings, changed structure types, and checksum updates.
 

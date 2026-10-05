@@ -57,6 +57,7 @@ pub(super) fn generate_resource(
   let files = stream_files(resource)?;
   let scanned_files = files.len();
   let mut unmatched = Vec::new();
+  let mut unsupported = Vec::new();
   let mut matched = Vec::new();
   for source in files {
     let relative = source.strip_prefix(resource)?.to_string_lossy().replace('\\', "/");
@@ -71,7 +72,9 @@ pub(super) fn generate_resource(
       continue;
     };
     if !name.ends_with(".ymap") {
-      return Err(format!("Matched native type is not supported yet: {name}").into());
+      log::warn!("Skipping unsupported MLO diff type: {id}/{relative}");
+      unsupported.push(relative);
+      continue;
     }
     let model = ModelState::new(
       (provider.reader)(&source)
@@ -152,6 +155,7 @@ pub(super) fn generate_resource(
     vanilla_version: selected_version,
     scanned_files,
     unmatched_files: unmatched,
+    unsupported_files: unsupported,
     files: reports,
   };
   write_json(&directory.join("resource_info.json"), &report)?;

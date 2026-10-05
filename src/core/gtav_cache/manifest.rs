@@ -13,7 +13,7 @@ use super::Result;
 pub struct CachedFile {
   /// SHA-256 of the extracted, standalone native file.
   pub sha256: String,
-  /// Cache-relative path to a new YMAP or a replacement's exact vanilla JSON delta.
+  /// Cache-relative path to a new native file or a replacement's exact vanilla JSON delta.
   pub object: String,
   /// Optional legacy native snapshot reference; omitted by new cache generation.
   #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -40,7 +40,7 @@ pub struct CacheVersion {
   pub parent: Option<String>,
   /// Archives contributing to this stage, in overlay order.
   pub archives: Vec<String>,
-  /// Case-insensitive native filenames added or replaced at this stage.
+  /// Case-insensitive YMAP/YBN filenames added or replaced at this stage.
   pub changes: BTreeMap<String, FileChange>,
   /// Number of filenames whose content matched the preceding cumulative stage.
   #[serde(default)]

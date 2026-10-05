@@ -196,7 +196,6 @@ fn build_geometry_bvh(
   if geometry.polygons.len() > i16::MAX as usize {
     return Err(super::invalid("GeometryBVH has too many polygons for BVH indices"));
   }
-  update_triangle_metadata(geometry, bound)?;
   let items = geometry
     .polygons
     .iter()
@@ -240,6 +239,7 @@ fn build_geometry_bvh(
       }
     }
   }
+  update_triangle_metadata(geometry, bound)?;
 
   let center = std::array::from_fn(|axis| (root.minimum[axis] + root.maximum[axis]) * 0.5);
   let quantum = std::array::from_fn(|axis| {
@@ -347,9 +347,19 @@ fn set_triangle_edge(
 }
 
 fn build_bvh_node(
-  items: Vec<BvhItem>,
+  mut items: Vec<BvhItem>,
   threshold: usize,
 ) -> BvhBuildNode {
+  items.sort_by(|first, second| {
+    first
+      .minimum
+      .iter()
+      .chain(&first.maximum)
+      .zip(second.minimum.iter().chain(&second.maximum))
+      .map(|(first, second)| first.total_cmp(second))
+      .find(|order| !order.is_eq())
+      .unwrap_or_else(|| first.index.cmp(&second.index))
+  });
   let mut node = BvhBuildNode {
     items,
     children: Vec::new(),

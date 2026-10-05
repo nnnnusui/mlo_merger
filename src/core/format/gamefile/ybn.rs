@@ -5,7 +5,7 @@ use std::{
 
 use super::{
   resource_file::Rsc7Resource,
-  xml_tree::{XmlElement, parse_xml},
+  xml_tree::{XmlElement, parse_xml, write_text_content},
 };
 
 mod bvh;
@@ -1145,6 +1145,13 @@ fn geometry_from_xml(node: &XmlElement) -> io::Result<Geometry> {
     unknown_ac: number(node, "UnkFloat2")?,
     ..Geometry::default()
   };
+  if let Some(quantum) = node.children.iter().find(|child| child.name == "VertexQuantum") {
+    let quantum = vec3(quantum)?;
+    if quantum.iter().any(|value| !value.is_finite() || *value < 0.0) {
+      return Err(invalid("YBN vertex quantum must be finite and nonnegative"));
+    }
+    geometry.vertex_quantum = Some(quantum);
+  }
   if let Some(vertices) = node.children.iter().find(|child| child.name == "Vertices") {
     geometry.vertices = parse_vectors(&vertices.text)?;
   }
@@ -1251,6 +1258,8 @@ fn encode_bound(
   if bound.kind == "None" {
     return Ok(());
   }
+  let normalized = quantized_geometry_bound(bound)?;
+  let bound = normalized.as_ref().unwrap_or(bound);
   let block_size = size_for_bound(bound);
   ensure_len(data, offset + block_size);
   let mut common = bound.common.clone();
@@ -1323,6 +1332,7 @@ fn encode_bound(
     if bound.kind == "GeometryBVH" {
       let mut geometry = geometry.clone();
       let pointer = bvh::append_geometry_bvh(data, &mut geometry, bound)?;
+      compact_polygon_materials(&mut geometry);
       encode_geometry(&geometry, bound, quantum, data, offset)?;
       put_u64(data, offset + 304, pointer)?;
     } else {
@@ -1330,6 +1340,35 @@ fn encode_bound(
     }
   }
   Ok(())
+}
+
+/// Makes bounds, triangle metadata and BVH use the exact vertices written to the resource.
+fn quantized_geometry_bound(bound: &Bound) -> io::Result<Option<Bound>> {
+  let Some(geometry) = &bound.geometry else {
+    return Ok(None);
+  };
+  let quantum = match geometry.vertex_quantum {
+    Some(quantum) => quantum,
+    None if bound.kind == "GeometryBVH" => geometry_bvh_quantum(geometry, &bound.common)?,
+    None => geometry_quantum(&bound.common)?,
+  };
+  if quantum.iter().any(|value| !value.is_finite() || *value < 0.0) {
+    return Err(invalid("YBN vertex quantum must be finite and nonnegative"));
+  }
+  let mut normalized = bound.clone();
+  let output = normalized.geometry.as_mut().unwrap();
+  for vertex in &mut output.vertices {
+    for axis in 0..3 {
+      if !vertex[axis].is_finite() {
+        return Err(invalid("YBN contains a non-finite vertex"));
+      }
+      let scaled = if quantum[axis] == 0.0 { 0.0 } else { vertex[axis] / quantum[axis] };
+      let packed = if geometry.vertex_quantum.is_some() { scaled.round() } else { scaled } as i16;
+      vertex[axis] = packed as f32 * quantum[axis];
+    }
+  }
+  output.vertex_quantum = Some(quantum);
+  Ok(Some(normalized))
 }
 
 fn geometry_quantum(common: &[u8]) -> io::Result<[f32; 3]> {
@@ -1539,6 +1578,9 @@ fn write_bound_xml(
   }
   if let Some(geometry) = &bound.geometry {
     vec_tag(xml, depth + 1, "GeometryCenter", geometry.center);
+    if let Some(quantum) = geometry.vertex_quantum {
+      vec_tag(xml, depth + 1, "VertexQuantum", quantum);
+    }
     val_tag(xml, depth + 1, "UnkFloat1", geometry.unknown_9c);
     val_tag(xml, depth + 1, "UnkFloat2", geometry.unknown_ac);
     write_array_open(xml, depth + 1, "Materials");
@@ -2176,7 +2218,9 @@ fn text_tag(
   value: &str,
 ) {
   indent(xml, depth);
-  xml.push_str(&format!("<{name}>{value}</{name}>\n"));
+  xml.push_str(&format!("<{name}>"));
+  write_text_content(xml, depth, value);
+  xml.push_str(&format!("</{name}>\n"));
 }
 fn write_array_open(
   xml: &mut String,
@@ -2303,6 +2347,78 @@ mod tests {
       flags: vec![[0; 2]],
     };
     encode_ybn_bound(&root).unwrap()
+  }
+
+  #[test]
+  fn multiline_geometry_text_arrays_are_indented_and_rebuildable() {
+    let original = triangle_root(
+      &[[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
+      &[([0, 1, 2], [false; 3])],
+    );
+    let mut root = read_ybn_root(&original).unwrap();
+    let geometry = root.children[0].geometry.as_mut().unwrap();
+    geometry.material_colours = vec![[1, 2, 3, 4], [5, 6, 7, 8]];
+    geometry.vertex_colours = vec![[10, 20, 30, 40]; 3];
+    let bytes = encode_ybn_bound(&root).unwrap();
+    let xml = ybn_to_xml(&bytes).unwrap();
+    for name in ["Vertices", "MaterialColours", "VertexColours"] {
+      assert!(xml.contains(&format!("    <{name}>\n     ")), "missing formatted {name}");
+      assert!(xml.contains(&format!("\n    </{name}>")), "misaligned closing {name}");
+    }
+    assert!(xml.contains("<Flags>NONE</Flags>"));
+    let rebuilt = xml_to_ybn(&xml).unwrap();
+    let actual = read_ybn_root(&rebuilt).unwrap();
+    let before = read_ybn_root(&bytes).unwrap();
+    let expected_geometry = before.children[0].geometry.as_ref().unwrap();
+    let actual_geometry = actual.children[0].geometry.as_ref().unwrap();
+    assert_eq!(actual_geometry.material_colours, expected_geometry.material_colours);
+    assert_eq!(actual_geometry.vertex_colours, expected_geometry.vertex_colours);
+    let expected = geometry_polygon_records(&before).unwrap();
+    let actual = geometry_polygon_records(&actual).unwrap();
+    assert_eq!(actual.len(), expected.len());
+    assert!(
+      actual
+        .iter()
+        .zip(&expected)
+        .all(|(actual, expected)| actual.identity.matches(&expected.identity))
+    );
+  }
+
+  #[test]
+  fn non_manifold_shared_edges_are_stable_after_bvh_ordering() {
+    let source = triangle_root(
+      &[[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, -1.0, 0.0], [0.0, 0.0, 1.0]],
+      &[([0, 1, 2], [false; 3]), ([1, 0, 3], [false; 3]), ([0, 1, 4], [false; 3])],
+    );
+    let mut original = read_ybn_root(&source).unwrap();
+    original.children[0].geometry.as_mut().unwrap().polygons.reverse();
+    let mut xml = "<BoundsFile>\n".to_string();
+    super::write_bound_xml(&original, 1, "Bounds", &mut xml);
+    xml.push_str("</BoundsFile>\n");
+    let first = xml_to_ybn(&xml).unwrap();
+    let first_xml = ybn_to_xml(&first).unwrap();
+    let second = xml_to_ybn(&first_xml).unwrap();
+    assert_eq!(first, second);
+    assert_eq!(first_xml, ybn_to_xml(&second).unwrap());
+    let rebuilt = read_ybn_root(&first).unwrap();
+    let geometry = rebuilt.children[0].geometry.as_ref().unwrap();
+    let shared = geometry
+      .polygons
+      .iter()
+      .enumerate()
+      .filter_map(|(index, polygon)| {
+        if let Polygon::Triangle(triangle) = polygon
+          && matches!([triangle.vertices[0], triangle.vertices[1]], [0, 1] | [1, 0])
+        {
+          return Some((index as u16, triangle.edge_indices[0]));
+        }
+        None
+      })
+      .collect::<Vec<_>>();
+    assert_eq!(shared.len(), 3);
+    assert_eq!(shared[0].1, shared[1].0);
+    assert_eq!(shared[1].1, shared[0].0);
+    assert_eq!(shared[2].1, shared[0].0);
   }
 
   #[test]

@@ -897,7 +897,7 @@ fn render(
   }
   xml.push('>');
   if node.children.is_empty() {
-    xml.push_str(&quick_xml::escape::escape(&node.text));
+    super::xml_tree::write_text_content(xml, depth, &node.text);
   } else {
     xml.push('\n');
     for child in &node.children {
@@ -912,6 +912,18 @@ fn render(
 mod tests {
   use super::*;
   use crate::core::format::gamefile::meta_resource::jenk_hash;
+
+  #[test]
+  fn multiline_leaf_text_uses_shared_indentation() {
+    let node = XmlElement {
+      name: "Data".into(),
+      text: "1 2 3\n4 5 6".into(),
+      ..XmlElement::default()
+    };
+    let mut xml = String::new();
+    render(&node, 2, &mut xml);
+    assert_eq!(xml, "  <Data>\n   1 2 3\n   4 5 6\n  </Data>\n");
+  }
 
   #[test]
   fn parses_four_vanilla_pso_ymaps() {

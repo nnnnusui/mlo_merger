@@ -120,7 +120,7 @@ fn build_ymap_cache() -> impl Parser<Command> {
 
 fn build_gtav_cache() -> impl Parser<Command> {
   let flag = long("generate-gtav-cache")
-    .help("Build ordered vanilla YMAP caches from the installed GTA V Legacy RPF archives")
+    .help("Build ordered vanilla YMAP/YBN caches from the installed GTA V Legacy RPF archives")
     .req_flag(());
   let game_dir =
     short('i').long("input").help("Installed GTA V Legacy directory").argument::<PathBuf>("DIR");

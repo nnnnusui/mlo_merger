@@ -10,7 +10,7 @@ use super::{
   io::write_json,
   logging::VersionLog,
   manifest::{CacheVersion, CachedFile, FileChange, GtavCacheManifest},
-  ymap_delta,
+  ybn_delta, ymap_delta,
 };
 use crate::core::{format::ymap::model::Ymap, merge::YmapDiff};
 
@@ -26,6 +26,7 @@ pub(super) fn stage(
   let directory = output.join(&id);
   fs::create_dir(&directory)?;
   fs::create_dir(directory.join("ymap"))?;
+  fs::create_dir(directory.join("ybn"))?;
   fs::create_dir_all(output.join(".working"))?;
   let version_log = VersionLog::start(&directory)?;
   let result = (|| -> Result<()> {
@@ -34,9 +35,9 @@ pub(super) fn stage(
     log::info!("Processing archives: {}", archives.join(", "));
     let mut winners = BTreeMap::new();
     for (file, directory) in files {
-      if file.name.ends_with(".ymap") {
-        if file.name.contains(['/', '\\']) || file.name == ".ymap" {
-          return Err(format!("Invalid YMAP basename: {}", file.name).into());
+      if file.name.ends_with(".ymap") || file.name.ends_with(".ybn") {
+        if file.name.contains(['/', '\\']) || matches!(file.name.as_str(), ".ymap" | ".ybn") {
+          return Err(format!("Invalid native basename: {}", file.name).into());
         }
         if let Some((previous, _)) = winners.get(&file.name) {
           let previous: &ExtractedFile = previous;
@@ -63,27 +64,39 @@ pub(super) fn stage(
       }
       let input = directory.join(&file.stored);
       let working = output.join(".working").join(&name);
+      let family = if name.ends_with(".ybn") { "ybn" } else { "ymap" };
       let object = if previous.is_some() {
-        format!("{id}/ymap/{name}.diff.json")
+        format!("{id}/{family}/{name}.diff.json")
       } else {
-        format!("{id}/ymap/{name}")
+        format!("{id}/{family}/{name}")
       };
       let destination = output.join(&object);
       if let Some(previous) = previous {
         log::info!("Diff {name}: {} -> {}", previous.source, file.source);
-        let before =
-          reader(&working).map_err(|error| format!("Reading previous {name}: {error}"))?;
-        let after =
-          reader(&input).map_err(|error| format!("Reading replacement {name}: {error}"))?;
-        let diff = YmapDiff::extract_from(&before, &after);
-        drop(diff);
-        let delta = ymap_delta::VanillaYmapDelta::extract_from(
-          &before,
-          &after,
-          previous.clone(),
-          file.sha256.clone(),
-        )?;
-        write_json(&destination, &delta)?;
+        if family == "ybn" {
+          let before = fs::read(&working)?;
+          let after = fs::read(&input)?;
+          let delta = ybn_delta::VanillaYbnDelta::extract_from(&before, &after, previous.clone())?;
+          if delta.target_native_sha256 != file.sha256 || delta.apply_to(&before)? != after {
+            return Err(format!("YBN delta did not reconstruct target {name}").into());
+          }
+          log::info!("Exact YBN byte delta: {} -> {} bytes", before.len(), after.len());
+          write_json(&destination, &delta)?;
+        } else {
+          let before =
+            reader(&working).map_err(|error| format!("Reading previous {name}: {error}"))?;
+          let after =
+            reader(&input).map_err(|error| format!("Reading replacement {name}: {error}"))?;
+          let diff = YmapDiff::extract_from(&before, &after);
+          drop(diff);
+          let delta = ymap_delta::VanillaYmapDelta::extract_from(
+            &before,
+            &after,
+            previous.clone(),
+            file.sha256.clone(),
+          )?;
+          write_json(&destination, &delta)?;
+        }
       } else {
         log::info!("Added {name}: {}", file.source);
         fs::copy(&input, &destination)?;
@@ -105,7 +118,7 @@ pub(super) fn stage(
       current.insert(name, cached);
     }
     log::info!(
-      "{id}: {} additions/replacements, {unchanged} unchanged, {} effective YMAPs",
+      "{id}: {} additions/replacements, {unchanged} unchanged, {} effective native files",
       changes.len(),
       current.len()
     );

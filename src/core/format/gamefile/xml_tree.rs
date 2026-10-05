@@ -12,6 +12,25 @@ pub(crate) struct XmlElement {
   pub(crate) children: Vec<XmlElement>,
 }
 
+/// Writes escaped text, placing multiline values one level inside their enclosing tag.
+pub(crate) fn write_text_content(
+  output: &mut String,
+  depth: usize,
+  text: &str,
+) {
+  if text.contains('\n') {
+    output.push('\n');
+    for line in text.lines() {
+      output.extend(std::iter::repeat_n(' ', depth + 1));
+      output.push_str(&quick_xml::escape::partial_escape(line));
+      output.push('\n');
+    }
+    output.extend(std::iter::repeat_n(' ', depth));
+  } else {
+    output.push_str(&quick_xml::escape::partial_escape(text));
+  }
+}
+
 pub(crate) fn parse_xml(xml: &str) -> io::Result<XmlElement> {
   let mut reader = Reader::from_str(xml);
   reader.config_mut().trim_text(true);
@@ -83,4 +102,26 @@ fn attach_node(
 
 fn invalid_data(message: &str) -> io::Error {
   io::Error::new(io::ErrorKind::InvalidData, message)
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn multiline_text_is_indented_and_escaped_without_changing_inline_values() {
+    let mut xml = "    <Vertices>".to_string();
+    write_text_content(&mut xml, 4, "1, 2, 3\r\n4, 5, 6\n7 & 8 < 9");
+    xml.push_str("</Vertices>\n");
+    assert_eq!(
+      xml,
+      "    <Vertices>\n     1, 2, 3\n     4, 5, 6\n     7 &amp; 8 &lt; 9\n    </Vertices>\n"
+    );
+    let mut inline = String::new();
+    write_text_content(&mut inline, 4, "NONE & value");
+    assert_eq!(inline, "NONE &amp; value");
+    let mut empty = String::new();
+    write_text_content(&mut empty, 4, "");
+    assert!(empty.is_empty());
+  }
 }

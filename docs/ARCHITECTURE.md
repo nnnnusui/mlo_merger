@@ -23,6 +23,38 @@ the flag skips that prompt.
 
 YBN conflicts are merged only when a vanilla baseline with the same basename exists. The merger preserves vanilla children not removed by any mod, applies mod-relative removals, unions distinct added Bounds, and deduplicates identical additions. Conflicting source paths are appended to `_extracted_ybns.txt`, which deploy combines with the YMAP omit list. The Native YBN writer generates GeometryBVH node/tree data, updates polygon order, and remaps triangle edge indices. CodeWalker.Core remains available as an alternate rebuild backend.
 
+## Native XML Formatting
+
+Generated YBN, YND, META and PSO XML share multiline text formatting through
+the gamefile XML helper. Text containing line breaks starts on the next line,
+each content line is indented one existing XML level deeper, and the closing
+tag aligns with the opening tag. This includes Vertices, MaterialColours and
+VertexColours, not just YBN vertex lists. Inline values and empty-tag styles
+remain unchanged. Numeric-list readers remain whitespace tolerant.
+
+## YBN Rebuild Stability
+
+Native YBN XML exports the optional VertexQuantum vector so the original
+vertex grid is not recomputed during subsequent rebuilds. Standard CodeWalker
+XML without this field remains accepted; CodeWalker.Core also accepts Native
+XML containing the extra field. Its Bounds.cs reference implementation uses
+CalculateQuantum, BuildBVH, BuildMaterials, UpdateTriangleAreas and
+UpdateEdgeIndices during XML import/reference generation.
+
+Native encoding first projects geometry onto the vertices actually stored as
+quantized shorts, then derives bounds, triangle areas and BVH from that same
+grid. BVH inputs are spatially ordered before float accumulation/partitioning
+to avoid changes when serialized polygons are read in BVH order. After final
+polygon ordering, shared-edge references are recomputed and material indices
+are compacted, matching CodeWalker's post-BVH reference-generation sequence.
+For non-manifold shared edges, the first two triangles in final order refer to
+each other and later triangles refer to the first, as in CodeWalker.Core.
+
+Regression tests require exact equality for the first/second rebuilt binaries
+and their exported XML, including the brofx_mansion_06 collision fixture. This
+ensures rebuild idempotence after normalization, not byte identity with every
+original game binary or lossless preservation of all unsupported YBN fields.
+
 ## GTA V Archive Cache
 
 `--generate-gtav-cache -i <GAME_DIR> -o <CACHE_DIR>` runs independently of the merge pipeline.
@@ -41,7 +73,7 @@ the existing exact YMAP delta module remains alongside them. Callers continue
 using `core::gtav_cache` without changes to commands or storage formats.
 
 The extraction order is all installed root .rpf files in filename order
-(including common.rpf and x64*.rpf), standalone update.rpf YMAPs, then dlclist.xml
+(including common.rpf and x64*.rpf), standalone update.rpf YMAPs/YBNs, then dlclist.xml
 items in document order. Missing alphabet letters are not assumed to exist.
 Embedded dlcpacks entries are excluded from the base stage and processed at
 their DLC stage. `platform:` DLCs may be nested in root x64*.rpf
@@ -56,7 +88,7 @@ unchanged count and additions/replacements with previous/new SHA-256 hashes,
 artifact paths and full archive provenance. <stage>/ymap/<name>.ymap stores a
 new filename's standalone native bytes; <name>.ymap.diff.json stores serialized
 VanillaYmapDelta for content replacements. Unchanged content is not saved again. Even
-empty stages have metadata, a log, and a ymap directory. Cache schema 1's
+empty stages have metadata, a log, and ymap/ybn directories. Cache schema 1's
 objects/ and manifest.json are obsolete; existing legacy files are not deleted.
 New generation does not create native/ snapshot directories. Original/new
 files use their regular ymap/ artifact and replacements use only exact JSON
@@ -82,6 +114,19 @@ Ymap adapter limits (including duplicate GUID collapse) still apply. YmapDiff
 retains its original merge semantics and remains the MLO report format.
 GtavCacheManifest::resolve_version(id) resolves the latest **artifact** index,
 which may point to diff JSON, not a complete native-file snapshot.
+
+YBNs use the same stage order, title-update patch overlays, hash-based change
+tracking and case-insensitive filename index. Additions live in ybn/<name>.ybn;
+replacements live in ybn/<name>.ybn.diff.json. `ybn_delta.rs` defines
+vanilla_ybn_delta_v1: one changed byte span with identical prefix/suffix,
+predecessor reference, before/after lengths and SHA-256 integrity checks.
+Generation applies each delta and verifies the exact target before writing it.
+Unlike the parsed-model YMAP delta, YBN deltas preserve the full standalone
+binary, including unknown Bounds families, padding and resource headers.
+They do not require lossy XML export or the supported-geometry merge adapter.
+Compression can make the changed span large; this representation favors exact
+binary history over semantic geometry edits. No native/ replacement copies
+are saved. MLO YBN diff-cache generation is separate and remains future work.
 
 VersionLog selects a thread-local file; version_logger() integrates with the
 existing CombinedLogger to capture actual diff INFO/WARN/DEBUG records in
@@ -118,8 +163,8 @@ Unknown names return an empty JSON array. The CLI handles this command before
 logger initialization, so stdout is JSON-only and no application logs or cache
 files are changed. Root and per-version metadata fallback matches diff-cache.
 The query and result types are extension-neutral; YBN and other resource
-metadata use the same path without format-specific parsing. This does not
-extend the current YMAP-only GTAV archive extraction or MLO diff generation.
+metadata use the same path without format-specific parsing. GTAV extraction
+supports YMAP/YBN; MLO diff-cache generation still compares only YMAP.
 
 ## MLO Diff Cache
 
@@ -137,6 +182,8 @@ The existing extraction explorer API delegates to it. Single resources and
 resources roots with nested bracket groups use the same discovery logic.
 Only files under stream/ or streams/ are considered; basename matching is
 case-insensitive and supported vanilla matches are currently YMAP-only.
+Other vanilla-matched stream types are logged and recorded in unsupported_files
+without aborting YMAP generation. Unmatched files remain in unmatched_files.
 
 Candidate histories contain the introduction and content replacement stages,
 not repeated unchanged snapshots. Parsed states are loaded lazily and

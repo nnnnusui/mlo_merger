@@ -673,7 +673,9 @@ fn write_text(
     writeln!(output, "<{name} />").unwrap();
   } else {
     write_indent(output, depth);
-    writeln!(output, "<{name}>{}</{name}>", escape_text(text)).unwrap();
+    write!(output, "<{name}>").unwrap();
+    super::xml_tree::write_text_content(output, depth, text);
+    writeln!(output, "</{name}>").unwrap();
   }
 }
 
@@ -684,7 +686,9 @@ fn write_text_pair(
   text: &str,
 ) {
   write_indent(output, depth);
-  writeln!(output, "<{name}>{}</{name}>", escape_text(text)).unwrap();
+  write!(output, "<{name}>").unwrap();
+  super::xml_tree::write_text_content(output, depth, text);
+  writeln!(output, "</{name}>").unwrap();
 }
 
 fn write_empty_array(
@@ -734,10 +738,6 @@ fn write_indent(
 
 fn escape_attr(value: &str) -> String {
   value.replace('&', "&amp;").replace('<', "&lt;").replace('"', "&quot;")
-}
-
-fn escape_text(value: &str) -> String {
-  value.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;")
 }
 
 fn resolve_hash(

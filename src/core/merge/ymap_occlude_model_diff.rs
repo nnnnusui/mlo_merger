@@ -105,8 +105,7 @@ pub fn check_occlude_models_diff(
   diffs
 }
 
-#[derive(Debug)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub enum YmapOccludeModelTriangleDiff {
   Added(Triangle),
   Removed(Triangle),

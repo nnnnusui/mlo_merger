@@ -183,6 +183,91 @@ fn stages_store_only_changes_and_resolve_prior_versions() {
 }
 
 #[test]
+fn stages_cache_ybn_additions_and_exact_replacements_alongside_ymap() {
+  use sha2::{Digest, Sha256};
+  let root = std::env::temp_dir().join(format!("gtav_ybn_stages_{}", std::process::id()));
+  fs::create_dir(&root).unwrap();
+  let _cleanup = Staging(root.clone());
+  let before = b"RSC7original-collision-tail";
+  let after = b"RSC7updated-collision-with-extra-data-tail";
+  fs::write(root.join("before.ybn"), before).unwrap();
+  fs::write(root.join("after.ybn"), after).unwrap();
+  fs::write(root.join("fake.ymap"), b"original map").unwrap();
+  let file = |name: &str, stored: &str| {
+    (
+      ExtractedFile {
+        name: name.into(),
+        stored: stored.into(),
+        source: format!("fixture.rpf/{name}"),
+        sha256: format!("{:x}", Sha256::digest(fs::read(root.join(stored)).unwrap())),
+      },
+      root.clone(),
+    )
+  };
+  let reader = |_: &Path| -> Result<Ymap> { Err("YBN files must not use the YMAP reader".into()) };
+  let mut manifest = GtavCacheManifest {
+    format_version: 3,
+    game_dir: "missing-game".into(),
+    versions: vec![],
+  };
+  let mut current = BTreeMap::new();
+  stage(
+    &mut manifest,
+    &mut current,
+    &root,
+    "base",
+    || Ok((vec![], vec![file("same.ybn", "before.ybn"), file("same.ymap", "fake.ymap")])),
+    &reader,
+  )
+  .unwrap();
+  stage(
+    &mut manifest,
+    &mut current,
+    &root,
+    "patch",
+    || Ok((vec![], vec![file("same.ybn", "after.ybn"), file("new.ybn", "after.ybn")])),
+    &reader,
+  )
+  .unwrap();
+  stage(
+    &mut manifest,
+    &mut current,
+    &root,
+    "unchanged",
+    || Ok((vec![], vec![file("same.ybn", "after.ybn")])),
+    &reader,
+  )
+  .unwrap();
+  assert_eq!(fs::read(root.join("0000-base/ybn/same.ybn")).unwrap(), before);
+  assert!(root.join("0000-base/ymap/same.ymap").is_file());
+  assert_eq!(fs::read(root.join("0001-patch/ybn/new.ybn")).unwrap(), after);
+  let delta: ybn_delta::VanillaYbnDelta = serde_json::from_reader(
+    fs::File::open(root.join("0001-patch/ybn/same.ybn.diff.json")).unwrap(),
+  )
+  .unwrap();
+  assert_eq!(delta.apply_to(before).unwrap(), after);
+  assert_eq!(delta.target_native_sha256, manifest.versions[1].changes["same.ybn"].file.sha256);
+  assert!(manifest.versions[2].changes.is_empty());
+  assert_eq!(manifest.versions[2].unchanged, 1);
+  assert_eq!(manifest.resolve_version("0002-unchanged").unwrap().len(), 3);
+  for version in &manifest.versions {
+    assert!(root.join(&version.id).join("ybn").is_dir());
+    assert!(!root.join(&version.id).join("native").exists());
+    write_json(&root.join(&version.id).join("version_info.json"), version).unwrap();
+  }
+  write_json(&root.join("cache_info.json"), &manifest).unwrap();
+  let listed = ListVanillaVersions {
+    file_name: "SAME.YBN".into(),
+    gtav_cache_dir: root.clone(),
+  }
+  .versions()
+  .unwrap();
+  assert_eq!(listed.len(), 2);
+  assert_eq!(listed[0].change, VanillaVersionChange::Added);
+  assert_eq!(listed[1].change, VanillaVersionChange::Modified);
+}
+
+#[test]
 fn discovers_all_installed_base_archives_without_assuming_a_final_letter() {
   let root = std::env::temp_dir().join(format!("gtav_base_discovery_{}", std::process::id()));
   fs::create_dir_all(root.join("directory.rpf")).unwrap();
@@ -191,6 +276,79 @@ fn discovers_all_installed_base_archives_without_assuming_a_final_letter() {
     fs::write(root.join(name), []).unwrap();
   }
   assert_eq!(base_archives(&root).unwrap(), ["common.rpf", "x64a.rpf", "x64z.rpf"]);
+}
+
+#[test]
+#[ignore = "requires generated YBN-inclusive asset/gtav-cache"]
+fn real_ybn_cache_restores_exact_binary_and_lists_change_versions() {
+  use sha2::{Digest, Sha256};
+  use std::io::BufReader;
+  fn restore(
+    cache: &Path,
+    file: &CachedFile,
+    visiting: &mut std::collections::BTreeSet<String>,
+  ) -> Result<Vec<u8>> {
+    if !visiting.insert(file.object.clone()) {
+      return Err("Cyclic YBN cache history".into());
+    }
+    let bytes = if file.object.ends_with(".diff.json") {
+      let delta: ybn_delta::VanillaYbnDelta =
+        serde_json::from_reader(BufReader::new(fs::File::open(cache.join(&file.object))?))?;
+      if delta.target_native_sha256 != file.sha256 {
+        return Err("YBN target metadata mismatch".into());
+      }
+      let before = restore(cache, &delta.base, visiting)?;
+      delta.apply_to(&before)?
+    } else {
+      fs::read(cache.join(&file.object))?
+    };
+    visiting.remove(&file.object);
+    if format!("{:x}", Sha256::digest(&bytes)) != file.sha256 {
+      return Err("YBN restored binary hash mismatch".into());
+    }
+    Ok(bytes)
+  }
+  let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("asset/gtav-cache");
+  let manifest = load_manifest(&root).unwrap();
+  let mut added = 0;
+  let mut modified = 0;
+  let mut first_replacement = None;
+  for version in &manifest.versions {
+    assert!(root.join(&version.id).join("ybn").is_dir());
+    assert!(!root.join(&version.id).join("native").exists());
+    for (name, change) in &version.changes {
+      if !name.ends_with(".ybn") {
+        continue;
+      }
+      assert!(change.file.object.starts_with(&format!("{}/ybn/", version.id)));
+      assert!(root.join(&change.file.object).is_file());
+      if change.previous_sha256.is_some() {
+        modified += 1;
+        if first_replacement.is_none() {
+          first_replacement = Some((name, &change.file));
+        }
+      } else {
+        added += 1;
+      }
+    }
+  }
+  assert!(added > 0);
+  let (name, file) = first_replacement.expect("requires a YBN replacement delta");
+  let bytes = restore(&root, file, &mut std::collections::BTreeSet::new()).unwrap();
+  assert!(bytes.starts_with(b"RSC7"));
+  let xml = crate::core::format::gamefile::ybn::ybn_to_xml(&bytes).unwrap();
+  assert!(xml.contains("<BoundsFile>"));
+  let versions = ListVanillaVersions {
+    file_name: name.clone(),
+    gtav_cache_dir: root,
+  }
+  .versions()
+  .unwrap();
+  assert!(versions.iter().any(|version| version.change == VanillaVersionChange::Modified));
+  println!(
+    "Validated {} stages: {added} YBN additions, {modified} replacements; restored {name} byte-identically",
+    manifest.versions.len()
+  );
 }
 
 #[test]

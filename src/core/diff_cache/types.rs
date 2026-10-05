@@ -40,6 +40,8 @@ pub(super) struct ResourceReport {
   pub(super) vanilla_version: Option<String>,
   pub(super) scanned_files: usize,
   pub(super) unmatched_files: Vec<String>,
+  #[serde(skip_serializing_if = "Vec::is_empty")]
+  pub(super) unsupported_files: Vec<String>,
   pub(super) files: Vec<FileReport>,
 }
 

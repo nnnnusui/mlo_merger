@@ -1,4 +1,4 @@
-//! Ordered vanilla YMAP snapshots and exact parsed-state deltas from GTA V RPF archives.
+//! Ordered vanilla YMAP/YBN files and exact history deltas from GTA V RPF archives.
 
 mod archives;
 mod generate;
@@ -8,6 +8,7 @@ mod manifest;
 mod publication;
 mod stage;
 mod versions;
+pub(crate) mod ybn_delta;
 pub(crate) mod ymap_delta;
 
 pub use generate::BuildGtavCache;

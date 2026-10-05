@@ -29,6 +29,39 @@ fn sample_parent_refs_dir() -> std::path::PathBuf {
 }
 
 #[test]
+#[ignore = "requires locally published CodeWalker.Bridge and CodeWalker.Core.dll"]
+fn codewalker_accepts_native_ybn_xml_with_vertex_quantum() {
+  let base = Path::new(env!("CARGO_MANIFEST_DIR"));
+  let source =
+    std::fs::read_to_string(base.join("docs/sample/ybn_conflicts/geometry_bvh.ybn.xml")).unwrap();
+  let native =
+    xml_to_resource(NativeResourceFormat::Ybn, &source, &MetaSchemaCatalog::default()).unwrap();
+  let xml =
+    resource_to_xml(NativeResourceFormat::Ybn, &native, &std::collections::HashMap::new()).unwrap();
+  assert!(xml.contains("<VertexQuantum "));
+  let directory =
+    std::env::temp_dir().join(format!("ybn_quantum_codewalker_{}", std::process::id()));
+  std::fs::create_dir(&directory).unwrap();
+  let input = directory.join("geometry.ybn.xml");
+  let output = directory.join("geometry.ybn");
+  let exported = directory.join("codewalker.ybn.xml");
+  std::fs::write(&input, &xml).unwrap();
+  let bridge = std::env::var("CODEWALKER_BRIDGE_DLL").unwrap_or_else(|_| {
+    base
+      .join("bridge/CodeWalker.Bridge/bin/publish/CodeWalker.Bridge.dll")
+      .to_string_lossy()
+      .into_owned()
+  });
+  let codewalker = CodeWalker::init(Path::new(&bridge)).unwrap();
+  codewalker.game_file_from_xml(&input, &output).unwrap();
+  codewalker.game_file_to_xml(&output, &exported).unwrap();
+  let result = std::fs::read_to_string(exported).unwrap();
+  assert!(result.contains("<BoundsFile>"));
+  assert!(result.contains("GeometryBVH"));
+  std::fs::remove_dir_all(directory).unwrap();
+}
+
+#[test]
 #[ignore = "requires a successfully generated asset/gtav-cache schema 2 or 3 cache"]
 fn gtav_generated_version_cache_has_complete_artifacts_and_diff_logs() {
   use mlo_merger::core::{gtav_cache::GtavCacheManifest, merge::YmapDiff};
@@ -59,17 +92,26 @@ fn gtav_generated_version_cache_has_complete_artifacts_and_diff_logs() {
     for (name, change) in &version.changes {
       let artifact = root.join(&change.file.object);
       assert_eq!(change.file.sha256.len(), 64);
-      assert!(change.file.object.starts_with(&format!("{}/ymap/", version.id)));
+      let family = if name.ends_with(".ybn") { "ybn" } else { "ymap" };
+      assert!(change.file.object.starts_with(&format!("{}/{family}/", version.id)));
       if change.previous_sha256.is_some() {
         modified += 1;
         assert!(has_diff, "missing diff log in {}", version.id);
         assert_eq!(artifact.file_name().unwrap().to_string_lossy(), format!("{name}.diff.json"));
         if manifest.format_version == 3 {
           let delta: serde_json::Value = read_json(&artifact);
-          assert_eq!(delta["format"], "vanilla_ymap_delta_v1");
+          assert_eq!(
+            delta["format"],
+            if family == "ybn" { "vanilla_ybn_delta_v1" } else { "vanilla_ymap_delta_v1" }
+          );
           assert_eq!(delta["target_native_sha256"], change.file.sha256);
-          assert!(delta["changes"].is_array());
-          assert!(delta["entity_order"].is_array());
+          if family == "ybn" {
+            assert!(delta["replacement"].is_array());
+            assert!(delta["prefix_length"].is_number());
+          } else {
+            assert!(delta["changes"].is_array());
+            assert!(delta["entity_order"].is_array());
+          }
         } else {
           let _: YmapDiff = read_json(&artifact);
         }
@@ -139,7 +181,11 @@ fn gtav_rpf_extracts_nested_resources_and_preserves_headers() {
     resource.extend_from_slice(&value.to_le_bytes());
   }
   resource.extend(encoder.finish().unwrap());
-  let nested = fixture(&[("inside.ymap", &resource, true), ("ignored.txt", b"skip", false)]);
+  let nested = fixture(&[
+    ("inside.ymap", &resource, true),
+    ("collision.ybn", &resource, true),
+    ("ignored.txt", b"skip", false),
+  ]);
   let archive = fixture(&[("outside.ymap", b"outer", false), ("nested.rpf", &nested, false)]);
   let directory = std::env::temp_dir().join(format!("gtav_rpf_fixture_{}", std::process::id()));
   std::fs::create_dir_all(&directory).unwrap();
@@ -160,15 +206,22 @@ fn gtav_rpf_extracts_nested_resources_and_preserves_headers() {
   codewalker.extract_rpf(&input, &all).unwrap();
   let files: Vec<serde_json::Value> =
     serde_json::from_slice(&std::fs::read(all.join("files.json")).unwrap()).unwrap();
-  assert_eq!(files.len(), 2);
+  assert_eq!(files.len(), 3);
   let selected = directory.join("selected");
   codewalker.extract_rpf_subtree(&input, "fixture.rpf/nested.rpf", &selected).unwrap();
   let files: Vec<serde_json::Value> =
     serde_json::from_slice(&std::fs::read(selected.join("files.json")).unwrap()).unwrap();
-  assert_eq!(files.len(), 1);
+  assert_eq!(files.len(), 2);
   assert_eq!(files[0]["source"], "fixture.rpf/nested.rpf/inside.ymap");
   assert_eq!(files[0]["sha256"].as_str().unwrap().len(), 64);
   let extracted = std::fs::read(selected.join(files[0]["stored"].as_str().unwrap())).unwrap();
+  assert_eq!(&extracted[..16], &resource[..16]);
+  let mut decoded = vec![];
+  flate2::read::DeflateDecoder::new(&extracted[16..]).read_to_end(&mut decoded).unwrap();
+  assert_eq!(decoded, payload);
+  let bounds = files.iter().find(|file| file["name"] == "collision.ybn").unwrap();
+  assert_eq!(bounds["source"], "fixture.rpf/nested.rpf/collision.ybn");
+  let extracted = std::fs::read(selected.join(bounds["stored"].as_str().unwrap())).unwrap();
   assert_eq!(&extracted[..16], &resource[..16]);
   let mut decoded = vec![];
   flate2::read::DeflateDecoder::new(&extracted[16..]).read_to_end(&mut decoded).unwrap();

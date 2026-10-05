@@ -596,6 +596,114 @@ mod tests {
     resource_file::Rsc7Resource,
   };
 
+  fn assert_repeated_xml_conversion_is_stable(
+    format: NativeResourceFormat,
+    original_xml: &str,
+    catalog: &MetaSchemaCatalog,
+    label: &str,
+  ) {
+    let first_binary = xml_to_resource(format, original_xml, catalog).unwrap();
+    let first_xml = resource_to_xml(format, &first_binary, &catalog.hash_names).unwrap();
+    let second_binary = xml_to_resource(format, &first_xml, catalog).unwrap();
+    let second_xml = resource_to_xml(format, &second_binary, &catalog.hash_names).unwrap();
+    if first_binary != second_binary {
+      let first = Rsc7Resource::decode(&first_binary).unwrap();
+      let second = Rsc7Resource::decode(&second_binary).unwrap();
+      let differences = first
+        .system_data
+        .iter()
+        .zip(&second.system_data)
+        .enumerate()
+        .filter(|(_, (before, after))| before != after)
+        .take(16)
+        .map(|(offset, (before, after))| format!("{offset:#x}: {before:02x}->{after:02x}"))
+        .collect::<Vec<_>>();
+      eprintln!("{label}: first system-byte differences: {}", differences.join(", "));
+    }
+    if first_xml != second_xml
+      && let Some((index, (before, after))) = first_xml
+        .lines()
+        .zip(second_xml.lines())
+        .enumerate()
+        .find(|(_, (before, after))| before != after)
+    {
+      eprintln!("{label}: first XML difference at line {}:\n{before}\n{after}", index + 1);
+    }
+    assert!(
+      first_binary == second_binary && first_xml == second_xml,
+      "repeated conversion changed: {label}; binary_equal={}, xml_equal={}, binary sizes {} -> {} bytes",
+      first_binary == second_binary,
+      first_xml == second_xml,
+      first_binary.len(),
+      second_binary.len()
+    );
+  }
+
+  fn assert_ybn_fixture_conversion_is_stable(name: &str) {
+    let base = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let path = base.join("docs/sample/ybn_conflicts").join(name);
+    let xml = std::fs::read_to_string(&path).unwrap();
+    assert_repeated_xml_conversion_is_stable(
+      NativeResourceFormat::Ybn,
+      &xml,
+      &MetaSchemaCatalog::default(),
+      name,
+    );
+  }
+
+  #[test]
+  fn repeated_ybn_empty_composite_conversion_is_stable() {
+    assert_ybn_fixture_conversion_is_stable("vanilla_empty.ybn.xml");
+  }
+
+  #[test]
+  fn repeated_ybn_resource_a_conversion_is_stable() {
+    assert_ybn_fixture_conversion_is_stable("resource_a.ybn.xml");
+  }
+
+  #[test]
+  fn repeated_ybn_resource_b_conversion_is_stable() {
+    assert_ybn_fixture_conversion_is_stable("resource_b.ybn.xml");
+  }
+
+  #[test]
+  fn repeated_ybn_geometry_bvh_conversion_is_stable() {
+    assert_ybn_fixture_conversion_is_stable("geometry_bvh.ybn.xml");
+  }
+
+  #[test]
+  fn repeated_ybn_brofx_mansion_conversion_is_stable() {
+    let base = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let binary =
+      std::fs::read(base.join("asset/source/[patron]/brofx_mansion_06/stream/ch2_06_1.ybn"))
+        .unwrap();
+    let xml = resource_to_xml(NativeResourceFormat::Ybn, &binary, &HashMap::new()).unwrap();
+    assert_repeated_xml_conversion_is_stable(
+      NativeResourceFormat::Ybn,
+      &xml,
+      &MetaSchemaCatalog::default(),
+      "brofx_mansion_06/ch2_06_1.ybn",
+    );
+  }
+
+  #[test]
+  fn repeated_ymap_xml_binary_conversion_is_stable() {
+    use crate::core::format::gamefile::test_support::{sample_ymap_catalog, sample_ymap_xml};
+    for name in [
+      "parent_refs/vanilla_parent.ymap.xml",
+      "parent_refs/child.ymap.xml",
+      "parent_refs/resource_a_parent.ymap.xml",
+      "parent_refs/resource_b_parent.ymap.xml",
+    ] {
+      assert_repeated_xml_conversion_is_stable(
+        NativeResourceFormat::Ymap,
+        &sample_ymap_xml(name),
+        sample_ymap_catalog(),
+        name,
+      );
+    }
+  }
+
   #[test]
   fn pso_batch_commands_preserve_suffix_and_template_format() {
     let base = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));

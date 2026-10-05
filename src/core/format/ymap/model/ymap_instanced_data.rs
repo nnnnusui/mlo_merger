@@ -3,8 +3,7 @@ use structdiff::{Difference, StructDiff};
 /// Instanced data definition in YMAP
 #[derive(Debug, Clone, PartialEq, Difference)]
 #[difference(expose)]
-#[derive(Default)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(Default, serde::Serialize, serde::Deserialize)]
 pub struct YmapInstancedData {
   pub imap_link: String,
   pub prop_instance_list: Vec<String>,

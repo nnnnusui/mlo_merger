@@ -391,7 +391,24 @@ fn diff_cache_selects_per_resource_latest_and_compares_its_cumulative_baseline()
     format_version: 2,
     game_dir: root.join("missing-game"),
     versions: vec![
-      version("0000-base", None, vec![("a.ymap", None, a0.clone()), ("b.ymap", None, b0.clone())]),
+      version(
+        "0000-base",
+        None,
+        vec![
+          ("a.ymap", None, a0.clone()),
+          ("b.ymap", None, b0.clone()),
+          (
+            "collision.ybn",
+            None,
+            CachedFile {
+              sha256: "3".repeat(64),
+              object: "0000-base/ybn/collision.ybn".into(),
+              native: None,
+              source: "fixture.rpf/collision.ybn".into(),
+            },
+          ),
+        ],
+      ),
       version("0001-patch", Some("0000-base"), vec![("a.ymap", Some(a0.sha256.clone()), a1)]),
       version("0002-patch", Some("0001-patch"), vec![("b.ymap", Some(b0.sha256), b2)]),
       version("0003-empty", Some("0002-patch"), vec![]),
@@ -406,6 +423,7 @@ fn diff_cache_selects_per_resource_latest_and_compares_its_cumulative_baseline()
   write_json(&first.join("stream/b.ymap"), &new).unwrap();
   write_json(&second.join("streams/a.ymap"), &new).unwrap();
   fs::write(first.join("stream/unmatched.ytyp"), b"unmatched").unwrap();
+  fs::write(first.join("stream/collision.ybn"), b"unsupported collision data").unwrap();
   fs::write(first.join("outside.ymap"), b"not in stream").unwrap();
   let command = BuildDiffCache {
     input_dir: resources,
@@ -421,8 +439,12 @@ fn diff_cache_selects_per_resource_latest_and_compares_its_cumulative_baseline()
   assert!(chrono::DateTime::parse_from_rfc3339(report["generated_at"].as_str().unwrap()).is_ok());
   assert_eq!(report["resources"][0]["vanilla_version"], "0002-patch");
   assert_eq!(report["resources"][1]["vanilla_version"], "0001-patch");
-  assert_eq!(report["resources"][0]["scanned_files"], 3);
+  assert_eq!(report["resources"][0]["scanned_files"], 4);
   assert_eq!(report["resources"][0]["unmatched_files"].as_array().unwrap().len(), 1);
+  assert_eq!(
+    report["resources"][0]["unsupported_files"],
+    serde_json::json!(["stream/collision.ybn"])
+  );
   let first_report = &report["resources"][0];
   assert_eq!(first_report["files"][0]["best_version"], "0000-base");
   assert_eq!(first_report["files"][0]["baseline_content_version"], "0001-patch");

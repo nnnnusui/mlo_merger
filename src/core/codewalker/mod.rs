@@ -217,7 +217,7 @@ impl CodeWalker {
     self.check(function(path.as_ptr() as *const u8), game_dir)
   }
 
-  /// Recursively extracts YMAPs and dlclist.xml, writing a `files.json` source index.
+  /// Recursively extracts YMAPs, YBNs and dlclist.xml, writing a `files.json` source index.
   pub fn extract_rpf(
     &self,
     archive: &Path,
@@ -233,7 +233,7 @@ impl CodeWalker {
     self.convert(function, archive, output)
   }
 
-  /// Extracts YMAPs from a nested RPF identified by its full virtual archive path.
+  /// Extracts YMAPs and YBNs from a nested RPF identified by its full virtual archive path.
   pub fn extract_rpf_subtree(
     &self,
     archive: &Path,
