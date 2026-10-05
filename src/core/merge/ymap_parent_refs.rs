@@ -18,7 +18,8 @@ pub(super) struct ParentTarget {
   pub(super) guid: u32,
 }
 
-/// Interns resolved parents as temporary indices below -1 during merging.
+/// Resolve positional parent links before merging, then remap them to the final
+/// entity order. Unresolved links are safe only while their original layout is unchanged.
 #[derive(Default)]
 pub(super) struct ParentReferences {
   targets: Vec<ParentTarget>,

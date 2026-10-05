@@ -87,7 +87,8 @@ impl GtavCacheManifest {
   }
 }
 
-/// Loads root or legacy/per-version metadata without opening game archives.
+/// Prefer current root metadata, then per-version records over a stale schema-1
+/// manifest; the latter may still supply the original game-directory hint.
 pub(crate) fn load_manifest(cache: &Path) -> Result<GtavCacheManifest> {
   let root = cache.join("cache_info.json");
   if root.is_file() {

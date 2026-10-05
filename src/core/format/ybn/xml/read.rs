@@ -91,6 +91,8 @@ pub(in crate::core::format::ybn) fn read_bound_xml(
   Ok(bound)
 }
 
+/// The optional Native quantum preserves the vertex grid across rebuilds;
+/// standard CodeWalker XML without it still uses the calculated grid.
 pub(in crate::core::format::ybn) fn geometry_from_xml(node: &XmlElement) -> io::Result<Geometry> {
   let mut geometry = Geometry {
     center: vec3(child(node, "GeometryCenter")?)?,

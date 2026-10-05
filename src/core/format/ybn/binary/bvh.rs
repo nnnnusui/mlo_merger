@@ -346,6 +346,8 @@ fn set_triangle_edge(
   Ok(())
 }
 
+/// Canonicalize spatial order before summing/partitioning so serialized polygon
+/// order cannot change the tree during the next rebuild.
 fn build_bvh_node(
   mut items: Vec<BvhItem>,
   threshold: usize,

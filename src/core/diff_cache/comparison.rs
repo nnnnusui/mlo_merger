@@ -14,6 +14,7 @@ pub(super) struct ModelState {
 }
 
 impl ModelState {
+  /// Export names and block bookkeeping must not influence baseline selection.
   pub(super) fn new(model: Ymap) -> Result<Self> {
     let mut comparison = serde_json::to_value(&model)?;
     let fields = comparison.as_object_mut().ok_or("YMAP model is not an object")?;
@@ -36,6 +37,7 @@ fn reference(value: &str) -> u32 {
     .unwrap_or_else(|| jenk_hash(&value.to_ascii_lowercase()))
 }
 
+/// Counts unequal leaves and unmatched entries; arrays remain ordered and hash spellings compare equally.
 pub(super) fn distance(
   before: &Value,
   after: &Value,
@@ -66,6 +68,7 @@ pub(super) fn distance(
   }
 }
 
+/// Ties select the newest content-change stage, not a later unchanged DLC stage.
 pub(super) fn best_candidate(
   scores: &[CandidateScore],
   variants: &[Variant],

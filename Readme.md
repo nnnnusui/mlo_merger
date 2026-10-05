@@ -1,241 +1,114 @@
-
 # MLO Merger
 
 [![SUSHI-WARE LICENSE](https://img.shields.io/badge/license-SUSHI--WARE%F0%9F%8D%A3-blue.svg)](https://github.com/MakeNowJust/sushi-ware)
 
-A tool for merging FiveM mod map `.ymap` files to avoid conflicts between multiple mods.
+Merges FiveM YMAP resources and conflicting YBN collision files against vanilla data.
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the processing flow and
+[docs/TODO.md](docs/TODO.md) for remaining work.
 
-## Status
+## Requirements
 
-- ✅ Core merge functionality is working
-- 🚧 Additional utility features are under development
+- Rust stable.
+- Vanilla YMAP XML and YBN files for merging. The default workspace is `asset`.
+- GTA V Legacy and a locally built CodeWalker bridge for RPF cache generation.
+- Local META schemas for XML-to-YMAP conversion. Matching binary files are discovered automatically, or supplied with `--schema-dir`.
 
-## Usage
-
-### Automated Pipeline (recommended)
-
-Running `cargo run` with no arguments executes the full workflow in one go: extract -> convert to xml -> merge YMAPs -> rebuild YMAPs -> merge colliding YBN bounds against vanilla. All intermediate paths (`vanilla/ymap.xml`, `vanilla/ybn`, `extracted`, `extracted.xml`, `merged.xml`, `merged`, `merged_ybn`, `blacklist.toml`, `log`) are resolved relative to a workspace directory (`asset` by default). Existing generated outputs are listed and replaced after confirmation; pass `-y` to skip the prompt.
-
-```bash
-# defaults: workspace=asset, source-dir=<workspace>/source
-cargo run
-
-# also deploy into a FiveM resource directory (overwrites merged YMAP/YBN streams and omit.txt)
-cargo run -- --workspace asset --source-dir asset/source --output-resource-dir asset/merged_mlo
-
-# skip confirmation before replacing generated outputs
-cargo run -- -y --workspace asset --source-dir asset/source --output-resource-dir asset/merged_mlo
-
-# opt in to CodeWalker.Core.dll for both conversion directions
-cargo run -- --use-codewalker-dll
-
-# scan nested FiveM stream folders for duplicate basenames
-cargo run -- --check-stream-conflicts --input asset/source --output asset/stream-conflicts.json
-```
-
-YMAP and YBN conversion use the Native Rust backend by default. Native YBN rebuilds generate GeometryBVH acceleration trees for collision geometry. `--use-codewalker-dll` selects CodeWalker.Core.dll (from [CodeWalker](https://github.com/dexyfex/CodeWalker)) instead for YMAP conversion and YBN rebuilds. The DLL must be available locally and is **not** distributed with this repository. Native XML-to-YMAP conversion builds its schema catalog from extracted binary YMAPs. Verify the applicable license before using or redistributing CodeWalker files. By default the DLL is looked up at `<workspace>/CodeWalker.Core.dll` (e.g. `asset/CodeWalker.Core.dll`); set `CODEWALKER_CORE_DLL` to override the location:
+The Native Rust backend is the default. Optional CodeWalker conversion and YBN
+rebuilding require the .NET 8 SDK and a local `CodeWalker.Core.dll`; the DLL is
+not distributed here. Check its license before using or redistributing it.
 
 ```bash
-# .NET SDK 8 is required to build the bridge (see .devcontainer/devcontainer.json's dotnet feature,
-# or install manually: https://dotnet.microsoft.com/download)
-export CODEWALKER_CORE_DLL=/path/to/CodeWalker.Core.dll  # optional, defaults to asset/CodeWalker.Core.dll
-cargo run
+export CODEWALKER_CORE_DLL=/path/to/CodeWalker.Core.dll
+cargo build
 ```
 
-When `--use-codewalker-dll` is selected, `cargo build`/`cargo run` builds `bridge/CodeWalker.Bridge` automatically via `build.rs` if `CODEWALKER_CORE_DLL` and `dotnet` are available. The default Native pipeline does not require the .NET SDK or DLL.
+Without that variable, the build looks for `asset/CodeWalker.Core.dll`.
+`CODEWALKER_BRIDGE_DLL` can override the published bridge location.
 
-### GTA V Vanilla Archive Cache
+## Merge Pipeline
 
-With the CodeWalker bridge built as described above:
+```bash
+cargo run
+cargo run -- --workspace asset --source-dir asset/source
+cargo run -- --output-resource-dir asset/merged_mlo
+```
+
+The pipeline extracts mod YMAPs, converts and merges them against vanilla,
+rebuilds YMAPs, and merges colliding YBNs. Deployment is optional.
+
+Existing generated outputs are replaced after confirmation. Deployment also
+replaces the destination's generated stream contents and omit list. Use `-y`
+to skip confirmation, and `--use-codewalker-dll` to select the optional backend.
+Vanilla merge inputs normally live in `asset/vanilla/ymap.xml` and
+`asset/vanilla/ybn`.
+
+## Vanilla Cache
 
 ```bash
 cargo run -- --generate-gtav-cache -i /mnt/gtav -o asset/gtav-cache
-# Cargo alias defined in .cargo/config.toml
-cargo generate-gtav-cache -i /mnt/gtav -o asset/gtav-cache
+cargo run -- --list-vanilla-versions example.ybn --gtav-cache asset/gtav-cache
 ```
 
-Both input and output directories are required (`--input`/`--output` are also accepted).
+Cache generation reads base archives, the title update, and DLCs in `dlclist.xml`
+order without modifying the game installation. It saves YMAP/YBN additions and
+changes by version, together with metadata and logs. Version IDs are overlay
+stages from the installed files, not historical game build numbers.
 
-Reads all installed root `.rpf` files (`common.rpf`, `x64a.rpf`, etc.) in filename
-order, then `update/update.rpf` and the DLC archives listed in
-`common/data/dlclist.xml`, in XML order. Nested platform DLCs are resolved from
-the root RPFs; modern DLCs are read from `update/x64/dlcpacks`. YMAP and YBN resources
-are exported as standalone native files with their resource headers restored.
-GTA V Legacy and a local `GTA5.exe` are required; the game directory is read-only.
+Version lookup returns a JSON list of introductions and changes. Matching is
+case-insensitive; unchanged stages are omitted and an unknown name returns `[]`.
 
-The cache uses decoded native filenames rather than hash filenames:
-
-```text
-gtav-cache/
-  cache_info.json
-  0000-base/
-    create_cache.log
-    version_info.json
-    ymap/ch1_01.ymap
-    ybn/collision.ybn
-  0001-update/
-    create_cache.log
-    version_info.json
-    ymap/ch1_01.ymap.diff.json
-    ymap/new_map.ymap
-    ybn/collision.ybn.diff.json
-    ybn/new_collision.ybn
-```
-
-New filenames are saved unchanged as `.ymap`; content replacements are compared
-against the preceding cumulative version and saved as exact vanilla-model
-deltas in `.ymap.diff.json` (GTAV cache schema 3). Unchanged content is omitted. Version logs include
-the existing diff-detection logs. Failed-run logs are retained under `failed-*`.
-Stage IDs (`0000-base`, `0001-update`, then position-prefixed DLC names) are
-**not historical game build numbers**. Vanilla deltas record a predecessor,
-all modeled field changes, entity order, and before/after model hashes. The
-original YMAP plus JSON deltas reconstructs each parsed model without the game
-or replacement snapshots. This does not recreate byte-identical compressed files.
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). New generation does not create
-`native/` directories or snapshot references. Original/new YMAPs are retained
-under `ymap/`; replacement binaries exist only in temporary comparison storage.
-Older cache snapshot references remain readable. Existing schema-2 merge-diff caches must
-be regenerated to enable exact JSON-only history reconstruction.
-
-YBN additions are saved as standalone `.ybn` files in each version's `ybn/`.
-YBN replacements use `.ybn.diff.json` with `vanilla_ybn_delta_v1`: exact byte-span
-changes, predecessor metadata, sizes and SHA-256 checks. Applying this delta to
-its original YBN recreates the byte-identical target, including headers and
-unknown collision data. This is a binary history delta, not a geometry merge
-report; compressed changes may store most of the target payload. Unchanged
-YBNs are omitted, and no replacement `native/` snapshots are created.
-
-### Vanilla Version Lookup
+## MLO Diff Cache
 
 ```bash
-cargo run -- --list-vanilla-versions example.ymap
-# Cargo alias; --gtav-cache defaults to asset/gtav-cache
-cargo list-vanilla-versions example.ybn --gtav-cache asset/gtav-cache
-```
-
-Returns a JSON array of stages that introduced (`added`) or replaced (`modified`)
-the filename, in cache order, with artifact paths and archive provenance.
-Matching is case-insensitive. Unchanged stages are omitted and an unknown name
-returns `[]`. This is a read-only metadata query: it does not extract RPFs,
-generate caches, or create/rotate application logs.
-Lookup is extension-independent and accepts `.ymap`, `.ybn`, or other cached
-filenames. GTAV cache generation now extracts YMAPs and YBNs; other types will
-appear once their metadata is available.
-
-### MLO Diff Cache
-
-```bash
-cargo run -- --generate-diff-cache --gtav-cache asset/gtav-cache \
+cargo run -- --generate-diff-cache \
   -i 'asset/source/[patron]/brofx_mansion_06' -o asset/diff-cache
-# --gtav-cache defaults to asset/gtav-cache
-cargo generate-diff-cache -i asset/source -o asset/all-diff-cache
 ```
 
-Input may be one resource or a resources root with nested bracket groups. The
-shared manifest-aware explorer discovers resources, then `stream/` and `streams/`
-files are matched case-insensitively by basename against vanilla cache entries.
-YMAP is currently the supported comparison format; unmatched files are listed
-in metadata instead of copied or compared.
-Vanilla-matched YBNs are logged and recorded in `unsupported_files` until MLO
-YBN diff-cache generation is implemented; they do not abort YMAP processing.
+Input can be one resource or a resources root, including nested bracket groups.
+`--gtav-cache` defaults to `asset/gtav-cache`; the output directory must be empty.
+Each resource selects a vanilla baseline from its files' closest versions, then
+saves YMAP differences, selection metadata and logs. Unmatched or unsupported
+files are recorded rather than compared. YBN MLO diff-cache generation is not
+yet supported.
 
-For each matched file, distinct changed-stage vanilla states are ranked by
-model field differences (excluding name and block metadata). Ties choose the
-newer changed stage. The latest of these per-file best stages becomes the
-resource's baseline; all its matched files are then compared against that
-stage's cumulative vanilla state. Each resource is inferred independently.
-
-The empty output directory receives `diff_cache_info.json`, `create_cache.log`,
-and `<resource>/resource_info.json` plus `<resource>/ymap/<stream-relative-path>.diff.json`.
-Metadata includes UTC generation time, chosen version, all candidate scores,
-hashes/provenance and unmatched paths. Failures are recorded as incomplete.
-The example processed 198 stream files and generated two YmapDiff reports
-against `0029-mpapartment`.
-
-Comparison uses exact parsed states: schema-3 vanilla deltas are composed from
-the original YMAP with full-model hash checks, while MLO merge diffs are never
-used as exact history patches. Older caches can use retained
-native objects or recover replacements from the original installed game and
-CodeWalker, verifying SHA-256. A missing root `cache_info.json` can be recovered
-from per-version metadata; stale schema-1 manifests provide game-directory
-information only when newer per-version metadata exists.
-
-### Structured YBN API
-
-YBN models, XML codecs and semantic differences live under `src/core/format/ybn`.
-The existing conversion commands are unchanged. Rust callers can inspect
-resolved polygon additions/removals and Bounds metadata separately:
-
-```rust
-use mlo_merger::core::format::ybn::{read_ybn, diff::YbnDiff};
-
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-  let before = read_ybn(&std::fs::read("vanilla.ybn")?)?;
-  let after = read_ybn(&std::fs::read("mod.ybn")?)?;
-  let diff = YbnDiff::extract_from(&before, &after)?;
-  println!("{}", serde_json::to_string_pretty(&diff)?);
-  Ok(())
-}
-```
-
-Matching resolves vertex/material references, retains duplicate occurrences
-and Bounds ownership, and ignores derived BVH/triangle metadata. These are
-semantic reports, not the byte-identical GTAV cache patches. MLO YBN diff-cache
-generation and applying/merging structured reports are not yet wired into CLI.
-
-### Basic Workflow (manual / individual steps)
-
-1. **Extract** - Extract MLO data from `.ymap` files
-2. **Convert to XML** - Use CodeWalker to convert `.ymap` files to `.ymap.xml` format
-3. **Merge XML** - Run the merge command to combine vanilla and mod files
-4. **Convert to YMAP** - Use CodeWalker to convert merged `.ymap.xml` files back to `.ymap` format
-
-Steps 2 and 4 can also be run through a real CodeWalker.exe install (Windows) instead of this tool's bridge, if preferred.
-
-### Commands
-
-For detailed command information, please refer to:
-- `--help` flag for each command
-- `.cargo/config.toml` for command aliases
-- `src/cli/command.rs` for implementation details
-
-Convert a single native resource to XML in the same directory, or provide `-o` to choose an output directory:
+## Individual Commands
 
 ```bash
-cargo run -- --to-xml -i asset/merged_ybn/hi@sc1_18_0.ybn
+# Native file/XML conversion
+cargo run -- --to-xml -i collision.ybn -o exported
+cargo run -- --from-xml -i exported/collision.ybn.xml -o rebuilt
+cargo run -- --from-xml -i map.ymap.xml -o rebuilt --schema-dir asset/extracted
+
+# PSO XML requires its original binary as a template
+cargo run -- --from-xml -i map.ymap.pso.xml -o rebuilt --schema-dir original/map.ymap
+
+# Extraction and manual merging
+cargo run -- --extract-ymap --flatten -i asset/source -o asset/extracted --vanilla-dir asset/vanilla/ymap.xml
+cargo run -- --merge-ymap-xml --vanilla-dir asset/vanilla/ymap.xml --mod-dir asset/extracted.xml --mod-ymap-dir asset/extracted --output-dir asset/merged.xml
+cargo run -- --merge-ybn --workspace asset
+
+# Diagnostics and parent-cache preparation
+cargo run -- --check-stream-conflicts -i asset/source -o asset/stream-conflicts.json
+cargo run -- --build-ymap-cache --vanilla-dir asset/vanilla/ymap.xml
 ```
 
-`--check-stream-conflicts` uses the same manifest-aware resource discovery as extraction, then scans each resource's `stream/` recursively (or scans a `stream/` directory directly). It groups files by case-insensitive basename and writes duplicate names with their relative paths to the requested JSON file.
+Use `--blacklist-config <FILE>` when merging to exclude configured occlude models.
+Run `cargo run -- --help` for all options. Convenience commands are defined in
+[.cargo/config.toml](.cargo/config.toml).
 
-### Example: Extract
+## Limitations
+
+- Cache stages do not reproduce the complete game-engine mount rules or historical installations.
+- YMAP history restores parsed state; YBN history restores exact binary content. Semantic MLO differences are not lossless history patches.
+- Conversion support depends on the resource family and available schemas. PSO rebuilding cannot grow arrays or allocated strings; RBF YMT is unsupported.
+- Matching XML or stable rebuilds does not establish in-game load safety. Validate generated resources in the target game environment.
+
+## Tests
 
 ```bash
-cargo run -- --extract-ymap -i asset/mlo/source -o asset/mlo/ymap.extracted --vanilla-dir asset/vanilla/ymap.xml
+cargo test --lib
+cargo test --doc
 ```
 
-### Example: Merge YMAP XML Files
-
-Merge multiple mod YMAP XML files with vanilla files:
-
-```bash
-cargo run -- --merge-ymap-xml \
-  --vanilla-dir asset/vanilla/ymap.xml \
-  --mod-dir asset/merged/ymap.xml \
-  --mod-ymap-dir asset/mlo/ymap.extracted \
-  --output-dir asset/merged/ymap.xml
-```
-
-#### Blacklist Configuration
-
-You can filter out specific occlude models from being added during merge by using a blacklist configuration file:
-
-```bash
-cargo run -- --merge-ymap-xml \
-  --vanilla-dir asset/vanilla/ymap.xml \
-  --mod-dir asset/merged/ymap.xml \
-  --mod-ymap-dir asset/mlo/ymap.extracted \
-  --output-dir asset/merged/ymap.xml \
-  --blacklist-config asset/blacklist.toml
-```
-
-See `asset/blacklist.toml` for configuration format.
+Some tests require local game assets or CodeWalker and are ignored by default.
+Game assets and CodeWalker binaries are not redistributed.

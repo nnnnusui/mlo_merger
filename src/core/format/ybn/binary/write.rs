@@ -134,7 +134,8 @@ pub(in crate::core::format::ybn) fn encode_bound(
   Ok(())
 }
 
-/// Makes bounds, triangle metadata and BVH use the exact vertices written to the resource.
+/// Derive bounds and acceleration data from the vertices actually stored, not
+/// their pre-quantized positions. Reusing the supplied grid prevents rebuild drift.
 pub(in crate::core::format::ybn) fn quantized_geometry_bound(
   bound: &Bound
 ) -> io::Result<Option<Bound>> {

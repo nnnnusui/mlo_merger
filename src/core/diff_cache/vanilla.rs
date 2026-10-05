@@ -64,6 +64,8 @@ impl NativeVariants<'_> {
     Ok(model)
   }
 
+  /// Decode deltas directly: generic JSON objects can reorder entity keys, and
+  /// untagged-enum buffering cannot preserve the generated numeric-key map decoder.
   fn load_model(
     &mut self,
     file: &CachedFile,

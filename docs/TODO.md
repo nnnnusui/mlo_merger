@@ -1,5 +1,7 @@
 # TODO
 
+- [x] Keep README focused on usage and Architecture focused on workflows/constraints; remove historical validation notes and place necessary implementation rationale in owning doc comments.
+
 ## GTA V Vanilla Archive Cache
 
 - [x] Add `--generate-gtav-cache -i <GAME_DIR> -o <CACHE_DIR>` with a Cargo command alias, using CodeWalker RPF decryption and recursive YMAP extraction.

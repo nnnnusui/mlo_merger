@@ -17,6 +17,8 @@ impl Drop for Staging {
   }
 }
 
+/// Reject unknown output directories and retain backups until root metadata
+/// is installed, restoring the previous cache if publication fails.
 pub(super) fn publish_cache(
   build: &Path,
   output: &Path,

@@ -24,7 +24,8 @@ pub struct Rsc7Resource {
 }
 
 impl Rsc7Resource {
-  /// Creates an RSC7 resource from unpadded system and graphics bytes.
+  /// Allocates one sufficiently large page per region so contiguous META blocks
+  /// cannot straddle page boundaries. Padding is preferred over invalid runtime layout.
   pub fn from_pages(
     version: u32,
     system_data: &[u8],

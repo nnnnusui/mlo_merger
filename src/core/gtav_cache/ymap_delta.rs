@@ -54,7 +54,8 @@ impl VanillaYmapDelta {
     })
   }
 
-  /// Applies changes only to the recorded predecessor, and validates the complete result.
+  /// Verify both states and restore entity order explicitly: map equality alone
+  /// does not preserve order-only changes needed by parent references.
   pub(crate) fn apply_to(
     self,
     before: &Ymap,
