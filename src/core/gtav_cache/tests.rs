@@ -246,6 +246,13 @@ fn stages_cache_ybn_additions_and_exact_replacements_alongside_ymap() {
   )
   .unwrap();
   assert_eq!(delta.apply_to(before).unwrap(), after);
+  let json: serde_json::Value = serde_json::from_reader(
+    fs::File::open(root.join("0001-patch/ybn/same.ybn.diff.json")).unwrap(),
+  )
+  .unwrap();
+  assert_eq!(json["format"], "vanilla_ybn_delta_v2");
+  assert_eq!(json["structured_diff"]["status"], "unavailable");
+  assert!(json["structured_diff"]["reason"].as_str().is_some());
   assert_eq!(delta.target_native_sha256, manifest.versions[1].changes["same.ybn"].file.sha256);
   assert!(manifest.versions[2].changes.is_empty());
   assert_eq!(manifest.versions[2].unchanged, 1);

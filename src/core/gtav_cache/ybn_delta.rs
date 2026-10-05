@@ -4,14 +4,28 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 use super::{CachedFile, Result};
+use crate::core::format::ybn::{diff::YbnDiff, read_ybn};
 
 #[derive(Deserialize, Serialize)]
 enum DeltaFormat {
   #[serde(rename = "vanilla_ybn_delta_v1")]
   VanillaYbnV1,
+  #[serde(rename = "vanilla_ybn_delta_v2")]
+  VanillaYbnV2,
 }
 
-/// Replaces a changed byte span while retaining an identical prefix and suffix.
+#[derive(Deserialize, Serialize)]
+#[serde(tag = "status", rename_all = "snake_case")]
+enum StructuredDiff {
+  Available {
+    changes: YbnDiff,
+  },
+  Unavailable {
+    reason: String,
+  },
+}
+
+/// Stores an exact byte delta and a best-effort structured Bounds/Polygon report.
 #[derive(Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct VanillaYbnDelta {
@@ -20,6 +34,8 @@ pub(crate) struct VanillaYbnDelta {
   pub(crate) base: CachedFile,
   /// SHA-256 of the exact target standalone binary.
   pub(crate) target_native_sha256: String,
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  structured_diff: Option<StructuredDiff>,
   before_size: usize,
   after_size: usize,
   prefix_length: usize,
@@ -32,7 +48,7 @@ fn hash(bytes: &[u8]) -> String {
 }
 
 impl VanillaYbnDelta {
-  /// Captures the entire binary difference without requiring a YBN schema adapter.
+  /// Captures an exact binary delta and a structured report when both models are supported.
   pub(crate) fn extract_from(
     before: &[u8],
     after: &[u8],
@@ -41,6 +57,19 @@ impl VanillaYbnDelta {
     if hash(before) != base.sha256 {
       return Err("YBN delta predecessor binary hash mismatch".into());
     }
+    let structured_diff = match (read_ybn(before), read_ybn(after)) {
+      (Ok(before), Ok(after)) => match YbnDiff::extract_from(&before, &after) {
+        Ok(changes) => Some(StructuredDiff::Available {
+          changes,
+        }),
+        Err(error) => Some(StructuredDiff::Unavailable {
+          reason: error.to_string(),
+        }),
+      },
+      (Err(error), _) | (_, Err(error)) => Some(StructuredDiff::Unavailable {
+        reason: error.to_string(),
+      }),
+    };
     let prefix_length =
       before.iter().zip(after).take_while(|(before, after)| before == after).count();
     let suffix_length = before[prefix_length..]
@@ -50,9 +79,10 @@ impl VanillaYbnDelta {
       .take_while(|(before, after)| before == after)
       .count();
     Ok(Self {
-      format: DeltaFormat::VanillaYbnV1,
+      format: DeltaFormat::VanillaYbnV2,
       base,
       target_native_sha256: hash(after),
+      structured_diff,
       before_size: before.len(),
       after_size: after.len(),
       prefix_length,
@@ -130,5 +160,32 @@ mod tests {
     let mut delta = VanillaYbnDelta::extract_from(before, after, base(before)).unwrap();
     delta.prefix_length = usize::MAX;
     assert!(delta.apply_to(before).is_err());
+  }
+
+  #[test]
+  fn ybn_delta_serializes_structured_polygon_changes_and_reads_v1() {
+    use crate::core::format::ybn::xml_to_ybn;
+
+    let before_xml = include_str!(concat!(
+      env!("CARGO_MANIFEST_DIR"),
+      "/docs/sample/ybn_conflicts/geometry_bvh.ybn.xml"
+    ));
+    let after_xml = before_xml.replacen("3, 0, 0\n", "3.1, 0, 0\n", 1);
+    assert_ne!(before_xml, after_xml);
+    let before = xml_to_ybn(before_xml).unwrap();
+    let after = xml_to_ybn(&after_xml).unwrap();
+    let delta = VanillaYbnDelta::extract_from(&before, &after, base(&before)).unwrap();
+    let json = serde_json::to_value(&delta).unwrap();
+    assert_eq!(json["format"], "vanilla_ybn_delta_v2");
+    assert_eq!(json["structured_diff"]["status"], "available");
+    assert!(!json["structured_diff"]["changes"]["polygon_diffs"].as_array().unwrap().is_empty());
+    let loaded: VanillaYbnDelta = serde_json::from_value(json.clone()).unwrap();
+    assert_eq!(loaded.apply_to(&before).unwrap(), after);
+
+    let mut legacy = json;
+    legacy["format"] = "vanilla_ybn_delta_v1".into();
+    legacy.as_object_mut().unwrap().remove("structured_diff");
+    let loaded: VanillaYbnDelta = serde_json::from_value(legacy).unwrap();
+    assert_eq!(loaded.apply_to(&before).unwrap(), after);
   }
 }

@@ -23,11 +23,15 @@ This document contains meta-guidelines that cannot be expressed through automate
    - `docs/ARCHITECTURE.md`: Application structure, flow, and design decisions
    - `docs/TODO.md`: Project task tracking and roadmap
    - This file (`.github/copilot-instructions.md`): Meta-guidelines
+   - Keep `Readme.md` and `docs/ARCHITECTURE.md` concise and focused on current usage, workflows, and design constraints; do not use them as change logs or validation-history notes
+   - Keep architecture documentation at the workflow/design level rather than describing source internals in detail
 
 3. **Documentation Updates**
    - Update `docs/TODO.md` when tasks change or complete
    - Update `docs/ARCHITECTURE.md` when structure or design changes
    - Update this file when new meta-guidelines emerge
+   - Put necessary, non-obvious implementation rationale in a doc comment at the code that owns it
+   - Omit doc-comment details already clear from names, types, or struct fields
 
 ## Version Control
 
