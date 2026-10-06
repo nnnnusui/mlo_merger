@@ -1,59 +1,89 @@
 # TODO
 
-- [x] Keep README focused on usage and Architecture focused on workflows/constraints; remove historical validation notes and place necessary implementation rationale in owning doc comments.
+## Pipeline Foundation
 
-## GTA V Vanilla Archive Cache
+- [ ] Dispatch stream files to separate format-specific workflows by extension; initially support YMAP and YBN without forcing them through one diff implementation.
+- [ ] Define stable internal step names matching the artifact stages: `vanilla`, `vanilla-cache`, `source-cache`, and `merge`.
+- [ ] Let every command run its required prerequisite steps, skipping valid outputs; support selecting individual stages with `--step-name` and define whether multiple names are accepted.
+- [ ] Use `-f` to force regeneration of the command's own stage only; prerequisite stages still use normal freshness checks unless explicitly forced.
+- [ ] Accept `-y` on all pipeline commands for non-interactive execution.
+- [ ] Support custom artifact paths through options such as `--vanilla`, `--vanilla-cache`, and `--source-cache`; default generated command output to `-o .`.
+- [ ] Support `--gamebuild` as either a named build/version or a number. Treat it as an upper bound: ignore vanilla versions after the selected version even when their files are present; define normalization and ordering for both forms.
+- [ ] Track source inputs, relevant settings, upstream cache revisions and generated outputs per stage so only affected work is rerun. Invalidate stale results when inputs are removed, outputs are missing, or relevant settings/upstream revisions change.
+- [ ] Define the incremental-run manifest, log retention, and which timestamp/fingerprint is authoritative for each artifact.
 
-- [x] Add `--generate-vanilla-cache -i <GAME_DIR> -o <CACHE_DIR>` with a Cargo command alias, using CodeWalker RPF decryption and recursive YMAP/YBN extraction.
-- [x] Clear the selected cache output before each run and allow generation to stop after a selected base/update/DLC stage while retaining its complete overlay prefix.
-- [x] Discover and read all installed root base RPFs, then update.rpf and ordered dlclist.xml DLC overlays, including nested platform DLCs and title-update DLC patches.
-- [x] Store changed raw YMAP/YBN files in each stage's family directory; omit unchanged files and retain cache_info.json/version_info.json metadata.
-- [x] Preserve stage-processing logs per version in create_cache.log, including retained logs for failed runs.
-- [x] Test cumulative history resolution, unchanged skipping, raw-file storage, version log isolation and root RPF discovery.
-- [ ] Regenerate the existing cache as schema 1 and verify all stored raw-file hashes.
-- [x] Generate MLO diff caches with `--generate-diff-cache`, optional vanilla cache path, shared single/multiple resource discovery, per-file closest-stage inference and per-resource latest-stage baselines.
-- [x] Save inference scores, chosen vanilla stages, UTC generation times, hashes/provenance and generation logs with serialized YmapDiff output.
-- [x] Validate brofx_mansion_06: 198 scanned files, two YMAP diff reports against 0029-mpapartment; test multiple resources, ties, cumulative baselines and raw-file hash failures.
-- [x] Test raw RSC7 stage resolution and closest middle-stage selection.
-- [x] Keep merge-oriented YmapDiff semantics separate from vanilla cache storage, preserving MLO merge behavior.
-- [x] Move the vanilla cache implementation under src/core/vanilla_cache/ and split generation, archive resolution, metadata, logging, I/O, stage storage, publication and tests.
-- [x] Store every changed-stage YMAP/YBN as its exact raw native file; retain only changed files and reject missing raw artifacts.
-- [x] Move all diff-cache implementation under src/core/diff_cache/ and split orchestration, resource processing, comparison, history metadata, I/O and report types while preserving the existing command API.
-- [x] Add read-only --list-vanilla-versions filename lookup with optional GTAV cache path, ordered added/modified JSON output and shared metadata loading; verify extension-independent YMAP/YBN lookup.
-- [ ] Define vanillaVersion/build-number mapping and support independently captured historical builds.
-- [x] Cache changed raw YBN files alongside YMAP, preserving exact source bytes and omitting unchanged files.
-- [x] Keep YMAP MLO diff-cache generation working with YBN-inclusive caches; record vanilla-matched unsupported types explicitly.
-- [ ] Extend extraction and cache objects to native types other than YMAP/YBN.
-- [x] Organize indexed YBN models under format/ybn/model, XML import/export under format/ybn/xml, native codecs under binary, and migrate all callers to format::ybn after removing the gamefile compatibility exports.
-- [x] Add structured YbnDiff/PolygonDiff extraction with duplicate-aware additions/removals, resolved material/vertex values, hierarchy ownership, Bounds metadata, tolerance and JSON serialization; verify the real mansion collision model.
-- [x] Generate semantic YBN MLO diff reports; record unrepresentable comparisons as unsupported without full-model fallback artifacts.
-- [x] Move YMAP diff models and extraction under `src/core/format/ymap/diff` for use by merge and diff-cache generation.
-- [x] Make pipeline merge select the least-difference baseline per file from vanilla-cache history and apply changes to the latest cached state using raw source files; source-cache is not a merge dependency.
-- [x] Move pipeline-generated intermediates, merged YMAP/YBN outputs, and default deploy resource under `<workspace>/.output`.
-- [ ] Support update2.rpf and content/setup mount rules for complete engine snapshots.
+## Vanilla Archive (`asset/vanilla`)
 
-## Resource Conversion Tests
+- [ ] Add `--generate-vanilla`; also run this stage automatically when `asset/vanilla` does not exist.
+- [ ] Generate the current vanilla archive overlay as versioned raw stream files grouped by version and extension, replacing the current `vanilla-cache` output role.
+- [ ] Record generation/read timestamps, source `.rpf` modification times and other provenance needed to detect changed game inputs; retain per-run logs.
+- [ ] On normal runs, reuse an existing `asset/vanilla`; only regenerate it when absent, stale by the defined source checks, or explicitly forced.
 
-- [x] Accept signed PSO XML entity GUIDs as their original unsigned 32-bit values; test unsigned roundtrips and out-of-range rejection.
-- [x] Read older PSO entities without childLodDist using zero while preserving explicit values and rejecting malformed values.
-- [x] Add an opt-in all-asset YMAP binary/XML readability check using pipeline loaders, with content deduplication and a complete failure report including panics.
-- [x] Read legacy LOD-light hash array names without losing lights, normalize Native XML output, and accept exact integral OpenIV OrientToTerrain decimal values.
-- [ ] Decide whether to accept zero padding beyond declared RSC7 page sizes in excluded source resources, without weakening truncation or nonzero-extra-data checks.
-- [x] Add explicit XML -> YBN/YMAP -> XML -> binary stability tests comparing first/second rebuilt bytes and re-exported XML; verify four META YMAP XML fixtures.
-- [x] Resolve cached YMAP/YBN history from exact raw stage files and validate per-file content hashes.
-- [x] Resolve repeated YBN rebuild instability using preserved VertexQuantum, quantized-vertex BVH input, deterministic BVH ordering and final-order material/edge rebuilding; all six YBN/YMAP stability tests pass with exact binary/XML equality.
-- [x] Verify shared-edge selection for three triangles against CodeWalker.Core behavior and confirm CodeWalker accepts Native XML with the optional VertexQuantum extension.
-- [x] Format multiline text elements consistently in Native YBN/YND/META/PSO XML; verify YBN vertex/colour arrays remain rebuildable and preserve inline/empty values.
-- [x] Support embedded-schema PSO export and bounded template-based `.pso.xml` rebuilds.
-- [ ] Add general PSO allocation/rebuilding for array growth, longer strings, changed structure types, and checksum updates.
+## Vanilla Derived Cache (`vanilla-cache`)
 
-- [x] Extract local YMAP/YBN/YMT/YND/YTYP fixtures into `asset/sample` with source manifests.
-- [x] Generate individual export and rebuild tests under `src/core/format/gamefile/test`.
-- [x] Compare Native and CodeWalker exports and rebuilds; report byte identity separately.
-- [x] Isolate expensive rebuilds with per-fixture time limits and produce JSON summaries.
-- [x] Merge colliding YBN Bounds against vanilla using world-coordinate polygon additions/removals for supported Geometry children with a 5 mm match tolerance, retain child-level fallback for unsupported bounds, omit source collisions, and rebuild GeometryBVH in Native.
-- [x] Generate Native GeometryBVH acceleration trees with polygon reorder and triangle edge remapping.
-- [ ] Resolve the remaining YBN export/rebuild differences.
-- [ ] Support the YTYP META array cases rejected by the current Native adapters.
-- [ ] Investigate reference YMAP schema errors and the LOD-light hash rebuild discrepancy.
-- [ ] Investigate YMT cases that CodeWalker cannot export; cover additional binary families as supported.
+- [ ] Add `--generate-vanilla-cache`; also build/update this cache when absent or when its `asset/vanilla` inputs have changed.
+- [ ] Read versioned stream files from `asset/vanilla` and build derived data needed by later steps, including the YMAP parent/child tree and other format-specific indexes.
+- [ ] Store the latest vanilla stream file for each supported format under `latest/`, subject to `--gamebuild`'s version ceiling.
+- [ ] Record the last-read `asset/vanilla` revision/timestamps and processing logs so cache freshness can be checked incrementally.
+- [ ] Add one cache-wide precomputation step for YMAP relationships. Update only changed entries, remove deleted entries, and index relationships by vanilla version.
+- [ ] During YMAP merge, load only target files and the parent/child relationship closure needed for that operation, not every vanilla YMAP body.
+- [ ] Leave vanilla-to-vanilla diff generation for a later version; the current diff model is not sufficiently complete.
+
+## Source Derived Cache (`source-cache`)
+
+- [ ] Add `--generate-source-cache` to create or update source-derived data from `asset/source` and `vanilla-cache`.
+- [ ] Cache vanilla-matched source modifications and cross-resource conflicts, grouped by resource and format, plus the source paths needed for resolution.
+- [ ] Record source file timestamps/fingerprints and relevant `vanilla-cache` revisions; regenerate only entries affected by changed, added, removed, or stale inputs.
+- [ ] Use `vanilla-cache` indexes to determine which YMAPs and relationship files must be considered without loading all vanilla YMAPs.
+- [ ] After identifying changes per resource, run a second source-wide detection pass: changing a parent YMAP can require rebuilding child YMAPs in other resources, so the final affected set cannot be the union of per-resource scans alone.
+- [ ] Preserve conflict provenance and the affected-file closure needed by merge.
+
+## Merged Output
+
+- [ ] Add `--merge` to validate/update `source-cache`, perform only required format-specific merges against `vanilla-cache/latest`, and write results to the selected `-o` path.
+- [ ] Emit source omit information alongside merged stream files.
+- [ ] Later, read additional diffs from `asset/overwrite` and apply them to vanilla stream files before resource merges.
+- [ ] Later, define overwrite targets as `{resourceName or vanilla}/{vanilla stream file}` and validate target/baseline identity before applying changes.
+- [ ] Keep overlapping resource edits deterministic through configured resource priority and report the selected source.
+
+## Conversion and Diff Commands
+
+- [ ] Provide `--to-xml <path>`, `--from-xml <path>`, and `--get-diff <a> <b>` commands, each accepting `-o <path>` with `.` as the default output path.
+- [ ] Make these commands use the same format dispatch and prerequisite/freshness behavior where applicable, without coupling their format-specific conversion or diff implementations.
+- [ ] Reconcile direct command names (`--generate-vanilla`, `--generate-vanilla-cache`, `--generate-source-cache`, `--merge`) with `--step-name` so each stage has one unambiguous selection and force behavior.
+
+## Ver1: YBN Merge
+
+- [ ] Support latest-vanilla YBN merge only: locate conflicting vanilla stream files, merge supported changes against the latest vanilla file, and emit results and omit information.
+- [ ] Keep YBN on its own merge path; stable semantic diff generation, baseline inference, and JSON diff output are out of scope for this version.
+- [ ] Report unsupported hierarchy/shape changes and define the existing conservative fallback behavior explicitly.
+
+## Ver2: YMAP Merge
+
+- [ ] Compare each source YMAP with available vanilla versions and infer its source version from the difference count.
+- [ ] Apply source changes to the latest vanilla YMAP using the precomputed parent/child index and range-limited file loading.
+- [ ] Merge overlapping resource edits according to configured resource priority; define deterministic tie and missing-priority behavior and record the selected source.
+- [ ] Keep YMAP diff/merge behavior independent from the YBN implementation.
+
+## Ver3: JSON Diff Cache
+
+- [ ] Make vanilla stream files available by version, not only from the latest version.
+- [ ] Emit versioned JSON caches for source-versus-vanilla differences and vanilla-version-to-version differences.
+- [ ] Include format, resource/file identity, selected baseline/version, provenance, and schema version without duplicating raw vanilla files.
+
+## Ver4: Additional Diff Application
+
+- [ ] Read `overwrite/**/*.diff.json` by resource and file and apply those changes after the normal merge.
+- [ ] Validate target identity and baseline/version; report missing, stale, unsupported, or ambiguous changes instead of silently applying them.
+
+## FiveM Preview and Editing
+
+- [ ] Define the JSON contract consumed by a separate FiveM resource for in-game MLO preview.
+- [ ] Allow the resource to emit additional typed edits, such as removing a Light, and apply them through the validated diff path.
+- [ ] Define how preview edits are returned, validated, and associated with resource/file and baseline provenance.
+
+## Merge Policy and Follow-up
+
+- [ ] Define the resource-priority configuration format, resource matching rules, and behavior for equal or unspecified priorities.
+- [ ] Define conflict and unsupported-change reporting for each format; never make precedence depend on filesystem enumeration order.
+- [ ] Update `docs/ARCHITECTURE.md` when the implemented workflow changes; its current YBN merge description is stale.
