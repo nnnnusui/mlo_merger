@@ -1,17 +1,7 @@
 # Cargo configuration and aliases
 
 [alias]
-list-vanilla-versions = "run -- --list-vanilla-versions"
-# Generate a fresh vanilla prefix cache; optionally pass --through-version <base|update|DLC>
-generate-vanilla-cache = "run -- --generate-vanilla-cache -i /mnt/gtav -o asset/vanilla-cache"
-# Generate diff caches for every resource below asset/source
-generate-diff-cache = "run -- --generate-diff-cache -i asset/source -o asset/source-cache --vanilla-cache asset/vanilla-cache"
-# Run the full pipeline (extract -> ymap2xml -> merge -> xml2ymap) against asset/
-pipeline = "run -- --workspace asset --source-dir asset/source --output-resource-dir asset/merged_mlo"
-# Run MLO batch processing with sample data
-check-conflict = "run -- --check-stream-conflicts --input asset/source --output asset/stream-conflicts.json"
-extract = "run -- --extract-ymap --flatten -i asset/source -o asset/extracted --vanilla-dir asset/vanilla/ymap.xml"
-mergexml = "run -- --merge-ymap-xml --vanilla-dir asset/vanilla/ymap.xml --mod-dir asset/extracted.xml --output-dir asset/merged.xml --mod-ymap-dir asset/extracted --blacklist-config asset/blacklist.toml"
-mergeybn = "run -- --merge-ybn --workspace asset --source-dir asset/source"
-parsexml = "run -- --parse-ymap-xml -i docs/sample/sample.ymap.xml"
-# & mkdir -p asset/extracted.xml & mkdir -p asset/merged
+generate-vanilla = "run -- --generate-vanilla -i /mnt/gtav"
+generate-vanilla-cache = "run -- --generate-vanilla-cache"
+generate-source-cache = "run -- --generate-source-cache -i asset/source"
+merge = "run -- --merge -o asset/merged"

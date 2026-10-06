@@ -1,1 +1,9 @@
 pub mod command;
+pub mod common;
+pub mod from_xml;
+pub mod generate_source_cache;
+pub mod generate_vanilla;
+pub mod generate_vanilla_cache;
+pub mod get_diff;
+pub mod merge;
+pub mod to_xml;
