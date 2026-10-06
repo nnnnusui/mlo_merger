@@ -8,7 +8,7 @@ use sha2::{Digest, Sha256};
 
 use crate::core::{
   format::ybn::{model::Bound, read_ybn},
-  vanilla_cache::{CachedFile, VanillaCacheManifest, load_manifest},
+  vanilla::{CachedFile, VanillaCacheManifest, load_manifest},
 };
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
@@ -145,7 +145,7 @@ impl VanillaHistory {
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::core::vanilla_cache::{CacheVersion, FileChange, write_json};
+  use crate::core::vanilla::{CacheVersion, FileChange, write_json};
   use std::collections::BTreeMap;
   use std::fs;
 

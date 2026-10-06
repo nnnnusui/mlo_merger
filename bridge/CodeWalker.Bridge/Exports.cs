@@ -88,13 +88,21 @@ public static unsafe class Exports
       Directory.CreateDirectory(outputPath);
       RpfFile root = ScanRpf(inputPath);
       List<object> files = new();
+      SortedSet<string> rpfNames = new(StringComparer.Ordinal);
       void Extract(RpfFile archive) {
         foreach (RpfFileEntry entry in archive.AllEntries.OfType<RpfFileEntry>()) {
-          if (subtree != null && !entry.Path.Replace('\\', '/').StartsWith(subtree + "/", StringComparison.OrdinalIgnoreCase)) {
+          string entryPath = entry.Path.Replace('\\', '/');
+          if (subtree != null && !entryPath.StartsWith(subtree + "/", StringComparison.OrdinalIgnoreCase)) {
             continue;
           }
+          int extension = entry.Name.LastIndexOf('.');
+          string name = extension > 0 ? entry.Name[..extension] : entry.Name;
+          if (!string.IsNullOrWhiteSpace(name)) {
+            rpfNames.Add(name);
+            rpfNames.Add(name.ToLowerInvariant());
+          }
           if (!entry.NameLower.EndsWith(".ymap") && !entry.NameLower.EndsWith(".ybn") &&
-              !entry.Path.Replace('\\', '/').EndsWith("/common/data/dlclist.xml")) {
+              !entryPath.EndsWith("/common/data/dlclist.xml")) {
             continue;
           }
           byte[] data = archive.ExtractFile(entry) ??
@@ -113,6 +121,7 @@ public static unsafe class Exports
       }
       Extract(root);
       File.WriteAllText(Path.Combine(outputPath, "files.json"), JsonSerializer.Serialize(files));
+        File.WriteAllText(Path.Combine(outputPath, "rpf_names.json"), JsonSerializer.Serialize(rpfNames));
   }
 
   [UnmanagedCallersOnly]

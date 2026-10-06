@@ -17,15 +17,18 @@
 - [ ] Add `--generate-vanilla`; also run this stage automatically when `asset/vanilla` does not exist.
 - [ ] Generate the current vanilla archive overlay as versioned raw stream files grouped by version and extension, replacing the current `vanilla-cache` output role.
 - [ ] Record generation/read timestamps, source `.rpf` modification times and other provenance needed to detect changed game inputs; retain per-run logs.
+- [x] Generate one global `hash -> text` names map containing embedded YMAP strings and entity archetype names during `--generate-vanilla`.
+- [x] Collect extensionless RPF entry-name candidates during vanilla extraction so entity archetype hashes can resolve to prop names.
 - [ ] On normal runs, reuse an existing `asset/vanilla`; only regenerate it when absent, stale by the defined source checks, or explicitly forced.
 
 ## Vanilla Derived Cache (`vanilla-cache`)
 
-- [ ] Add `--generate-vanilla-cache`; also build/update this cache when absent or when its `asset/vanilla` inputs have changed.
-- [ ] Read versioned stream files from `asset/vanilla` and build derived data needed by later steps, including the YMAP parent/child tree and other format-specific indexes.
+- [x] Add `--generate-vanilla-cache`; also build/update this cache when absent or when its `asset/vanilla` inputs have changed.
+- [x] Read versioned stream files from `asset/vanilla` and build derived data needed by later steps, including latest YMAP/YBN files and the YMAP parent/child index.
 - [ ] Store the latest vanilla stream file for each supported format under `latest/`, subject to `--gamebuild`'s version ceiling.
-- [ ] Record the last-read `asset/vanilla` revision/timestamps and processing logs so cache freshness can be checked incrementally.
-- [ ] Add one cache-wide precomputation step for YMAP relationships. Update only changed entries, remove deleted entries, and index relationships by vanilla version.
+- [x] Record the raw manifest revision and timestamps of referenced `asset/vanilla` inputs so cache freshness can be checked incrementally.
+- [ ] Retain processing logs for vanilla-cache generation.
+- [x] Precompute the YMAP parent/child relationships for the selected latest vanilla snapshot; parse only its effective YMAP files.
 - [ ] During YMAP merge, load only target files and the parent/child relationship closure needed for that operation, not every vanilla YMAP body.
 - [ ] Leave vanilla-to-vanilla diff generation for a later version; the current diff model is not sufficiently complete.
 

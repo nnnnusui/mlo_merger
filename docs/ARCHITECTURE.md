@@ -46,21 +46,37 @@ YBN semantic differences are used by MLO diff-cache generation. They describe
 primitive occurrences and Bounds metadata; conflict merge does not yet consume
 these reports. Vanilla history stores raw native files instead.
 
-## Vanilla History
+## Vanilla Archive And Derived Cache
 
-The vanilla cache applies base archives, the title update and listed DLCs in
-order. DLC title-update patches are applied with their corresponding DLC. A build
-starts with an empty output directory; an optional stage limit emits a complete
-prefix and avoids reading later DLC archives. Each stage records provenance,
-metadata and generation logs. New or changed YMAP/YBN files are stored as raw
-native files in that stage; unchanged files are omitted. The manifest records
-the predecessor hash and source, and cumulative lookup selects the most recent
-stored file for each name. This preserves source bytes without replaying history
-deltas. The manifest schema is currently version 1.
+The raw vanilla archive (`asset/vanilla`) applies base archives, the title update
+and listed DLCs in order. DLC title-update patches are applied with their
+corresponding DLC. A build starts with an empty output directory; an optional
+stage limit emits a complete prefix and avoids reading later DLC archives. Each
+stage records provenance, metadata and generation logs. New or changed YMAP/YBN
+files are stored as raw native files in that stage; unchanged files are omitted.
+The manifest records the predecessor hash and source, and cumulative lookup
+selects the most recent stored file for each name. This preserves source bytes
+without replaying history
+deltas. The manifest schema is currently version 1. Extraction also stores a
+deduplicated set of extensionless RPF entry names in `rpf_names.json` for hash
+resolution.
 
-Cache publication occurs after all stages complete. Failures retain diagnostic
-logs without publishing an incomplete cache. Version lookup is a read-only
-metadata query over stages that introduced or changed a filename.
+Raw vanilla generation also writes `hash_names.json`. Its single `names` map
+combines embedded YMAP META strings, RPF entry-name candidates, and entity
+archetype names as `hash -> text` entries. Entity GUIDs are not included. The
+candidates do not reproduce CodeWalker's broader nametable or bundled-string
+index.
+
+The derived vanilla cache (`asset/vanilla-cache`) links the selected raw files
+under `latest/ymap` and `latest/ybn`, and stores YMAP parent-to-child
+relationships for the selected latest stage only. Its manifest records the raw
+manifest fingerprint and timestamps of referenced raw files. A changed timestamp,
+selected final stage, or missing link triggers a rebuild. This cache is separate
+from the raw archive and can be recreated from it.
+
+Raw archive publication occurs after all stages complete; failures retain
+diagnostic logs without publishing an incomplete cache. Version lookup is a
+read-only metadata query over stages that introduced or changed a filename.
 
 ## MLO Baseline Selection
 

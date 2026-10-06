@@ -137,7 +137,7 @@ pub fn convert_files_from_xml(
     return Err(
       io::Error::new(
         io::ErrorKind::InvalidInput,
-        "--schema-dir is required when converting .pso.xml files",
+        "--vanilla is required when converting .pso.xml files",
       )
       .into(),
     );
@@ -168,7 +168,7 @@ pub fn convert_files_from_xml(
     return Err(
       io::Error::new(
         io::ErrorKind::NotFound,
-        "no matching binary META schemas found; provide --schema-dir",
+        "no matching binary META schemas found; provide --vanilla",
       )
       .into(),
     );

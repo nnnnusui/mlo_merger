@@ -1,6 +1,6 @@
 //! Coordinates base archives, title updates and ordered DLC stages.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -9,6 +9,7 @@ use super::{
   archives::{
     DlcList, base_archives, dlc_archive, extract, game_path, patch_dlc, platform_archives,
   },
+  hash_index::write_hash_index,
   io::write_json,
   manifest::VanillaCacheManifest,
   publication::{Staging, preserve_failed_logs, publish_cache, reset_output_directory},
@@ -69,12 +70,13 @@ impl BuildVanillaArchive {
       versions: vec![],
     };
     let mut current = BTreeMap::new();
+    let mut rpf_names = BTreeSet::new();
     let base_dir = scratch.join("base");
     stage(&mut manifest, &mut current, build, "base", || {
       let mut files = Vec::new();
       for relative in &roots {
         let directory = base_dir.join(relative);
-        let extracted = extract(codewalker, game_dir, relative, &directory, None)?;
+        let extracted = extract(codewalker, game_dir, relative, &directory, None, &mut rpf_names)?;
         files.extend(
           extracted
             .into_iter()
@@ -86,14 +88,15 @@ impl BuildVanillaArchive {
     })?;
     fs::remove_dir_all(&base_dir)?;
     if through_version.as_deref() == Some("base") {
-      return self.publish_cache(build, output_dir, &manifest);
+      return self.publish_cache(build, output_dir, &manifest, &rpf_names);
     }
 
     let update_dir = scratch.join("update");
     let mut update = Vec::new();
     let mut dlc_items = Vec::new();
     stage(&mut manifest, &mut current, build, "update", || {
-      update = extract(codewalker, game_dir, "update/update.rpf", &update_dir, None)?;
+      update =
+        extract(codewalker, game_dir, "update/update.rpf", &update_dir, None, &mut rpf_names)?;
       let list = update
         .iter()
         .find(|file| file.source == "update/update.rpf/common/data/dlclist.xml")
@@ -113,7 +116,7 @@ impl BuildVanillaArchive {
       ))
     })?;
     if through_version.as_deref() == Some("update") {
-      return self.publish_cache(build, output_dir, &manifest);
+      return self.publish_cache(build, output_dir, &manifest, &rpf_names);
     }
 
     let dlc_stages = dlc_items
@@ -155,7 +158,8 @@ impl BuildVanillaArchive {
           } else {
             (relative.clone(), None)
           };
-        let extracted = extract(codewalker, game_dir, &physical, &directory, subtree.as_deref())?;
+        let extracted =
+          extract(codewalker, game_dir, &physical, &directory, subtree.as_deref(), &mut rpf_names)?;
         let mut files: Vec<_> =
           extracted.into_iter().map(|file| (file, directory.clone())).collect();
         let patches: Vec<_> = update
@@ -175,7 +179,7 @@ impl BuildVanillaArchive {
         break;
       }
     }
-    self.publish_cache(build, output_dir, &manifest)
+    self.publish_cache(build, output_dir, &manifest, &rpf_names)
   }
 
   fn publish_cache(
@@ -183,8 +187,11 @@ impl BuildVanillaArchive {
     build: &Path,
     output_dir: &Path,
     manifest: &VanillaCacheManifest,
+    rpf_names: &BTreeSet<String>,
   ) -> Result<()> {
+    write_json(&build.join("rpf_names.json"), rpf_names)?;
     write_json(&build.join("cache_info.json"), &manifest)?;
+    write_hash_index(build, manifest, rpf_names)?;
     publish_cache(build, output_dir, manifest)?;
     log::info!("Saved {} vanilla stages to {}", manifest.versions.len(), output_dir.display());
     Ok(())

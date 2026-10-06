@@ -16,8 +16,10 @@ cargo build
 
 ## CLI
 
-The command interface is being reorganized. The current handlers only parse the
-arguments and print a mock invocation; they do not read or write game resources.
+The command interface is being reorganized. `--generate-vanilla`,
+`--generate-vanilla-cache`, `--to-xml`, and
+`--from-xml` call core implementations. Source scanning, merge, and diff
+commands currently only print a mock invocation.
 
 ```bash
 cargo run -- --generate-vanilla -i /mnt/gtav -o asset/vanilla
@@ -25,16 +27,25 @@ cargo run -- --generate-vanilla-cache --vanilla asset/vanilla -o asset/vanilla-c
 cargo run -- --generate-source-cache -i asset/source --vanilla-cache asset/vanilla-cache -o asset/source-cache
 cargo run -- --merge --vanilla-cache asset/vanilla-cache --source-cache asset/source-cache -o asset/merged
 cargo run -- --to-xml collision.ybn -o exported
-cargo run -- --from-xml exported/collision.ybn.xml -o rebuilt
+cargo run -- --from-xml exported/collision.ybn.xml -o rebuilt --vanilla asset/vanilla
 cargo run -- --get-diff vanilla.ybn mod.ybn -o diff
 ```
 
-`-o` defaults to the current directory. Common options include `--vanilla`,
-`--vanilla-cache`, `--source-cache`, `--gamebuild`, `-f` to force the selected
-operation, `-y` to skip confirmation, and repeatable `--step-name <name>` to
-select pipeline stages. `--gamebuild` accepts a build number or version name.
-Run `cargo run -- --help` for the full interface. Convenience aliases are
-defined in [.cargo/config.toml](.cargo/config.toml).
+For generation and merge commands, `-o` defaults to the artifact directory shown
+in each command's help. Conversion and diff commands default to the current
+directory. Common options include `--vanilla`, `--vanilla-cache`,
+`--source-cache`, `--gamebuild`, `-f` to force the selected operation, `-y` to
+skip confirmation, and repeatable `--step-name <name>` to
+select pipeline stages. `--gamebuild` currently selects an installed version or
+DLC stage name; mapping numeric game build IDs is not implemented yet.
+`--vanilla` supplies source schema/template files to `--from-xml`. Run
+`cargo run -- --help` for the full interface. Convenience aliases are defined in
+[.cargo/config.toml](.cargo/config.toml).
+
+`--generate-vanilla` writes `rpf_names.json` and `hash_names.json` alongside the
+raw archive. The single `names` map contains embedded YMAP names and entity
+archetypes as `hash: text` entries; entity GUIDs are not included. Regenerate an older raw
+cache once to populate the RPF-name candidates used to resolve prop names.
 
 ## Limitations
 

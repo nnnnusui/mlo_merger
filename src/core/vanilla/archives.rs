@@ -1,7 +1,7 @@
 //! RPF extraction and physical/virtual DLC archive resolution.
 
 use serde::Deserialize;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::io::BufReader;
 use std::path::{Path, PathBuf};
@@ -78,6 +78,7 @@ pub(super) fn extract(
   relative: &str,
   output: &Path,
   subtree: Option<&str>,
+  rpf_names: &mut BTreeSet<String>,
 ) -> Result<Vec<ExtractedFile>> {
   log::info!("Scanning {relative}");
   let archive = game_path(game_dir, Path::new(relative))?;
@@ -87,6 +88,9 @@ pub(super) fn extract(
   }
   let mut files: Vec<ExtractedFile> =
     serde_json::from_reader(BufReader::new(fs::File::open(output.join("files.json"))?))?;
+  let names: Vec<String> =
+    serde_json::from_reader(BufReader::new(fs::File::open(output.join("rpf_names.json"))?))?;
+  rpf_names.extend(names);
   for file in &mut files {
     let (_, entry) = file.source.split_once('/').ok_or("Invalid extracted RPF entry path")?;
     file.source = format!("{relative}/{entry}");

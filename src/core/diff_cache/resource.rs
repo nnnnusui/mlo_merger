@@ -15,7 +15,7 @@ use crate::core::{
     xml::{xml_to_ybn, ybn_to_xml},
   },
   format::ymap::diff::YmapDiff,
-  vanilla_cache::{VanillaCacheManifest, write_json},
+  vanilla::{VanillaCacheManifest, write_json},
 };
 use std::collections::BTreeMap;
 use std::fs;

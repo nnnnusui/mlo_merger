@@ -83,6 +83,14 @@ pub(super) fn publish_cache(
   output: &Path,
   manifest: &VanillaCacheManifest,
 ) -> Result<()> {
+  for name in ["rpf_names.json", "hash_names.json", "cache_info.json"] {
+    let metadata_path = output.join(name);
+    if metadata_path.exists() && !metadata_path.is_file() {
+      return Err(
+        format!("Refusing to replace non-file cache metadata {}", metadata_path.display()).into(),
+      );
+    }
+  }
   for version in &manifest.versions {
     let destination = output.join(&version.id);
     if destination.exists() {
@@ -100,6 +108,7 @@ pub(super) fn publish_cache(
   let backup = output.join(format!(".backup-{}", chrono::Local::now().format("%Y%m%d-%H%M%S-%f")));
   fs::create_dir(&backup)?;
   let mut published = Vec::new();
+  let mut published_metadata = Vec::new();
   let result = (|| -> Result<()> {
     for version in &manifest.versions {
       let destination = output.join(&version.id);
@@ -110,10 +119,31 @@ pub(super) fn publish_cache(
       published.push((version.id.clone(), existed));
       fs::rename(build.join(&version.id), destination)?;
     }
-    fs::rename(build.join("cache_info.json"), output.join("cache_info.json"))?;
+    for name in ["rpf_names.json", "hash_names.json", "cache_info.json"] {
+      let source = build.join(name);
+      if !source.is_file() {
+        continue;
+      }
+      let destination = output.join(name);
+      let existed = destination.exists();
+      if existed {
+        fs::rename(&destination, backup.join(name))?;
+      }
+      published_metadata.push((name, existed));
+      fs::rename(source, destination)?;
+    }
     Ok(())
   })();
   if result.is_err() {
+    for (name, existed) in published_metadata.into_iter().rev() {
+      let destination = output.join(name);
+      if destination.exists() {
+        fs::rename(&destination, build.join(name))?;
+      }
+      if existed {
+        fs::rename(backup.join(name), destination)?;
+      }
+    }
     for (id, existed) in published.into_iter().rev() {
       let destination = output.join(&id);
       if destination.exists() {

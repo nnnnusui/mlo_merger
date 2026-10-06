@@ -45,7 +45,7 @@ impl ListVanillaVersions {
   /// Missing filenames produce an empty list; game files are never read.
   ///
   /// ```no_run
-  /// let query = mlo_merger::core::vanilla_cache::ListVanillaVersions {
+  /// let query = mlo_merger::core::vanilla::ListVanillaVersions {
   ///   file_name: "ch1_01.ymap".into(), vanilla_cache_dir: "asset/vanilla-cache".into(),
   /// };
   /// let versions = query.versions()?;
@@ -106,7 +106,7 @@ impl ListVanillaVersions {
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::core::vanilla_cache::{
+  use crate::core::vanilla::{
     CacheVersion, CachedFile, FileChange, VanillaCacheManifest, write_json,
   };
   use std::collections::BTreeMap;

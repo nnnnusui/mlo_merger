@@ -9,7 +9,7 @@ use super::{
 };
 use crate::core::{
   common::function::get_resource_directories,
-  vanilla_cache::{VersionLog, read_ymap, write_json},
+  vanilla::{VersionLog, read_ymap, write_json},
 };
 use std::collections::BTreeMap;
 use std::fs;
@@ -30,7 +30,7 @@ impl BuildDiffCache {
   /// Infers the latest of each resource's per-file best stages and saves differences and metadata.
   ///
   /// ```no_run
-  /// simplelog::CombinedLogger::init(vec![mlo_merger::core::vanilla_cache::version_logger()])?;
+  /// simplelog::CombinedLogger::init(vec![mlo_merger::core::vanilla::version_logger()])?;
   /// let command = mlo_merger::core::diff_cache::BuildDiffCache {
   ///   input_dir: "asset/source".into(), output_dir: "asset/source-cache".into(),
   ///   vanilla_cache_dir: "asset/vanilla-cache".into(),
@@ -63,7 +63,7 @@ impl BuildDiffCache {
     let mut report = GenerationReport {
       format_version: 2,
       input: input.clone(),
-      vanilla_cache: cache.clone(),
+      vanilla: cache.clone(),
       generated_at: generated_at.clone(),
       completed: false,
       error: None,

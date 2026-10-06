@@ -1,6 +1,6 @@
 //! Internal candidate and generation-report data structures.
 
-use crate::core::vanilla_cache::CachedFile;
+use crate::core::vanilla::CachedFile;
 use serde::Serialize;
 use std::path::PathBuf;
 
@@ -49,7 +49,7 @@ pub(super) struct ResourceReport {
 pub(super) struct GenerationReport {
   pub(super) format_version: u32,
   pub(super) input: PathBuf,
-  pub(super) vanilla_cache: PathBuf,
+  pub(super) vanilla: PathBuf,
   pub(super) generated_at: String,
   pub(super) completed: bool,
   pub(super) error: Option<String>,

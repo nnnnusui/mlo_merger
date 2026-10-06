@@ -251,7 +251,7 @@ mod tests {
   use super::*;
   use crate::core::{
     format::ybn::{diff::YbnDiff, read_ybn, xml::xml_to_ybn},
-    vanilla_cache::{CacheVersion, CachedFile, FileChange, VanillaCacheManifest, write_json},
+    vanilla::{CacheVersion, CachedFile, FileChange, VanillaCacheManifest, write_json},
   };
   use sha2::{Digest, Sha256};
   use std::collections::BTreeMap;

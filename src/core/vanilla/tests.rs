@@ -302,6 +302,10 @@ fn publication_restores_existing_versions_if_root_metadata_cannot_be_replaced() 
   };
   fs::write(output.join("0000-base/ymap/map.ymap"), b"old").unwrap();
   fs::write(build.join("0000-base/ymap/map.ymap"), b"new").unwrap();
+  fs::write(output.join("rpf_names.json"), b"old names").unwrap();
+  fs::write(build.join("rpf_names.json"), b"new names").unwrap();
+  fs::write(output.join("hash_names.json"), b"old index").unwrap();
+  fs::write(build.join("hash_names.json"), b"new index").unwrap();
   serde_json::to_writer(
     fs::File::create(output.join("0000-base/version_info.json")).unwrap(),
     &manifest.versions[0],
@@ -312,10 +316,14 @@ fn publication_restores_existing_versions_if_root_metadata_cannot_be_replaced() 
   fs::create_dir(output.join("cache_info.json")).unwrap();
   assert!(publish_cache(&build, &output, &manifest).is_err());
   assert_eq!(fs::read(output.join("0000-base/ymap/map.ymap")).unwrap(), b"old");
+  assert_eq!(fs::read(output.join("rpf_names.json")).unwrap(), b"old names");
+  assert_eq!(fs::read(output.join("hash_names.json")).unwrap(), b"old index");
   assert_eq!(fs::read(build.join("0000-base/ymap/map.ymap")).unwrap(), b"new");
   fs::remove_dir(output.join("cache_info.json")).unwrap();
   publish_cache(&build, &output, &manifest).unwrap();
   assert_eq!(fs::read(output.join("0000-base/ymap/map.ymap")).unwrap(), b"new");
+  assert_eq!(fs::read(output.join("rpf_names.json")).unwrap(), b"new names");
+  assert_eq!(fs::read(output.join("hash_names.json")).unwrap(), b"new index");
   assert!(output.join("cache_info.json").is_file());
 }
 

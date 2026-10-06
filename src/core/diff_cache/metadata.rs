@@ -1,7 +1,7 @@
 //! Loads GTAV manifests and validates ordered vanilla content histories.
 
 use super::{Result, types::Variant};
-use crate::core::vanilla_cache::VanillaCacheManifest;
+use crate::core::vanilla::VanillaCacheManifest;
 use std::collections::{BTreeMap, BTreeSet};
 
 pub(super) fn history(manifest: &VanillaCacheManifest) -> Result<BTreeMap<String, Vec<Variant>>> {
@@ -33,4 +33,4 @@ pub(super) fn history(manifest: &VanillaCacheManifest) -> Result<BTreeMap<String
   Ok(files)
 }
 
-pub(super) use crate::core::vanilla_cache::load_manifest;
+pub(super) use crate::core::vanilla::load_manifest;

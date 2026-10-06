@@ -257,7 +257,7 @@ impl OriginalMap {
   }
 
   pub(super) fn load_raw(path: &Path) -> io::Result<Self> {
-    let xml = crate::core::vanilla_cache::read_ymap_xml(path)
+    let xml = crate::core::vanilla::read_ymap_xml(path)
       .map_err(|error| invalid(&format!("{}: {error}", path.display())))?;
     Self::from_xml(xml).map_err(|error| invalid(&format!("{}: {error}", path.display())))
   }

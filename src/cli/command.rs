@@ -53,17 +53,18 @@ pub fn parse_args() -> Command {
   parser().to_options().run()
 }
 
-/// Dispatches an operation to its placeholder implementation.
-pub fn run(command: Command) {
+/// Dispatches an operation to its implementation or placeholder.
+pub fn run(command: Command) -> Result<(), Box<dyn std::error::Error>> {
   match command {
-    Command::GenerateVanilla(command) => generate_vanilla::run_mock(command),
-    Command::GenerateVanillaCache(command) => generate_vanilla_cache::run_mock(command),
+    Command::GenerateVanilla(command) => generate_vanilla::run(command)?,
+    Command::GenerateVanillaCache(command) => generate_vanilla_cache::run(command)?,
     Command::GenerateSourceCache(command) => generate_source_cache::run_mock(command),
     Command::Merge(command) => merge::run_mock(command),
-    Command::ToXml(command) => to_xml::run_mock(command),
-    Command::FromXml(command) => from_xml::run_mock(command),
+    Command::ToXml(command) => to_xml::run(command)?,
+    Command::FromXml(command) => from_xml::run(command)?,
     Command::GetDiff(command) => get_diff::run_mock(command),
   }
+  Ok(())
 }
 
 #[cfg(test)]
@@ -123,12 +124,15 @@ mod tests {
     assert_eq!(command.input, PathBuf::from("input.ymap"));
     assert_eq!(command.common.output, PathBuf::from("."));
 
-    let Command::FromXml(command) =
-      parser().to_options().run_inner(&["--from-xml", "input.ymap.xml", "-o", "rebuilt"]).unwrap()
+    let Command::FromXml(command) = parser()
+      .to_options()
+      .run_inner(&["--from-xml", "input.ymap.xml", "-o", "rebuilt", "--vanilla", "schemas"])
+      .unwrap()
     else {
       panic!("Expected from-xml command")
     };
     assert_eq!(command.input, PathBuf::from("input.ymap.xml"));
+    assert_eq!(command.common.vanilla, PathBuf::from("schemas"));
     assert_eq!(command.common.output, PathBuf::from("rebuilt"));
   }
 

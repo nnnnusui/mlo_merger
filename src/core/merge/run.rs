@@ -63,7 +63,7 @@ impl MergeYmapXml {
       None
     };
 
-    let vanilla_cache =
+    let vanilla =
       if history.is_none() { Some(VanillaParentCache::update(&self.vanilla_dir)?.0) } else { None };
     let modded_ymaps_map = collect_modded_ymaps_map(&self.mod_dir)?;
     log::info!("Found {} unique YMAP files across mods", modded_ymaps_map.len());
@@ -76,7 +76,7 @@ impl MergeYmapXml {
       }
       files.len()
     } else {
-      let files = vanilla_cache
+      let files = vanilla
         .as_ref()
         .expect("legacy merge loads the XML parent cache")
         .paths(&self.vanilla_dir)
@@ -201,7 +201,7 @@ impl MergeYmapXml {
       }
       children
     } else {
-      vanilla_cache
+      vanilla
         .as_ref()
         .expect("legacy merge loads the XML parent cache")
         .children(&self.vanilla_dir, &changed_layouts)

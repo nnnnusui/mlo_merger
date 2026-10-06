@@ -12,7 +12,7 @@ use super::{
 };
 use crate::core::{
   format::ybn::{model::Bound, read_ybn},
-  vanilla_cache::CachedFile,
+  vanilla::CachedFile,
 };
 
 pub(super) struct NativeVariants<'a> {

@@ -12,7 +12,7 @@ use super::{
 use crate::core::{
   format::ymap::diff::YmapDiff,
   format::{gamefile::meta_resource::jenk_hash, ymap::model::Ymap},
-  vanilla_cache::{CacheVersion, CachedFile, VanillaCacheManifest, read_ymap, write_json},
+  vanilla::{CacheVersion, CachedFile, VanillaCacheManifest, read_ymap, write_json},
 };
 use serde_json::Value;
 use std::collections::BTreeMap;
@@ -47,7 +47,7 @@ fn write_native_model(
 
 impl NativeVersionFixture {
   fn new(label: &str) -> Self {
-    use crate::core::{format::ymap::xml::XmlYmap, vanilla_cache::FileChange};
+    use crate::core::{format::ymap::xml::XmlYmap, vanilla::FileChange};
     let root =
       Scratch(std::env::temp_dir().join(format!("vanilla_version_{label}_{}", std::process::id())));
     let xml: XmlYmap = quick_xml::de::from_str(include_str!(concat!(
@@ -201,7 +201,7 @@ fn vanilla_diff_replay_cannot_restore_entity_deletion_or_cleared_content_flags()
 
 #[test]
 fn diff_cache_identifies_middle_version_with_least_changes_and_diffs_against_it() {
-  crate::core::vanilla_cache::init_test_version_logger();
+  crate::core::vanilla::init_test_version_logger();
   let fixture = NativeVersionFixture::new("closest");
   let resource = fixture.root.0.join("resource");
   let mut target = fixture.expected[1].clone();
@@ -277,7 +277,7 @@ fn diff_cache_distance_is_symmetric_and_counts_model_changes() {
 #[test]
 fn diff_cache_selects_per_resource_latest_and_compares_its_cumulative_baseline() {
   use crate::core::format::ymap::xml::XmlYmap;
-  use crate::core::vanilla_cache::{FileChange, init_test_version_logger};
+  use crate::core::vanilla::{FileChange, init_test_version_logger};
   init_test_version_logger();
   let root = std::env::temp_dir().join(format!("diff_cache_run_{}", std::process::id()));
   let cache = root.join("cache");
@@ -456,7 +456,7 @@ fn diff_cache_selects_per_resource_latest_and_compares_its_cumulative_baseline()
 #[test]
 fn diff_cache_generates_ybn_reports_from_raw_vanilla_history() {
   use crate::core::format::ybn::{diff::YbnDiff, read_ybn, xml::xml_to_ybn};
-  use crate::core::vanilla_cache::{FileChange, init_test_version_logger};
+  use crate::core::vanilla::{FileChange, init_test_version_logger};
   use sha2::{Digest, Sha256};
 
   init_test_version_logger();

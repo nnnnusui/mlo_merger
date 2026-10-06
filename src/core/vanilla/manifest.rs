@@ -58,7 +58,7 @@ impl VanillaCacheManifest {
   /// Resolves the latest raw file per filename at a stage, retaining unchanged parent entries.
   ///
   /// ```
-  /// # use mlo_merger::core::vanilla_cache::VanillaCacheManifest;
+  /// # use mlo_merger::core::vanilla::VanillaCacheManifest;
   /// # let cache = VanillaCacheManifest { format_version: 1, game_dir: ".".into(), versions: vec![] };
   /// assert!(cache.resolve_version("unknown").is_err());
   /// ```

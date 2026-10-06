@@ -26,7 +26,12 @@ pub fn parser() -> impl Parser<GenerateVanilla> {
   })
 }
 
-/// Prints a mock invocation without reading game archives.
-pub fn run_mock(command: GenerateVanilla) {
-  println!("mock: --generate-vanilla game_dir={:?} options={:?}", command.game_dir, command.common);
+/// Generates the raw vanilla archive through the core workflow.
+pub fn run(command: GenerateVanilla) -> Result<(), Box<dyn std::error::Error>> {
+  crate::core::vanilla::GenerateVanilla {
+    game_dir: command.game_dir,
+    output_dir: command.common.output,
+    gamebuild: command.common.gamebuild,
+  }
+  .run()
 }

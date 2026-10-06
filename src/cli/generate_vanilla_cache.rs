@@ -22,7 +22,13 @@ pub fn parser() -> impl Parser<GenerateVanillaCache> {
   })
 }
 
-/// Prints a mock invocation without building cache data.
-pub fn run_mock(command: GenerateVanillaCache) {
-  super::common::run_mock("--generate-vanilla-cache", &command.common);
+/// Builds the derived vanilla cache from versioned raw vanilla files.
+pub fn run(command: GenerateVanillaCache) -> Result<(), Box<dyn std::error::Error>> {
+  crate::core::vanilla_cache::BuildVanillaCache {
+    vanilla_dir: command.common.vanilla,
+    output_dir: command.common.output,
+    through_version: command.common.gamebuild,
+    force: command.common.force,
+  }
+  .run()
 }

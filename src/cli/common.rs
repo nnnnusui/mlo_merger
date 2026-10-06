@@ -43,7 +43,7 @@ pub fn parser(default_output: PathBuf) -> impl Parser<CommonOptions> {
     .argument::<PathBuf>("DIR")
     .fallback(PathBuf::from("asset/source-cache"));
   let gamebuild = long("gamebuild")
-    .help("Latest vanilla build/version to include; later versions are ignored")
+    .help("Latest vanilla version/stage to include; numeric build mapping is not implemented yet")
     .argument::<String>("BUILD")
     .optional();
   let force = short('f').long("force").help("Force regeneration of this operation").switch();

@@ -25,7 +25,13 @@ pub fn parser() -> impl Parser<FromXml> {
   })
 }
 
-/// Prints a mock invocation without converting files.
-pub fn run_mock(command: FromXml) {
-  println!("mock: --from-xml {:?} options={:?}", command.input, command.common);
+/// Converts the selected XML files through the core conversion workflow.
+pub fn run(command: FromXml) -> Result<(), Box<dyn std::error::Error>> {
+  let (converted, failed) = crate::core::conversion::from_xml(
+    &command.input,
+    &command.common.output,
+    command.common.vanilla.exists().then_some(command.common.vanilla.as_path()),
+  )?;
+  println!("Converted {converted} XML files to binary; {failed} failed.");
+  Ok(())
 }
