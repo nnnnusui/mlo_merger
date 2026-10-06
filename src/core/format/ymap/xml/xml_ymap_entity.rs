@@ -12,6 +12,7 @@ pub struct XmlYmapEntity {
   pub entity_type: String,
   pub archetype_name: String,
   pub flags: XmlValueAttr<u32>,
+  #[serde(deserialize_with = "deserialize_guid")]
   pub guid: XmlValueAttr<u32>,
   pub position: XmlPositionAttr,
   pub rotation: XmlRotation,
@@ -19,6 +20,8 @@ pub struct XmlYmapEntity {
   pub scale_z: XmlValueAttr<f32>,
   pub parent_index: XmlValueAttr<i32>,
   pub lod_dist: XmlValueAttr<f32>,
+  /// Older embedded PSO schemas omit this field; use the zero-initialized value.
+  #[serde(default)]
   pub child_lod_dist: XmlValueAttr<f32>,
   pub lod_level: String,
   pub num_children: XmlValueAttr<u32>,
@@ -27,6 +30,23 @@ pub struct XmlYmapEntity {
   pub ambient_occlusion_multiplier: XmlValueAttr<u8>,
   pub artificial_ambient_occlusion: XmlValueAttr<u8>,
   pub tint_value: XmlValueAttr<u32>,
+}
+
+/// PSO XML can spell a GUID as signed i32; preserve its original 32-bit pattern.
+fn deserialize_guid<'de, D>(deserializer: D) -> Result<XmlValueAttr<u32>, D::Error>
+where
+  D: serde::Deserializer<'de>,
+{
+  let attr = XmlValueAttr::<i64>::deserialize(deserializer)?;
+  let value = if attr.value < 0 {
+    let signed = i32::try_from(attr.value).map_err(serde::de::Error::custom)?;
+    u32::from_ne_bytes(signed.to_ne_bytes())
+  } else {
+    u32::try_from(attr.value).map_err(serde::de::Error::custom)?
+  };
+  Ok(XmlValueAttr {
+    value,
+  })
 }
 
 impl From<XmlYmapEntity> for YmapEntity {
@@ -97,5 +117,75 @@ impl From<YmapEntity> for XmlYmapEntity {
         value: v.tint_value,
       },
     }
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::XmlYmapEntity;
+
+  fn entity_xml(guid: &str) -> String {
+    format!(
+      r#"<Item type="CEntityDef">
+        <archetypeName>cs1_railwyc_trk05</archetypeName>
+        <flags value="1572872"/><guid value="{guid}"/>
+        <position x="-544.0997" y="4910.33" z="89.414536"/>
+        <rotation w="1" x="0" y="0" z="0"/>
+        <scaleXY value="1"/><scaleZ value="1"/><parentIndex value="-1"/>
+        <lodDist value="200"/><childLodDist value="0"/>
+        <lodLevel>LODTYPES_DEPTH_ORPHANHD</lodLevel><numChildren value="0"/>
+        <priorityLevel>PRI_REQUIRED</priorityLevel>
+        <ambientOcclusionMultiplier value="255"/>
+        <artificialAmbientOcclusion value="255"/><tintValue value="0"/>
+      </Item>"#
+    )
+  }
+
+  #[test]
+  fn guid_accepts_signed_pso_and_unsigned_xml() {
+    for (input, expected) in [
+      ("-629962797", 3665004499),
+      ("3665004499", 3665004499),
+      ("-2147483648", 2147483648),
+      ("-1", u32::MAX),
+      ("4294967295", u32::MAX),
+      ("0", 0),
+    ] {
+      let entity: XmlYmapEntity = quick_xml::de::from_str(&entity_xml(input)).unwrap();
+      assert_eq!(entity.guid.value, expected);
+      let serialized = quick_xml::se::to_string(&entity).unwrap();
+      assert!(serialized.contains(&format!(r#"<guid value="{expected}""#)));
+      let reparsed: XmlYmapEntity = quick_xml::de::from_str(&serialized).unwrap();
+      assert_eq!(reparsed.guid.value, expected);
+    }
+  }
+
+  #[test]
+  fn guid_rejects_values_outside_32_bit_range() {
+    for input in ["-2147483649", "4294967296", "not-a-guid"] {
+      assert!(quick_xml::de::from_str::<XmlYmapEntity>(&entity_xml(input)).is_err());
+    }
+  }
+
+  #[test]
+  fn child_lod_dist_defaults_only_when_omitted() {
+    let xml = entity_xml("0");
+    let omitted = xml.replace(r#"<childLodDist value="0"/>"#, "");
+    let entity: XmlYmapEntity = quick_xml::de::from_str(&omitted).unwrap();
+    let model: crate::core::format::ymap::model::YmapEntity = entity.into();
+    assert_eq!(model.child_lod_dist, 0.0);
+
+    for value in ["-1", "125.5"] {
+      let explicit =
+        xml.replace(r#"<childLodDist value="0"/>"#, &format!(r#"<childLodDist value="{value}"/>"#));
+      let entity: XmlYmapEntity = quick_xml::de::from_str(&explicit).unwrap();
+      assert_eq!(entity.child_lod_dist.value, value.parse::<f32>().unwrap());
+      let serialized = quick_xml::se::to_string(&entity).unwrap();
+      let reparsed: XmlYmapEntity = quick_xml::de::from_str(&serialized).unwrap();
+      assert_eq!(reparsed.child_lod_dist.value, entity.child_lod_dist.value);
+    }
+
+    let invalid = xml.replace(r#"<childLodDist value="0"/>"#, r#"<childLodDist value="invalid"/>"#);
+    assert!(quick_xml::de::from_str::<XmlYmapEntity>(&invalid).is_err());
   }
 }

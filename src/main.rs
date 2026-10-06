@@ -8,7 +8,7 @@ use mlo_merger::{
       ymap::{model::Ymap, xml::XmlYmap},
     },
     merge::ybn_conflicts::MergeYbnConflicts,
-    merge::{build_ymap_parent_cache, run::MergeYmapXml},
+    merge::{VanillaHistory, build_ymap_parent_cache, run::MergeYmapXml},
     vanilla_cache::version_logger,
     xmlconvert::{Xml2Ymap, Ymap2Xml},
   },
@@ -133,8 +133,9 @@ fn init_codewalker() -> Result<CodeWalker, Box<dyn std::error::Error>> {
 }
 
 fn run_pipeline(cmd: &Pipeline) -> Result<(), Box<dyn std::error::Error>> {
-  let vanilla_ybn_dir = cmd.workspace.join("vanilla/ybn");
-  MergeYbnConflicts::has_conflicts(&cmd.source_dir, &vanilla_ybn_dir)?;
+  let vanilla_cache_dir = cmd.workspace.join("vanilla-cache");
+  let vanilla_history = VanillaHistory::load(&vanilla_cache_dir)?;
+  MergeYbnConflicts::has_conflicts_with_vanilla_cache(&cmd.source_dir, &vanilla_history)?;
   println!("This will run the full pipeline (workspace: {}):", cmd.workspace.display());
   println!("  1. extract   {} -> {}", cmd.source_dir.display(), cmd.extracted_dir.display());
   let backend = if cmd.use_codewalker_dll { "CodeWalker" } else { "Native" };
@@ -145,7 +146,7 @@ fn run_pipeline(cmd: &Pipeline) -> Result<(), Box<dyn std::error::Error>> {
   );
   println!(
     "  3. mergexml  {} + {} -> {}",
-    cmd.vanilla_xml_dir.display(),
+    vanilla_cache_dir.display(),
     cmd.extracted_xml_dir.display(),
     cmd.merged_xml_dir.display()
   );
@@ -154,9 +155,13 @@ fn run_pipeline(cmd: &Pipeline) -> Result<(), Box<dyn std::error::Error>> {
     cmd.merged_xml_dir.display(),
     cmd.merged_dir.display()
   );
-  println!("  5. merge YBN conflicts -> {}/merged_ybn", cmd.workspace.display());
+  println!("  5. merge YBN conflicts -> {}", cmd.merged_ybn_dir.display());
   if let Some(resource_dir) = &cmd.output_resource_dir {
-    println!("  6. deploy    {} -> {}", cmd.merged_dir.display(), resource_dir.display());
+    println!(
+      "  6. deploy    {} -> {}",
+      cmd.workspace.join(".output/merged").display(),
+      resource_dir.display()
+    );
   }
   let mut answer = String::new();
   if !cmd.yes {
@@ -182,16 +187,17 @@ fn run_pipeline(cmd: &Pipeline) -> Result<(), Box<dyn std::error::Error>> {
   let codewalker = if cmd.use_codewalker_dll { Some(init_codewalker()?) } else { None };
   clear_pipeline_outputs(cmd)?;
 
-  log::info!("Step 1/4: extract");
+  log::info!("Step 1/6: extract");
+  let vanilla_ymap_names = vanilla_history.ymap_names();
   ExtractYmap {
     input_dir: cmd.source_dir.clone(),
     output_dir: cmd.extracted_dir.clone(),
     flatten: true,
-    vanilla_dir: Some(cmd.vanilla_xml_dir.clone()),
+    vanilla_dir: None,
   }
-  .run()?;
+  .run_with_vanilla_names(&vanilla_ymap_names)?;
 
-  log::info!("Step 2/4: ymap -> xml");
+  log::info!("Step 2/6: ymap -> xml");
   let ymap_to_xml = Ymap2Xml {
     input_dir: cmd.extracted_dir.clone(),
     output_dir: cmd.extracted_xml_dir.clone(),
@@ -202,18 +208,18 @@ fn run_pipeline(cmd: &Pipeline) -> Result<(), Box<dyn std::error::Error>> {
     ymap_to_xml.run_native()?;
   }
 
-  log::info!("Step 3/4: merge xml");
+  log::info!("Step 3/6: merge xml");
   MergeYmapXml {
-    vanilla_dir: cmd.vanilla_xml_dir.clone(),
+    vanilla_dir: vanilla_cache_dir.clone(),
     mod_dir: cmd.extracted_xml_dir.clone(),
     mod_ymap_dir: cmd.extracted_dir.clone(),
     output_dir: cmd.merged_xml_dir.clone(),
     rebuild_all: false,
     blacklist_config: cmd.blacklist_config.clone(),
   }
-  .run()?;
+  .run_with_vanilla_cache(&vanilla_history)?;
 
-  log::info!("Step 4/4: xml -> ymap");
+  log::info!("Step 4/6: xml -> ymap");
   let xml_to_ymap = Xml2Ymap {
     input_dir: cmd.merged_xml_dir.clone(),
     output_dir: cmd.merged_dir.clone(),
@@ -224,14 +230,14 @@ fn run_pipeline(cmd: &Pipeline) -> Result<(), Box<dyn std::error::Error>> {
     xml_to_ymap.run_native(&cmd.extracted_dir)?;
   }
 
-  log::info!("Step 5/5: merge YBN conflicts against vanilla bounds");
+  log::info!("Step 5/6: merge YBN conflicts against vanilla bounds");
   MergeYbnConflicts {
     source_dir: cmd.source_dir.clone(),
-    vanilla_dir: vanilla_ybn_dir,
-    output_dir: cmd.workspace.join("merged_ybn"),
+    vanilla_dir: cmd.workspace.join("vanilla-cache/ybn"),
+    output_dir: cmd.merged_ybn_dir.clone(),
     omitted_files_path: cmd.extracted_dir.join("_extracted_ybns.txt"),
   }
-  .run(codewalker.as_ref())?;
+  .run_with_vanilla_cache(codewalker.as_ref(), &vanilla_history)?;
 
   if let Some(resource_dir) = &cmd.output_resource_dir {
     log::info!("Step 6/6: deploy to resource dir");
@@ -246,9 +252,8 @@ fn pipeline_output_dirs(cmd: &Pipeline) -> Vec<std::path::PathBuf> {
     cmd.extracted_dir.clone(),
     cmd.extracted_xml_dir.clone(),
     cmd.merged_dir.clone(),
-    cmd.workspace.join("merged_ybn"),
+    cmd.merged_ybn_dir.clone(),
     cmd.merged_xml_dir.clone(),
-    cmd.workspace.join("merged_mlo/stream"),
   ];
   if let Some(resource_dir) = &cmd.output_resource_dir {
     outputs.push(resource_dir.join("stream"));
@@ -281,7 +286,7 @@ fn deploy_resource(
 
   copy_dir_overwrite(&cmd.merged_dir, &stream_ymap_dir.join("merged"))?;
   copy_dir_overwrite(&cmd.merged_xml_dir.join("clone"), &stream_ymap_dir.join("clone"))?;
-  copy_dir_overwrite(&cmd.workspace.join("merged_ybn"), &resource_dir.join("stream/ybn/merged"))?;
+  copy_dir_overwrite(&cmd.merged_ybn_dir, &resource_dir.join("stream/ybn/merged"))?;
 
   let omit_src = cmd.extracted_dir.join("_extracted_ymaps.txt");
   let omit_dest = resource_dir.join("omit.txt");
@@ -350,11 +355,11 @@ mod tests {
       workspace: workspace.clone(),
       source_dir: workspace.join("source"),
       output_resource_dir: Some(resource_dir),
-      vanilla_xml_dir: workspace.join("vanilla/ymap.xml"),
-      extracted_dir: workspace.join("extracted"),
-      extracted_xml_dir: workspace.join("extracted.xml"),
-      merged_xml_dir: workspace.join("merged.xml"),
-      merged_dir: workspace.join("merged"),
+      extracted_dir: workspace.join(".output/extracted"),
+      extracted_xml_dir: workspace.join(".output/extracted.xml"),
+      merged_xml_dir: workspace.join(".output/merged.xml"),
+      merged_dir: workspace.join(".output/merged/ymap"),
+      merged_ybn_dir: workspace.join(".output/merged/ybn"),
       log_dir: workspace.join("log"),
       blacklist_config: None,
       use_codewalker_dll: false,
@@ -377,11 +382,11 @@ mod tests {
     let tmp = std::env::temp_dir().join("mlo_merger_deploy_resource_test");
     let _ = fs::remove_dir_all(&tmp);
 
-    let merged_dir = tmp.join("asset/merged");
-    let merged_ybn_dir = tmp.join("asset/merged_ybn");
-    let merged_xml_dir = tmp.join("asset/merged.xml");
-    let extracted_dir = tmp.join("asset/extracted");
-    let resource_dir = tmp.join("asset/merged_mlo");
+    let merged_dir = tmp.join("asset/.output/merged/ymap");
+    let merged_ybn_dir = tmp.join("asset/.output/merged/ybn");
+    let merged_xml_dir = tmp.join("asset/.output/merged.xml");
+    let extracted_dir = tmp.join("asset/.output/extracted");
+    let resource_dir = tmp.join("asset/.output/merged_mlo");
 
     fs::create_dir_all(merged_dir.join("sub")).unwrap();
     fs::write(merged_dir.join("foo.ymap"), "merged foo").unwrap();
@@ -404,11 +409,11 @@ mod tests {
       workspace: tmp.join("asset"),
       source_dir: tmp.join("asset/source"),
       output_resource_dir: Some(resource_dir.clone()),
-      vanilla_xml_dir: tmp.join("asset/vanilla/ymap.xml"),
       extracted_dir,
-      extracted_xml_dir: tmp.join("asset/extracted.xml"),
+      extracted_xml_dir: tmp.join("asset/.output/extracted.xml"),
       merged_xml_dir,
       merged_dir,
+      merged_ybn_dir: merged_ybn_dir.clone(),
       log_dir: tmp.join("asset/log"),
       blacklist_config: None,
       use_codewalker_dll: false,

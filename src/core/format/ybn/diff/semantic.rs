@@ -5,7 +5,7 @@ use std::io;
 use super::{
   compare,
   polygon::{PolygonDiff, ResolvedPolygon, ResolvedShape},
-  resolve::{self, BoundMetadata},
+  resolve::{self, BoundMetadata, PrimitiveBounds},
 };
 use crate::core::format::ybn::model::{Bound, Geometry, Polygon, Triangle};
 
@@ -227,6 +227,224 @@ impl YbnDiff {
     }
     Ok(result)
   }
+
+  /// Applies supported changes to a newer vanilla model by matching polygon shapes by value.
+  pub fn apply_rebased_to(
+    &self,
+    latest: &Bound,
+  ) -> io::Result<Bound> {
+    let mut result = latest.clone();
+    for change in &self.bound_diffs {
+      match change {
+        BoundDiff::Modified {
+          path,
+          before,
+          after,
+        } => apply_rebased_metadata(bound_at_path_mut(&mut result, path)?, before, after)?,
+        BoundDiff::Added {
+          ..
+        }
+        | BoundDiff::Removed {
+          ..
+        } => return Err(invalid_input("YBN Bounds hierarchy changes cannot be rebased")),
+      }
+    }
+
+    let mut removals: Vec<_> = self
+      .polygon_diffs
+      .iter()
+      .filter_map(|change| match change {
+        PolygonDiff::Removed {
+          location,
+          polygon,
+        } => Some((location, polygon)),
+        PolygonDiff::Added {
+          ..
+        } => None,
+      })
+      .collect();
+    removals.sort_by(|(first, _), (second, _)| {
+      first
+        .bound_path
+        .cmp(&second.bound_path)
+        .then_with(|| first.polygon_index.cmp(&second.polygon_index))
+    });
+    for (location, removed) in removals {
+      let bound = bound_at_path_mut(&mut result, &location.bound_path)?;
+      let geometry =
+        bound.geometry.as_mut().ok_or_else(|| invalid_data("YBN polygon owner has no Geometry"))?;
+      let mut matching = None;
+      for (index, polygon) in geometry.polygons.iter().enumerate() {
+        let resolved = resolve::resolved(geometry, polygon)?;
+        if compare::matches(&resolved, removed, self.tolerance) {
+          matching = Some(index);
+          break;
+        }
+      }
+      if let Some(index) = matching {
+        geometry.polygons.remove(index);
+      }
+    }
+
+    let mut additions: Vec<_> = self
+      .polygon_diffs
+      .iter()
+      .filter_map(|change| match change {
+        PolygonDiff::Added {
+          location,
+          polygon,
+        } => Some((location, polygon)),
+        PolygonDiff::Removed {
+          ..
+        } => None,
+      })
+      .collect();
+    additions.sort_by(|(first, _), (second, _)| {
+      first
+        .bound_path
+        .cmp(&second.bound_path)
+        .then_with(|| first.polygon_index.cmp(&second.polygon_index))
+    });
+    for (location, added) in additions {
+      let bound = bound_at_path_mut(&mut result, &location.bound_path)?;
+      let geometry =
+        bound.geometry.as_mut().ok_or_else(|| invalid_data("YBN polygon owner has no Geometry"))?;
+      let mut already_present = false;
+      for polygon in &geometry.polygons {
+        if compare::matches(&resolve::resolved(geometry, polygon)?, added, self.tolerance) {
+          already_present = true;
+          break;
+        }
+      }
+      if !already_present {
+        let polygon = append_polygon(geometry, added)?;
+        geometry.polygons.push(polygon);
+      }
+    }
+    Ok(result)
+  }
+}
+
+fn apply_rebased_metadata(
+  bound: &mut Bound,
+  before: &BoundMetadata,
+  after: &BoundMetadata,
+) -> io::Result<()> {
+  if before.kind != after.kind || bound.kind != after.kind {
+    return Err(invalid_input("YBN Bounds kind changed and cannot be rebased"));
+  }
+  let mut merged = resolve::metadata(bound)?;
+  if before.transform != after.transform {
+    merged.transform = after.transform;
+  }
+  if before.composite_flags != after.composite_flags {
+    merge_array(&mut merged.composite_flags, &before.composite_flags, &after.composite_flags);
+  }
+  if before.child_transforms != after.child_transforms {
+    if before.child_transforms.len() != after.child_transforms.len()
+      || merged.child_transforms.len() != before.child_transforms.len()
+    {
+      return Err(invalid_input("YBN child transform layout changed and cannot be rebased"));
+    }
+    for index in 0..before.child_transforms.len() {
+      merge_array(
+        &mut merged.child_transforms[index],
+        &before.child_transforms[index],
+        &after.child_transforms[index],
+      );
+    }
+  }
+  if before.child_flags != after.child_flags {
+    if before.child_flags.len() != after.child_flags.len()
+      || merged.child_flags.len() != before.child_flags.len()
+    {
+      return Err(invalid_input("YBN child flag layout changed and cannot be rebased"));
+    }
+    for index in 0..before.child_flags.len() {
+      merge_array(
+        &mut merged.child_flags[index],
+        &before.child_flags[index],
+        &after.child_flags[index],
+      );
+    }
+  }
+  if before.margin != after.margin {
+    merged.margin = after.margin;
+  }
+  if before.volume != after.volume {
+    merged.volume = after.volume;
+  }
+  if before.inertia != after.inertia {
+    merge_array(&mut merged.inertia, &before.inertia, &after.inertia);
+  }
+  if before.attributes != after.attributes {
+    merge_bytes(&mut merged.attributes, &before.attributes, &after.attributes)?;
+  }
+  if before.unknown_type != after.unknown_type {
+    merged.unknown_type = after.unknown_type;
+  }
+  if before.geometry_unknowns != after.geometry_unknowns {
+    merged.geometry_unknowns = after.geometry_unknowns;
+  }
+  match (&before.primitive, &after.primitive, &mut merged.primitive) {
+    (Some(before), Some(after), Some(merged)) => merge_primitive(merged, before, after),
+    (None, None, _) => {}
+    _ => return Err(invalid_input("YBN primitive kind changed and cannot be rebased")),
+  }
+  apply_metadata(bound, &merged)
+}
+
+fn merge_primitive(
+  merged: &mut PrimitiveBounds,
+  before: &PrimitiveBounds,
+  after: &PrimitiveBounds,
+) {
+  if before.minimum != after.minimum {
+    merge_array(&mut merged.minimum, &before.minimum, &after.minimum);
+  }
+  if before.maximum != after.maximum {
+    merge_array(&mut merged.maximum, &before.maximum, &after.maximum);
+  }
+  if before.box_center != after.box_center {
+    merge_array(&mut merged.box_center, &before.box_center, &after.box_center);
+  }
+  if before.sphere_center != after.sphere_center {
+    merge_array(&mut merged.sphere_center, &before.sphere_center, &after.sphere_center);
+  }
+  if before.sphere_radius != after.sphere_radius {
+    merged.sphere_radius = after.sphere_radius;
+  }
+  if before.extension != after.extension {
+    merged.extension.clone_from(&after.extension);
+  }
+}
+
+fn merge_array<T: Copy + PartialEq>(
+  merged: &mut [T],
+  before: &[T],
+  after: &[T],
+) {
+  for index in 0..before.len().min(after.len()).min(merged.len()) {
+    if before[index] != after[index] {
+      merged[index] = after[index];
+    }
+  }
+}
+
+fn merge_bytes(
+  merged: &mut [u8],
+  before: &[u8],
+  after: &[u8],
+) -> io::Result<()> {
+  if before.len() != after.len() || merged.len() != before.len() {
+    return Err(invalid_input("YBN attribute layout changed and cannot be rebased"));
+  }
+  for index in 0..before.len() {
+    if before[index] != after[index] {
+      merged[index] = after[index];
+    }
+  }
+  Ok(())
 }
 
 fn invalid_data(message: &str) -> io::Error {

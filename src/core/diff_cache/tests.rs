@@ -395,13 +395,13 @@ fn diff_cache_selects_per_resource_latest_and_compares_its_cumulative_baseline()
   );
   let first_report = &report["resources"][0];
   assert_eq!(first_report["files"][0]["best_version"], "0000-base");
-  assert_eq!(first_report["files"][0]["baseline_content_version"], "0001-patch");
-  assert_eq!(first_report["files"][0]["difference_count"], 1);
+  assert_eq!(first_report["files"][0]["baseline_content_version"], "0000-base");
+  assert_eq!(first_report["files"][0]["difference_count"], 0);
   let diff: YmapDiff = serde_json::from_reader(BufReader::new(
     fs::File::open(command.output_dir.join("[group]/first/ymap/stream/a.ymap.diff.json")).unwrap(),
   ))
   .unwrap();
-  assert_eq!(diff.apply_to(&new, None).parent, old.parent);
+  assert_eq!(diff.apply_to(&old, None).parent, old.parent);
   assert!(
     fs::read_to_string(command.output_dir.join("create_cache.log"))
       .unwrap()
@@ -455,7 +455,6 @@ fn diff_cache_selects_per_resource_latest_and_compares_its_cumulative_baseline()
 
 #[test]
 fn diff_cache_generates_ybn_reports_from_raw_vanilla_history() {
-  use super::types::YbnDiffReport;
   use crate::core::format::ybn::{diff::YbnDiff, read_ybn, xml::xml_to_ybn};
   use crate::core::vanilla_cache::{FileChange, init_test_version_logger};
   use sha2::{Digest, Sha256};
@@ -551,14 +550,8 @@ fn diff_cache_generates_ybn_reports_from_raw_vanilla_history() {
   assert_eq!(resource_report["files"][0]["baseline_content_version"], "0001-patch");
   let diff_path =
     command.output_dir.join("[group]/collision-resource/ybn/stream/collision.ybn.diff.json");
-  let changes: YbnDiffReport =
+  let diff: YbnDiff =
     serde_json::from_reader(BufReader::new(fs::File::open(diff_path).unwrap())).unwrap();
-  let YbnDiffReport::Semantic {
-    diff,
-  } = changes
-  else {
-    panic!("expected semantic YBN diff");
-  };
   assert_eq!(diff.bound_diffs.len(), 1);
   assert!(diff.polygon_diffs.is_empty());
   let baseline = read_ybn(&patch_binary).unwrap();

@@ -27,6 +27,15 @@ impl ModelState {
   }
 }
 
+pub(crate) fn ymap_distance(
+  before: &Ymap,
+  after: &Ymap,
+) -> Result<usize> {
+  let before = ModelState::new(before.clone())?;
+  let after = ModelState::new(after.clone())?;
+  Ok(distance(&before.comparison, &after.comparison))
+}
+
 fn reference(value: &str) -> u32 {
   if value.is_empty() {
     return 0;

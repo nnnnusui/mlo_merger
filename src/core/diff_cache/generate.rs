@@ -61,7 +61,7 @@ impl BuildDiffCache {
     let log = VersionLog::start(&self.output_dir)?;
     let generated_at = chrono::Utc::now().to_rfc3339();
     let mut report = GenerationReport {
-      format_version: 1,
+      format_version: 2,
       input: input.clone(),
       vanilla_cache: cache.clone(),
       generated_at: generated_at.clone(),

@@ -87,10 +87,30 @@ pub struct XmlGrassInstanceItem {
   pub lod_fade_start_dist: XmlValueAttr<f32>,
   #[serde(rename = "LodInstFadeRange", default)]
   pub lod_inst_fade_range: XmlValueAttr<f32>,
-  #[serde(rename = "OrientToTerrain", default)]
+  /// OpenIV writes this integer flag with a zero fractional part.
+  #[serde(rename = "OrientToTerrain", default, deserialize_with = "deserialize_orient_to_terrain")]
   pub orient_to_terrain: XmlValueAttr<u32>,
   #[serde(rename = "InstanceList", default)]
   pub instance_list: XmlGrassInstanceDataList,
+}
+
+fn deserialize_orient_to_terrain<'de, D>(deserializer: D) -> Result<XmlValueAttr<u32>, D::Error>
+where
+  D: serde::Deserializer<'de>,
+{
+  let attr = XmlValueAttr::<String>::deserialize(deserializer)?;
+  let integer = if let Some((integer, fraction)) = attr.value.split_once('.') {
+    if fraction.is_empty() || !fraction.bytes().all(|digit| digit == b'0') {
+      return Err(serde::de::Error::custom("OrientToTerrain must be an unsigned integer"));
+    }
+    integer
+  } else {
+    &attr.value
+  };
+  let value = integer.parse().map_err(serde::de::Error::custom)?;
+  Ok(XmlValueAttr {
+    value,
+  })
 }
 
 #[derive(Debug, Deserialize, Default, Serialize)]
@@ -305,6 +325,22 @@ impl From<GrassInstance> for XmlGrassInstanceData {
 
 #[cfg(test)]
 mod tests {
+  #[test]
+  fn orient_to_terrain_accepts_exact_decimal_integers() {
+    for (input, expected) in [("1", 1), ("1.00000000", 1), ("0.0", 0), ("4294967295.000", u32::MAX)]
+    {
+      let xml = format!(r#"<Item><OrientToTerrain value="{input}"/></Item>"#);
+      let parsed: super::XmlGrassInstanceItem = quick_xml::de::from_str(&xml).unwrap();
+      assert_eq!(parsed.orient_to_terrain.value, expected);
+      let serialized = quick_xml::se::to_string(&parsed).unwrap();
+      assert!(serialized.contains(&format!(r#"<OrientToTerrain value="{expected}""#)));
+    }
+    for input in ["1.5", "-1.0", "4294967296.0", "1.", "NaN", "1.00000000000000001"] {
+      let xml = format!(r#"<Item><OrientToTerrain value="{input}"/></Item>"#);
+      assert!(quick_xml::de::from_str::<super::XmlGrassInstanceItem>(&xml).is_err());
+    }
+  }
+
   use super::*;
 
   #[test]

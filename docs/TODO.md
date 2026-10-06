@@ -26,14 +26,19 @@
 - [ ] Extend extraction and cache objects to native types other than YMAP/YBN.
 - [x] Organize indexed YBN models under format/ybn/model, XML import/export under format/ybn/xml, native codecs under binary, and migrate all callers to format::ybn after removing the gamefile compatibility exports.
 - [x] Add structured YbnDiff/PolygonDiff extraction with duplicate-aware additions/removals, resolved material/vertex values, hierarchy ownership, Bounds metadata, tolerance and JSON serialization; verify the real mansion collision model.
-- [x] Generate semantic YBN MLO diff-cache reports with a decoded-model fallback when a semantic comparison cannot represent a file.
+- [x] Generate semantic YBN MLO diff reports; record unrepresentable comparisons as unsupported without full-model fallback artifacts.
 - [x] Move YMAP diff models and extraction under `src/core/format/ymap/diff` for use by merge and diff-cache generation.
-- [ ] Update merge pipeline to read vanilla-cache and precomputed source-cache differences instead of extracting them at runtime.
-- [ ] Integrate semantic YBN diff reports into conflict merge.
+- [x] Make pipeline merge select the least-difference baseline per file from vanilla-cache history and apply changes to the latest cached state using raw source files; source-cache is not a merge dependency.
+- [x] Move pipeline-generated intermediates, merged YMAP/YBN outputs, and default deploy resource under `<workspace>/.output`.
 - [ ] Support update2.rpf and content/setup mount rules for complete engine snapshots.
 
 ## Resource Conversion Tests
 
+- [x] Accept signed PSO XML entity GUIDs as their original unsigned 32-bit values; test unsigned roundtrips and out-of-range rejection.
+- [x] Read older PSO entities without childLodDist using zero while preserving explicit values and rejecting malformed values.
+- [x] Add an opt-in all-asset YMAP binary/XML readability check using pipeline loaders, with content deduplication and a complete failure report including panics.
+- [x] Read legacy LOD-light hash array names without losing lights, normalize Native XML output, and accept exact integral OpenIV OrientToTerrain decimal values.
+- [ ] Decide whether to accept zero padding beyond declared RSC7 page sizes in excluded source resources, without weakening truncation or nonzero-extra-data checks.
 - [x] Add explicit XML -> YBN/YMAP -> XML -> binary stability tests comparing first/second rebuilt bytes and re-exported XML; verify four META YMAP XML fixtures.
 - [x] Resolve cached YMAP/YBN history from exact raw stage files and validate per-file content hashes.
 - [x] Resolve repeated YBN rebuild instability using preserved VertexQuantum, quantized-vertex BVH input, deterministic BVH ordering and final-order material/edge rebuilding; all six YBN/YMAP stability tests pass with exact binary/XML equality.

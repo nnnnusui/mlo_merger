@@ -26,6 +26,32 @@ pub struct ExtractYmap {
 impl ExtractYmap {
   pub const FLATTEN_DELIMITER: &str = "___";
   pub fn run(&self) -> Result<(), Box<dyn std::error::Error>> {
+    let vanilla_ymap_names = self.vanilla_dir.as_deref().map(|path| {
+      collect_files_with_suffix(path, ".ymap.xml")
+        .into_iter()
+        .filter_map(|path| {
+          path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .map(|name| name.strip_suffix(".xml").unwrap_or(name).to_string())
+        })
+        .collect::<HashSet<_>>()
+    });
+    self.run_with_filter(vanilla_ymap_names.as_ref())
+  }
+
+  /// Extracts only YMAP files whose basenames are present in the supplied vanilla set.
+  pub fn run_with_vanilla_names(
+    &self,
+    vanilla_ymap_names: &HashSet<String>,
+  ) -> Result<(), Box<dyn std::error::Error>> {
+    self.run_with_filter(Some(vanilla_ymap_names))
+  }
+
+  fn run_with_filter(
+    &self,
+    vanilla_ymap_names: Option<&HashSet<String>>,
+  ) -> Result<(), Box<dyn std::error::Error>> {
     let output_content_already_exists =
       self.output_dir.exists() && fs::read_dir(&self.output_dir)?.next().is_some();
     if output_content_already_exists {
@@ -40,19 +66,6 @@ impl ExtractYmap {
 
     fs::create_dir_all(&self.output_dir)?;
 
-    // Collect vanilla ymap filenames if vanilla_dir is specified
-    let vanilla_ymap_names: Option<HashSet<String>> = self.vanilla_dir.as_deref().map(|path| {
-      collect_files_with_suffix(path, ".ymap.xml")
-        .into_iter()
-        .filter_map(|p| {
-          p.file_name().and_then(|n| n.to_str()).map(|s| {
-            // Remove .xml suffix from .ymap.xml files
-            s.strip_suffix(".xml").unwrap_or(s).to_string()
-          })
-        })
-        .collect()
-    });
-
     let resource_dirs = get_resource_directories(&self.input_dir)?;
     log::info!("Found {} resource directories:", resource_dirs.len());
     log::info!("Found {} vanilla YMAP files.", vanilla_ymap_names.as_ref().map_or(0, |s| s.len()));
@@ -60,8 +73,7 @@ impl ExtractYmap {
     let extraction_results: Vec<_> = resource_dirs
       .into_iter()
       .map(|resource_dir| {
-        let result =
-          extract_ymap_files(&self.output_dir, &resource_dir, vanilla_ymap_names.as_ref());
+        let result = extract_ymap_files(&self.output_dir, &resource_dir, vanilla_ymap_names);
         (resource_dir, result)
       })
       .collect();
@@ -117,7 +129,7 @@ fn extract_ymap_files(
         src_path
           .file_name()
           .and_then(|n| n.to_str())
-          .map(|filename| vanilla_names.contains(filename))
+          .map(|filename| vanilla_names.iter().any(|name| name.eq_ignore_ascii_case(filename)))
           .unwrap_or(false)
       })
       .collect()
@@ -136,4 +148,33 @@ fn extract_ymap_files(
   }
 
   Ok(filtered_files)
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn extraction_accepts_latest_cache_filename_filter() {
+    let root =
+      std::env::temp_dir().join(format!("extract_ymap_cache_filter_{}", std::process::id()));
+    let source = root.join("source");
+    let resource = source.join("resource_a");
+    let stream = resource.join("stream");
+    let output = root.join("extracted");
+    fs::create_dir_all(&stream).unwrap();
+    fs::write(resource.join("fxmanifest.lua"), []).unwrap();
+    fs::write(stream.join("cached.ymap"), b"cached").unwrap();
+    fs::write(stream.join("uncached.ymap"), b"uncached").unwrap();
+    let command = ExtractYmap {
+      input_dir: source,
+      output_dir: output.clone(),
+      flatten: true,
+      vanilla_dir: None,
+    };
+    command.run_with_vanilla_names(&HashSet::from(["cached.ymap".to_string()])).unwrap();
+    assert_eq!(fs::read(output.join("resource_a___cached.ymap")).unwrap(), b"cached");
+    assert!(!output.join("resource_a___uncached.ymap").exists());
+    fs::remove_dir_all(root).unwrap();
+  }
 }

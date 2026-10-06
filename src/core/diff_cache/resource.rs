@@ -4,7 +4,7 @@ use super::{
   Result,
   comparison::{ModelState, best_candidate, distance},
   io::{cache_path, content_hash},
-  types::{CandidateScore, FileReport, ResourceReport, Variant, YbnDiffReport},
+  types::{CandidateScore, FileReport, ResourceReport, Variant},
   vanilla::NativeVariants,
 };
 use crate::core::{
@@ -183,13 +183,8 @@ pub(super) fn generate_resource(
   fs::create_dir_all(directory.join("ymap"))?;
   fs::create_dir_all(directory.join("ybn"))?;
   let mut reports = Vec::new();
-  for file in matched {
-    let baseline = file
-      .variants
-      .iter()
-      .rev()
-      .find(|variant| Some(variant.index) <= selected)
-      .ok_or("Selected stage precedes file creation")?;
+  'reports: for file in matched {
+    let baseline = &file.variants[file.best];
     log::info!(
       "Generating diff {} against content from {}",
       file.source.display(),
@@ -208,31 +203,19 @@ pub(super) fn generate_resource(
       }
       ResourceModel::Ybn(model) => {
         let vanilla = provider.ybn_model(&baseline.file)?;
-        let changes = match YbnDiff::extract_from(&vanilla, model) {
-          Ok(diff) => YbnDiffReport::Semantic {
-            diff,
-          },
-          Err(error) => YbnDiffReport::ModelReplacement {
-            reason: error.to_string(),
-            model: Box::new(model.clone()),
-          },
+        let diff = match YbnDiff::extract_from(&vanilla, model) {
+          Ok(diff) => diff,
+          Err(error) => {
+            log::warn!("Skipping unsupported YBN diff {id}/{}: {error}", file.relative);
+            unsupported.push(file.relative.clone());
+            continue 'reports;
+          }
         };
-        let difference_count = match &changes {
-          YbnDiffReport::Semantic {
-            diff,
-          } => diff.bound_diffs.len() + diff.polygon_diffs.len(),
-          YbnDiffReport::ModelReplacement {
-            model,
-            ..
-          } => distance(
-            &serde_json::to_value(vanilla.as_ref())?,
-            &serde_json::to_value(model.as_ref())?,
-          ),
-        };
+        let difference_count = diff.bound_diffs.len() + diff.polygon_diffs.len();
         let artifact = format!("ybn/{}.diff.json", file.relative);
         let destination = cache_path(&directory, &artifact)?;
         fs::create_dir_all(destination.parent().ok_or("Diff artifact has no parent")?)?;
-        write_json(&destination, &changes)?;
+        write_json(&destination, &diff)?;
         ("ybn", difference_count)
       }
     };

@@ -23,7 +23,8 @@ pub struct XmlYmapLodLightsSoa {
   pub falloff_exponent: XmlYmapNumberList,
   #[serde(default)]
   pub time_and_state_flags: XmlYmapNumberList,
-  #[serde(default)]
+  /// Some embedded schemas label the hash array with the raw field ID 0x4A.
+  #[serde(default, alias = "hash_0000004A")]
   pub hash: XmlYmapNumberList,
   #[serde(default)]
   pub cone_inner_angle: XmlYmapNumberList,
@@ -174,6 +175,16 @@ mod tests {
     assert_eq!(converted[1].falloff, 4.2);
     assert_eq!(converted[0].falloff_exponent, 128.0);
     assert_eq!(converted[1].falloff_exponent, 8.0);
+
+    let legacy = xml.replace("<hash>", "<hash_0000004A>").replace("</hash>", "</hash_0000004A>");
+    let parsed: XmlYmapLodLightsSoa = quick_xml::de::from_str(&legacy).unwrap();
+    let converted: Vec<YmapLodLight> = parsed.into();
+    assert_eq!(converted.len(), 2);
+    assert_eq!(converted[0].hash, "10038078");
+    assert_eq!(converted[1].hash, "20018242");
+    let serialized = quick_xml::se::to_string(&XmlYmapLodLightsSoa::from(converted)).unwrap();
+    assert!(serialized.contains("<hash>"));
+    assert!(!serialized.contains("hash_0000004A"));
   }
 
   #[test]

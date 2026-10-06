@@ -85,7 +85,7 @@ fn vector(
   Ok([float(bytes, offset)?, float(bytes, offset + 4)?, float(bytes, offset + 8)?])
 }
 
-fn metadata(bound: &Bound) -> io::Result<BoundMetadata> {
+pub(super) fn metadata(bound: &Bound) -> io::Result<BoundMetadata> {
   if bound.common.len() < 112 {
     return Err(invalid("Truncated YBN Bounds metadata"));
   }
@@ -135,7 +135,7 @@ fn metadata(bound: &Bound) -> io::Result<BoundMetadata> {
   })
 }
 
-fn resolved(
+pub(super) fn resolved(
   geometry: &Geometry,
   polygon: &Polygon,
 ) -> io::Result<ResolvedPolygon> {

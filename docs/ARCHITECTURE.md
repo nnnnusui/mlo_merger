@@ -18,11 +18,11 @@ conversion backend and supplies RPF reading for vanilla cache generation.
 3. Compare each mod with vanilla and combine changes.
 4. Preserve unchanged binary clones or rebuild affected YMAPs.
 5. Merge same-named YBN collisions against vanilla.
-6. Optionally deploy generated resources and the source-file omit list.
+6. Deploy the generated resource and source-file omit list.
 
-Generated output is replaced for each pipeline run after confirmation. Vanilla
-and source resources remain inputs; deployment replaces the selected output
-resource's generated contents.
+Generated output under `.output/` is replaced for each pipeline run after
+confirmation. The default deploy target is `.output/merged_mlo`; source resources
+remain inputs and are never modified.
 
 ## Merge Policy
 
@@ -32,9 +32,11 @@ Files affected by those repairs are rebuilt even when their own mod data is
 otherwise unchanged. Ambiguous references are rejected rather than guessed.
 
 YMAP difference types and extraction live under `format/ymap/diff` and are
-shared by merge and diff-cache generation. The pipeline currently extracts and
-combines differences at runtime; it does not yet consume precomputed
-`source-cache` reports.
+shared by merge and diff-cache generation. Pipeline merge reads raw mod files
+and vanilla-cache history, tests changed vanilla versions newest-first, selects
+the least-different baseline per file, then applies those changes to the latest
+cached vanilla state. The generated source-cache is a separate reporting
+artifact and is not a merge input.
 
 YBN merging requires a same-named vanilla baseline. Supported collision shapes
 are compared geometrically rather than by binary table order. Removals and
@@ -62,11 +64,11 @@ metadata query over stages that introduced or changed a filename.
 
 ## MLO Baseline Selection
 
-Each resource is processed independently. Its vanilla-matched YMAPs are compared
-with the recorded content versions. Ties prefer the newer changed version; the
-latest of the per-file best versions becomes the resource's shared baseline.
-All final differences are then calculated against that baseline's cumulative
-state.
+Each resource is processed independently. Vanilla-matched files are compared
+with changed content versions newest-first. Each file uses its lowest-difference
+baseline, with ties favoring the newer version; merge then applies its changes to
+the latest vanilla-cache state. Diff-cache generation records these per-file
+comparisons for inspection, but pipeline merge reads source files directly.
 
 Output includes differences, selection information, timestamps and logs.
 Unmatched and unsupported stream files are recorded explicitly. The current

@@ -27,7 +27,7 @@ pub(super) struct ParentReferences {
   unresolved: HashMap<i32, UnresolvedReference>,
   unresolved_handles: HashMap<(Option<String>, u32, i32), i32>,
   ambiguous_guids: std::collections::HashSet<(u32, u32)>,
-  entity_keys: HashMap<(u32, Vec<u32>), u32>,
+  entity_keys: HashMap<(u32, Vec<u32>, usize), u32>,
   original_guids: HashMap<u32, u32>,
 }
 
@@ -52,28 +52,50 @@ impl ParentReferences {
   }
 
   /// Uses a unique GUID when possible, or a conservative geometric identity otherwise.
+  #[cfg(test)]
   pub(super) fn entity_id(
     &mut self,
     map: u32,
     entity: &YmapEntity,
   ) -> io::Result<u32> {
-    let mut identity = vec![entity.guid];
-    if entity.guid == 0 || self.ambiguous_guids.contains(&(map, entity.guid)) {
-      identity.extend([
-        reference_hash(&entity.entity_type),
-        reference_hash(&entity.archetype_name),
-        float_bits(entity.position.x),
-        float_bits(entity.position.y),
-        float_bits(entity.position.z),
-        float_bits(entity.rotation.x),
-        float_bits(entity.rotation.y),
-        float_bits(entity.rotation.z),
-        float_bits(entity.rotation.w),
-        float_bits(entity.scale_x_y),
-        float_bits(entity.scale_z),
-      ]);
-    }
-    let key = (map, identity);
+    self.entity_id_with_occurrence(map, entity_identity(self, map, entity), 0, entity.guid)
+  }
+
+  fn entity_ids(
+    &mut self,
+    map: u32,
+    entities: &[YmapEntity],
+  ) -> io::Result<Vec<u32>> {
+    let mut occurrences = HashMap::<Vec<u32>, usize>::new();
+    entities
+      .iter()
+      .map(|entity| {
+        let identity = entity_identity(self, map, entity);
+        let occurrence = occurrences.entry(identity.clone()).or_default();
+        let current = *occurrence;
+        *occurrence += 1;
+        self.entity_id_with_occurrence(map, identity, current, entity.guid)
+      })
+      .collect()
+  }
+
+  pub(super) fn runtime_entity_ids(
+    &mut self,
+    map: u32,
+    entities: &[YmapEntity],
+  ) -> io::Result<Vec<u32>> {
+    let ids = self.entity_ids(map, entities)?;
+    Ok(runtime_entity_indices(entities).into_iter().map(|index| ids[index]).collect())
+  }
+
+  fn entity_id_with_occurrence(
+    &mut self,
+    map: u32,
+    identity: Vec<u32>,
+    occurrence: usize,
+    original_guid: u32,
+  ) -> io::Result<u32> {
+    let key = (map, identity, occurrence);
     if let Some(id) = self.entity_keys.get(&key) {
       return Ok(*id);
     }
@@ -82,7 +104,7 @@ impl ParentReferences {
       .and_then(|id| id.checked_add(1))
       .ok_or_else(|| invalid("too many internal entity identities"))?;
     self.entity_keys.insert(key, id);
-    self.original_guids.insert(id, entity.guid);
+    self.original_guids.insert(id, original_guid);
     Ok(id)
   }
 
@@ -126,7 +148,6 @@ impl ParentReferences {
     self.handles.insert(target, handle);
     Ok(handle)
   }
-
   /// Returns the target represented by an internal handle.
   pub(super) fn target(
     &self,
@@ -232,12 +253,22 @@ impl OriginalMap {
   /// Loads without losing duplicate GUID entries from the original entity array.
   pub(super) fn load(path: &Path) -> io::Result<Self> {
     let xml = std::fs::read_to_string(path)?;
-    let mut parsed: XmlYmap = quick_xml::de::from_str(&xml)
+    Self::from_xml(xml).map_err(|error| invalid(&format!("{}: {error}", path.display())))
+  }
+
+  pub(super) fn load_raw(path: &Path) -> io::Result<Self> {
+    let xml = crate::core::vanilla_cache::read_ymap_xml(path)
       .map_err(|error| invalid(&format!("{}: {error}", path.display())))?;
+    Self::from_xml(xml).map_err(|error| invalid(&format!("{}: {error}", path.display())))
+  }
+
+  pub(super) fn from_xml(xml: String) -> io::Result<Self> {
+    let mut parsed: XmlYmap =
+      quick_xml::de::from_str(&xml).map_err(|error| invalid(&error.to_string()))?;
     if let Some(error) =
       parsed.instanced_data.error.as_ref().filter(|error| !error.trim().is_empty())
     {
-      return Err(invalid(&format!("{}: instancedData error: {error}", path.display())));
+      return Err(invalid(&format!("instancedData error: {error}")));
     }
     let entities = std::mem::take(&mut parsed.entities.items)
       .into_iter()
@@ -256,8 +287,13 @@ impl OriginalMap {
 /// Lazy original-map lookup: same-mod parent first, vanilla parent otherwise.
 #[derive(Default)]
 pub(super) struct SourceMaps {
-  paths: HashMap<(Option<String>, u32), PathBuf>,
+  paths: HashMap<(Option<String>, u32), OriginalMapSource>,
   loaded: HashMap<(Option<String>, u32), Rc<OriginalMap>>,
+}
+
+enum OriginalMapSource {
+  Xml(PathBuf),
+  RawYmap(PathBuf),
 }
 
 impl SourceMaps {
@@ -271,7 +307,25 @@ impl SourceMaps {
     let name = name.strip_suffix(".xml").unwrap_or(name);
     let name = name.strip_suffix(".ymap").unwrap_or(name);
     let key = (namespace.map(str::to_string), reference_hash(name));
-    if self.paths.insert(key, path).is_some() {
+    if self.paths.insert(key, OriginalMapSource::Xml(path)).is_some() {
+      return Err(invalid("duplicate original map name within one resource"));
+    }
+    Ok(())
+  }
+
+  pub(super) fn register_raw(
+    &mut self,
+    namespace: Option<&str>,
+    name: &str,
+    path: PathBuf,
+  ) -> io::Result<()> {
+    let name = name.strip_suffix(".xml").unwrap_or(name);
+    let name = name.strip_suffix(".ymap").unwrap_or(name);
+    let key = (namespace.map(str::to_string), reference_hash(name));
+    if self.paths.contains_key(&key) || self.loaded.contains_key(&key) {
+      return Err(invalid("duplicate original map name within one resource"));
+    }
+    if self.paths.insert(key, OriginalMapSource::RawYmap(path)).is_some() {
       return Err(invalid("duplicate original map name within one resource"));
     }
     Ok(())
@@ -288,10 +342,13 @@ impl SourceMaps {
     if let Some(map) = self.loaded.get(&key) {
       return Ok(Some(Rc::clone(map)));
     }
-    let Some(path) = self.paths.get(&key) else {
+    let Some(source) = self.paths.get(&key) else {
       return Ok(None);
     };
-    let map = Rc::new(OriginalMap::load(path)?);
+    let map = Rc::new(match source {
+      OriginalMapSource::Xml(path) => OriginalMap::load(path)?,
+      OriginalMapSource::RawYmap(path) => OriginalMap::load_raw(path)?,
+    });
     self.loaded.insert(key, Rc::clone(&map));
     Ok(Some(map))
   }
@@ -306,16 +363,9 @@ impl SourceMaps {
   ) -> io::Result<(Ymap, Vec<YmapEntity>)> {
     references.register_entities(map_hash, &original.entities);
     let mut entities = original.entities.clone();
-    let own_ids = original
-      .entities
-      .iter()
-      .map(|entity| references.entity_id(map_hash, entity))
-      .collect::<io::Result<Vec<_>>>()?;
+    let own_ids = references.entity_ids(map_hash, &original.entities)?;
     let original_order = runtime_entities(original.entities.iter());
-    let own_layout = original_order
-      .iter()
-      .map(|entity| references.entity_id(map_hash, entity))
-      .collect::<io::Result<Vec<_>>>()?;
+    let own_layout = references.runtime_entity_ids(map_hash, &original.entities)?;
     let external = reference_hash(&original.model.parent);
     for (entity_index, entity) in entities.iter_mut().enumerate() {
       entity.guid = own_ids[entity_index];
@@ -334,10 +384,7 @@ impl SourceMaps {
           .as_ref()
           .map(|parent| {
             references.register_entities(owner, &parent.entities);
-            runtime_entities(parent.entities.iter())
-              .into_iter()
-              .map(|entity| references.entity_id(owner, entity))
-              .collect::<io::Result<Vec<_>>>()
+            references.runtime_entity_ids(owner, &parent.entities)
           })
           .transpose()?
       };
@@ -369,6 +416,38 @@ impl SourceMaps {
   }
 }
 
+fn entity_identity(
+  references: &ParentReferences,
+  map: u32,
+  entity: &YmapEntity,
+) -> Vec<u32> {
+  let mut identity = vec![entity.guid];
+  if entity.guid == 0 || references.ambiguous_guids.contains(&(map, entity.guid)) {
+    identity.extend([
+      reference_hash(&entity.entity_type),
+      reference_hash(&entity.archetype_name),
+      float_bits(entity.position.x),
+      float_bits(entity.position.y),
+      float_bits(entity.position.z),
+      float_bits(entity.rotation.x),
+      float_bits(entity.rotation.y),
+      float_bits(entity.rotation.z),
+      float_bits(entity.rotation.w),
+      float_bits(entity.scale_x_y),
+      float_bits(entity.scale_z),
+    ]);
+  }
+  identity
+}
+
+fn runtime_entity_indices(entities: &[YmapEntity]) -> Vec<usize> {
+  let mut indices = (0..entities.len()).collect::<Vec<_>>();
+  indices.sort_by_key(|index| {
+    reference_hash(&entities[*index].entity_type) == reference_hash("CMloInstanceDef")
+  });
+  indices
+}
+
 fn lod_rank(name: &str) -> Option<usize> {
   [
     "LODTYPES_DEPTH_HD",
@@ -387,10 +466,12 @@ fn lod_rank(name: &str) -> Option<usize> {
 pub(super) fn runtime_entities<'a>(
   entities: impl Iterator<Item = &'a YmapEntity>
 ) -> Vec<&'a YmapEntity> {
-  let mut ordered = entities.collect::<Vec<_>>();
-  ordered
-    .sort_by_key(|entity| reference_hash(&entity.entity_type) == reference_hash("CMloInstanceDef"));
-  ordered
+  let entities = entities.collect::<Vec<_>>();
+  let mut indices = (0..entities.len()).collect::<Vec<_>>();
+  indices.sort_by_key(|index| {
+    reference_hash(&entities[*index].entity_type) == reference_hash("CMloInstanceDef")
+  });
+  indices.into_iter().map(|index| entities[index]).collect()
 }
 
 fn is_local_parent(
@@ -660,15 +741,18 @@ mod tests {
   }
 
   #[test]
-  fn indistinguishable_duplicates_remain_ambiguous_without_losing_clone_entities() {
+  fn indistinguishable_duplicates_receive_stable_occurrence_ids() {
     let first = entity(42, "LODTYPES_DEPTH_LOD", -1);
     let original = original_map(vec![first.clone(), first]);
     let mut references = ParentReferences::default();
     let (model, entities) =
       SourceMaps::default().normalize(&original, None, 123, &mut references).unwrap();
     assert_eq!(entities.len(), 2);
-    assert_eq!(model.entity_map.len(), 1);
-    assert!(references.capture(123, &[entities[0].guid, entities[1].guid], 0).is_err());
+    assert_eq!(model.entity_map.len(), 2);
+    assert_ne!(entities[0].guid, entities[1].guid);
+    assert_eq!(references.original_guid(entities[0].guid).unwrap(), 42);
+    assert_eq!(references.original_guid(entities[1].guid).unwrap(), 42);
+    assert!(references.capture(123, &[entities[0].guid, entities[1].guid], 1).is_ok());
   }
 
   #[test]
@@ -689,5 +773,107 @@ mod tests {
       runtime_entities(entities.iter()).into_iter().map(|entity| entity.guid).collect::<Vec<_>>();
     assert_eq!(references.restore(entities[2].parent_index, &layout).unwrap(), 0);
     assert_eq!(entities[0].entity_type, "CMloInstanceDef");
+  }
+
+  #[test]
+  #[ignore = "reads all local asset YMAP files and writes a validation report"]
+  fn validate_asset_ymap_readability() {
+    use std::io::Write;
+
+    let root = std::env::var_os("YMAP_VALIDATION_ROOT")
+      .map(PathBuf::from)
+      .unwrap_or_else(|| PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("asset"));
+    let report = std::env::var_os("YMAP_VALIDATION_REPORT")
+      .map(PathBuf::from)
+      .unwrap_or_else(|| std::env::temp_dir().join("ymap-read-validation.json"));
+    let mut paths = Vec::new();
+    let mut failures = Vec::new();
+    for entry in walkdir::WalkDir::new(&root) {
+      match entry {
+        Ok(entry) if entry.file_type().is_file() => {
+          let name = entry.file_name().to_string_lossy().to_ascii_lowercase();
+          if name.ends_with(".ymap")
+            || name.ends_with(".ymap.xml")
+            || name.ends_with(".ymap.pso.xml")
+          {
+            paths.push(entry.into_path());
+          }
+        }
+        Ok(_) => {}
+        Err(error) => failures.push(serde_json::json!({
+          "path": error.path(), "error": error.to_string(), "kind": "walk"
+        })),
+      }
+    }
+    paths.sort();
+    let mut counts = std::collections::BTreeMap::<String, [usize; 2]>::new();
+    let mut results = HashMap::<(bool, [u8; 32]), Result<(), String>>::new();
+    let mut passed = 0;
+    for (index, path) in paths.iter().enumerate() {
+      let raw = path.extension().is_some_and(|extension| extension.eq_ignore_ascii_case("ymap"));
+      let group = path.strip_prefix(&root).unwrap().components().next().unwrap();
+      let key =
+        format!("{}:{}", group.as_os_str().to_string_lossy(), if raw { "binary" } else { "xml" });
+      let result = std::fs::read(path).map_err(|error| error.to_string()).and_then(|bytes| {
+        use sha2::Digest;
+        let key = (raw, sha2::Sha256::digest(&bytes).into());
+        results
+          .entry(key)
+          .or_insert_with(|| {
+            std::panic::catch_unwind(|| {
+              if raw { OriginalMap::load_raw(path) } else { OriginalMap::load(path) }
+            })
+            .map_err(|payload| {
+              let message = payload
+                .downcast_ref::<String>()
+                .map(String::as_str)
+                .or_else(|| payload.downcast_ref::<&str>().copied())
+                .unwrap_or("unknown panic");
+              format!("loader panicked: {message}")
+            })
+            .and_then(|result| result.map(|_| ()).map_err(|error| error.to_string()))
+          })
+          .clone()
+      });
+      let totals = counts.entry(key).or_default();
+      totals[0] += 1;
+      match result {
+        Ok(_) => passed += 1,
+        Err(error) => {
+          totals[1] += 1;
+          failures.push(serde_json::json!({
+            "path": path, "error": error.to_string(),
+            "kind": if raw { "binary" } else { "xml" }
+          }));
+        }
+      }
+      if (index + 1) % 1000 == 0 {
+        eprintln!(
+          "YMAP validation: {}/{} checked, {} failures",
+          index + 1,
+          paths.len(),
+          failures.len()
+        );
+      }
+    }
+    let mut writer = std::io::BufWriter::new(std::fs::File::create(&report).unwrap());
+    serde_json::to_writer_pretty(
+      &mut writer,
+      &serde_json::json!({
+        "root": root, "checked": paths.len(), "passed": passed,
+        "unique_contents": results.len(),
+        "failure_count": failures.len(), "groups_checked_failed": counts, "failures": failures
+      }),
+    )
+    .unwrap();
+    writer.flush().unwrap();
+    eprintln!(
+      "YMAP validation: {} checked, {passed} passed, {} failures; report: {}",
+      paths.len(),
+      failures.len(),
+      report.display()
+    );
+    assert!(!paths.is_empty(), "no YMAP files found under {}", root.display());
+    assert!(failures.is_empty(), "YMAP read failures; see {}", report.display());
   }
 }

@@ -308,7 +308,15 @@ fn write_structure(
       array_info = Some(entry);
       continue;
     }
-    let name = resolve_name(entry.name_hash, names);
+    let name = if structure_hash == jenk_hash("CLODLight")
+      && entry.data_offset == 72
+      && entry.data_type == ARRAY
+      && entry.name_hash == 0x4a
+    {
+      "hash".to_string()
+    } else {
+      resolve_name(entry.name_hash, names)
+    };
     let field_offset = offset
       .checked_add(entry.data_offset as usize)
       .ok_or_else(|| invalid_data("META field offset overflows"))?;
@@ -1014,6 +1022,22 @@ mod tests {
     assert!(xml.contains("<boxOccluders itemType=\"BoxOccluder\">"));
     assert!(xml.contains("<iCenterX value=\"-1567\" />"));
     assert!(xml.contains("<occludeModels"));
+  }
+
+  #[test]
+  fn lod_light_hash_array_uses_its_canonical_name() {
+    let fixture = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+      .join("asset/source/isacb_mechanic_littlesoul/stream/metadata/mek_lodlights_lodlights.ymap");
+    let bytes = std::fs::read(fixture).unwrap();
+    let resource = Rsc7Resource::decode(&bytes).unwrap();
+    let meta = MetaResource::parse(&resource).unwrap();
+    let xml = meta_to_xml(&meta, &HashMap::new()).unwrap();
+    assert!(xml.contains("<hash>"));
+    assert!(!xml.contains("hash_0000004A"));
+    let parsed: crate::core::format::ymap::xml::XmlYmap = quick_xml::de::from_str(&xml).unwrap();
+    let model: crate::core::format::ymap::model::Ymap = parsed.into();
+    assert_eq!(model.lod_lights.len(), 184);
+    assert_eq!(model.lod_lights[0].hash, "1571135");
   }
 
   #[test]

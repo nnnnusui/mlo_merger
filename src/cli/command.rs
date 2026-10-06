@@ -175,6 +175,26 @@ mod gtav_tests {
   use super::*;
 
   #[test]
+  fn pipeline_defaults_generated_outputs_under_hidden_output_directory() {
+    let Command::Pipeline(command) = pipeline().to_options().run_inner(&[]).unwrap() else {
+      panic!("Expected pipeline command")
+    };
+    assert_eq!(command.extracted_dir, PathBuf::from("asset/.output/extracted"));
+    assert_eq!(command.extracted_xml_dir, PathBuf::from("asset/.output/extracted.xml"));
+    assert_eq!(command.merged_xml_dir, PathBuf::from("asset/.output/merged.xml"));
+    assert_eq!(command.merged_dir, PathBuf::from("asset/.output/merged/ymap"));
+    assert_eq!(command.merged_ybn_dir, PathBuf::from("asset/.output/merged/ybn"));
+    assert_eq!(command.output_resource_dir, Some(PathBuf::from("asset/.output/merged_mlo")));
+
+    let Command::Pipeline(command) =
+      pipeline().to_options().run_inner(&["--output-resource-dir", "custom-resource"]).unwrap()
+    else {
+      panic!("Expected pipeline command")
+    };
+    assert_eq!(command.output_resource_dir, Some(PathBuf::from("custom-resource")));
+  }
+
+  #[test]
   fn vanilla_version_list_arguments_allow_default_or_explicit_cache() {
     let Command::ListVanillaVersions(command) = list_vanilla_versions()
       .to_options()
@@ -441,7 +461,7 @@ fn merge_ybn() -> impl Parser<Command> {
 }
 
 /// Default command run with no flags: extract -> ymap2xml -> merge -> xml2ymap,
-/// then (if `output_resource_dir` is set) deploy into a FiveM resource layout.
+/// then deploy into the default FiveM resource layout or the requested directory.
 /// All paths except `source_dir`/`output_resource_dir` are derived from `workspace`.
 /// Must stay last in `parse_args`' alternation since its flags are all optional.
 #[derive(Debug, Clone)]
@@ -449,11 +469,11 @@ pub struct Pipeline {
   pub workspace: PathBuf,
   pub source_dir: PathBuf,
   pub output_resource_dir: Option<PathBuf>,
-  pub vanilla_xml_dir: PathBuf,
   pub extracted_dir: PathBuf,
   pub extracted_xml_dir: PathBuf,
   pub merged_xml_dir: PathBuf,
   pub merged_dir: PathBuf,
+  pub merged_ybn_dir: PathBuf,
   pub log_dir: PathBuf,
   pub blacklist_config: Option<PathBuf>,
   pub use_codewalker_dll: bool,
@@ -462,7 +482,7 @@ pub struct Pipeline {
 
 fn pipeline() -> impl Parser<Command> {
   let workspace = long("workspace")
-    .help("Root directory holding vanilla/extracted/merged/blacklist/log (default: asset)")
+    .help("Root directory holding source, vanilla-cache, extracted, merged, blacklist, and logs (default: asset)")
     .argument::<PathBuf>("DIR")
     .fallback(PathBuf::from("asset"));
   let source_dir = long("source-dir")
@@ -471,7 +491,7 @@ fn pipeline() -> impl Parser<Command> {
     .optional();
   let output_resource_dir = long("output-resource-dir")
     .help(
-      "FiveM resource directory to deploy into: overwrites stream/ymap/merged, \
+      "FiveM resource directory to deploy into (default: <workspace>/.output/merged_mlo): overwrites stream/ymap/merged, \
        stream/ymap/clone, stream/ybn/merged and omit.txt",
     )
     .argument::<PathBuf>("DIR")
@@ -487,12 +507,14 @@ fn pipeline() -> impl Parser<Command> {
       let blacklist_config = workspace.join("blacklist.toml");
       Command::Pipeline(Pipeline {
         source_dir: source_dir.unwrap_or_else(|| workspace.join("source")),
-        output_resource_dir,
-        vanilla_xml_dir: workspace.join("vanilla/ymap.xml"),
-        extracted_dir: workspace.join("extracted"),
-        extracted_xml_dir: workspace.join("extracted.xml"),
-        merged_xml_dir: workspace.join("merged.xml"),
-        merged_dir: workspace.join("merged"),
+        output_resource_dir: Some(
+          output_resource_dir.unwrap_or_else(|| workspace.join(".output/merged_mlo")),
+        ),
+        extracted_dir: workspace.join(".output/extracted"),
+        extracted_xml_dir: workspace.join(".output/extracted.xml"),
+        merged_xml_dir: workspace.join(".output/merged.xml"),
+        merged_dir: workspace.join(".output/merged/ymap"),
+        merged_ybn_dir: workspace.join(".output/merged/ybn"),
         log_dir: workspace.join("log"),
         blacklist_config: blacklist_config.exists().then_some(blacklist_config),
         use_codewalker_dll,

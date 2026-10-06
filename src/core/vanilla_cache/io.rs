@@ -14,9 +14,13 @@ use crate::core::format::{
 
 /// Reads a native YMAP through the existing native XML/model adapters.
 pub(crate) fn read_ymap(path: &Path) -> Result<Ymap> {
-  let xml = resource_to_xml(NativeResourceFormat::Ymap, &fs::read(path)?, &HashMap::new())?;
+  let xml = read_ymap_xml(path)?;
   let xml: XmlYmap = quick_xml::de::from_str(&xml)?;
   Ok(xml.into())
+}
+
+pub(crate) fn read_ymap_xml(path: &Path) -> Result<String> {
+  Ok(resource_to_xml(NativeResourceFormat::Ymap, &fs::read(path)?, &HashMap::new())?)
 }
 
 /// Writes JSON with buffered I/O and explicit error propagation on flush.

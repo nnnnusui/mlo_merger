@@ -8,6 +8,7 @@ mod resource;
 mod types;
 mod vanilla;
 
+pub(crate) use comparison::ymap_distance;
 pub use generate::BuildDiffCache;
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;

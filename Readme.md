@@ -9,7 +9,7 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the processing flow and
 ## Requirements
 
 - Rust stable.
-- Vanilla YMAP XML and YBN files for merging. The default workspace is `asset`.
+- A schema-1 `vanilla-cache` for pipeline merging; standalone YMAP/YBN merge commands accept their existing vanilla inputs. The default workspace is `asset`.
 - GTA V Legacy and a locally built CodeWalker bridge for RPF cache generation.
 - Local META schemas for XML-to-YMAP conversion. Matching binary files are discovered automatically, or supplied with `--schema-dir`.
 
@@ -30,17 +30,23 @@ Without that variable, the build looks for `asset/CodeWalker.Core.dll`.
 ```bash
 cargo run
 cargo run -- --workspace asset --source-dir asset/source
-cargo run -- --output-resource-dir asset/merged_mlo
+cargo run -- --output-resource-dir asset/custom_resource
 ```
 
-The pipeline extracts mod YMAPs, converts and merges them against vanilla,
-rebuilds YMAPs, and merges colliding YBNs. Deployment is optional.
+The pipeline reads mod files from `source` and vanilla history from
+`vanilla-cache`. For each matching file it selects the lowest-difference
+baseline from newest to oldest, then merges changes onto the latest cached
+vanilla state. The default outputs are `asset/.output/extracted`,
+`asset/.output/extracted.xml`, `asset/.output/merged.xml`,
+`asset/.output/merged/ymap`, `asset/.output/merged/ybn`, and
+`asset/.output/merged_mlo`. Use `--output-resource-dir` to choose another
+deployment directory.
 
 Existing generated outputs are replaced after confirmation. Deployment also
 replaces the destination's generated stream contents and omit list. Use `-y`
 to skip confirmation, and `--use-codewalker-dll` to select the optional backend.
-Vanilla merge inputs normally live in `asset/vanilla/ymap.xml` and
-`asset/vanilla/ybn`.
+Generate `asset/vanilla-cache` before running the pipeline. YMAP XML conversion
+uses the matching extracted mod binary as its resource template.
 
 ## Vanilla Cache
 
@@ -77,10 +83,10 @@ including nested bracket groups. The output directory must be empty. Use `--inpu
 for a single resource or another resources root.
 Each resource selects a vanilla baseline from its files' closest versions, then
 saves YMAP/YBN differences, selection metadata and logs. Unmatched or unsupported
-files are recorded rather than compared. These reports are not yet consumed by
-the main merge pipeline. YBN reports contain semantic Bounds/
-Polygon changes, with the decoded model stored when semantic comparison cannot
-represent a file.
+files are recorded rather than compared. These reports are for inspection and
+are not read by the main merge pipeline. Unsupported YBN semantic comparisons
+are recorded as unsupported; the diff cache does not store full-model fallback
+artifacts.
 
 ## Individual Commands
 
