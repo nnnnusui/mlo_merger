@@ -16,6 +16,28 @@ cargo build
 
 ## CLI
 
+Without an operation flag, `cargo run` executes the complete pipeline:
+generate vanilla only when its archive is missing, update vanilla-cache and
+source-cache, merge, then deploy. Existing stages use their normal freshness
+checks. `-i` selects source resources and `-o` selects the final deployment
+directory, defaulting to `asset/source` and `asset/merged_mlo` respectively.
+The source-cache stage moves vanilla-named resource files into its cache.
+
+```bash
+cargo run
+cargo run -- -i asset/source -o merged_mlo
+cargo run -- -i resources -o merged_mlo --game-dir /mnt/gtav
+```
+
+`--game-dir` is used only when vanilla extraction is needed (default `/mnt/gtav`).
+Intermediate paths can be changed with `--vanilla`, `--vanilla-cache`,
+`--source-cache`, and `--merged` (default `asset/merged`). Overlapping input and
+artifact directories are rejected before processing. Pipeline `-f` forces the
+derived caches, merge and deploy, but reuses an existing vanilla archive.
+Pipeline `--step-name` selection and pipeline-wide `--gamebuild` ceilings are
+not implemented and are rejected explicitly; use individual generator commands
+to create a limited vanilla archive.
+
 The command interface is being reorganized. `--generate-vanilla`,
 `--generate-vanilla-cache`, `--generate-source-cache`, `--merge`, `--deploy`,
 `--to-xml`, and `--from-xml` call core implementations. The diff command
@@ -37,8 +59,8 @@ For generation, merge and deploy commands, `-o` defaults to the artifact directo
 in each command's help. Conversion and diff commands default to the current
 directory. Common options include `--vanilla`, `--vanilla-cache`,
 `--source-cache`, `--gamebuild`, `-f` to force the selected operation, `-y` to
-skip confirmation, and repeatable `--step-name <name>` to
-select pipeline stages. `--gamebuild` currently selects an installed version or
+skip confirmation, and repeatable `--step-name <name>` for reserved stage
+selection (not implemented yet). `--gamebuild` currently selects an installed version or
 DLC stage name; mapping numeric game build IDs is not implemented yet.
 `--vanilla` supplies source schema/template files to `--from-xml`. Run
 `cargo run -- --help` for the full interface. Convenience aliases are defined in
@@ -108,6 +130,10 @@ The output's `deploy_cache_info.json` records source/destination mtime, size and
 SHA-256. Unchanged copies are skipped, missing or modified copies are repaired,
 and stale managed copies are removed; unrelated output files are preserved.
 Modified stale copies are rejected instead of deleted. `-f` forces all copies.
+Deployment also writes `files.txt`, a sorted, deduplicated list of original
+source-relative paths for moved files still present in source-cache. This includes
+both merged inputs and clone files, but excludes unmoved and archived files.
+An unchanged list is not rewritten; without source-cache inventory it is empty.
 
 ## Limitations
 

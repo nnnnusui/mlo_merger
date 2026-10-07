@@ -210,6 +210,13 @@ fn moves_vanilla_files_retains_history_and_updates_only_selected_resources() {
     serde_json::json!(["resource_a/stream/custom.ybn", "resource_b/streams/custom.ybn",])
   );
   assert_eq!(super::load_merge_inputs(&output).unwrap().ybn.len(), 2);
+  assert_eq!(
+    super::load_moved_source_paths(&output).unwrap(),
+    BTreeSet::from([
+      "resource_a/stream/nested/collision.ybn".into(),
+      "resource_b/streams/nested/collision.ybn".into(),
+    ])
+  );
   assert!(!build.run().unwrap());
 
   let mut legacy = read_metadata();
@@ -402,6 +409,15 @@ fn moves_vanilla_files_retains_history_and_updates_only_selected_resources() {
   assert!(build.run().unwrap());
   assert!(!second.join("streams/custom.ybn").exists());
   assert!(output.join("resources/resource_b/custom.ybn").is_file());
+  assert_eq!(
+    super::load_moved_source_paths(&output).unwrap(),
+    BTreeSet::from([
+      "[changed]/resource_a/stream/custom.ybn".into(),
+      "[changed]/resource_a/stream/nested/collision.ybn".into(),
+      "resource_b/streams/custom.ybn".into(),
+      "resource_b/streams/nested/collision.ybn".into(),
+    ])
+  );
   assert!(!build.run().unwrap());
 
   fs::write(empty.join("fxmanifest.lua"), b"changed manifest").unwrap();

@@ -115,12 +115,7 @@ impl MergeYmap {
     } else {
       collect_modded_ymaps_map(&self.mod_dir)?
     };
-    let vanilla_map_keys = latest_files.map(|files| {
-      files
-        .iter()
-        .filter_map(|path| path.file_stem()?.to_str().map(reference_hash))
-        .collect::<HashSet<_>>()
-    });
+    let vanilla_map_paths = latest_files.map(latest_ymap_paths);
     let mut registered_maps = HashSet::new();
     modded_ymaps_map.retain(|_, references| {
       references.retain(|reference| {
@@ -138,7 +133,7 @@ impl MergeYmap {
           return false;
         };
         let hash = reference_hash(name);
-        if vanilla_map_keys.as_ref().is_some_and(|keys| !keys.contains(&hash)) {
+        if vanilla_map_paths.as_ref().is_some_and(|paths| !paths.contains_key(&hash)) {
           log::warn!(
             "Latest vanilla YMAP {name}.ymap is missing for resource {}; skipping {}",
             reference.mod_name,
@@ -219,9 +214,14 @@ impl MergeYmap {
     let mut planned = BTreeMap::<u32, PlannedMap>::new();
     for (ymap_name, mod_refs) in &modded_ymaps_map {
       let hash = reference_hash(ymap_name.trim_end_matches(".ymap.xml"));
+      let vanilla_ymap_path = vanilla_map_paths
+        .as_ref()
+        .and_then(|paths| paths.get(&hash))
+        .cloned()
+        .unwrap_or_else(|| self.vanilla_dir.join(ymap_name));
       if history.is_none() && !self.rebuild_all && mod_refs.len() <= 1 {
         let mod_ref = mod_refs.first().unwrap();
-        log::info!("Processing YMAP: {}", self.vanilla_dir.join(ymap_name).display());
+        log::info!("Processing YMAP: {}", vanilla_ymap_path.display());
         log::info!("  Mod: {} ({})", mod_ref.mod_name, mod_ref.mod_ymap_path.display());
         let Some(original) = sources.get(Some(&mod_ref.mod_name), hash)? else {
           log::warn!(
@@ -246,7 +246,6 @@ impl MergeYmap {
         );
         continue;
       }
-      let vanilla_ymap_path = self.vanilla_dir.join(ymap_name);
       log::info!("Processing YMAP: {}", vanilla_ymap_path.display());
 
       let Some(original) = sources.get(None, hash)? else {
@@ -579,6 +578,16 @@ impl MergeYmap {
   }
 }
 
+fn latest_ymap_paths(files: &[PathBuf]) -> HashMap<u32, PathBuf> {
+  let mut paths = HashMap::new();
+  for path in files {
+    if let Some(name) = path.file_stem().and_then(|name| name.to_str()) {
+      paths.entry(reference_hash(name)).or_insert_with(|| path.clone());
+    }
+  }
+  paths
+}
+
 fn best_cached_ymap_diff(
   history: &VanillaHistory,
   sources: &mut SourceMaps,
@@ -830,6 +839,18 @@ mod tests {
       .unwrap();
     assert!(!root.join("output").join(name).exists());
     fs::remove_dir_all(root).unwrap();
+  }
+
+  #[test]
+  fn latest_ymap_log_paths_use_actual_native_files() {
+    let path = PathBuf::from("vanilla-cache/latest/ymap/vw_lodlights_small037.ymap");
+    let paths = latest_ymap_paths(std::slice::from_ref(&path));
+    let internal_name = "vw_lodlights_small037.ymap.xml";
+    let hash = reference_hash(internal_name.trim_end_matches(".ymap.xml"));
+    assert_eq!(paths[&hash], path);
+    assert_eq!(paths[&hash].extension().unwrap(), "ymap");
+    let duplicate = PathBuf::from("another-cache/vw_lodlights_small037.ymap");
+    assert_eq!(latest_ymap_paths(&[path.clone(), duplicate])[&hash], path);
   }
 
   #[test]

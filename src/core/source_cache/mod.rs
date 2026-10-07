@@ -41,6 +41,57 @@ pub struct MergeInputs {
   pub vanilla_ymaps_to_read: BTreeSet<String>,
 }
 
+/// Lists original source-relative paths for moved files still present in the active cache.
+/// Returns an empty set when no source inventory is available.
+///
+/// ```no_run
+/// let paths = mlo_merger::core::source_cache::load_moved_source_paths(
+///   std::path::Path::new("asset/source-cache"),
+/// )?;
+/// # Ok::<(), Box<dyn std::error::Error>>(())
+/// ```
+pub fn load_moved_source_paths(cache_dir: &Path) -> Result<BTreeSet<String>> {
+  let metadata_path = cache_dir.join("source_cache_info.json");
+  if !metadata_path.is_file() {
+    return Ok(BTreeSet::new());
+  }
+  let metadata: SourceCacheMetadata =
+    serde_json::from_reader(BufReader::new(std::fs::File::open(metadata_path)?))?;
+  if !matches!(metadata.format_version, 2 | 3) {
+    return Err(format!("Unsupported source cache schema {}", metadata.format_version).into());
+  }
+  let mut paths = BTreeSet::new();
+  for resource in metadata.resources.values() {
+    for file in resource.files_by_format.values().flatten() {
+      let Some(cached) = &file.cached_path else {
+        continue;
+      };
+      let cached = Path::new(cached);
+      if cached.components().any(|component| !matches!(component, std::path::Component::Normal(_)))
+      {
+        return Err("Unsafe moved source-cache path".into());
+      }
+      if cached.starts_with("_old") || !cache_dir.join(cached).is_file() {
+        continue;
+      }
+      let original = resource.source.join(&file.path);
+      let relative = original.strip_prefix(&metadata.source_dir)?;
+      if relative
+        .components()
+        .any(|component| !matches!(component, std::path::Component::Normal(_)))
+      {
+        return Err("Unsafe original moved source path".into());
+      }
+      let relative = relative.to_string_lossy().replace('\\', "/");
+      if relative.contains(['\r', '\n']) {
+        return Err("Moved source path contains a line break".into());
+      }
+      paths.insert(relative);
+    }
+  }
+  Ok(paths)
+}
+
 /// Loads merge inputs from a generated source cache without rescanning source streams.
 pub fn load_merge_inputs(cache_dir: &Path) -> Result<MergeInputs> {
   let metadata: SourceCacheMetadata = serde_json::from_reader(BufReader::new(

@@ -7,4 +7,5 @@ pub mod generate_vanilla;
 pub mod generate_vanilla_cache;
 pub mod get_diff;
 pub mod merge;
+pub mod pipeline;
 pub mod to_xml;

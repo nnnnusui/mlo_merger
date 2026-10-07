@@ -8,6 +8,7 @@ pub mod extract;
 pub mod format;
 pub mod getprop;
 pub mod merge;
+pub mod pipeline;
 #[path = "source_cache/mod.rs"]
 pub mod source_cache;
 pub mod stream_conflicts;

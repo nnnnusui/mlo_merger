@@ -3,6 +3,8 @@
 ## Pipeline Foundation
 
 - [x] Dispatch stream files to separate format-specific workflows by extension; initially support YMAP and YBN without forcing them through one diff implementation.
+- [x] Run the full pipeline by default without an operation flag: generate missing vanilla, update vanilla-cache/source-cache, merge and deploy; connect `-i` to source resources and `-o` to deployment.
+- [x] Share one pipeline logger, reuse valid raw vanilla, validate artifact path separation before processing, and retain derived-stage freshness checks.
 - [ ] Define stable internal step names matching the artifact stages: `vanilla`, `vanilla-cache`, `source-cache`, and `merge`.
 - [ ] Let every command run its required prerequisite steps, skipping valid outputs; support selecting individual stages with `--step-name` and define whether multiple names are accepted.
 - [ ] Use `-f` to force regeneration of the command's own stage only; prerequisite stages still use normal freshness checks unless explicitly forced.
@@ -58,6 +60,7 @@
 - [x] Cache merge sources, vanilla baselines, dependency groups, algorithm version and output/no-output results to remerge only invalid groups; preserve unchanged files and remove stale results atomically.
 - [x] Add `--deploy` to copy merged files and remaining source-cache files into `stream/{extension}/merged` and `stream/{extension}/clone`.
 - [x] Cache deployment input/output mtime, size and fingerprints to copy only needed files, repair missing/changed copies and remove stale managed output safely.
+- [x] Write deployment `files.txt` with original source-relative paths of active moved cache files, including merged inputs and clones.
 - [ ] Later, read additional diffs from `asset/overwrite` and apply them to vanilla stream files before resource merges.
 - [ ] Later, define overwrite targets as `{resourceName or vanilla}/{vanilla stream file}` and validate target/baseline identity before applying changes.
 - [ ] Keep overlapping resource edits deterministic through configured resource priority and report the selected source.

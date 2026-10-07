@@ -75,6 +75,11 @@ impl Deploy {
     let cache = self.source_cache_dir.canonicalize()?;
     let output = prepare_output(&self.output_dir, &[&merged, &cache])?;
     let planned = plan(&merged, &cache)?;
+    let moved_files = crate::core::source_cache::load_moved_source_paths(&cache)?
+      .into_iter()
+      .collect::<Vec<_>>()
+      .join("\n");
+    let moved_files_path = destination(&output, "files.txt")?;
     let metadata_path = destination(&output, "deploy_cache_info.json")?;
     let previous = if metadata_path.is_file() {
       let metadata: DeployMetadata =
@@ -170,6 +175,14 @@ impl Deploy {
       }
       write_json(&temporary, &metadata)?;
       fs::rename(temporary, metadata_path)?;
+    }
+    if fs::read_to_string(&moved_files_path).ok().as_deref() != Some(&moved_files) {
+      let temporary = destination(&output, &format!(".files-{}.tmp", std::process::id()))?;
+      let mut writer = fs::OpenOptions::new().write(true).create_new(true).open(&temporary)?;
+      writer.write_all(moved_files.as_bytes())?;
+      writer.flush()?;
+      drop(writer);
+      fs::rename(temporary, moved_files_path)?;
     }
     Ok(summary)
   }
@@ -369,6 +382,7 @@ mod tests {
       }
     );
     let cloned = output.join("stream/ybn/clone/resource_a/nested/collision.ybn");
+    assert_eq!(fs::read_to_string(output.join("files.txt")).unwrap(), "");
     assert_eq!(fs::read(output.join("stream/ymap/merged/map.ymap")).unwrap(), b"merged map");
     assert_eq!(fs::read(&cloned).unwrap(), b"clone bytes");
     assert!(!output.join("stream/ymap/clone").exists());

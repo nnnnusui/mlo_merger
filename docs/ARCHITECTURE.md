@@ -11,6 +11,21 @@ The application provides three related workflows:
 Native Rust handles game-file conversion and merging. CodeWalker is an optional
 conversion backend and supplies RPF reading for vanilla cache generation.
 
+## Pipeline
+
+The default command runs vanilla extraction when no raw archive exists, then
+vanilla-cache, source-cache, merge and deploy in order. Existing raw vanilla is
+validated and reused; missing vanilla requires an installed game path. Nonempty
+directories without an archive manifest are not automatically replaced. Source
+input is controlled by `-i`; final deployment output by `-o`. Intermediate caches
+and merged output have independent paths. All artifact paths are checked for
+overlap before any stage mutates data, and stages stop on the first error.
+
+The CLI owns one logger for the entire pipeline. Each derived stage retains its
+incremental freshness checks, including checks performed by prerequisite calls.
+Pipeline force applies to derived stages, not existing raw vanilla. Explicit
+stage selection and a pipeline-wide gamebuild ceiling remain unimplemented.
+
 ## Merge
 
 1. Ensure the derived vanilla and source inventory caches are current.
@@ -62,6 +77,11 @@ and they have not been locally modified; unrelated files remain untouched.
 Each copy is staged individually and preserves source mtime. Deployment metadata
 is published after the file updates. `-f` forces copying without forcing merge or
 source-cache generation. The default output is `asset/merged_mlo`.
+Deployment's `files.txt` records original source-relative paths of active moved
+cache files, including both merged inputs and clones. It is derived from
+source-cache provenance, not from the merged omit list; unmoved and archived
+files are excluded. Entries are sorted and deduplicated, and unchanged content
+preserves the list's modification time.
 
 ## Merge Policy
 

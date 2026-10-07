@@ -8,12 +8,15 @@ use super::{
   generate_vanilla_cache::{self, GenerateVanillaCache},
   get_diff::{self, GetDiff},
   merge::{self, Merge},
+  pipeline::{self, Pipeline},
   to_xml::{self, ToXml},
 };
 
 /// A parsed top-level CLI operation.
 #[derive(Debug, Clone)]
 pub enum Command {
+  /// Run the complete cached pipeline when no operation flag is supplied.
+  Pipeline(Pipeline),
   /// Extract raw, versioned vanilla stream files.
   GenerateVanilla(GenerateVanilla),
   /// Build derived vanilla indexes and latest files.
@@ -41,6 +44,7 @@ fn parser() -> impl Parser<Command> {
   let to_xml = to_xml::parser().map(Command::ToXml);
   let from_xml = from_xml::parser().map(Command::FromXml);
   let get_diff = get_diff::parser().map(Command::GetDiff);
+  let pipeline = pipeline::parser().map(Command::Pipeline);
   construct!([
     generate_vanilla,
     generate_vanilla_cache,
@@ -50,6 +54,7 @@ fn parser() -> impl Parser<Command> {
     to_xml,
     from_xml,
     get_diff,
+    pipeline,
   ])
 }
 
@@ -61,6 +66,7 @@ pub fn parse_args() -> Command {
 /// Dispatches an operation to its implementation or placeholder.
 pub fn run(command: Command) -> Result<(), Box<dyn std::error::Error>> {
   match command {
+    Command::Pipeline(command) => pipeline::run(command)?,
     Command::GenerateVanilla(command) => generate_vanilla::run(command)?,
     Command::GenerateVanillaCache(command) => generate_vanilla_cache::run(command)?,
     Command::GenerateSourceCache(command) => generate_source_cache::run(command)?,
@@ -77,6 +83,47 @@ pub fn run(command: Command) -> Result<(), Box<dyn std::error::Error>> {
 mod tests {
   use super::*;
   use std::path::PathBuf;
+
+  #[test]
+  fn default_pipeline_parses_source_and_deployment_paths() {
+    let Command::Pipeline(command) = parser().to_options().run_inner(&[] as &[&str]).unwrap()
+    else {
+      panic!("Expected pipeline")
+    };
+    assert_eq!(command.source_dir, PathBuf::from("asset/source"));
+    assert_eq!(command.merged_dir, PathBuf::from("asset/merged"));
+    assert_eq!(command.common.output, PathBuf::from("asset/merged_mlo"));
+    let Command::Pipeline(command) = parser()
+      .to_options()
+      .run_inner(&[
+        "-i",
+        "resources",
+        "-o",
+        "merged_mlo",
+        "--game-dir",
+        "game",
+        "--merged",
+        "merged",
+        "--vanilla",
+        "vanilla",
+        "--vanilla-cache",
+        "vanilla-cache",
+        "--source-cache",
+        "source-cache",
+        "-f",
+        "-y",
+      ])
+      .unwrap()
+    else {
+      panic!("Expected pipeline")
+    };
+    assert_eq!(command.source_dir, PathBuf::from("resources"));
+    assert_eq!(command.common.output, PathBuf::from("merged_mlo"));
+    assert_eq!(command.game_dir, PathBuf::from("game"));
+    assert_eq!(command.merged_dir, PathBuf::from("merged"));
+    assert!(command.common.force);
+    assert!(command.common.yes);
+  }
 
   #[test]
   fn generation_command_accepts_shared_pipeline_options() {

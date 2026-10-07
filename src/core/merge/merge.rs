@@ -376,12 +376,19 @@ mod tests {
       force: false,
     };
     assert_eq!(deployment.run().unwrap().copied, 2);
+    let moved_files = "resource_a/stream/collision.ybn\nresource_a/stream/independent.ybn\nresource_b/stream/collision.ybn\nresource_b/stream/independent.ybn";
+    assert_eq!(fs::read_to_string(root.join("deployed/files.txt")).unwrap(), moved_files);
+    let list_modified = fs::metadata(root.join("deployed/files.txt")).unwrap().modified().unwrap();
     assert_eq!(
       fs::read(root.join("deployed/stream/ybn/merged/collision.ybn")).unwrap(),
       fs::read(output_dir.join("ybn/collision.ybn")).unwrap(),
     );
     assert!(!root.join("deployed/stream/ybn/clone").exists());
     assert_eq!(deployment.run().unwrap().copied, 0);
+    assert_eq!(
+      fs::metadata(root.join("deployed/files.txt")).unwrap().modified().unwrap(),
+      list_modified
+    );
     let read_cache = || {
       serde_json::from_reader::<_, super::super::incremental::MergeMetadata>(
         fs::File::open(output_dir.join("merge_cache_info.json")).unwrap(),
@@ -488,6 +495,12 @@ mod tests {
     assert!(!output_dir.join("ybn/collision.ybn").exists());
     assert!(!independent.exists());
     assert!(fs::read_to_string(output_dir.join("_omit.txt")).unwrap().is_empty());
+    assert_eq!(deployment.run().unwrap().copied, 2);
+    assert_eq!(
+      fs::read_to_string(root.join("deployed/files.txt")).unwrap(),
+      "resource_a/stream/collision.ybn\nresource_a/stream/independent.ybn"
+    );
+    assert!(root.join("deployed/stream/ybn/clone/resource_a/collision.ybn").is_file());
     fs::remove_dir_all(root).unwrap();
   }
 }

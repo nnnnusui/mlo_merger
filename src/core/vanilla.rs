@@ -51,6 +51,11 @@ impl GenerateVanilla {
       version_logger(),
     ])?;
 
+    self.run_with_initialized_logger()
+  }
+
+  /// Generates the archive when the caller already owns the shared pipeline logger.
+  pub(crate) fn run_with_initialized_logger(&self) -> std::result::Result<(), Box<dyn Error>> {
     let bridge_dll =
       std::env::var_os("CODEWALKER_BRIDGE_DLL").map(PathBuf::from).unwrap_or_else(|| {
         PathBuf::from("bridge/CodeWalker.Bridge/bin/publish/CodeWalker.Bridge.dll")
