@@ -59,6 +59,18 @@ become no-ops disappear from the new publication. Failed runs leave existing
 merged files and merge metadata intact. A fully current run does not replace
 the merged directory.
 
+## Inspection
+
+Entity GUID and position-radius searches read existing merged native YMAPs without executing pipeline
+stages or writing artifacts. Case-insensitive filename glob filtering limits
+reads for both merged output and recorded pre-merge inputs, and the result is
+one XML document containing all matching occurrences. Optional pre-merge output
+uses recorded vanilla/source provenance from the merge cache, validates those
+input fingerprints, and marks stages where the entity is absent. The command
+does not claim historical data when recorded input files have changed.
+Position searches use an inclusive 3D Euclidean radius, native coordinate
+precision and the same predicate across merged, vanilla and source stages.
+
 ## Deploy
 
 Deployment consumes existing merged output and `source-cache/resources` without

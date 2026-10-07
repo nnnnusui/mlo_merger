@@ -5,6 +5,7 @@ pub mod conversion;
 pub mod deploy;
 pub mod diff_cache;
 pub mod extract;
+pub mod find;
 pub mod format;
 pub mod getprop;
 pub mod merge;

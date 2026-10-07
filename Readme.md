@@ -53,6 +53,8 @@ cargo run -- --deploy -i asset/merged --source-cache asset/source-cache -o merge
 cargo run -- --to-xml collision.ybn -o exported
 cargo run -- --from-xml exported/collision.ybn.xml -o rebuilt --vanilla asset/vanilla
 cargo run -- --get-diff vanilla.ybn mod.ybn -o diff
+cargo run -- --find entity-guid 2443198849 --filter lr_cs4_10_strm_0.ymap
+cargo run -- --find entity-guid 2443198849 --filter lr_cs4_10_strm_0.ymap --diff-all
 ```
 
 For generation, merge and deploy commands, `-o` defaults to the artifact directory shown
@@ -99,6 +101,37 @@ scan/conflict counts refer to the source cache.
 raw archive. The single `names` map contains embedded YMAP names and entity
 archetypes as `hash: text` entries; entity GUIDs are not included. Regenerate an older raw
 cache once to populate the RPF-name candidates used to resolve prop names.
+
+## Entity Search
+
+`--find entity-guid <GUID>` searches existing merged native YMAPs and writes a
+single XML document to stdout without running the pipeline or creating XML files.
+Use `-i` for a custom merged directory and `--filter <glob>` for a
+case-insensitive filename match. Literal filenames still match exactly. Glob
+patterns support `*`, `?`, character classes and alternatives; quote them so the
+shell does not expand the pattern. Omit the filter to search all merged YMAPs.
+Duplicate GUID occurrences are retained.
+
+```bash
+cargo run -- --find entity-guid 2443198849 --filter '*cs4_10_strm_0.ymap' --diff-all
+cargo run -- --find entity-position 3.5,4.2,0.0 --round 1.0
+```
+
+`--find entity-position X,Y,Z --round R` selects every entity whose 3D Euclidean
+distance from the center is at most `R`, including the boundary. The default
+radius is `1.0`; `0` selects the exact position at YMAP coordinate precision.
+Coordinates use native `f32` precision and distances are calculated in `f64`.
+Negative coordinates are supported. Non-finite/out-of-range coordinates and
+negative/non-finite radii are rejected. Position searches also accept glob filters
+and `--diff-all`, and XML identifies the requested center and radius.
+
+`--diff-all` also reads vanilla and each source input recorded in
+`merge_cache_info.json`; XML entries identify their stage, path and resource.
+`found="false"` marks a stage without matching entities, including removed entities or
+maps with no generated output. Recorded input fingerprints must still match;
+otherwise the command fails and requests a fresh merge instead of presenting
+changed inputs as historical data. This option outputs entity snapshots for
+comparison, not a computed semantic diff.
 
 ## Incremental Merge
 

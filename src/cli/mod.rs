@@ -1,6 +1,7 @@
 pub mod command;
 pub mod common;
 pub mod deploy;
+pub mod find;
 pub mod from_xml;
 pub mod generate_source_cache;
 pub mod generate_vanilla;

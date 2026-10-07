@@ -2,6 +2,7 @@ use bpaf::*;
 
 use super::{
   deploy::{self, Deploy},
+  find::{self, Find},
   from_xml::{self, FromXml},
   generate_source_cache::{self, GenerateSourceCache},
   generate_vanilla::{self, GenerateVanilla},
@@ -31,6 +32,8 @@ pub enum Command {
   ToXml(ToXml),
   /// Convert XML files to native files.
   FromXml(FromXml),
+  /// Search generated merge data and optionally its recorded inputs.
+  Find(Find),
   /// Compare two stream files.
   GetDiff(GetDiff),
 }
@@ -44,6 +47,7 @@ fn parser() -> impl Parser<Command> {
   let to_xml = to_xml::parser().map(Command::ToXml);
   let from_xml = from_xml::parser().map(Command::FromXml);
   let get_diff = get_diff::parser().map(Command::GetDiff);
+  let find = find::parser().map(Command::Find);
   let pipeline = pipeline::parser().map(Command::Pipeline);
   construct!([
     generate_vanilla,
@@ -54,6 +58,7 @@ fn parser() -> impl Parser<Command> {
     to_xml,
     from_xml,
     get_diff,
+    find,
     pipeline,
   ])
 }
@@ -74,6 +79,7 @@ pub fn run(command: Command) -> Result<(), Box<dyn std::error::Error>> {
     Command::Deploy(command) => deploy::run(command)?,
     Command::ToXml(command) => to_xml::run(command)?,
     Command::FromXml(command) => from_xml::run(command)?,
+    Command::Find(command) => find::run(command)?,
     Command::GetDiff(command) => get_diff::run_mock(command),
   }
   Ok(())
@@ -267,6 +273,104 @@ mod tests {
     };
     assert_eq!(command.merged_dir, PathBuf::from("asset/merged"));
     assert_eq!(command.common.output, PathBuf::from("asset/merged_mlo"));
+  }
+
+  #[test]
+  fn find_entity_guid_accepts_filter_and_before_inputs() {
+    let Command::Find(command) = parser()
+      .to_options()
+      .run_inner(&[
+        "--find",
+        "entity-guid",
+        "2443198849",
+        "--filter",
+        "lr_cs4_10_strm_0.ymap",
+        "--diff-all",
+      ])
+      .unwrap()
+    else {
+      panic!("Expected find command")
+    };
+    assert_eq!(command.query, crate::core::find::EntityQuery::Guid(2443198849));
+    assert_eq!(command.filter.as_deref(), Some("lr_cs4_10_strm_0.ymap"));
+    assert!(command.diff_all);
+    assert_eq!(command.merged_dir, PathBuf::from("asset/merged"));
+    let Command::Find(command) = parser()
+      .to_options()
+      .run_inner(&["--find", "entity-guid", "2443198849", "-i", "merged"])
+      .unwrap()
+    else {
+      panic!("Expected find command")
+    };
+    assert_eq!(command.merged_dir, PathBuf::from("merged"));
+    assert!(!command.diff_all);
+    let Command::Find(command) = parser()
+      .to_options()
+      .run_inner(&[
+        "--find",
+        "entity-guid",
+        "2443198849",
+        "--filter",
+        "*cs4_10_strm_0.ymap",
+        "--diff-all",
+      ])
+      .unwrap()
+    else {
+      panic!("Expected find command")
+    };
+    assert_eq!(command.filter.as_deref(), Some("*cs4_10_strm_0.ymap"));
+    assert!(command.diff_all);
+    assert!(parser().to_options().run_inner(&["--find", "unknown", "2443198849"]).is_err());
+    assert!(parser().to_options().run_inner(&["--find", "entity-guid", "4294967296"]).is_err());
+  }
+
+  #[test]
+  fn find_entity_position_accepts_radius_and_rejects_invalid_numbers() {
+    let Command::Find(command) = parser()
+      .to_options()
+      .run_inner(&[
+        "--find",
+        "entity-position",
+        "3.5,4.2,0.0",
+        "--round",
+        "1.0",
+        "--filter",
+        "*.ymap",
+        "--diff-all",
+      ])
+      .unwrap()
+    else {
+      panic!("Expected position search")
+    };
+    assert_eq!(
+      command.query,
+      crate::core::find::EntityQuery::Position {
+        position: [3.5, 4.2, 0.0],
+        radius: 1.0
+      }
+    );
+    assert!(command.diff_all);
+    let Command::Find(command) =
+      parser().to_options().run_inner(&["--find", "entity-position", "-3.5,4.2,-2.0"]).unwrap()
+    else {
+      panic!("Expected position search")
+    };
+    assert_eq!(
+      command.query,
+      crate::core::find::EntityQuery::Position {
+        position: [-3.5, 4.2, -2.0],
+        radius: 1.0
+      }
+    );
+    for args in [
+      vec!["--find", "entity-position", "3.5,4.2"],
+      vec!["--find", "entity-position", "NaN,0,0"],
+      vec!["--find", "entity-position", "0,0,0", "--round", "-1"],
+      vec!["--find", "entity-position", "0,0,0", "--round", "inf"],
+      vec!["--find", "entity-guid", "2443198849", "--round", "1"],
+    ] {
+      assert!(parser().to_options().run_inner(args.as_slice()).is_err(), "{args:?}");
+    }
   }
 
   #[test]
