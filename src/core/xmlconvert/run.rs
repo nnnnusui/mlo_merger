@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 
@@ -7,6 +6,7 @@ use crate::core::common::function::collect_files_with_suffix;
 use crate::core::format::gamefile::{
   meta_resource::{MetaResource, MetaSchemaCatalog},
   meta_xml::ymap_to_xml,
+  resource_convert::load_vanilla_hash_names,
   resource_file::Rsc7Resource,
   xml_meta_builder::meta_from_xml,
 };
@@ -60,7 +60,7 @@ impl Ymap2Xml {
     let inputs = collect_files_with_suffix(&self.input_dir, ".ymap");
     log::info!("Found {} .ymap files to convert to xml natively.", inputs.len());
 
-    let mut shared_hash_names = HashMap::new();
+    let mut shared_hash_names = load_vanilla_hash_names();
     for input in &inputs {
       let result = fs::read(input)
         .and_then(|bytes| Rsc7Resource::decode(&bytes))

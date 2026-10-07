@@ -19,7 +19,7 @@ use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
 #[derive(Debug, Clone)]
-pub struct MergeYmapXml {
+pub struct MergeYmap {
   pub vanilla_dir: PathBuf,
   pub mod_dir: PathBuf,
   pub mod_ymap_dir: PathBuf,
@@ -28,25 +28,36 @@ pub struct MergeYmapXml {
   pub blacklist_config: Option<PathBuf>,
 }
 
-impl MergeYmapXml {
+impl MergeYmap {
   pub fn run(&self) -> Result<(), Box<dyn std::error::Error>> {
-    self.run_inner(None)
+    self.run_inner(None, None, None)
   }
 
-  /// Merges source maps against the least-difference vanilla-cache versions and rebases onto latest.
+  /// Version-aware YMAP merge API for the planned historical-baseline workflow.
   pub fn run_with_vanilla_cache(
     &self,
     history: &VanillaHistory,
   ) -> Result<(), Box<dyn std::error::Error>> {
-    self.run_inner(Some(history))
+    self.run_inner(Some(history), None, None)
+  }
+
+  /// Merges source maps directly against the supplied latest vanilla stream files.
+  pub fn run_with_latest_vanilla_files(
+    &self,
+    vanilla_files: &[PathBuf],
+    source_files: Option<&[(String, PathBuf)]>,
+  ) -> Result<(), Box<dyn std::error::Error>> {
+    self.run_inner(None, Some(vanilla_files), source_files)
   }
 
   fn run_inner(
     &self,
     history: Option<&VanillaHistory>,
+    latest_files: Option<&[PathBuf]>,
+    raw_sources: Option<&[(String, PathBuf)]>,
   ) -> Result<(), Box<dyn std::error::Error>> {
     log::info!(
-      "Merging YMAP XML files from {} and {} into {}",
+      "Merging YMAP files from {} and {} into {}",
       self.vanilla_dir.display(),
       self.mod_dir.display(),
       self.output_dir.display()
@@ -63,9 +74,72 @@ impl MergeYmapXml {
       None
     };
 
-    let vanilla =
-      if history.is_none() { Some(VanillaParentCache::update(&self.vanilla_dir)?.0) } else { None };
-    let modded_ymaps_map = collect_modded_ymaps_map(&self.mod_dir)?;
+    let vanilla = if history.is_none() && latest_files.is_none() {
+      Some(VanillaParentCache::update(&self.vanilla_dir)?.0)
+    } else {
+      None
+    };
+    let mut modded_ymaps_map = if let Some(sources) = raw_sources {
+      let mut maps = BTreeMap::<String, Vec<ModYmapReference>>::new();
+      for (resource, path) in sources {
+        let name = path
+          .file_name()
+          .and_then(|name| name.to_str())
+          .ok_or("Source YMAP filename is not UTF-8")?;
+        let reference = ModYmapReference {
+          mod_name: resource.clone(),
+          ymap_name: name.to_string(),
+          mod_ymap_path: path.clone(),
+        };
+        maps.entry(format!("{name}.xml")).or_default().push(reference);
+      }
+      maps
+    } else {
+      collect_modded_ymaps_map(&self.mod_dir)?
+    };
+    let vanilla_map_keys = latest_files.map(|files| {
+      files
+        .iter()
+        .filter_map(|path| path.file_stem()?.to_str().map(reference_hash))
+        .collect::<HashSet<_>>()
+    });
+    let mut registered_maps = HashSet::new();
+    modded_ymaps_map.retain(|_, references| {
+      references.retain(|reference| {
+        if !reference.mod_ymap_path.is_file() {
+          log::warn!(
+            "Source YMAP is missing for resource {}; skipping {}",
+            reference.mod_name,
+            reference.mod_ymap_path.display()
+          );
+          return false;
+        }
+        let name = Path::new(&reference.ymap_name).file_stem().and_then(|name| name.to_str());
+        let Some(name) = name else {
+          log::warn!("Source YMAP has an invalid filename: {}", reference.mod_ymap_path.display());
+          return false;
+        };
+        let hash = reference_hash(name);
+        if vanilla_map_keys.as_ref().is_some_and(|keys| !keys.contains(&hash)) {
+          log::warn!(
+            "Latest vanilla YMAP {name}.ymap is missing for resource {}; skipping {}",
+            reference.mod_name,
+            reference.mod_ymap_path.display()
+          );
+          return false;
+        }
+        if !registered_maps.insert((reference.mod_name.clone(), hash)) {
+          log::warn!(
+            "Duplicate original map {name} within resource {}; keeping the first and skipping {}",
+            reference.mod_name,
+            reference.mod_ymap_path.display()
+          );
+          return false;
+        }
+        true
+      });
+      !references.is_empty()
+    });
     log::info!("Found {} unique YMAP files across mods", modded_ymaps_map.len());
 
     let mut sources = SourceMaps::default();
@@ -73,6 +147,13 @@ impl MergeYmapXml {
       let files = history.ymap_files();
       for (name, file) in &files {
         sources.register_raw(None, name, history.raw_path(file)?)?;
+      }
+      files.len()
+    } else if let Some(files) = latest_files {
+      for path in files {
+        let name = path.file_name().ok_or("Vanilla YMAP filename missing")?;
+        let name = name.to_str().ok_or("non-UTF8 vanilla filename")?;
+        sources.register_raw(None, name, path.clone())?;
       }
       files.len()
     } else {
@@ -90,11 +171,19 @@ impl MergeYmapXml {
     log::info!("Registered {vanilla_count} vanilla YMAP files for merge");
     for references in modded_ymaps_map.values() {
       for reference in references {
-        sources.register(
-          Some(&reference.mod_name),
-          &reference.ymap_name,
-          reference.mod_ymap_path.clone(),
-        )?;
+        if raw_sources.is_some() {
+          sources.register_raw(
+            Some(&reference.mod_name),
+            &reference.ymap_name,
+            reference.mod_ymap_path.clone(),
+          )?;
+        } else {
+          sources.register(
+            Some(&reference.mod_name),
+            &reference.ymap_name,
+            reference.mod_ymap_path.clone(),
+          )?;
+        }
       }
     }
     let mut references = ParentReferences::default();
@@ -116,8 +205,14 @@ impl MergeYmapXml {
         let mod_ref = mod_refs.first().unwrap();
         log::info!("Processing YMAP: {}", self.vanilla_dir.join(ymap_name).display());
         log::info!("  Mod: {} ({})", mod_ref.mod_name, mod_ref.mod_ymap_path.display());
-        let original =
-          sources.get(Some(&mod_ref.mod_name), hash)?.ok_or("clone XML unavailable")?;
+        let Some(original) = sources.get(Some(&mod_ref.mod_name), hash)? else {
+          log::warn!(
+            "Source YMAP is unavailable for resource {}; skipping {}",
+            mod_ref.mod_name,
+            mod_ref.mod_ymap_path.display()
+          );
+          continue;
+        };
         let (model, entities) =
           sources.normalize(&original, Some(&mod_ref.mod_name), hash, &mut references)?;
         planned.insert(
@@ -136,9 +231,10 @@ impl MergeYmapXml {
       let vanilla_ymap_path = self.vanilla_dir.join(ymap_name);
       log::info!("Processing YMAP: {}", vanilla_ymap_path.display());
 
-      let original = sources
-        .get(None, hash)?
-        .ok_or_else(|| format!("vanilla XML unavailable: {}", vanilla_ymap_path.display()))?;
+      let Some(original) = sources.get(None, hash)? else {
+        log::warn!("Vanilla YMAP is unavailable; skipping {}", vanilla_ymap_path.display());
+        continue;
+      };
       let (vanilla_ymap, vanilla_entities) =
         sources.normalize(&original, None, hash, &mut references)?;
       if vanilla_ymap.entity_map.len() != vanilla_entities.len() {
@@ -149,7 +245,14 @@ impl MergeYmapXml {
       for mod_info in mod_refs {
         log::info!("  Mod: {} ({})", mod_info.mod_name, mod_info.mod_ymap_path.display());
 
-        let source = sources.get(Some(&mod_info.mod_name), hash)?.ok_or("mod XML unavailable")?;
+        let Some(source) = sources.get(Some(&mod_info.mod_name), hash)? else {
+          log::warn!(
+            "Source YMAP is unavailable for resource {}; skipping {}",
+            mod_info.mod_name,
+            mod_info.mod_ymap_path.display()
+          );
+          continue;
+        };
         let (mod_ymap, _) =
           sources.normalize(&source, Some(&mod_info.mod_name), hash, &mut references)?;
         if mod_ymap.entity_map.len() != source.entities.len() {
@@ -163,6 +266,10 @@ impl MergeYmapXml {
           YmapDiff::extract_from(&vanilla_ymap, &mod_ymap)
         };
         ymap_diffs.push(ymap_diff);
+      }
+
+      if ymap_diffs.is_empty() {
+        continue;
       }
 
       let merged_diff = ymap_diffs.into_iter().reduce(|acc, d| acc.merge(d)).unwrap();
@@ -191,6 +298,20 @@ impl MergeYmapXml {
     let vanilla_children = if let Some(history) = history {
       let mut children = Vec::new();
       for name in history.ymap_names() {
+        let hash = reference_hash(name.trim_end_matches(".ymap"));
+        let Some(original) = sources.get(None, hash)? else {
+          continue;
+        };
+        if changed_layouts.contains(&reference_hash(&original.model.parent)) {
+          children.push((hash, PathBuf::from(name)));
+        }
+      }
+      children
+    } else if let Some(files) = latest_files {
+      let mut children = Vec::new();
+      for path in files {
+        let name = path.file_name().ok_or("Vanilla YMAP filename missing")?;
+        let name = name.to_str().ok_or("non-UTF8 vanilla filename")?;
         let hash = reference_hash(name.trim_end_matches(".ymap"));
         let Some(original) = sources.get(None, hash)? else {
           continue;
@@ -231,6 +352,8 @@ impl MergeYmapXml {
     let mut repaired = 0usize;
     for (hash, output) in &mut planned {
       let parent_hash = reference_hash(&output.model.parent);
+      let map_name = output.name.clone();
+      let declared_parent = output.model.parent.clone();
       let entities = output.entities_mut();
       for (child_index, entity) in entities.into_iter().enumerate() {
         let handle = entity.parent_index;
@@ -239,7 +362,18 @@ impl MergeYmapXml {
         }
         let owner = references.map_for(handle).ok_or("missing normalized parent handle")?;
         if owner != *hash && owner != parent_hash {
-          return Err(format!("entity {} references parent YMAP {owner:08X}, but merged map declares {parent_hash:08X}", entity.guid).into());
+          log::warn!(
+            "Entity {} in {} references parent YMAP {owner:08X}, but the merged map declares {parent_hash:08X} ({}); detaching the external parent link",
+            entity.guid,
+            map_name,
+            declared_parent
+          );
+          entity.parent_index = -1;
+          entity.flags &= !8;
+          if reference_hash(&entity.lod_level) == reference_hash("LODTYPES_DEPTH_HD") {
+            entity.lod_level = "LODTYPES_DEPTH_ORPHANHD".into();
+          }
+          continue;
         }
         if let std::collections::hash_map::Entry::Vacant(entry) = layouts.entry(owner)
           && let Some(vanilla) = sources.get(None, owner)?
@@ -345,7 +479,19 @@ impl MergeYmapXml {
       let clone_path = clone_ymap_dir.join(binary_name);
       if output.rebuild {
         let xml_string = if let Some(entities) = &output.clone_entities {
-          patch_clone(&output.original, entities)?
+          if output.original.xml.is_empty() {
+            let mut model = output.model.clone();
+            model.entity_map =
+              entities.iter().map(|entity| (entity.guid, entity.clone())).collect();
+            let xml_ymap: XmlYmap = model.into();
+            let mut xml = String::new();
+            let mut serializer = quick_xml::se::Serializer::new(&mut xml);
+            serializer.indent(' ', 2);
+            xml_ymap.serialize(serializer)?;
+            xml
+          } else {
+            patch_clone(&output.original, entities)?
+          }
         } else {
           let xml_ymap: XmlYmap = output.model.into();
           let mut xml = String::new();
@@ -582,7 +728,7 @@ mod tests {
         .collect::<Vec<_>>(),
       ["dependent.ymap.xml"]
     );
-    MergeYmapXml {
+    MergeYmap {
       vanilla_dir,
       mod_dir,
       mod_ymap_dir,
@@ -603,7 +749,7 @@ mod tests {
   }
 
   #[test]
-  #[ignore = "requires local vanilla XML, extracted mods, and the original pipeline log"]
+  #[ignore = "requires local vanilla XML, extracted mods, and the original merge log"]
   fn merge_logged_unsupported_ymaps() {
     let base = Path::new(env!("CARGO_MANIFEST_DIR"));
     let old_log =
@@ -650,7 +796,7 @@ mod tests {
         mod_count += 1;
       }
     }
-    let runner = MergeYmapXml {
+    let runner = MergeYmap {
       vanilla_dir,
       mod_dir,
       mod_ymap_dir: base.join("asset/extracted"),

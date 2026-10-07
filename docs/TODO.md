@@ -2,7 +2,7 @@
 
 ## Pipeline Foundation
 
-- [ ] Dispatch stream files to separate format-specific workflows by extension; initially support YMAP and YBN without forcing them through one diff implementation.
+- [x] Dispatch stream files to separate format-specific workflows by extension; initially support YMAP and YBN without forcing them through one diff implementation.
 - [ ] Define stable internal step names matching the artifact stages: `vanilla`, `vanilla-cache`, `source-cache`, and `merge`.
 - [ ] Let every command run its required prerequisite steps, skipping valid outputs; support selecting individual stages with `--step-name` and define whether multiple names are accepted.
 - [ ] Use `-f` to force regeneration of the command's own stage only; prerequisite stages still use normal freshness checks unless explicitly forced.
@@ -45,8 +45,8 @@
 
 ## Merged Output
 
-- [ ] Add `--merge` to validate/update `source-cache`, perform only required format-specific merges against `vanilla-cache/latest`, and write results to the selected `-o` path.
-- [ ] Emit source omit information alongside merged stream files.
+- [x] Add `--merge` to validate/update `source-cache`, perform format-specific merges against latest vanilla, and write results to the selected `-o` path.
+- [x] Emit source omit information alongside merged stream files in `_omit.txt`.
 - [ ] Later, read additional diffs from `asset/overwrite` and apply them to vanilla stream files before resource merges.
 - [ ] Later, define overwrite targets as `{resourceName or vanilla}/{vanilla stream file}` and validate target/baseline identity before applying changes.
 - [ ] Keep overlapping resource edits deterministic through configured resource priority and report the selected source.
@@ -57,18 +57,21 @@
 - [ ] Make these commands use the same format dispatch and prerequisite/freshness behavior where applicable, without coupling their format-specific conversion or diff implementations.
 - [ ] Reconcile direct command names (`--generate-vanilla`, `--generate-vanilla-cache`, `--generate-source-cache`, `--merge`) with `--step-name` so each stage has one unambiguous selection and force behavior.
 
-## Ver1: YBN Merge
+## Ver1: YBN And YMAP Merge
 
-- [ ] Support latest-vanilla YBN merge only: locate conflicting vanilla stream files, merge supported changes against the latest vanilla file, and emit results and omit information.
-- [ ] Keep YBN on its own merge path; stable semantic diff generation, baseline inference, and JSON diff output are out of scope for this version.
+- [x] Support latest-vanilla YBN merge: apply supported source changes directly to the latest vanilla file and emit merged files and omit information.
+- [x] Support latest-vanilla YMAP merge without historical baseline inference.
+- [x] Keep YBN on its own merge path; versioned JSON diff output is out of scope for this version.
+- [ ] Replace the YMAP model-to-native XML conversion adapter with a direct binary writer.
 - [ ] Report unsupported hierarchy/shape changes and define the existing conservative fallback behavior explicitly.
 
 ## Ver2: YMAP Merge
 
 - [ ] Compare each source YMAP with available vanilla versions and infer its source version from the difference count.
-- [ ] Apply source changes to the latest vanilla YMAP using the precomputed parent/child index and range-limited file loading.
+- [ ] Apply source changes from their inferred baseline to the latest vanilla YMAP and repair parent references.
+- [ ] Load only the target files and required parent/child closure during YMAP merge.
 - [ ] Merge overlapping resource edits according to configured resource priority; define deterministic tie and missing-priority behavior and record the selected source.
-- [ ] Keep YMAP diff/merge behavior independent from the YBN implementation.
+- [x] Keep YMAP diff/merge behavior independent from the YBN implementation.
 
 ## Ver3: JSON Diff Cache
 
@@ -91,4 +94,4 @@
 
 - [ ] Define the resource-priority configuration format, resource matching rules, and behavior for equal or unspecified priorities.
 - [ ] Define conflict and unsupported-change reporting for each format; never make precedence depend on filesystem enumeration order.
-- [ ] Update `docs/ARCHITECTURE.md` when the implemented workflow changes; its current YBN merge description is stale.
+- [x] Update `docs/ARCHITECTURE.md` when the implemented workflow changes.

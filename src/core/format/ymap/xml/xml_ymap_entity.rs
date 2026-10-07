@@ -26,7 +26,7 @@ pub struct XmlYmapEntity {
   pub lod_level: String,
   pub num_children: XmlValueAttr<u32>,
   pub priority_level: String,
-  pub extensions: Option<()>,
+  pub extensions: Option<serde_json::Value>,
   pub ambient_occlusion_multiplier: XmlValueAttr<u8>,
   pub artificial_ambient_occlusion: XmlValueAttr<u8>,
   pub tint_value: XmlValueAttr<u32>,
@@ -187,5 +187,22 @@ mod tests {
 
     let invalid = xml.replace(r#"<childLodDist value="0"/>"#, r#"<childLodDist value="invalid"/>"#);
     assert!(quick_xml::de::from_str::<XmlYmapEntity>(&invalid).is_err());
+  }
+
+  #[test]
+  fn accepts_structured_entity_extensions() {
+    let xml = entity_xml("0").replace(
+      "</Item>",
+      "<extensions><Item type=\"test\"><payload value=\"1\"/></Item></extensions></Item>",
+    );
+    let entity: XmlYmapEntity = quick_xml::de::from_str(&xml).unwrap();
+    assert!(entity.extensions.is_some());
+    let mut value = serde_json::to_value(&entity).unwrap();
+    value["extensions"] = serde_json::json!({
+      "Item": [{"@type": "test", "payload": {"@value": 1}}]
+    });
+    let entity: XmlYmapEntity = serde_json::from_value(value).unwrap();
+    let model: crate::core::format::ymap::model::YmapEntity = entity.into();
+    assert_eq!(model.guid, 0);
   }
 }

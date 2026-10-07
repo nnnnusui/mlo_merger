@@ -21,7 +21,7 @@ fn cache_basename(name: &str) -> &str {
   }
 }
 
-/// Validated raw-file history used by pipeline merges.
+/// Validated raw-file history for version-aware merge operations.
 pub struct VanillaHistory {
   vanilla_root: PathBuf,
   manifest: VanillaCacheManifest,

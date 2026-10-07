@@ -11,18 +11,16 @@ The application provides three related workflows:
 Native Rust handles game-file conversion and merging. CodeWalker is an optional
 conversion backend and supplies RPF reading for vanilla cache generation.
 
-## Merge Pipeline
+## Merge
 
-1. Discover FiveM resources and extract relevant mod YMAPs.
-2. Convert YMAPs to XML against the available resource schemas.
-3. Compare each mod with vanilla and combine changes.
-4. Preserve unchanged binary clones or rebuild affected YMAPs.
-5. Merge same-named YBN collisions against vanilla.
-6. Deploy the generated resource and source-file omit list.
+1. Ensure the derived vanilla and source inventory caches are current.
+2. Enumerate files under `vanilla-cache/latest` and dispatch `.ybn` and `.ymap` files to separate merge handlers.
+3. Match source files by basename and apply their supported changes directly to each latest vanilla file.
+4. Write merged native stream files and `_omit.txt` to the selected output directory.
 
-Generated output under `.output/` is replaced for each pipeline run after
-confirmation. The default deploy target is `.output/merged_mlo`; source resources
-remain inputs and are never modified.
+Merge output is staged and replaces the selected output directory after a
+successful run. The default output is `asset/merged`; source resources remain
+inputs and are never modified.
 
 ## Merge Policy
 
@@ -32,19 +30,23 @@ Files affected by those repairs are rebuilt even when their own mod data is
 otherwise unchanged. Ambiguous references are rejected rather than guessed.
 
 YMAP difference types and extraction live under `format/ymap/diff` and are
-shared by merge and diff-cache generation. Pipeline merge reads raw mod files
-and vanilla-cache history, tests changed vanilla versions newest-first, selects
-the least-different baseline per file, then applies those changes to the latest
-cached vanilla state. The generated source-cache is a separate reporting
-artifact and is not a merge input.
+shared by merge and diff-cache generation. Ver1 compares each source map
+directly with the matching latest vanilla stream file, applies the supported
+changes, repairs parent references, and rebuilds native files. Historical
+baseline inference is planned for ver2. The source-cache is refreshed as a
+prerequisite; merge decodes source and latest vanilla binaries directly into
+YMAP models without an XML input round-trip. Model-to-native YMAP output still
+uses the existing XML conversion adapter.
 
-YBN merging requires a same-named vanilla baseline. Supported collision shapes
-are compared geometrically rather than by binary table order. Removals and
-additions are combined; unsupported shapes use conservative handling.
+YBN merging applies source files directly to the matching latest vanilla file.
+Multiple resources with the same basename are combined deterministically by
+sorted source path; source files without a vanilla baseline are skipped unless
+multiple resources collide on that name, which is an error. Version-aware
+baseline selection is planned for a later version.
 
-YBN semantic differences are used by MLO diff-cache generation. They describe
-primitive occurrences and Bounds metadata; conflict merge does not yet consume
-these reports. Vanilla history stores raw native files instead.
+YBN semantic differences describe primitive occurrences and Bounds metadata.
+Merge and MLO diff-cache use this model independently from YMAP merging.
+Vanilla history stores raw native files instead of replaying semantic reports.
 
 ## Vanilla Archive And Derived Cache
 
@@ -81,7 +83,13 @@ cross-resource basename conflicts; it does not generate semantic or binary
 diffs. Changed source parents expand the YMAP read/rebuild plan through the
 latest relationship index, including source children in other resources. Input
 and upstream revisions allow unchanged runs to be skipped; a stale source
-cache is rebuilt as one staged, atomic publication.
+cache is rebuilt as one staged, atomic publication. Merge consumes the
+extension-specific conflict inventory and only vanilla-backed source files;
+YMAP model decoding is limited to selected source maps and the recorded vanilla
+parent/child closure. Fingerprinting first compares cached size and nanosecond
+mtime, reusing SHA-256 when both are unchanged and hashing only new or stat-changed
+files. Paths, size, and SHA-256 determine whether inventory outputs need rebuilding;
+mtime-only changes refresh provenance without regenerating the source cache.
 
 Raw archive publication occurs after all stages complete; failures retain
 diagnostic logs without publishing an incomplete cache. Version lookup is a
@@ -93,11 +101,11 @@ Each resource is processed independently. Vanilla-matched files are compared
 with changed content versions newest-first. Each file uses its lowest-difference
 baseline, with ties favoring the newer version; merge then applies its changes to
 the latest vanilla-cache state. Diff-cache generation records these per-file
-comparisons for inspection, but pipeline merge reads source files directly.
+comparisons for inspection, but merge reads source files directly.
 
 Output includes differences, selection information, timestamps and logs.
 Unmatched and unsupported stream files are recorded explicitly. The current
-workflow compares YMAPs only.
+diff-cache workflow compares YMAPs only.
 
 ## Conversion and Dependencies
 

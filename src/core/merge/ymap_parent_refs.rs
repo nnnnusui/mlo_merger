@@ -242,7 +242,7 @@ impl ParentReferences {
   }
 }
 
-/// Original XML and entity order, retained separately from the GUID-keyed merge model.
+/// Original model, entity order, and optional XML retained for legacy clone patching.
 pub(super) struct OriginalMap {
   pub(super) model: Ymap,
   pub(super) entities: Vec<YmapEntity>,
@@ -257,9 +257,16 @@ impl OriginalMap {
   }
 
   pub(super) fn load_raw(path: &Path) -> io::Result<Self> {
-    let xml = crate::core::vanilla::read_ymap_xml(path)
-      .map_err(|error| invalid(&format!("{}: {error}", path.display())))?;
-    Self::from_xml(xml).map_err(|error| invalid(&format!("{}: {error}", path.display())))
+    let (model, entities) = crate::core::format::gamefile::meta_xml::ymap_to_model_with_entities(
+      &std::fs::read(path).map_err(|error| invalid(&format!("{}: {error}", path.display())))?,
+      &HashMap::new(),
+    )
+    .map_err(|error| invalid(&format!("{}: {error}", path.display())))?;
+    Ok(Self {
+      model,
+      entities,
+      xml: String::new(),
+    })
   }
 
   pub(super) fn from_xml(xml: String) -> io::Result<Self> {
@@ -307,9 +314,15 @@ impl SourceMaps {
     let name = name.strip_suffix(".xml").unwrap_or(name);
     let name = name.strip_suffix(".ymap").unwrap_or(name);
     let key = (namespace.map(str::to_string), reference_hash(name));
-    if self.paths.insert(key, OriginalMapSource::Xml(path)).is_some() {
-      return Err(invalid("duplicate original map name within one resource"));
+    if self.paths.contains_key(&key) || self.loaded.contains_key(&key) {
+      warn_duplicate_map(namespace, name, &path);
+      return Ok(());
     }
+    if !path.is_file() {
+      warn_missing_map(namespace, name, &path);
+      return Ok(());
+    }
+    self.paths.insert(key, OriginalMapSource::Xml(path));
     Ok(())
   }
 
@@ -323,10 +336,15 @@ impl SourceMaps {
     let name = name.strip_suffix(".ymap").unwrap_or(name);
     let key = (namespace.map(str::to_string), reference_hash(name));
     if self.paths.contains_key(&key) || self.loaded.contains_key(&key) {
-      return Err(invalid("duplicate original map name within one resource"));
+      warn_duplicate_map(namespace, name, &path);
+      return Ok(());
+    }
+    if !path.is_file() {
+      warn_missing_map(namespace, name, &path);
+      return Ok(());
     }
     if self.paths.insert(key, OriginalMapSource::RawYmap(path)).is_some() {
-      return Err(invalid("duplicate original map name within one resource"));
+      warn_duplicate_map(namespace, name, Path::new(name));
     }
     Ok(())
   }
@@ -345,6 +363,18 @@ impl SourceMaps {
     let Some(source) = self.paths.get(&key) else {
       return Ok(None);
     };
+    let path = match source {
+      OriginalMapSource::Xml(path) | OriginalMapSource::RawYmap(path) => path,
+    };
+    if !path.is_file() {
+      warn_missing_map(
+        key.0.as_deref(),
+        path.file_name().and_then(|name| name.to_str()).unwrap_or("<unknown>"),
+        path,
+      );
+      self.paths.remove(&key);
+      return Ok(None);
+    }
     let map = Rc::new(match source {
       OriginalMapSource::Xml(path) => OriginalMap::load(path)?,
       OriginalMapSource::RawYmap(path) => OriginalMap::load_raw(path)?,
@@ -414,6 +444,30 @@ impl SourceMaps {
     model.entity_map = entities.iter().map(|entity| (entity.guid, entity.clone())).collect();
     Ok((model, entities))
   }
+}
+
+fn warn_duplicate_map(
+  namespace: Option<&str>,
+  name: &str,
+  path: &Path,
+) {
+  let resource = namespace.unwrap_or("vanilla");
+  log::warn!(
+    "Duplicate original map {name} within resource {resource}; keeping the first registered file and skipping {}",
+    path.display()
+  );
+}
+
+fn warn_missing_map(
+  namespace: Option<&str>,
+  name: &str,
+  path: &Path,
+) {
+  log::warn!(
+    "Original map {name} is missing for resource {}; skipping {}",
+    namespace.unwrap_or("vanilla"),
+    path.display()
+  );
 }
 
 fn entity_identity(
@@ -652,6 +706,53 @@ mod tests {
     assert_eq!(references.restore(handle, &final_guids).unwrap(), 200);
     assert_eq!(handle, references.capture(123, &final_guids, 200).unwrap());
     assert_ne!(handle, references.capture(456, &final_guids, 200).unwrap());
+  }
+
+  #[test]
+  fn duplicate_map_registration_keeps_the_first_file() {
+    let root = std::env::temp_dir().join(format!("duplicate_ymap_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(&root).unwrap();
+    let first = root.join("first.ymap");
+    let second = root.join("second.ymap");
+    std::fs::write(&first, []).unwrap();
+    std::fs::write(&second, []).unwrap();
+    let mut sources = SourceMaps::default();
+    sources.register_raw(Some("[gabz]/resource_a"), "map.ymap", first.clone()).unwrap();
+    sources.register_raw(Some("[gabz]/resource_a"), "map.ymap", second).unwrap();
+
+    let key = (Some("[gabz]/resource_a".into()), reference_hash("map"));
+    assert!(
+      matches!(sources.paths.get(&key), Some(OriginalMapSource::RawYmap(path)) if path == &first)
+    );
+    std::fs::remove_dir_all(root).unwrap();
+  }
+
+  #[test]
+  fn missing_map_registration_is_skipped() {
+    let mut sources = SourceMaps::default();
+    sources
+      .register_raw(
+        Some("resource_missing"),
+        "map.ymap",
+        PathBuf::from("missing-resource/map.ymap"),
+      )
+      .unwrap();
+    assert!(sources.paths.is_empty());
+  }
+
+  #[test]
+  fn map_removed_after_registration_is_skipped_on_load() {
+    let root = std::env::temp_dir().join(format!("removed_ymap_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(&root).unwrap();
+    let path = root.join("map.ymap");
+    std::fs::write(&path, []).unwrap();
+    let mut sources = SourceMaps::default();
+    sources.register_raw(Some("resource"), "map.ymap", path.clone()).unwrap();
+    std::fs::remove_file(&path).unwrap();
+    assert!(sources.get(Some("resource"), reference_hash("map")).unwrap().is_none());
+    std::fs::remove_dir_all(root).unwrap();
   }
 
   #[test]

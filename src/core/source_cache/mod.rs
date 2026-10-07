@@ -6,12 +6,16 @@ mod types;
 mod vanilla;
 mod ymap_plan;
 
-use std::{collections::BTreeSet, path::PathBuf};
+use std::{
+  collections::{BTreeMap, BTreeSet},
+  io::BufReader,
+  path::{Path, PathBuf},
+};
 
 use sha2::{Digest, Sha256};
 
 use crate::core::{
-  stream_conflicts::scan_stream_conflicts,
+  stream_conflicts::{StreamConflictReport, scan_stream_conflicts},
   vanilla::{load_manifest, write_json},
   vanilla_cache::BuildVanillaCache,
 };
@@ -19,7 +23,8 @@ use crate::core::{
 use self::{
   inventory::{discover_resources, source_fingerprints, source_inventory},
   publication::{
-    cache_is_current, create_staging_directory, prepare_output_path, publish_directory,
+    cache_is_current, cached_source_inputs, create_staging_directory, prepare_output_path,
+    publish_directory, refresh_source_timestamps,
   },
   types::SourceCacheMetadata,
   vanilla::{revision as derived_cache_revision, validate_derived_cache},
@@ -27,6 +32,109 @@ use self::{
 };
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
+
+/// One source stream file selected for merge from the current source cache.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MergeSourceFile {
+  /// Resource identifier recorded by the source inventory.
+  pub resource: String,
+  /// Absolute path to the source stream file.
+  pub path: PathBuf,
+  /// Lowercase stream filename.
+  pub file_name: String,
+}
+
+/// Source inputs and vanilla YMAP closure selected by the source-cache analysis.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct MergeInputs {
+  /// Changed or conflicting source YMAPs with a latest vanilla baseline.
+  pub ymap: Vec<MergeSourceFile>,
+  /// Conflicting source YBNs with a latest vanilla baseline.
+  pub ybn: Vec<MergeSourceFile>,
+  /// Latest vanilla YMAP filenames required by the source load plan.
+  pub vanilla_ymaps_to_read: BTreeSet<String>,
+}
+
+/// Loads merge inputs from a generated source cache without rescanning source streams.
+pub fn load_merge_inputs(cache_dir: &Path) -> Result<MergeInputs> {
+  let metadata: SourceCacheMetadata = serde_json::from_reader(BufReader::new(
+    std::fs::File::open(cache_dir.join("source_cache_info.json"))?,
+  ))?;
+  if metadata.format_version != 2 {
+    return Err(format!("Unsupported source cache schema {}", metadata.format_version).into());
+  }
+  let conflicts: StreamConflictReport = serde_json::from_reader(BufReader::new(
+    std::fs::File::open(cache_dir.join("stream_conflicts.json"))?,
+  ))?;
+  let conflict_paths = [".ymap", ".ybn"]
+    .into_iter()
+    .map(|extension| {
+      let paths = conflicts
+        .conflicts
+        .get(extension)
+        .into_iter()
+        .flatten()
+        .flat_map(|conflict| conflict.paths.iter())
+        .map(|path| path.to_ascii_lowercase())
+        .collect::<BTreeSet<_>>();
+      (extension, paths)
+    })
+    .collect::<BTreeMap<_, _>>();
+  let required_ymap_sources = metadata
+    .ymap_load_plan
+    .changed_source_parents
+    .iter()
+    .chain(&metadata.ymap_load_plan.additional_source_children)
+    .map(|source| (source.resource.clone(), source.source_path.to_ascii_lowercase()))
+    .collect::<BTreeSet<_>>();
+  let vanilla_ymaps_to_read = serde_json::from_reader(BufReader::new(std::fs::File::open(
+    cache_dir.join("vanilla_ymaps_to_read.json"),
+  )?))?;
+  let mut inputs = MergeInputs {
+    vanilla_ymaps_to_read,
+    ..MergeInputs::default()
+  };
+  for (resource_id, resource) in metadata.resources {
+    for (extension, files) in resource.files_by_format {
+      let selected = match extension.as_str() {
+        ".ymap" => &mut inputs.ymap,
+        ".ybn" => &mut inputs.ybn,
+        _ => continue,
+      };
+      for file in files {
+        let Some(vanilla) = &file.vanilla else {
+          continue;
+        };
+        let source_path = resource.source.join(&file.path);
+        let source_relative = source_path
+          .strip_prefix(&metadata.source_dir)?
+          .to_string_lossy()
+          .replace('\\', "/")
+          .to_ascii_lowercase();
+        let conflict = conflict_paths
+          .get(extension.as_str())
+          .is_some_and(|paths| paths.contains(&source_relative));
+        let required_child = extension == ".ymap"
+          && required_ymap_sources.contains(&(resource_id.clone(), file.path.to_ascii_lowercase()));
+        let selected_for_merge = match extension.as_str() {
+          ".ymap" => !vanilla.content_matches || conflict || required_child,
+          ".ybn" => conflict,
+          _ => false,
+        };
+        if selected_for_merge {
+          selected.push(MergeSourceFile {
+            resource: resource_id.clone(),
+            path: source_path,
+            file_name: file.file_name,
+          });
+        }
+      }
+    }
+  }
+  inputs.ymap.sort_by(|left, right| left.path.cmp(&right.path));
+  inputs.ybn.sort_by(|left, right| left.path.cmp(&right.path));
+  Ok(inputs)
+}
 
 struct Staging(PathBuf);
 
@@ -69,6 +177,9 @@ impl BuildSourceCache {
     log::info!("Discovering source resources in {}", source_dir.display());
     let resources = discover_resources(&source_dir)?;
     log::info!("Found {} source resources", resources.len());
+    let output_dir =
+      prepare_output_path(&self.output_dir, &[&source_dir, &vanilla_dir, &vanilla_cache_dir])?;
+    let cached_source_inputs = cached_source_inputs(&output_dir, &source_dir);
 
     let raw_manifest_bytes = std::fs::read(vanilla_dir.join("cache_info.json"))?;
     let raw_manifest = load_manifest(&vanilla_dir)?;
@@ -78,10 +189,8 @@ impl BuildSourceCache {
       validate_derived_cache(&vanilla_cache_dir, &vanilla_manifest_sha256)?;
     let vanilla_cache_revision = derived_cache_revision(&vanilla_cache_dir)?;
     log::info!("Fingerprinting source inputs");
-    let source_inputs = source_fingerprints(&source_dir, &resources)?;
+    let source_inputs = source_fingerprints(&source_dir, &resources, &cached_source_inputs)?;
     log::info!("Fingerprinting complete: {} files", source_inputs.len());
-    let output_dir =
-      prepare_output_path(&self.output_dir, &[&source_dir, &vanilla_dir, &vanilla_cache_dir])?;
 
     if !self.force
       && cache_is_current(
@@ -94,6 +203,7 @@ impl BuildSourceCache {
         &source_inputs,
       )?
     {
+      refresh_source_timestamps(&output_dir, &source_inputs)?;
       log::info!("Source cache is current at {}", output_dir.display());
       return Ok(false);
     }

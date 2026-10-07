@@ -1,4 +1,4 @@
-use std::io;
+use std::{collections::HashMap, io};
 
 use super::{
   resource_file::Rsc7Resource,
@@ -57,7 +57,10 @@ struct Dictionary {
 }
 
 /// Converts an RSC7 YND NodeDictionary resource into CodeWalker-style XML.
-pub fn ynd_to_xml(bytes: &[u8]) -> io::Result<String> {
+pub fn ynd_to_xml(
+  bytes: &[u8],
+  hash_names: &HashMap<u32, String>,
+) -> io::Result<String> {
   let resource = Rsc7Resource::decode(bytes)?;
   let root = resource.read_address(BASE, ROOT_SIZE + DICTIONARY_SIZE)?;
   let body = &root[ROOT_SIZE..];
@@ -134,13 +137,16 @@ pub fn ynd_to_xml(bytes: &[u8]) -> io::Result<String> {
       unknown: u16_at(record, 6).unwrap(),
     })
     .collect();
-  Ok(to_xml(&Dictionary {
-    vehicle_count,
-    ped_count,
-    nodes,
-    junctions,
-    refs,
-  }))
+  Ok(to_xml(
+    &Dictionary {
+      vehicle_count,
+      ped_count,
+      nodes,
+      junctions,
+      refs,
+    },
+    hash_names,
+  ))
 }
 
 /// Builds a compressed RSC7 YND resource from CodeWalker-style XML.
@@ -321,7 +327,10 @@ fn encode(dictionary: &Dictionary) -> io::Result<Rsc7Resource> {
   Rsc7Resource::from_pages(1, &data, &[])
 }
 
-fn to_xml(dictionary: &Dictionary) -> String {
+fn to_xml(
+  dictionary: &Dictionary,
+  hash_names: &HashMap<u32, String>,
+) -> String {
   let mut xml = String::from("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<NodeDictionary>\n");
   tag(&mut xml, 1, "VehicleNodeCount", dictionary.vehicle_count);
   tag(&mut xml, 1, "PedNodeCount", dictionary.ped_count);
@@ -333,7 +342,11 @@ fn to_xml(dictionary: &Dictionary) -> String {
     if node.street == 0 {
       empty(&mut xml, 3, "StreetName");
     } else {
-      text_tag(&mut xml, 3, "StreetName", &format!("hash_{:08X}", node.street));
+      let name = hash_names
+        .get(&node.street)
+        .cloned()
+        .unwrap_or_else(|| format!("hash_{:08X}", node.street));
+      text_tag(&mut xml, 3, "StreetName", &name);
     }
     empty(
       &mut xml,

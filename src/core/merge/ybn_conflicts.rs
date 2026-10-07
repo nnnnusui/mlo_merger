@@ -23,28 +23,37 @@ pub struct MergeYbnConflicts {
 }
 
 impl MergeYbnConflicts {
-  /// Validates vanilla coverage and reports whether YBN conflicts require merging.
+  /// Validates vanilla coverage and reports whether source YBNs require merging.
   pub fn has_conflicts(
     source_dir: &Path,
     vanilla_dir: &Path,
   ) -> io::Result<bool> {
-    let conflicts = collect_ybn_groups(source_dir)?
-      .into_iter()
-      .filter(|(_, paths)| paths.len() > 1)
-      .collect::<Vec<_>>();
-    if conflicts.is_empty() {
+    let groups = collect_ybn_groups(source_dir)?;
+    if groups.is_empty() {
+      return Ok(false);
+    }
+    if !vanilla_dir.is_dir() {
+      if groups.values().any(|paths| paths.len() > 1) {
+        return Err(io::Error::new(
+          io::ErrorKind::NotFound,
+          format!("Vanilla directory is missing: {}", vanilla_dir.display()),
+        ));
+      }
       return Ok(false);
     }
     let vanilla = collect_vanilla_ybns(vanilla_dir)?;
-    for (name, _) in &conflicts {
-      if !vanilla.contains_key(name) {
+    let mut found = false;
+    for (name, paths) in groups {
+      if vanilla.contains_key(&name) {
+        found = true;
+      } else if paths.len() > 1 {
         return Err(io::Error::new(
           io::ErrorKind::NotFound,
           format!("YBN conflict {name} has no vanilla baseline in {}", vanilla_dir.display()),
         ));
       }
     }
-    Ok(!conflicts.is_empty())
+    Ok(found)
   }
 
   /// Checks conflict coverage against the latest raw YBN files in vanilla history.
@@ -52,14 +61,18 @@ impl MergeYbnConflicts {
     source_dir: &Path,
     history: &VanillaHistory,
   ) -> io::Result<bool> {
-    let conflicts = collect_ybn_groups(source_dir)?
-      .into_iter()
-      .filter(|(_, paths)| paths.len() > 1)
-      .collect::<Vec<_>>();
-    for (name, _) in &conflicts {
-      history.latest_file(name).map_err(|error| io::Error::other(error.to_string()))?;
+    let mut found = false;
+    for (name, paths) in collect_ybn_groups(source_dir)? {
+      if history.latest_file(&name).is_ok() {
+        found = true;
+      } else if paths.len() > 1 {
+        return Err(io::Error::new(
+          io::ErrorKind::NotFound,
+          format!("YBN conflict {name} has no vanilla baseline in the vanilla cache"),
+        ));
+      }
     }
-    Ok(!conflicts.is_empty())
+    Ok(found)
   }
 
   /// Writes merged YBNs for source basename conflicts and records their source paths for omission.
@@ -67,7 +80,17 @@ impl MergeYbnConflicts {
     &self,
     codewalker: Option<&CodeWalker>,
   ) -> Result<(), Box<dyn std::error::Error>> {
-    self.run_inner(codewalker, None)
+    self.run_inner(codewalker, None, None, None)
+  }
+
+  /// Merges source YBNs directly against the supplied latest vanilla stream files.
+  pub fn run_with_latest_vanilla_files(
+    &self,
+    codewalker: Option<&CodeWalker>,
+    vanilla_files: &[PathBuf],
+    source_files: Option<&[PathBuf]>,
+  ) -> Result<(), Box<dyn std::error::Error>> {
+    self.run_inner(codewalker, None, Some(vanilla_files), source_files)
   }
 
   /// Merges raw source YBNs against the latest cache state after scoring history candidates.
@@ -76,16 +99,43 @@ impl MergeYbnConflicts {
     codewalker: Option<&CodeWalker>,
     history: &VanillaHistory,
   ) -> Result<(), Box<dyn std::error::Error>> {
-    self.run_inner(codewalker, Some(history))
+    self.run_inner(codewalker, Some(history), None, None)
   }
 
   fn run_inner(
     &self,
     codewalker: Option<&CodeWalker>,
     history: Option<&VanillaHistory>,
+    vanilla_files: Option<&[PathBuf]>,
+    source_files: Option<&[PathBuf]>,
   ) -> Result<(), Box<dyn std::error::Error>> {
-    let groups = collect_ybn_groups(&self.source_dir)?;
-    let conflicts = groups.into_iter().filter(|(_, paths)| paths.len() > 1).collect::<Vec<_>>();
+    let groups = if let Some(paths) = source_files {
+      collect_ybn_groups_from_paths(paths.iter())
+    } else {
+      collect_ybn_groups(&self.source_dir)?
+    };
+    let vanilla = if history.is_none() {
+      Some(if let Some(files) = vanilla_files {
+        collect_vanilla_ybns_from_paths(files.iter().cloned())?
+      } else {
+        collect_vanilla_ybns(&self.vanilla_dir)?
+      })
+    } else {
+      None
+    };
+    let mut conflicts = Vec::new();
+    for (name, paths) in groups {
+      let has_vanilla = if let Some(history) = history {
+        history.latest_file(&name).is_ok()
+      } else {
+        vanilla.as_ref().unwrap().contains_key(&name)
+      };
+      if has_vanilla {
+        conflicts.push((name, paths));
+      } else {
+        log::warn!("Skipping YBN source group {name}: latest vanilla file is missing");
+      }
+    }
     if conflicts.is_empty() {
       fs::create_dir_all(&self.output_dir)?;
       for entry in fs::read_dir(&self.output_dir)? {
@@ -95,20 +145,8 @@ impl MergeYbnConflicts {
         }
       }
       fs::write(&self.omitted_files_path, "")?;
-      log::info!("No conflicting YBN basenames found");
+      log::info!("No vanilla-matched source YBNs found");
       return Ok(());
-    }
-    let vanilla =
-      if history.is_none() { Some(collect_vanilla_ybns(&self.vanilla_dir)?) } else { None };
-    for (name, _) in &conflicts {
-      if let Some(history) = history {
-        history.latest_file(name)?;
-      } else if !vanilla.as_ref().unwrap().contains_key(name) {
-        return Err(
-          format!("YBN conflict {name} has no vanilla baseline in {}", self.vanilla_dir.display())
-            .into(),
-        );
-      }
     }
     fs::create_dir_all(&self.output_dir)?;
     for entry in fs::read_dir(&self.output_dir)? {
@@ -174,13 +212,13 @@ impl MergeYbnConflicts {
     omitted.sort();
     omitted.dedup();
     fs::write(&self.omitted_files_path, omitted.join("\n"))?;
-    log::info!("Merged {} conflicting YBN basenames", conflicts.len());
+    log::info!("Merged {} vanilla-backed YBN source groups", conflicts.len());
     Ok(())
   }
 }
 
 fn collect_ybn_groups(source_dir: &Path) -> io::Result<BTreeMap<String, Vec<PathBuf>>> {
-  let mut groups = BTreeMap::<String, Vec<PathBuf>>::new();
+  let mut paths = Vec::new();
   let resources = get_resource_directories(&source_dir.to_path_buf())
     .map_err(|error| io::Error::other(error.to_string()))?;
   for resource in resources {
@@ -191,16 +229,26 @@ fn collect_ybn_groups(source_dir: &Path) -> io::Result<BTreeMap<String, Vec<Path
       {
         continue;
       }
-      let Some(name) = entry.path().file_name().and_then(|name| name.to_str()) else {
-        continue;
-      };
-      groups.entry(name.to_ascii_lowercase()).or_default().push(entry.into_path());
+      paths.push(entry.into_path());
     }
+  }
+  Ok(collect_ybn_groups_from_paths(paths.iter()))
+}
+
+fn collect_ybn_groups_from_paths<'a>(
+  paths: impl IntoIterator<Item = &'a PathBuf>
+) -> BTreeMap<String, Vec<PathBuf>> {
+  let mut groups = BTreeMap::<String, Vec<PathBuf>>::new();
+  for path in paths {
+    let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
+      continue;
+    };
+    groups.entry(name.to_ascii_lowercase()).or_default().push(path.clone());
   }
   for paths in groups.values_mut() {
     paths.sort();
   }
-  Ok(groups)
+  groups
 }
 
 fn best_ybn_diff(
@@ -223,20 +271,32 @@ fn best_ybn_diff(
 }
 
 fn collect_vanilla_ybns(vanilla_dir: &Path) -> io::Result<BTreeMap<String, PathBuf>> {
+  let paths = WalkDir::new(vanilla_dir)
+    .follow_links(false)
+    .into_iter()
+    .filter_map(Result::ok)
+    .map(|entry| entry.into_path())
+    .filter(|path| {
+      path.is_file()
+        && path.extension().is_some_and(|extension| extension.eq_ignore_ascii_case("ybn"))
+    });
+  collect_vanilla_ybns_from_paths(paths)
+}
+
+fn collect_vanilla_ybns_from_paths(
+  paths: impl IntoIterator<Item = PathBuf>
+) -> io::Result<BTreeMap<String, PathBuf>> {
   let mut files = BTreeMap::new();
-  for entry in WalkDir::new(vanilla_dir).follow_links(false) {
-    let entry = entry.map_err(|error| io::Error::other(error.to_string()))?;
-    if !entry.file_type().is_file()
-      || entry.path().extension().is_none_or(|extension| !extension.eq_ignore_ascii_case("ybn"))
+  for path in paths {
+    if !path.is_file()
+      || path.extension().is_none_or(|extension| !extension.eq_ignore_ascii_case("ybn"))
     {
       continue;
     }
-    let Some(name) = entry.path().file_name().and_then(|name| name.to_str()).map(str::to_string)
-    else {
+    let Some(name) = path.file_name().and_then(|name| name.to_str()).map(str::to_string) else {
       continue;
     };
-    let key = name.to_ascii_lowercase();
-    if files.insert(key, entry.into_path()).is_some() {
+    if files.insert(name.to_ascii_lowercase(), path).is_some() {
       return Err(io::Error::new(
         io::ErrorKind::InvalidData,
         format!("duplicate vanilla YBN basename: {name}"),
@@ -402,6 +462,11 @@ mod tests {
     let merged_diff = YbnDiff::extract_from(&latest, &merged).unwrap();
     assert_eq!(merged_diff.polygon_diffs.len(), 2);
     assert_eq!(fs::read_to_string(temp.join("omitted.txt")).unwrap().lines().count(), 2);
+
+    fs::remove_file(source_b.join("collision.ybn")).unwrap();
+    merger.run_with_vanilla_cache(None, &history).unwrap();
+    assert!(output.join("collision.ybn").is_file());
+    assert_eq!(fs::read_to_string(temp.join("omitted.txt")).unwrap().lines().count(), 1);
     fs::remove_dir_all(temp).unwrap();
   }
 }

@@ -7,20 +7,11 @@ use std::io::{BufWriter, Write};
 use std::path::Path;
 
 use super::Result;
-use crate::core::format::{
-  gamefile::resource_convert::{NativeResourceFormat, resource_to_xml},
-  ymap::{model::Ymap, xml::XmlYmap},
-};
+use crate::core::format::{gamefile::meta_xml::ymap_to_model, ymap::model::Ymap};
 
-/// Reads a native YMAP through the existing native XML/model adapters.
+/// Reads a native YMAP directly into its typed model without serializing XML.
 pub(crate) fn read_ymap(path: &Path) -> Result<Ymap> {
-  let xml = read_ymap_xml(path)?;
-  let xml: XmlYmap = quick_xml::de::from_str(&xml)?;
-  Ok(xml.into())
-}
-
-pub(crate) fn read_ymap_xml(path: &Path) -> Result<String> {
-  Ok(resource_to_xml(NativeResourceFormat::Ymap, &fs::read(path)?, &HashMap::new())?)
+  Ok(ymap_to_model(&fs::read(path)?, &HashMap::new())?)
 }
 
 /// Writes JSON with buffered I/O and explicit error propagation on flush.

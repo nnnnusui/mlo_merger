@@ -22,6 +22,7 @@ pub(super) fn discover_resources(source_dir: &Path) -> Result<Vec<PathBuf>> {
 pub(super) fn source_fingerprints(
   source_dir: &Path,
   resources: &[PathBuf],
+  cached: &BTreeMap<String, FileFingerprint>,
 ) -> Result<BTreeMap<String, FileFingerprint>> {
   let mut files = BTreeMap::new();
   let total = resources.len();
@@ -32,7 +33,8 @@ pub(super) fn source_fingerprints(
     for manifest in ["fxmanifest.lua", "__resource.lua"] {
       let path = resource.join(manifest);
       if path.is_file() {
-        files.insert(input_key(&id, manifest), fingerprint(&path)?);
+        let key = input_key(&id, manifest);
+        files.insert(key.clone(), fingerprint(&path, cached.get(&key))?);
       }
     }
     for stream_name in ["stream", "streams"] {
@@ -46,7 +48,8 @@ pub(super) fn source_fingerprints(
           continue;
         }
         let relative = entry.path().strip_prefix(resource)?.to_string_lossy().replace('\\', "/");
-        files.insert(input_key(&id, &relative), fingerprint(entry.path())?);
+        let key = input_key(&id, &relative);
+        files.insert(key.clone(), fingerprint(entry.path(), cached.get(&key))?);
       }
     }
     log::info!("Fingerprint complete for {id}: {} files", files.len() - before);
@@ -158,7 +161,19 @@ fn input_key(
   format!("{resource_id}/{relative}")
 }
 
-fn fingerprint(path: &Path) -> Result<FileFingerprint> {
+fn fingerprint(
+  path: &Path,
+  cached: Option<&FileFingerprint>,
+) -> Result<FileFingerprint> {
+  let metadata = fs::metadata(path)?;
+  let modified = metadata.modified()?.duration_since(std::time::UNIX_EPOCH)?;
+  if let Some(cached) = cached
+    && cached.size == metadata.len()
+    && cached.modified_seconds == modified.as_secs()
+    && cached.modified_nanos == modified.subsec_nanos()
+  {
+    return Ok(cached.clone());
+  }
   let bytes = fs::read(path)?;
   let metadata = fs::metadata(path)?;
   let modified = metadata.modified()?.duration_since(std::time::UNIX_EPOCH)?;
@@ -168,4 +183,31 @@ fn fingerprint(path: &Path) -> Result<FileFingerprint> {
     modified_nanos: modified.subsec_nanos(),
     size: metadata.len(),
   })
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn unchanged_file_metadata_reuses_hash_and_changed_metadata_rehashes() {
+    let path = std::env::temp_dir().join(format!("source_fingerprint_{}", std::process::id()));
+    fs::write(&path, b"source bytes").unwrap();
+    let metadata = fs::metadata(&path).unwrap();
+    let modified = metadata.modified().unwrap().duration_since(std::time::UNIX_EPOCH).unwrap();
+    let cached = FileFingerprint {
+      sha256: "reused-hash".into(),
+      modified_seconds: modified.as_secs(),
+      modified_nanos: modified.subsec_nanos(),
+      size: metadata.len(),
+    };
+
+    assert_eq!(fingerprint(&path, Some(&cached)).unwrap().sha256, "reused-hash");
+
+    let mut stale_stat = cached.clone();
+    stale_stat.modified_seconds = stale_stat.modified_seconds.wrapping_add(1);
+    let recalculated = fingerprint(&path, Some(&stale_stat)).unwrap();
+    assert_eq!(recalculated.sha256, format!("{:x}", Sha256::digest(b"source bytes")));
+    fs::remove_file(path).unwrap();
+  }
 }

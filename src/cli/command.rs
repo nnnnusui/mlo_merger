@@ -59,7 +59,7 @@ pub fn run(command: Command) -> Result<(), Box<dyn std::error::Error>> {
     Command::GenerateVanilla(command) => generate_vanilla::run(command)?,
     Command::GenerateVanillaCache(command) => generate_vanilla_cache::run(command)?,
     Command::GenerateSourceCache(command) => generate_source_cache::run(command)?,
-    Command::Merge(command) => merge::run_mock(command),
+    Command::Merge(command) => merge::run(command)?,
     Command::ToXml(command) => to_xml::run(command)?,
     Command::FromXml(command) => from_xml::run(command)?,
     Command::GetDiff(command) => get_diff::run_mock(command),
@@ -169,9 +169,18 @@ mod tests {
     let Command::Merge(command) = parser().to_options().run_inner(&["--merge"]).unwrap() else {
       panic!("Expected merge command")
     };
+    assert_eq!(command.source_dir, PathBuf::from("asset/source"));
     assert_eq!(command.common.vanilla_cache, PathBuf::from("asset/vanilla-cache"));
     assert_eq!(command.common.source_cache, PathBuf::from("asset/source-cache"));
     assert_eq!(command.common.output, PathBuf::from("asset/merged"));
+
+    let Command::Merge(command) =
+      parser().to_options().run_inner(&["--merge", "-i", "resources", "-o", "merged"]).unwrap()
+    else {
+      panic!("Expected merge command")
+    };
+    assert_eq!(command.source_dir, PathBuf::from("resources"));
+    assert_eq!(command.common.output, PathBuf::from("merged"));
   }
 
   #[test]

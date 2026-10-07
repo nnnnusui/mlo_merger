@@ -25,6 +25,42 @@ pub enum NativeResourceFormat {
   Ynd,
 }
 
+#[derive(serde::Deserialize)]
+struct HashNameIndex {
+  names: HashMap<String, String>,
+}
+
+pub(crate) fn load_vanilla_hash_names() -> HashMap<u32, String> {
+  let path = Path::new("asset/vanilla/hash_names.json");
+  match load_hash_names(path) {
+    Ok(names) => names,
+    Err(error) if error.kind() == io::ErrorKind::NotFound => HashMap::new(),
+    Err(error) => {
+      log::warn!("Failed to load vanilla hash names from {}: {error}", path.display());
+      HashMap::new()
+    }
+  }
+}
+
+fn load_hash_names(path: &Path) -> io::Result<HashMap<u32, String>> {
+  parse_hash_names(&fs::read(path)?)
+}
+
+fn parse_hash_names(bytes: &[u8]) -> io::Result<HashMap<u32, String>> {
+  let index: HashNameIndex = serde_json::from_slice(bytes)
+    .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+  Ok(
+    index
+      .names
+      .into_iter()
+      .filter_map(|(hash, name)| {
+        let hash = u32::from_str_radix(&hash, 16).ok()?;
+        (!name.eq_ignore_ascii_case(&format!("hash_{hash:08X}"))).then_some((hash, name))
+      })
+      .collect(),
+  )
+}
+
 impl NativeResourceFormat {
   /// Selects the native format adapter from a filename extension.
   pub fn from_path(path: &Path) -> io::Result<Self> {
@@ -81,7 +117,7 @@ pub fn convert_files_to_xml(
 ) -> Result<(usize, usize), Box<dyn std::error::Error>> {
   let inputs = collect_inputs(input, &|path| NativeResourceFormat::from_path(path).is_ok())?;
   fs::create_dir_all(output_dir)?;
-  let mut shared_names = HashMap::new();
+  let mut shared_names = load_vanilla_hash_names();
   for source in &inputs {
     if !matches!(
       NativeResourceFormat::from_path(source),
@@ -354,7 +390,7 @@ pub fn resource_to_xml(
     return super::pso::PsoResource::parse(bytes)?.to_xml(shared_hash_names);
   }
   if format == NativeResourceFormat::Ynd {
-    return ynd_to_xml(bytes);
+    return ynd_to_xml(bytes, shared_hash_names);
   }
   if format == NativeResourceFormat::Ybn {
     return ybn_to_xml(bytes);
@@ -417,7 +453,7 @@ pub fn convert_path_to_xml(
 ) -> Result<(usize, usize), Box<dyn std::error::Error>> {
   let inputs = collect_paths(input, |path| NativeResourceFormat::from_path(path).is_ok())?;
   fs::create_dir_all(output_dir)?;
-  let mut names = HashMap::new();
+  let mut names = load_vanilla_hash_names();
   for path in &inputs {
     if !matches!(
       NativeResourceFormat::from_path(path),
@@ -588,7 +624,7 @@ mod tests {
 
   use super::{
     NativeResourceFormat, convert_files_from_xml, convert_files_to_xml, discover_schema_inputs,
-    resource_to_xml, xml_to_resource,
+    parse_hash_names, resource_to_xml, xml_to_resource,
   };
   use crate::core::format::gamefile::{
     meta_resource::{MetaResource, MetaSchemaCatalog},
@@ -649,6 +685,14 @@ mod tests {
       &MetaSchemaCatalog::default(),
       name,
     );
+  }
+
+  #[test]
+  fn hash_name_index_parses_hex_keys_and_ignores_fallback_names() {
+    let bytes = br#"{"names":{"0000EF80":"glen2_ldoor_croc","0001D65D":"hash_0001D65D","invalid":"ignored"}}"#;
+    let names = parse_hash_names(bytes).unwrap();
+    assert_eq!(names.get(&0x0000_EF80).map(String::as_str), Some("glen2_ldoor_croc"));
+    assert!(!names.contains_key(&0x0001_D65D));
   }
 
   #[test]
@@ -910,9 +954,10 @@ mod tests {
     let binary =
       xml_to_resource(NativeResourceFormat::Ynd, xml, &MetaSchemaCatalog::default()).unwrap();
     assert_eq!(&binary[..4], b"RSC7");
-    let output = resource_to_xml(NativeResourceFormat::Ynd, &binary, &HashMap::new()).unwrap();
+    let names = HashMap::from([(0x1234_ABCD, "test_street".to_string())]);
+    let output = resource_to_xml(NativeResourceFormat::Ynd, &binary, &names).unwrap();
     assert!(output.contains("<VehicleNodeCount value=\"1\""));
-    assert!(output.contains("<StreetName>hash_1234ABCD</StreetName>"));
+    assert!(output.contains("<StreetName>test_street</StreetName>"));
     assert!(output.contains("<LinkLength value=\"13\""));
     assert!(output.contains("<Heightmap>7F</Heightmap>"));
     assert!(output.contains("<JunctionID value=\"0\""));
