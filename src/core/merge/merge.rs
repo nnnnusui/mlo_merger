@@ -57,7 +57,7 @@ pub fn run(
   let staging = Staging(create_staging_directory(&output_dir)?);
   let ybn_omit_path = staging.0.join("ybn_omit.txt");
   MergeYbnConflicts {
-    source_dir: source_dir.clone(),
+    source_dir: source_cache_dir.clone(),
     vanilla_dir: vanilla_cache_dir.join("latest/ybn"),
     output_dir: staging.0.clone(),
     omitted_files_path: ybn_omit_path.clone(),
@@ -90,15 +90,25 @@ pub fn run(
   }
   let ymap_xml_dir = staging.0.join("ymap_xml");
   let ymap_output_dir = staging.0.join("ymap_output");
-  let mut omitted =
-    fs::read_to_string(&ybn_omit_path)?.lines().map(str::to_owned).collect::<BTreeSet<_>>();
+  let mut omitted = merge_inputs
+    .ybn
+    .iter()
+    .map(|source| {
+      source
+        .original_path
+        .strip_prefix(&source_dir)
+        .map(|path| path.to_string_lossy().replace('\\', "/"))
+    })
+    .collect::<std::result::Result<BTreeSet<_>, _>>()?;
   if !ymap_sources.is_empty() {
     let raw_sources = ymap_sources
       .iter()
       .map(|(resource, path, _)| (resource.clone(), path.clone()))
       .collect::<Vec<_>>();
-    for (_, source_path, _) in &ymap_sources {
-      omitted.insert(source_path.strip_prefix(&source_dir)?.to_string_lossy().replace('\\', "/"));
+    for source in &merge_inputs.ymap {
+      omitted.insert(
+        source.original_path.strip_prefix(&source_dir)?.to_string_lossy().replace('\\', "/"),
+      );
     }
     fs::create_dir_all(&ymap_xml_dir)?;
     fs::create_dir_all(&ymap_output_dir)?;
@@ -154,6 +164,18 @@ pub fn run(
   let _ = fs::remove_dir_all(ymap_xml_dir);
   let _ = fs::remove_dir_all(ymap_output_dir);
   let _ = fs::remove_dir_all(staging.0.join("ymap_schemas"));
+  for entry in fs::read_dir(&staging.0)? {
+    let path = entry?.path();
+    let Some(extension) = path.extension().and_then(|extension| extension.to_str()) else {
+      continue;
+    };
+    if !path.is_file() || !matches!(extension.to_ascii_lowercase().as_str(), "ymap" | "ybn") {
+      continue;
+    }
+    let directory = staging.0.join(extension.to_ascii_lowercase());
+    fs::create_dir_all(&directory)?;
+    fs::rename(&path, directory.join(path.file_name().ok_or("Merged file has no name")?))?;
+  }
   fs::write(staging.0.join("_omit.txt"), omitted.into_iter().collect::<Vec<_>>().join("\n"))?;
   publish_directory(&staging.0, &output_dir)?;
   log::info!("Published merged stream files to {}", output_dir.display());
@@ -324,7 +346,7 @@ mod tests {
     assert!(vanilla_cache_dir.join("latest/ybn/collision.ybn").is_file());
     assert!(source_cache_dir.join("source_cache_info.json").is_file());
     let merged =
-      crate::core::format::ybn::read_ybn(&fs::read(output_dir.join("collision.ybn")).unwrap())
+      crate::core::format::ybn::read_ybn(&fs::read(output_dir.join("ybn/collision.ybn")).unwrap())
         .unwrap();
     let source = crate::core::format::ybn::read_ybn(&bytes).unwrap();
     let diff = crate::core::format::ybn::diff::YbnDiff::extract_from(&source, &merged).unwrap();
@@ -334,6 +356,19 @@ mod tests {
       fs::read_to_string(output_dir.join("_omit.txt")).unwrap().trim(),
       "resource_a/stream/collision.ybn\nresource_b/stream/collision.ybn"
     );
+    let deployment = crate::core::deploy::Deploy {
+      merged_dir: output_dir.clone(),
+      source_cache_dir: source_cache_dir.clone(),
+      output_dir: root.join("deployed"),
+      force: false,
+    };
+    assert_eq!(deployment.run().unwrap().copied, 1);
+    assert_eq!(
+      fs::read(root.join("deployed/stream/ybn/merged/collision.ybn")).unwrap(),
+      fs::read(output_dir.join("ybn/collision.ybn")).unwrap(),
+    );
+    assert!(!root.join("deployed/stream/ybn/clone").exists());
+    assert_eq!(deployment.run().unwrap().copied, 0);
     fs::remove_dir_all(root).unwrap();
   }
 }

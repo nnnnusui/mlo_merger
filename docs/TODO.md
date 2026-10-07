@@ -36,17 +36,27 @@
 
 - [x] Add `--generate-source-cache` to ensure `vanilla-cache` and inventory `asset/source` without calculating diffs.
 - [x] Record YMAP/YBN source paths, fingerprints, latest vanilla filename/hash matches, and cross-resource conflicts grouped by resource and format.
-- [x] Record source fingerprints and relevant vanilla-cache revisions; skip the whole cache when unchanged.
-- [ ] Rebuild only entries affected by changed, added, removed, or stale source inputs.
+- [x] Record source fingerprints and per-resource vanilla-cache revisions; skip unchanged resources.
+- [x] Rebuild only resources affected by changed, added, removed, or stale source inputs.
+- [x] Move vanilla-named stream inputs into the source cache, retaining replaced files and fingerprint/mtime records under `_old/{timestamp}`.
+- [x] Store cached and archived files by stream-relative path without a `stream/` prefix, migrating recorded legacy paths on resource checks.
+- [x] Place active resource files under `source-cache/resources/{resourceName}`, migrating recorded root-level cache paths while preserving modification times.
+- [x] Track resource directory/manifest updates and stream presence, including resources without streams.
+- [x] Support `--generate-source-cache [resourceName]` with selection-scoped `-f` updates.
+- [x] Detect same-name resource moves between input groups and preserve cached files while updating source paths and resource keys.
 - [x] Use the derived latest-file and YMAP relationship index without loading all vanilla YMAP bodies or generating diffs.
 - [x] Run a source-wide pass to include cross-resource YMAP children of changed or unmatched parent YMAPs.
 - [x] Preserve conflict paths and affected-file closure for merge processing.
+- [x] Build `conflicts` from active cached files and retain the original resource inventory's conflicts under `source_conflicts`, excluding archived files from cache scans.
 - [x] Retain a source-cache generation summary log.
 
 ## Merged Output
 
 - [x] Add `--merge` to validate/update `source-cache`, perform format-specific merges against latest vanilla, and write results to the selected `-o` path.
 - [x] Emit source omit information alongside merged stream files in `_omit.txt`.
+- [x] Group merged stream files into extension-specific directories.
+- [x] Add `--deploy` to copy merged files and remaining source-cache files into `stream/{extension}/merged` and `stream/{extension}/clone`.
+- [x] Cache deployment input/output mtime, size and fingerprints to copy only needed files, repair missing/changed copies and remove stale managed output safely.
 - [ ] Later, read additional diffs from `asset/overwrite` and apply them to vanilla stream files before resource merges.
 - [ ] Later, define overwrite targets as `{resourceName or vanilla}/{vanilla stream file}` and validate target/baseline identity before applying changes.
 - [ ] Keep overlapping resource edits deterministic through configured resource priority and report the selected source.

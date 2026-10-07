@@ -1,7 +1,17 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 
+use crate::core::stream_conflicts::{StreamConflictReport, StreamFileConflict};
 use serde::{Deserialize, Serialize};
+
+/// Cache-relative conflicts with conflicts among source files remaining after extraction.
+#[derive(Debug, Deserialize, Serialize, PartialEq)]
+pub(super) struct SourceCacheConflictReport {
+  #[serde(flatten)]
+  pub(super) report: StreamConflictReport,
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub(super) source_conflicts: Option<BTreeMap<String, Vec<StreamFileConflict>>>,
+}
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 pub(super) struct FileFingerprint {
@@ -29,6 +39,8 @@ pub(super) struct SourceFile {
   pub(super) vanilla: Option<VanillaMatch>,
   pub(super) ymap_parent_hash: Option<String>,
   pub(super) metadata_error: Option<String>,
+  #[serde(default)]
+  pub(super) cached_path: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
@@ -51,6 +63,13 @@ pub(super) struct YmapLoadPlan {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+pub(super) struct ResourceCheck {
+  pub(super) checked_at: String,
+  pub(super) vanilla_revision: String,
+  pub(super) has_stream: bool,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 pub(super) struct SourceCacheMetadata {
   pub(super) format_version: u32,
   pub(super) source_dir: PathBuf,
@@ -61,6 +80,8 @@ pub(super) struct SourceCacheMetadata {
   pub(super) latest_vanilla_version: String,
   pub(super) generated_at: String,
   pub(super) source_inputs: BTreeMap<String, FileFingerprint>,
+  #[serde(default)]
+  pub(super) resource_checks: BTreeMap<String, ResourceCheck>,
   pub(super) resources: BTreeMap<String, ResourceInventory>,
   pub(super) scanned_stream_file_count: usize,
   pub(super) conflict_count: usize,

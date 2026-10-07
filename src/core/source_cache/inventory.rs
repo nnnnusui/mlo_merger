@@ -30,6 +30,7 @@ pub(super) fn source_fingerprints(
     let id = resource_id(source_dir, resource)?;
     log::info!("Fingerprinting source resource {}/{}: {id}", index + 1, total);
     let before = files.len();
+    files.insert(input_key(&id, ""), fingerprint(resource, None)?);
     for manifest in ["fxmanifest.lua", "__resource.lua"] {
       let path = resource.join(manifest);
       if path.is_file() {
@@ -44,7 +45,7 @@ pub(super) fn source_fingerprints(
       }
       for entry in WalkDir::new(&stream).follow_links(false) {
         let entry = entry?;
-        if !entry.file_type().is_file() {
+        if !entry.file_type().is_file() && !entry.file_type().is_dir() {
           continue;
         }
         let relative = entry.path().strip_prefix(resource)?.to_string_lossy().replace('\\', "/");
@@ -62,6 +63,7 @@ pub(super) fn source_inventory(
   resources: &[PathBuf],
   inputs: &BTreeMap<String, FileFingerprint>,
   vanilla_files: &BTreeMap<String, DerivedVanillaFile>,
+  cached: Option<&ResourceInventory>,
 ) -> Result<BTreeMap<String, ResourceInventory>> {
   let mut inventories = BTreeMap::new();
   let total = resources.len();
@@ -102,7 +104,17 @@ pub(super) fn source_inventory(
         } else {
           None
         };
-        let (ymap_parent_hash, metadata_error) = if format == ".ymap" {
+        let previous =
+          cached.and_then(|inventory| inventory.files_by_format.get(&format)).and_then(|files| {
+            files.iter().find(|file| {
+              file.path == relative
+                && file.sha256 == fingerprint.sha256
+                && file.size == fingerprint.size
+            })
+          });
+        let (ymap_parent_hash, metadata_error) = if let Some(previous) = previous {
+          (previous.ymap_parent_hash.clone(), previous.metadata_error.clone())
+        } else if format == ".ymap" {
           match ymap_parent_hash(path) {
             Ok(hash) => (Some(format!("{hash:08X}")), None),
             Err(error) => {
@@ -123,6 +135,7 @@ pub(super) fn source_inventory(
           vanilla,
           ymap_parent_hash,
           metadata_error,
+          cached_path: None,
         });
       }
     }
@@ -142,7 +155,7 @@ pub(super) fn source_inventory(
   Ok(inventories)
 }
 
-fn resource_id(
+pub(super) fn resource_id(
   source_dir: &Path,
   resource: &Path,
 ) -> Result<String> {
@@ -161,12 +174,27 @@ fn input_key(
   format!("{resource_id}/{relative}")
 }
 
-fn fingerprint(
+pub(super) fn fingerprint(
   path: &Path,
   cached: Option<&FileFingerprint>,
 ) -> Result<FileFingerprint> {
   let metadata = fs::metadata(path)?;
   let modified = metadata.modified()?.duration_since(std::time::UNIX_EPOCH)?;
+  if metadata.is_dir() {
+    let mut entries = fs::read_dir(path)?
+      .map(|entry| {
+        let entry = entry?;
+        Ok((entry.file_name(), entry.file_type()?.is_dir()))
+      })
+      .collect::<std::io::Result<Vec<_>>>()?;
+    entries.sort();
+    return Ok(FileFingerprint {
+      sha256: format!("{:x}", Sha256::digest(serde_json::to_vec(&entries)?)),
+      modified_seconds: modified.as_secs(),
+      modified_nanos: modified.subsec_nanos(),
+      size: entries.len() as u64,
+    });
+  }
   if let Some(cached) = cached
     && cached.size == metadata.len()
     && cached.modified_seconds == modified.as_secs()

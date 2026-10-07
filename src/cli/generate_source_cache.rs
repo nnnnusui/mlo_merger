@@ -10,6 +10,8 @@ use super::common::{self, CommonOptions};
 pub struct GenerateSourceCache {
   /// Source resource directory.
   pub source_dir: PathBuf,
+  /// Restricts updates to one resource name or relative resource path.
+  pub resource: Option<String>,
   /// Shared execution options.
   pub common: CommonOptions,
 }
@@ -19,15 +21,19 @@ pub fn parser() -> impl Parser<GenerateSourceCache> {
   let command = long("generate-source-cache")
     .help("Build or update source resource conflict data")
     .req_flag(());
+  let resource = positional::<String>("RESOURCE").optional();
   let source_dir = short('i')
     .long("input")
     .help("Source resource directory (default: asset/source)")
     .argument::<PathBuf>("DIR")
     .fallback(PathBuf::from("asset/source"));
   let common = common::parser(PathBuf::from("asset/source-cache"));
-  construct!(command, source_dir, common).map(|(_, source_dir, common)| GenerateSourceCache {
-    source_dir,
-    common,
+  construct!(command, source_dir, common, resource).map(|(_, source_dir, common, resource)| {
+    GenerateSourceCache {
+      source_dir,
+      resource,
+      common,
+    }
   })
 }
 
@@ -46,7 +52,7 @@ pub fn run(command: GenerateSourceCache) -> Result<(), Box<dyn std::error::Error
     vanilla_cache_dir: command.common.vanilla_cache,
     force: command.common.force,
   }
-  .run()?;
+  .run_selected(command.resource.as_deref())?;
   if rebuilt {
     println!("Generated source cache.");
   } else {

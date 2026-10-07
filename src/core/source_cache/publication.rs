@@ -1,71 +1,14 @@
+use super::Result;
+#[cfg(test)]
+use super::types::{FileFingerprint, SourceCacheMetadata};
+#[cfg(test)]
+use std::{collections::BTreeMap, io::BufReader};
 use std::{
-  collections::BTreeMap,
   fs,
-  io::BufReader,
-  path::{Component, Path, PathBuf},
+  path::{Path, PathBuf},
 };
 
-use super::{
-  Result,
-  types::{FileFingerprint, SourceCacheMetadata},
-};
-
-pub(super) fn cached_source_inputs(
-  output: &Path,
-  source_dir: &Path,
-) -> BTreeMap<String, FileFingerprint> {
-  let metadata = fs::File::open(output.join("source_cache_info.json"))
-    .ok()
-    .and_then(|file| serde_json::from_reader::<_, SourceCacheMetadata>(BufReader::new(file)).ok());
-  metadata
-    .filter(|metadata| metadata.format_version == 2 && metadata.source_dir == source_dir)
-    .map(|metadata| metadata.source_inputs)
-    .unwrap_or_default()
-}
-
-pub(super) fn cache_is_current(
-  output: &Path,
-  source_dir: &Path,
-  vanilla_dir: &Path,
-  vanilla_cache_dir: &Path,
-  raw_revision: &str,
-  derived_revision: &str,
-  source_inputs: &BTreeMap<String, FileFingerprint>,
-) -> Result<bool> {
-  let metadata_path = output.join("source_cache_info.json");
-  if !metadata_path.is_file() {
-    return Ok(false);
-  }
-  let Ok(metadata) = serde_json::from_reader::<_, SourceCacheMetadata>(BufReader::new(
-    fs::File::open(metadata_path)?,
-  )) else {
-    return Ok(false);
-  };
-  if metadata.format_version != 2
-    || metadata.source_dir != source_dir
-    || metadata.vanilla_dir != vanilla_dir
-    || metadata.vanilla_cache_dir != vanilla_cache_dir
-    || metadata.vanilla_manifest_sha256 != raw_revision
-    || metadata.vanilla_cache_revision != derived_revision
-    || !same_source_content(&metadata.source_inputs, source_inputs)
-  {
-    return Ok(false);
-  }
-  for output_file in metadata.outputs {
-    let relative = Path::new(&output_file);
-    if relative.components().any(|part| !matches!(part, Component::Normal(_)))
-      || !output.join(relative).is_file()
-    {
-      return Ok(false);
-    }
-  }
-  Ok(
-    output.join("source_cache_info.json").is_file()
-      && output.join("stream_conflicts.json").is_file()
-      && output.join("vanilla_ymaps_to_read.json").is_file(),
-  )
-}
-
+#[cfg(test)]
 pub(super) fn same_source_content(
   cached: &BTreeMap<String, FileFingerprint>,
   current: &BTreeMap<String, FileFingerprint>,
@@ -79,6 +22,7 @@ pub(super) fn same_source_content(
     })
 }
 
+#[cfg(test)]
 pub(super) fn refresh_source_timestamps(
   output: &Path,
   source_inputs: &BTreeMap<String, FileFingerprint>,
@@ -163,32 +107,4 @@ pub(super) fn create_staging_directory(output: &Path) -> Result<PathBuf> {
   let staging = parent.join(format!(".{name}.staging-{}", std::process::id()));
   fs::create_dir(&staging)?;
   Ok(staging)
-}
-
-pub(super) fn publish_directory(
-  staging: &Path,
-  output: &Path,
-) -> Result<()> {
-  let backup = output.with_file_name(format!(
-    ".{}.backup-{}",
-    output.file_name().unwrap_or_default().to_string_lossy(),
-    std::process::id()
-  ));
-  if backup.exists() {
-    return Err(format!("Source-cache backup already exists: {}", backup.display()).into());
-  }
-  let existed = output.exists();
-  if existed {
-    fs::rename(output, &backup)?;
-  }
-  if let Err(error) = fs::rename(staging, output) {
-    if existed {
-      fs::rename(&backup, output)?;
-    }
-    return Err(error.into());
-  }
-  if existed && let Err(error) = fs::remove_dir_all(backup) {
-    log::warn!("Could not remove source-cache backup: {error}");
-  }
-  Ok(())
 }

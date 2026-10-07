@@ -16,11 +16,31 @@ conversion backend and supplies RPF reading for vanilla cache generation.
 1. Ensure the derived vanilla and source inventory caches are current.
 2. Enumerate files under `vanilla-cache/latest` and dispatch `.ybn` and `.ymap` files to separate merge handlers.
 3. Match source files by basename and apply their supported changes directly to each latest vanilla file.
-4. Write merged native stream files and `_omit.txt` to the selected output directory.
+4. Write merged native stream files under extension subdirectories (`ymap/`, `ybn/`) and `_omit.txt` at the selected output root.
 
 Merge output is staged and replaces the selected output directory after a
-successful run. The default output is `asset/merged`; source resources remain
-inputs and are never modified.
+successful run. The default output is `asset/merged`. Its source-cache
+prerequisite moves vanilla-named source stream files into the cache; merge reads
+those cached files and retains original resource paths for omit information.
+
+## Deploy
+
+Deployment consumes existing merged output and `source-cache/resources` without
+regenerating either input. Merged stream files go to
+`stream/{extension}/merged/{filename}`. Source-cache files not replaced by a
+merged basename go to
+`stream/{extension}/clone/{resourceName}/{stream-relative-path}`. Matching is
+case-insensitive; archive and report files are excluded. Duplicate merged
+basenames are rejected rather than selected arbitrarily.
+
+The deployment cache records both input and copied-file mtime, size and SHA-256.
+Unchanged file stats reuse fingerprints; changed stats rehash the file. Content
+matches skip copying, including timestamp-only changes. Missing or altered copies
+are repaired. Files no longer selected are removed only when the cache owns them
+and they have not been locally modified; unrelated files remain untouched.
+Each copy is staged individually and preserves source mtime. Deployment metadata
+is published after the file updates. `-f` forces copying without forcing merge or
+source-cache generation. The default output is `asset/merged_mlo`.
 
 ## Merge Policy
 
@@ -82,14 +102,42 @@ source paths, fingerprints, exact latest-vanilla content matches, and
 cross-resource basename conflicts; it does not generate semantic or binary
 diffs. Changed source parents expand the YMAP read/rebuild plan through the
 latest relationship index, including source children in other resources. Input
-and upstream revisions allow unchanged runs to be skipped; a stale source
-cache is rebuilt as one staged, atomic publication. Merge consumes the
+and per-resource upstream revisions allow unchanged resources to be skipped.
+Vanilla-named YMAP/YBN files move from each resource's stream directories into
+`source-cache/resources/{resourceName}/{stream-relative-path}`. The leading `stream/` or
+`streams/` component is omitted from cached and archived paths, while metadata
+retains original resource-relative paths for conflict and omit output. Recorded
+legacy cached paths migrate when the resource is checked.
+Legacy resource folders directly under the cache migrate under `resources/`;
+the timestamped history layout under `_old` remains unchanged.
+Colliding relative paths across stream roots are rejected rather than overwritten. Unmatched files stay in
+the resource. Replacements move the previous file and fingerprint/mtime records
+to `_old/{UTC timestamp}` with a snapshot of the prior cache metadata. Resource
+names must be unique. Moving a resource between input groups without changing
+its name preserves its cached files and fingerprints; only its source paths
+and resource keys change. Content changes during a move follow normal update
+and replacement rules. Ambiguous cached names are rejected rather than guessed.
+Resource directories, manifests and stream presence are
+tracked even when a resource has no stream files. An optional resource selection
+limits checks and forced updates; global conflict and load plans still include
+the retained inventories of other resources. Cache metadata is staged before
+publication, while file moves are incremental and do not replace the cache tree.
+The stream-conflict report's `conflicts` scans active resource directories in
+the source cache, excluding `_old` and report files. Its paths are relative to
+the source cache recorded as the input directory; its scan/conflict counts
+describe that cached data.
+`source_conflicts` preserves the original inventory's resource-relative conflict
+paths, including moved files and files left in source resources. Each invocation
+checks the cache report even when no resource inventory needs updating.
+Merge consumes the
 extension-specific conflict inventory and only vanilla-backed source files;
 YMAP model decoding is limited to selected source maps and the recorded vanilla
 parent/child closure. Fingerprinting first compares cached size and nanosecond
 mtime, reusing SHA-256 when both are unchanged and hashing only new or stat-changed
-files. Paths, size, and SHA-256 determine whether inventory outputs need rebuilding;
-mtime-only changes refresh provenance without regenerating the source cache.
+files. Unchanged file contents reuse decoded inventory metadata. Directory,
+manifest, stream presence, file stat/fingerprint or per-resource upstream changes
+trigger an update. A missing moved file without an original source is an error,
+not a reason to silently discard its inventory.
 
 Raw archive publication occurs after all stages complete; failures retain
 diagnostic logs without publishing an incomplete cache. Version lookup is a

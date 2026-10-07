@@ -1,6 +1,7 @@
 use bpaf::*;
 
 use super::{
+  deploy::{self, Deploy},
   from_xml::{self, FromXml},
   generate_source_cache::{self, GenerateSourceCache},
   generate_vanilla::{self, GenerateVanilla},
@@ -21,6 +22,8 @@ pub enum Command {
   GenerateSourceCache(GenerateSourceCache),
   /// Merge source changes into vanilla stream files.
   Merge(Merge),
+  /// Copy merged and unmerged cached files into a deployable stream layout.
+  Deploy(Deploy),
   /// Convert native files to XML.
   ToXml(ToXml),
   /// Convert XML files to native files.
@@ -34,6 +37,7 @@ fn parser() -> impl Parser<Command> {
   let generate_vanilla_cache = generate_vanilla_cache::parser().map(Command::GenerateVanillaCache);
   let generate_source_cache = generate_source_cache::parser().map(Command::GenerateSourceCache);
   let merge = merge::parser().map(Command::Merge);
+  let deploy = deploy::parser().map(Command::Deploy);
   let to_xml = to_xml::parser().map(Command::ToXml);
   let from_xml = from_xml::parser().map(Command::FromXml);
   let get_diff = get_diff::parser().map(Command::GetDiff);
@@ -42,6 +46,7 @@ fn parser() -> impl Parser<Command> {
     generate_vanilla_cache,
     generate_source_cache,
     merge,
+    deploy,
     to_xml,
     from_xml,
     get_diff,
@@ -60,6 +65,7 @@ pub fn run(command: Command) -> Result<(), Box<dyn std::error::Error>> {
     Command::GenerateVanillaCache(command) => generate_vanilla_cache::run(command)?,
     Command::GenerateSourceCache(command) => generate_source_cache::run(command)?,
     Command::Merge(command) => merge::run(command)?,
+    Command::Deploy(command) => deploy::run(command)?,
     Command::ToXml(command) => to_xml::run(command)?,
     Command::FromXml(command) => from_xml::run(command)?,
     Command::GetDiff(command) => get_diff::run_mock(command),
@@ -181,6 +187,39 @@ mod tests {
     };
     assert_eq!(command.source_dir, PathBuf::from("resources"));
     assert_eq!(command.common.output, PathBuf::from("merged"));
+  }
+
+  #[test]
+  fn source_cache_accepts_optional_resource_and_force() {
+    let Command::GenerateSourceCache(command) = parser()
+      .to_options()
+      .run_inner(&["--generate-source-cache", "resource_a", "-i", "resources", "-f"])
+      .unwrap()
+    else {
+      panic!("Expected source cache command")
+    };
+    assert_eq!(command.resource.as_deref(), Some("resource_a"));
+    assert!(command.common.force);
+  }
+
+  #[test]
+  fn deploy_parses_paths_and_force() {
+    let Command::Deploy(command) = parser()
+      .to_options()
+      .run_inner(&["--deploy", "-i", "merged", "--source-cache", "cache", "-o", "merged_mlo", "-f"])
+      .unwrap()
+    else {
+      panic!("Expected deploy command")
+    };
+    assert_eq!(command.merged_dir, PathBuf::from("merged"));
+    assert_eq!(command.common.source_cache, PathBuf::from("cache"));
+    assert_eq!(command.common.output, PathBuf::from("merged_mlo"));
+    assert!(command.common.force);
+    let Command::Deploy(command) = parser().to_options().run_inner(&["--deploy"]).unwrap() else {
+      panic!("Expected deploy command")
+    };
+    assert_eq!(command.merged_dir, PathBuf::from("asset/merged"));
+    assert_eq!(command.common.output, PathBuf::from("asset/merged_mlo"));
   }
 
   #[test]
