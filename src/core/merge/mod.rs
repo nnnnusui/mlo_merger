@@ -1,4 +1,5 @@
 mod cache_inputs;
+mod incremental;
 pub mod merge;
 pub mod run;
 pub mod ybn_conflicts;

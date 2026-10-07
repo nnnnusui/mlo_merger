@@ -1,15 +1,14 @@
 use std::{
-  collections::BTreeSet,
   fs,
   path::{Path, PathBuf},
 };
 
 use walkdir::WalkDir;
 
-use super::{run::MergeYmap, ybn_conflicts::MergeYbnConflicts};
+use super::incremental::IncrementalMerge;
 use crate::core::source_cache::{self, BuildSourceCache};
 
-type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
+pub(super) type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
 struct VanillaStreamFiles {
   ymap: Vec<PathBuf>,
@@ -31,7 +30,7 @@ pub fn run(
   vanilla_cache_dir: &Path,
   source_cache_dir: &Path,
   output_dir: &Path,
-  _force: bool,
+  force: bool,
 ) -> Result<()> {
   let source_dir = source_dir.canonicalize()?;
   let vanilla_dir = vanilla_dir.canonicalize()?;
@@ -52,102 +51,21 @@ pub fn run(
     &[&source_dir, &vanilla_dir, &vanilla_cache_dir, &source_cache_dir],
   )?;
   let staging = Staging(create_staging_directory(&output_dir)?);
-  let ybn_omit_path = staging.0.join("ybn_omit.txt");
-  MergeYbnConflicts {
-    source_dir: source_cache_dir.clone(),
-    vanilla_dir: vanilla_cache_dir.join("latest/ybn"),
-    output_dir: staging.0.clone(),
-    omitted_files_path: ybn_omit_path.clone(),
+  let changed = IncrementalMerge {
+    source_dir: &source_dir,
+    vanilla_cache: &vanilla_cache_dir,
+    source_cache: &source_cache_dir,
+    output: &output_dir,
+    staging: &staging.0,
+    ybn: &latest_files.ybn,
+    ymap: &latest_files.ymap,
+    inputs: &merge_inputs,
+    force,
   }
-  .run_with_latest_vanilla_files(
-    None,
-    &latest_files.ybn,
-    Some(&merge_inputs.ybn.iter().map(|source| source.path.clone()).collect::<Vec<_>>()),
-  )?;
-
-  let ymap_sources = merge_inputs
-    .ymap
-    .iter()
-    .map(|source| (source.resource.clone(), source.path.clone(), source.file_name.clone()))
-    .collect::<Vec<_>>();
-  let mut vanilla_ymap_names = merge_inputs.vanilla_ymaps_to_read;
-  vanilla_ymap_names.extend(ymap_sources.iter().map(|(_, _, name)| name.to_ascii_lowercase()));
-  let latest_ymap_by_name = latest_files
-    .ymap
-    .iter()
-    .filter_map(|path| path.file_name()?.to_str().map(|name| (name.to_ascii_lowercase(), path)))
-    .collect::<std::collections::HashMap<_, _>>();
-  let mut selected_vanilla_ymaps = Vec::new();
-  for name in vanilla_ymap_names {
-    if let Some(path) = latest_ymap_by_name.get(&name) {
-      selected_vanilla_ymaps.push((*path).clone());
-    } else {
-      log::warn!("Latest vanilla YMAP {name} is missing; skipping it");
-    }
+  .run()?;
+  if !changed {
+    return Ok(());
   }
-  let ymap_output_dir = staging.0.join("ymap");
-  let mut omitted = merge_inputs
-    .ybn
-    .iter()
-    .map(|source| {
-      source
-        .original_path
-        .strip_prefix(&source_dir)
-        .map(|path| path.to_string_lossy().replace('\\', "/"))
-    })
-    .collect::<std::result::Result<BTreeSet<_>, _>>()?;
-  if !ymap_sources.is_empty() {
-    let raw_sources = ymap_sources
-      .iter()
-      .map(|(resource, path, _)| (resource.clone(), path.clone()))
-      .collect::<Vec<_>>();
-    fs::create_dir_all(&ymap_output_dir)?;
-    MergeYmap {
-      vanilla_dir: vanilla_cache_dir.join("latest/ymap"),
-      mod_dir: source_dir.clone(),
-      mod_ymap_dir: source_dir.clone(),
-      output_dir: ymap_output_dir.clone(),
-      rebuild_all: true,
-      blacklist_config: None,
-    }
-    .run_with_latest_vanilla_files(&selected_vanilla_ymaps, Some(&raw_sources))?;
-
-    let mut generated_ymaps = BTreeSet::new();
-    for entry in fs::read_dir(&ymap_output_dir)? {
-      let entry = entry?;
-      let Some(name) = entry.file_name().to_str().map(str::to_owned) else {
-        continue;
-      };
-      if !name.to_ascii_lowercase().ends_with(".ymap") {
-        continue;
-      }
-      generated_ymaps.insert(name.to_ascii_lowercase());
-    }
-    for source in &merge_inputs.ymap {
-      if generated_ymaps.contains(&source.file_name.to_ascii_lowercase()) {
-        omitted.insert(
-          source.original_path.strip_prefix(&source_dir)?.to_string_lossy().replace('\\', "/"),
-        );
-      }
-    }
-    let _ = fs::remove_file(ymap_output_dir.join("_copy_targets.txt"));
-    let _ = fs::remove_file(ymap_output_dir.join("_managed_ymaps.txt"));
-    let _ = fs::remove_dir_all(ymap_output_dir.join("clone"));
-  }
-  let _ = fs::remove_file(ybn_omit_path);
-  for entry in fs::read_dir(&staging.0)? {
-    let path = entry?.path();
-    let Some(extension) = path.extension().and_then(|extension| extension.to_str()) else {
-      continue;
-    };
-    if !path.is_file() || !matches!(extension.to_ascii_lowercase().as_str(), "ymap" | "ybn") {
-      continue;
-    }
-    let directory = staging.0.join(extension.to_ascii_lowercase());
-    fs::create_dir_all(&directory)?;
-    fs::rename(&path, directory.join(path.file_name().ok_or("Merged file has no name")?))?;
-  }
-  fs::write(staging.0.join("_omit.txt"), omitted.into_iter().collect::<Vec<_>>().join("\n"))?;
   publish_directory(&staging.0, &output_dir)?;
   log::info!("Published merged stream files to {}", output_dir.display());
   Ok(())
@@ -256,6 +174,109 @@ mod tests {
   use std::collections::BTreeMap;
 
   #[test]
+  #[ignore = "requires local vanilla YMAP schemas"]
+  fn incremental_ymap_merge_caches_noop_results_and_removes_obsolete_outputs() {
+    use crate::core::format::gamefile::{
+      meta_resource::{MetaResource, MetaSchemaCatalog},
+      meta_xml::ymap_to_model_with_entities,
+      resource_file::Rsc7Resource,
+    };
+    let local = Path::new(env!("CARGO_MANIFEST_DIR")).join("asset/vanilla-cache/latest/ymap");
+    let sample = fs::read_dir(local)
+      .unwrap()
+      .map(|entry| entry.unwrap().path())
+      .find(|path| path.file_name().unwrap().to_string_lossy().contains("occl"))
+      .unwrap();
+    let bytes = fs::read(sample).unwrap();
+    let meta = MetaResource::parse(&Rsc7Resource::decode(&bytes).unwrap()).unwrap();
+    let mut catalog = MetaSchemaCatalog::default();
+    catalog.add_resource(&meta);
+    let (model, entities) = ymap_to_model_with_entities(&bytes, &catalog.hash_names).unwrap();
+    let root = std::env::temp_dir().join(format!("incremental_ymap_{}", std::process::id()));
+    let _ = fs::remove_dir_all(&root);
+    let source = root.join("source");
+    let resource = source.join("resource");
+    let vanilla = root.join("vanilla");
+    let cache = root.join("vanilla-cache");
+    let source_cache = root.join("source-cache");
+    let output = root.join("merged");
+    fs::create_dir_all(resource.join("stream")).unwrap();
+    fs::write(resource.join("fxmanifest.lua"), []).unwrap();
+    let object = "0000-base/ymap/map.ymap";
+    fs::create_dir_all(vanilla.join("0000-base/ymap")).unwrap();
+    fs::write(vanilla.join(object), &bytes).unwrap();
+    write_json(
+      &vanilla.join("cache_info.json"),
+      &VanillaCacheManifest {
+        format_version: 1,
+        game_dir: root.join("game"),
+        versions: vec![CacheVersion {
+          id: "0000-base".into(),
+          parent: None,
+          archives: vec![],
+          unchanged: 0,
+          changes: BTreeMap::from([(
+            "map.ymap".into(),
+            FileChange {
+              previous_sha256: None,
+              file: CachedFile {
+                sha256: format!("{:x}", Sha256::digest(&bytes)),
+                object: object.into(),
+                source: "base.rpf/map.ymap".into(),
+              },
+            },
+          )]),
+        }],
+      },
+    )
+    .unwrap();
+    let mut unsupported = model.clone();
+    unsupported.flags ^= 1;
+    let write_source = |model: &crate::core::format::ymap::model::Ymap| {
+      fs::write(
+        resource.join("stream/map.ymap"),
+        crate::core::format::ymap::binary::write_ymap(model, &entities, &catalog).unwrap(),
+      )
+      .unwrap();
+    };
+    let read_cache = || {
+      serde_json::from_reader::<_, super::super::incremental::MergeMetadata>(
+        fs::File::open(output.join("merge_cache_info.json")).unwrap(),
+      )
+      .unwrap()
+    };
+    write_source(&unsupported);
+    run(&source, &vanilla, &cache, &source_cache, &output, false).unwrap();
+    let initial = read_cache();
+    assert!(initial.files["map.ymap"].output.is_none());
+    assert!(!output.join("ymap/map.ymap").exists());
+    run(&source, &vanilla, &cache, &source_cache, &output, false).unwrap();
+    assert_eq!(read_cache().files["map.ymap"].merged_at, initial.files["map.ymap"].merged_at);
+    let mut edited = model.clone();
+    let bit = (!edited.content_flags).trailing_zeros();
+    assert!(bit < 32);
+    edited.content_flags |= 1u32 << bit;
+    write_source(&edited);
+    run(&source, &vanilla, &cache, &source_cache, &output, false).unwrap();
+    assert!(output.join("ymap/map.ymap").is_file());
+    let actual = fs::read(output.join("ymap/map.ymap")).unwrap();
+    assert_eq!(
+      ymap_to_model_with_entities(&actual, &catalog.hash_names).unwrap().0.content_flags,
+      edited.content_flags
+    );
+    assert_eq!(fs::read_to_string(output.join("_omit.txt")).unwrap(), "resource/stream/map.ymap");
+    let changed = read_cache();
+    run(&source, &vanilla, &cache, &source_cache, &output, false).unwrap();
+    assert_eq!(read_cache().files["map.ymap"].merged_at, changed.files["map.ymap"].merged_at);
+    write_source(&unsupported);
+    run(&source, &vanilla, &cache, &source_cache, &output, false).unwrap();
+    assert!(!output.join("ymap/map.ymap").exists());
+    assert!(read_cache().files["map.ymap"].output.is_none());
+    assert!(fs::read_to_string(output.join("_omit.txt")).unwrap().is_empty());
+    fs::remove_dir_all(root).unwrap();
+  }
+
+  #[test]
   fn merge_dispatches_latest_vanilla_ybn_and_writes_omit_list() {
     let root = std::env::temp_dir().join(format!("merge_latest_{}", std::process::id()));
     let _ = fs::remove_dir_all(&root);
@@ -311,6 +332,27 @@ mod tests {
     )
     .unwrap();
 
+    let independent_object = "0000-base/ybn/independent.ybn";
+    fs::write(vanilla_dir.join(independent_object), &bytes).unwrap();
+    for stream in [&source_stream, &second_source_stream] {
+      fs::write(stream.join("independent.ybn"), &bytes).unwrap();
+    }
+    let mut manifest: VanillaCacheManifest =
+      serde_json::from_reader(fs::File::open(vanilla_dir.join("cache_info.json")).unwrap())
+        .unwrap();
+    manifest.versions[0].changes.insert(
+      "independent.ybn".into(),
+      FileChange {
+        previous_sha256: None,
+        file: CachedFile {
+          sha256: format!("{:x}", Sha256::digest(&bytes)),
+          object: independent_object.into(),
+          source: "base.rpf/independent.ybn".into(),
+        },
+      },
+    );
+    write_json(&vanilla_dir.join("cache_info.json"), &manifest).unwrap();
+
     run(&source_dir, &vanilla_dir, &vanilla_cache_dir, &source_cache_dir, &output_dir, false)
       .unwrap();
 
@@ -325,7 +367,7 @@ mod tests {
     assert!(diff.polygon_diffs.is_empty());
     assert_eq!(
       fs::read_to_string(output_dir.join("_omit.txt")).unwrap().trim(),
-      "resource_a/stream/collision.ybn\nresource_b/stream/collision.ybn"
+      "resource_a/stream/collision.ybn\nresource_a/stream/independent.ybn\nresource_b/stream/collision.ybn\nresource_b/stream/independent.ybn"
     );
     let deployment = crate::core::deploy::Deploy {
       merged_dir: output_dir.clone(),
@@ -333,13 +375,119 @@ mod tests {
       output_dir: root.join("deployed"),
       force: false,
     };
-    assert_eq!(deployment.run().unwrap().copied, 1);
+    assert_eq!(deployment.run().unwrap().copied, 2);
     assert_eq!(
       fs::read(root.join("deployed/stream/ybn/merged/collision.ybn")).unwrap(),
       fs::read(output_dir.join("ybn/collision.ybn")).unwrap(),
     );
     assert!(!root.join("deployed/stream/ybn/clone").exists());
     assert_eq!(deployment.run().unwrap().copied, 0);
+    let read_cache = || {
+      serde_json::from_reader::<_, super::super::incremental::MergeMetadata>(
+        fs::File::open(output_dir.join("merge_cache_info.json")).unwrap(),
+      )
+      .unwrap()
+    };
+    let initial = read_cache();
+    assert_eq!(initial.files.len(), 2);
+    let independent = output_dir.join("ybn/independent.ybn");
+    let modified = fs::metadata(&independent).unwrap().modified().unwrap();
+    let cache_modified =
+      fs::metadata(output_dir.join("merge_cache_info.json")).unwrap().modified().unwrap();
+    run(&source_dir, &vanilla_dir, &vanilla_cache_dir, &source_cache_dir, &output_dir, false)
+      .unwrap();
+    assert_eq!(
+      fs::metadata(output_dir.join("merge_cache_info.json")).unwrap().modified().unwrap(),
+      cache_modified
+    );
+    fs::File::options()
+      .write(true)
+      .open(source_cache_dir.join("resources/resource_a/independent.ybn"))
+      .unwrap()
+      .set_times(
+        fs::FileTimes::new()
+          .set_modified(std::time::UNIX_EPOCH + std::time::Duration::from_secs(10)),
+      )
+      .unwrap();
+    run(&source_dir, &vanilla_dir, &vanilla_cache_dir, &source_cache_dir, &output_dir, false)
+      .unwrap();
+    assert_eq!(
+      read_cache().files["independent.ybn"].merged_at,
+      initial.files["independent.ybn"].merged_at
+    );
+    assert_eq!(fs::metadata(&independent).unwrap().modified().unwrap(), modified);
+    let mut changed_source = bytes.clone();
+    changed_source.extend_from_slice(b"changed source fingerprint");
+    crate::core::format::ybn::read_ybn(&changed_source).unwrap();
+    let cached_source = source_cache_dir.join("resources/resource_a/collision.ybn");
+    fs::write(&cached_source, &changed_source).unwrap();
+    run(&source_dir, &vanilla_dir, &vanilla_cache_dir, &source_cache_dir, &output_dir, false)
+      .unwrap();
+    let changed = read_cache();
+    assert_ne!(changed.files["collision.ybn"].merged_at, initial.files["collision.ybn"].merged_at);
+    assert_eq!(
+      changed.files["independent.ybn"].merged_at,
+      initial.files["independent.ybn"].merged_at
+    );
+    assert_eq!(fs::metadata(&independent).unwrap().modified().unwrap(), modified);
+    fs::write(output_dir.join("ybn/collision.ybn"), b"broken output").unwrap();
+    run(&source_dir, &vanilla_dir, &vanilla_cache_dir, &source_cache_dir, &output_dir, false)
+      .unwrap();
+    crate::core::format::ybn::read_ybn(&fs::read(output_dir.join("ybn/collision.ybn")).unwrap())
+      .unwrap();
+    assert_eq!(
+      read_cache().files["independent.ybn"].merged_at,
+      initial.files["independent.ybn"].merged_at
+    );
+    let before_vanilla = read_cache();
+    let mut updated_vanilla = bytes.clone();
+    updated_vanilla.extend_from_slice(b"changed vanilla fingerprint");
+    fs::write(&vanilla_file, &updated_vanilla).unwrap();
+    manifest.versions[0].changes.get_mut("collision.ybn").unwrap().file.sha256 =
+      format!("{:x}", Sha256::digest(&updated_vanilla));
+    write_json(&vanilla_dir.join("cache_info.json"), &manifest).unwrap();
+    run(&source_dir, &vanilla_dir, &vanilla_cache_dir, &source_cache_dir, &output_dir, false)
+      .unwrap();
+    let after_vanilla = read_cache();
+    assert_ne!(
+      after_vanilla.files["collision.ybn"].merged_at,
+      before_vanilla.files["collision.ybn"].merged_at
+    );
+    assert_eq!(
+      after_vanilla.files["independent.ybn"].merged_at,
+      before_vanilla.files["independent.ybn"].merged_at
+    );
+    fs::remove_file(&independent).unwrap();
+    run(&source_dir, &vanilla_dir, &vanilla_cache_dir, &source_cache_dir, &output_dir, false)
+      .unwrap();
+    assert!(independent.is_file());
+    let before_force = read_cache();
+    run(&source_dir, &vanilla_dir, &vanilla_cache_dir, &source_cache_dir, &output_dir, true)
+      .unwrap();
+    let forced = read_cache();
+    assert!(
+      forced
+        .files
+        .iter()
+        .all(|(name, record)| record.merged_at != before_force.files[name].merged_at)
+    );
+    let preserved = fs::read(output_dir.join("merge_cache_info.json")).unwrap();
+    let preserved_output = fs::read(output_dir.join("ybn/collision.ybn")).unwrap();
+    fs::write(&cached_source, b"invalid source file").unwrap();
+    assert!(
+      run(&source_dir, &vanilla_dir, &vanilla_cache_dir, &source_cache_dir, &output_dir, false)
+        .is_err()
+    );
+    assert_eq!(fs::read(output_dir.join("merge_cache_info.json")).unwrap(), preserved);
+    assert_eq!(fs::read(output_dir.join("ybn/collision.ybn")).unwrap(), preserved_output);
+    fs::write(cached_source, changed_source).unwrap();
+    fs::remove_dir_all(&second_resource_dir).unwrap();
+    run(&source_dir, &vanilla_dir, &vanilla_cache_dir, &source_cache_dir, &output_dir, false)
+      .unwrap();
+    assert!(read_cache().files.is_empty());
+    assert!(!output_dir.join("ybn/collision.ybn").exists());
+    assert!(!independent.exists());
+    assert!(fs::read_to_string(output_dir.join("_omit.txt")).unwrap().is_empty());
     fs::remove_dir_all(root).unwrap();
   }
 }

@@ -78,6 +78,16 @@ raw archive. The single `names` map contains embedded YMAP names and entity
 archetypes as `hash: text` entries; entity GUIDs are not included. Regenerate an older raw
 cache once to populate the RPF-name candidates used to resolve prop names.
 
+## Incremental Merge
+
+`--merge` stores source/vanilla mtime, size, SHA-256, dependency information and
+output/no-output results in `merge_cache_info.json` under merged output. Only
+changed or invalid groups are merged again: YBNs by basename, YMAPs by connected
+parent/child relationships. Timestamp-only changes do not require remerging;
+missing or changed generated files are rebuilt. Unchanged outputs retain mtime,
+and removed inputs or newly unchanged results remove obsolete output and omit
+entries. `-f` forces this merge stage without forcing its prerequisites.
+
 ## Deployment
 
 Merge writes native files under `asset/merged/ymap/` and `asset/merged/ybn/`,

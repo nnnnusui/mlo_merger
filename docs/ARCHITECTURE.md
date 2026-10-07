@@ -28,6 +28,22 @@ alone do not cause output; changed fields, runtime entity order and repaired
 references do. A run with no edited YMAPs succeeds without generating YMAP files.
 Only source YMAPs replaced by generated output are listed in `_omit.txt`.
 
+Merge records per-filename source and vanilla mtime, size and SHA-256, dependency
+links, an algorithm version, and the output fingerprint or a no-output result
+in `merge_cache_info.json`. Unchanged file stats reuse hashes; timestamp-only
+changes refresh provenance without remerging. YBNs are independent basename
+groups. YMAPs are conservative connected parent/child groups formed from both
+vanilla relationships and source parent references, so a changed layout cannot
+reuse stale related maps. Only groups with changed contents/dependencies or
+missing/altered output are merged again. `-f` forces all current groups while
+prerequisites retain their normal freshness checks.
+
+Unchanged outputs are linked or copied into staging only when publication is
+needed; their modification times are preserved. Removed inputs and results that
+become no-ops disappear from the new publication. Failed runs leave existing
+merged files and merge metadata intact. A fully current run does not replace
+the merged directory.
+
 ## Deploy
 
 Deployment consumes existing merged output and `source-cache/resources` without
