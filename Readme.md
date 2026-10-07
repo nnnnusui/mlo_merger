@@ -17,9 +17,9 @@ cargo build
 ## CLI
 
 The command interface is being reorganized. `--generate-vanilla`,
-`--generate-vanilla-cache`, `--to-xml`, and
-`--from-xml` call core implementations. Source scanning, merge, and diff
-commands currently only print a mock invocation.
+`--generate-vanilla-cache`, `--generate-source-cache`, `--to-xml`, and
+`--from-xml` call core implementations. Merge and diff commands currently only
+print a mock invocation.
 
 ```bash
 cargo run -- --generate-vanilla -i /mnt/gtav -o asset/vanilla
@@ -41,6 +41,10 @@ DLC stage name; mapping numeric game build IDs is not implemented yet.
 `--vanilla` supplies source schema/template files to `--from-xml`. Run
 `cargo run -- --help` for the full interface. Convenience aliases are defined in
 [.cargo/config.toml](.cargo/config.toml).
+
+`--generate-source-cache` inventories YMAP/YBN stream files by resource, records
+exact latest-vanilla content matches and parent/child processing closure, and
+writes cross-resource duplicate-filename conflicts. It does not generate diffs.
 
 `--generate-vanilla` writes `rpf_names.json` and `hash_names.json` alongside the
 raw archive. The single `names` map contains embedded YMAP names and entity

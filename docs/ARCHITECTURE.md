@@ -74,6 +74,15 @@ manifest fingerprint and timestamps of referenced raw files. A changed timestamp
 selected final stage, or missing link triggers a rebuild. This cache is separate
 from the raw archive and can be recreated from it.
 
+The source-cache command first ensures the derived vanilla cache is current,
+then inventories supported YMAP/YBN inputs by resource and format. It records
+source paths, fingerprints, exact latest-vanilla content matches, and
+cross-resource basename conflicts; it does not generate semantic or binary
+diffs. Changed source parents expand the YMAP read/rebuild plan through the
+latest relationship index, including source children in other resources. Input
+and upstream revisions allow unchanged runs to be skipped; a stale source
+cache is rebuilt as one staged, atomic publication.
+
 Raw archive publication occurs after all stages complete; failures retain
 diagnostic logs without publishing an incomplete cache. Version lookup is a
 read-only metadata query over stages that introduced or changed a filename.

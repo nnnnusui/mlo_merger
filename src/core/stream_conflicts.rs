@@ -114,8 +114,9 @@ pub fn scan_stream_conflicts(input_dir: &Path) -> io::Result<StreamConflictRepor
 }
 
 fn find_stream_directories(input_dir: &Path) -> io::Result<Vec<PathBuf>> {
-  if input_dir.file_name().is_some_and(|name| name.to_string_lossy().eq_ignore_ascii_case("stream"))
-  {
+  if input_dir.file_name().is_some_and(|name| {
+    ["stream", "streams"].iter().any(|stream| name.to_string_lossy().eq_ignore_ascii_case(stream))
+  }) {
     return Ok(vec![input_dir.to_path_buf()]);
   }
 
@@ -130,7 +131,7 @@ fn find_stream_directories(input_dir: &Path) -> io::Result<Vec<PathBuf>> {
   Ok(
     resources
       .into_iter()
-      .map(|resource| resource.join("stream"))
+      .flat_map(|resource| ["stream", "streams"].into_iter().map(move |name| resource.join(name)))
       .filter(|stream| stream.is_dir())
       .collect(),
   )
@@ -144,16 +145,19 @@ mod tests {
   fn finds_case_insensitive_filename_collisions_across_streams() {
     let temp_dir = std::env::temp_dir().join(format!("stream_conflicts_{}", std::process::id()));
     let first_stream = temp_dir.join("resource_a/stream/ymap");
+    let plural_stream = temp_dir.join("resource_a/streams/ymap");
     let second_stream = temp_dir.join("resource_b/stream/other");
     let third_stream = temp_dir.join("resource_b/stream/ytyp");
     let unmanifested_stream = temp_dir.join("not_a_resource/stream");
     std::fs::create_dir_all(&first_stream).unwrap();
+    std::fs::create_dir_all(&plural_stream).unwrap();
     std::fs::create_dir_all(&second_stream).unwrap();
     std::fs::create_dir_all(&third_stream).unwrap();
     std::fs::create_dir_all(&unmanifested_stream).unwrap();
     std::fs::write(temp_dir.join("resource_a/fxmanifest.lua"), []).unwrap();
     std::fs::write(temp_dir.join("resource_b/__resource.lua"), []).unwrap();
     std::fs::write(first_stream.join("mission.ymap"), []).unwrap();
+    std::fs::write(plural_stream.join("mission.ymap"), []).unwrap();
     std::fs::write(second_stream.join("MISSION.YMAP"), []).unwrap();
     std::fs::write(first_stream.join("unique.ytyp"), []).unwrap();
     std::fs::write(first_stream.join("shared.ytyp"), []).unwrap();
@@ -161,10 +165,10 @@ mod tests {
     std::fs::write(unmanifested_stream.join("mission.ymap"), []).unwrap();
 
     let report = scan_stream_conflicts(&temp_dir).unwrap();
-    assert_eq!(report.scanned_file_count, 5);
+    assert_eq!(report.scanned_file_count, 6);
     assert_eq!(report.conflict_count, 2);
     assert_eq!(report.conflicts[".ymap"][0].file_name, "mission.ymap");
-    assert_eq!(report.conflicts[".ymap"][0].paths.len(), 2);
+    assert_eq!(report.conflicts[".ymap"][0].paths.len(), 3);
     assert_eq!(report.conflicts[".ytyp"][0].file_name, "shared.ytyp");
     assert_eq!(report.conflicts[".ytyp"][0].paths.len(), 2);
 

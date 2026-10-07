@@ -200,7 +200,7 @@ fn children_by_parent_hash(
   children
 }
 
-fn ymap_parent_hash(path: &Path) -> Result<u32> {
+pub(crate) fn ymap_parent_hash(path: &Path) -> Result<u32> {
   let bytes = fs::read(path)?;
   if !bytes.starts_with(b"RSC7") {
     let ymap = read_ymap(path)?;

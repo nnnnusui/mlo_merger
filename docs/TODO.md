@@ -34,12 +34,14 @@
 
 ## Source Derived Cache (`source-cache`)
 
-- [ ] Add `--generate-source-cache` to create or update source-derived data from `asset/source` and `vanilla-cache`.
-- [ ] Cache vanilla-matched source modifications and cross-resource conflicts, grouped by resource and format, plus the source paths needed for resolution.
-- [ ] Record source file timestamps/fingerprints and relevant `vanilla-cache` revisions; regenerate only entries affected by changed, added, removed, or stale inputs.
-- [ ] Use `vanilla-cache` indexes to determine which YMAPs and relationship files must be considered without loading all vanilla YMAPs.
-- [ ] After identifying changes per resource, run a second source-wide detection pass: changing a parent YMAP can require rebuilding child YMAPs in other resources, so the final affected set cannot be the union of per-resource scans alone.
-- [ ] Preserve conflict provenance and the affected-file closure needed by merge.
+- [x] Add `--generate-source-cache` to ensure `vanilla-cache` and inventory `asset/source` without calculating diffs.
+- [x] Record YMAP/YBN source paths, fingerprints, latest vanilla filename/hash matches, and cross-resource conflicts grouped by resource and format.
+- [x] Record source fingerprints and relevant vanilla-cache revisions; skip the whole cache when unchanged.
+- [ ] Rebuild only entries affected by changed, added, removed, or stale source inputs.
+- [x] Use the derived latest-file and YMAP relationship index without loading all vanilla YMAP bodies or generating diffs.
+- [x] Run a source-wide pass to include cross-resource YMAP children of changed or unmatched parent YMAPs.
+- [x] Preserve conflict paths and affected-file closure for merge processing.
+- [x] Retain a source-cache generation summary log.
 
 ## Merged Output
 

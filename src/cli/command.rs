@@ -58,7 +58,7 @@ pub fn run(command: Command) -> Result<(), Box<dyn std::error::Error>> {
   match command {
     Command::GenerateVanilla(command) => generate_vanilla::run(command)?,
     Command::GenerateVanillaCache(command) => generate_vanilla_cache::run(command)?,
-    Command::GenerateSourceCache(command) => generate_source_cache::run_mock(command),
+    Command::GenerateSourceCache(command) => generate_source_cache::run(command)?,
     Command::Merge(command) => merge::run_mock(command),
     Command::ToXml(command) => to_xml::run(command)?,
     Command::FromXml(command) => from_xml::run(command)?,

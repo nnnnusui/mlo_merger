@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use bpaf::*;
+use simplelog::{ColorChoice, CombinedLogger, Config, LevelFilter, TermLogger, TerminalMode};
 
 use super::common::{self, CommonOptions};
 
@@ -30,10 +31,26 @@ pub fn parser() -> impl Parser<GenerateSourceCache> {
   })
 }
 
-/// Prints a mock invocation without scanning resources.
-pub fn run_mock(command: GenerateSourceCache) {
-  println!(
-    "mock: --generate-source-cache source_dir={:?} options={:?}",
-    command.source_dir, command.common
-  );
+/// Builds or reuses the source-derived conflict cache.
+pub fn run(command: GenerateSourceCache) -> Result<(), Box<dyn std::error::Error>> {
+  CombinedLogger::init(vec![TermLogger::new(
+    LevelFilter::Info,
+    Config::default(),
+    TerminalMode::Mixed,
+    ColorChoice::Auto,
+  )])?;
+  let rebuilt = crate::core::source_cache::BuildSourceCache {
+    source_dir: command.source_dir,
+    output_dir: command.common.output,
+    vanilla_dir: command.common.vanilla,
+    vanilla_cache_dir: command.common.vanilla_cache,
+    force: command.common.force,
+  }
+  .run()?;
+  if rebuilt {
+    println!("Generated source cache.");
+  } else {
+    println!("Source cache is current; nothing to do.");
+  }
+  Ok(())
 }
