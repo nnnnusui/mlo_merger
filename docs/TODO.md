@@ -71,8 +71,10 @@
 
 - [x] Support latest-vanilla YBN merge: apply supported source changes directly to the latest vanilla file and emit merged files and omit information.
 - [x] Support latest-vanilla YMAP merge without historical baseline inference.
+- [x] Generate only YMAPs whose final supported model or repaired parent references differ from vanilla; allow no-op merges without emitting YMAPs or omit entries.
 - [x] Keep YBN on its own merge path; versioned JSON diff output is out of scope for this version.
-- [ ] Replace the YMAP model-to-native XML conversion adapter with a direct binary writer.
+- [x] Replace the YMAP model-to-native XML conversion adapter with a direct binary writer.
+- [x] Split the native YMAP writer by responsibility and share checked binary storage helpers with YBN under `format/gamefile`.
 - [ ] Report unsupported hierarchy/shape changes and define the existing conservative fallback behavior explicitly.
 
 ## Ver2: YMAP Merge

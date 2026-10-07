@@ -7,10 +7,7 @@ use std::{
 use walkdir::WalkDir;
 
 use super::{run::MergeYmap, ybn_conflicts::MergeYbnConflicts};
-use crate::core::{
-  conversion,
-  source_cache::{self, BuildSourceCache},
-};
+use crate::core::source_cache::{self, BuildSourceCache};
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
@@ -88,8 +85,7 @@ pub fn run(
       log::warn!("Latest vanilla YMAP {name} is missing; skipping it");
     }
   }
-  let ymap_xml_dir = staging.0.join("ymap_xml");
-  let ymap_output_dir = staging.0.join("ymap_output");
+  let ymap_output_dir = staging.0.join("ymap");
   let mut omitted = merge_inputs
     .ybn
     .iter()
@@ -105,65 +101,40 @@ pub fn run(
       .iter()
       .map(|(resource, path, _)| (resource.clone(), path.clone()))
       .collect::<Vec<_>>();
-    for source in &merge_inputs.ymap {
-      omitted.insert(
-        source.original_path.strip_prefix(&source_dir)?.to_string_lossy().replace('\\', "/"),
-      );
-    }
-    fs::create_dir_all(&ymap_xml_dir)?;
     fs::create_dir_all(&ymap_output_dir)?;
     MergeYmap {
       vanilla_dir: vanilla_cache_dir.join("latest/ymap"),
       mod_dir: source_dir.clone(),
       mod_ymap_dir: source_dir.clone(),
-      output_dir: ymap_xml_dir.clone(),
+      output_dir: ymap_output_dir.clone(),
       rebuild_all: true,
       blacklist_config: None,
     }
     .run_with_latest_vanilla_files(&selected_vanilla_ymaps, Some(&raw_sources))?;
 
-    let schema_dir = staging.0.join("ymap_schemas");
-    fs::create_dir_all(&schema_dir)?;
-    let vanilla_by_name = selected_vanilla_ymaps
-      .iter()
-      .filter_map(|path| path.file_name()?.to_str().map(|name| (name.to_ascii_lowercase(), path)))
-      .collect::<std::collections::HashMap<_, _>>();
-    for entry in fs::read_dir(&ymap_xml_dir)? {
+    let mut generated_ymaps = BTreeSet::new();
+    for entry in fs::read_dir(&ymap_output_dir)? {
       let entry = entry?;
       let Some(name) = entry.file_name().to_str().map(str::to_owned) else {
         continue;
       };
-      let Some(vanilla_name) = name.strip_suffix(".xml") else {
-        continue;
-      };
-      if !vanilla_name.to_ascii_lowercase().ends_with(".ymap") {
+      if !name.to_ascii_lowercase().ends_with(".ymap") {
         continue;
       }
-      let vanilla = vanilla_by_name
-        .get(&vanilla_name.to_ascii_lowercase())
-        .ok_or_else(|| format!("Latest vanilla YMAP is missing: {vanilla_name}"))?;
-      fs::copy(vanilla, schema_dir.join(vanilla_name))?;
+      generated_ymaps.insert(name.to_ascii_lowercase());
     }
-    let (converted, failed) =
-      conversion::from_xml(&ymap_xml_dir, &ymap_output_dir, Some(&schema_dir))?;
-    if failed != 0 || converted == 0 {
-      return Err(
-        format!("Could not convert merged YMAPs: {converted} converted, {failed} failed").into(),
-      );
-    }
-    for entry in fs::read_dir(&ymap_output_dir)? {
-      let entry = entry?;
-      let path = entry.path();
-      if path.extension().is_some_and(|extension| extension.eq_ignore_ascii_case("ymap")) {
-        let destination = staging.0.join(path.file_name().ok_or("Merged YMAP has no filename")?);
-        fs::rename(path, destination)?;
+    for source in &merge_inputs.ymap {
+      if generated_ymaps.contains(&source.file_name.to_ascii_lowercase()) {
+        omitted.insert(
+          source.original_path.strip_prefix(&source_dir)?.to_string_lossy().replace('\\', "/"),
+        );
       }
     }
+    let _ = fs::remove_file(ymap_output_dir.join("_copy_targets.txt"));
+    let _ = fs::remove_file(ymap_output_dir.join("_managed_ymaps.txt"));
+    let _ = fs::remove_dir_all(ymap_output_dir.join("clone"));
   }
   let _ = fs::remove_file(ybn_omit_path);
-  let _ = fs::remove_dir_all(ymap_xml_dir);
-  let _ = fs::remove_dir_all(ymap_output_dir);
-  let _ = fs::remove_dir_all(staging.0.join("ymap_schemas"));
   for entry in fs::read_dir(&staging.0)? {
     let path = entry?.path();
     let Some(extension) = path.extension().and_then(|extension| extension.to_str()) else {

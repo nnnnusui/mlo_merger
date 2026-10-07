@@ -1,6 +1,9 @@
 //! Checked binary record and pointer helpers.
 
 use super::super::*;
+pub(in crate::core::format::ybn) use crate::core::format::gamefile::binary_io::{
+  append, reserve, write,
+};
 
 pub(in crate::core::format::ybn) fn read_address_table(
   resource: &Rsc7Resource,
@@ -210,18 +213,6 @@ pub(in crate::core::format::ybn) fn write_vec3(
   }
   Ok(())
 }
-pub(in crate::core::format::ybn) fn write(
-  bytes: &mut [u8],
-  offset: usize,
-  value: &[u8],
-) -> io::Result<()> {
-  let end = offset.checked_add(value.len()).ok_or_else(|| invalid("YBN write offset overflows"))?;
-  bytes
-    .get_mut(offset..end)
-    .ok_or_else(|| invalid("YBN write range is out of bounds"))?
-    .copy_from_slice(value);
-  Ok(())
-}
 pub(in crate::core::format::ybn) fn ensure_len(
   bytes: &mut Vec<u8>,
   length: usize,
@@ -229,25 +220,6 @@ pub(in crate::core::format::ybn) fn ensure_len(
   if bytes.len() < length {
     bytes.resize(length, 0);
   }
-}
-pub(in crate::core::format::ybn) fn reserve(
-  bytes: &mut Vec<u8>,
-  length: usize,
-) -> io::Result<usize> {
-  let padding = (16 - bytes.len() % 16) % 16;
-  bytes.resize(bytes.len() + padding, 0);
-  let offset = bytes.len();
-  let end = offset.checked_add(length).ok_or_else(|| invalid("YBN output size overflows"))?;
-  bytes.resize(end, 0);
-  Ok(offset)
-}
-pub(in crate::core::format::ybn) fn append(
-  bytes: &mut Vec<u8>,
-  value: &[u8],
-) -> io::Result<usize> {
-  let offset = reserve(bytes, value.len())?;
-  bytes[offset..offset + value.len()].copy_from_slice(value);
-  Ok(offset)
 }
 pub(in crate::core::format::ybn) fn address(offset: usize) -> io::Result<u64> {
   let offset = u32::try_from(offset).map_err(|_| invalid("YBN resource exceeds address space"))?;

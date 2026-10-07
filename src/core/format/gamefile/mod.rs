@@ -1,3 +1,4 @@
+pub(crate) mod binary_io;
 pub mod meta_resource;
 pub mod meta_xml;
 pub mod pso;

@@ -81,7 +81,9 @@ cache once to populate the RPF-name candidates used to resolve prop names.
 ## Deployment
 
 Merge writes native files under `asset/merged/ymap/` and `asset/merged/ybn/`,
-with `_omit.txt` at the merged root. `--deploy` copies existing outputs without
+with YMAP models written directly to RSC7 using embedded META schemas, without
+intermediate XML.
+`_omit.txt` stays at the merged root. `--deploy` copies existing outputs without
 running merge or cache generation. Its default input is `asset/merged` and its
 default output is `asset/merged_mlo`.
 

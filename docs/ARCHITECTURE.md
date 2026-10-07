@@ -22,6 +22,11 @@ Merge output is staged and replaces the selected output directory after a
 successful run. The default output is `asset/merged`. Its source-cache
 prerequisite moves vanilla-named source stream files into the cache; merge reads
 those cached files and retains original resource paths for omit information.
+YMAP output is limited to final models that differ from vanilla after supported
+merges and parent-reference repairs. Identical inputs and basename conflicts
+alone do not cause output; changed fields, runtime entity order and repaired
+references do. A run with no edited YMAPs succeeds without generating YMAP files.
+Only source YMAPs replaced by generated output are listed in `_omit.txt`.
 
 ## Deploy
 
@@ -55,8 +60,13 @@ directly with the matching latest vanilla stream file, applies the supported
 changes, repairs parent references, and rebuilds native files. Historical
 baseline inference is planned for ver2. The source-cache is refreshed as a
 prerequisite; merge decodes source and latest vanilla binaries directly into
-YMAP models without an XML input round-trip. Model-to-native YMAP output still
-uses the existing XML conversion adapter.
+YMAP models without an XML input round-trip. Edited models and their ordered
+entities are written directly to RSC7 binaries using compatible embedded META
+schemas from the selected vanilla/source files. Merge does not create intermediate
+XML or schema-copy directories. Explicit XML conversion and legacy XML-input
+merge workflows remain available separately.
+Native YMAP and YBN writers share checked record writes and 16-byte aligned
+storage, while META schemas and collision Bounds remain format-specific.
 
 YBN merging applies source files directly to the matching latest vanilla file.
 Multiple resources with the same basename are combined deterministically by

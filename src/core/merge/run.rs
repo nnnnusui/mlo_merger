@@ -41,7 +41,7 @@ impl MergeYmap {
     self.run_inner(Some(history), None, None)
   }
 
-  /// Merges source maps directly against the supplied latest vanilla stream files.
+  /// Merges source maps against the supplied latest vanilla files and emits edited RSC7 binaries.
   pub fn run_with_latest_vanilla_files(
     &self,
     vanilla_files: &[PathBuf],
@@ -76,6 +76,24 @@ impl MergeYmap {
 
     let vanilla = if history.is_none() && latest_files.is_none() {
       Some(VanillaParentCache::update(&self.vanilla_dir)?.0)
+    } else {
+      None
+    };
+    let binary_catalog = if let Some(files) = latest_files {
+      use crate::core::format::gamefile::{
+        meta_resource::{MetaResource, MetaSchemaCatalog},
+        resource_file::Rsc7Resource,
+      };
+      let mut catalog = MetaSchemaCatalog::default();
+      for path in files.iter().chain(raw_sources.into_iter().flatten().map(|(_, path)| path)) {
+        let bytes = fs::read(path)?;
+        if let Ok(resource) = Rsc7Resource::decode(&bytes)
+          && let Ok(meta) = MetaResource::parse(&resource)
+        {
+          catalog.add_resource(&meta);
+        }
+      }
+      Some(catalog)
     } else {
       None
     };
@@ -458,6 +476,9 @@ impl MergeYmap {
           repaired += 1;
         }
       }
+      if output.rebuild && output.copy_target.is_none() {
+        output.rebuild = output.differs_from_original();
+      }
     }
     log::info!(
       "Repaired parent references; promoted {repaired} clone/vanilla child YMAPs for rebuild"
@@ -476,8 +497,32 @@ impl MergeYmap {
     for output in planned.into_values() {
       let xml_path = self.output_dir.join(&output.name);
       let binary_name = output.name.trim_end_matches(".xml");
+      let binary_path = self.output_dir.join(binary_name);
       let clone_path = clone_ymap_dir.join(binary_name);
       if output.rebuild {
+        if let Some(catalog) = &binary_catalog {
+          let entities = match &output.clone_entities {
+            Some(entities) => runtime_entities(entities.iter()),
+            None => runtime_entities(output.model.entity_map.values()),
+          }
+          .into_iter()
+          .cloned()
+          .collect::<Vec<_>>();
+          let bytes =
+            crate::core::format::ymap::binary::write_ymap(&output.model, &entities, catalog)
+              .map_err(|error| {
+                std::io::Error::new(error.kind(), format!("Cannot write {binary_name}: {error}"))
+              })?;
+          fs::write(&binary_path, bytes)?;
+          if xml_path != binary_path && xml_path.exists() {
+            fs::remove_file(&xml_path)?;
+          }
+          if clone_path.exists() {
+            fs::remove_file(&clone_path)?;
+          }
+          log::info!("  [Success] Wrote merged/relinked YMAP binary to: {}", binary_path.display());
+          continue;
+        }
         let xml_string = if let Some(entities) = &output.clone_entities {
           if output.original.xml.is_empty() {
             let mut model = output.model.clone();
@@ -518,6 +563,9 @@ impl MergeYmap {
           "Copied single-mod YMAP to clone output (vanilla diff merge skipped): {binary_name}"
         );
       } else {
+        if binary_catalog.is_some() && binary_path.exists() {
+          fs::remove_file(&binary_path)?;
+        }
         if xml_path.exists() {
           fs::remove_file(&xml_path)?;
         }
@@ -578,6 +626,22 @@ struct PlannedMap {
 }
 
 impl PlannedMap {
+  /// Compares runtime entity order and final fields without internal normalized entity keys.
+  fn differs_from_original(&self) -> bool {
+    let mut before = self.original.model.clone();
+    let mut after = self.model.clone();
+    before.entity_map.clear();
+    after.entity_map.clear();
+    if before != after {
+      return true;
+    }
+    let entities = match &self.clone_entities {
+      Some(entities) => runtime_entities(entities.iter()),
+      None => runtime_entities(self.model.entity_map.values()),
+    };
+    entities != runtime_entities(self.original.entities.iter())
+  }
+
   fn entity_at(
     &self,
     index: usize,
@@ -694,6 +758,156 @@ mod tests {
   }
 
   #[test]
+  #[ignore = "requires local vanilla YMAP schemas"]
+  fn latest_ymap_merge_writes_binary_without_xml() {
+    use crate::core::format::gamefile::{
+      meta_resource::{MetaResource, MetaSchemaCatalog},
+      meta_xml::ymap_to_model_with_entities,
+      resource_file::Rsc7Resource,
+    };
+    let base = Path::new(env!("CARGO_MANIFEST_DIR")).join("asset/vanilla-cache/latest/ymap");
+    let mut files =
+      fs::read_dir(base).unwrap().map(|entry| entry.unwrap().path()).collect::<Vec<_>>();
+    files.sort();
+    let root = std::env::temp_dir().join(format!("ymap_direct_merge_{}", std::process::id()));
+    let _ = fs::remove_dir_all(&root);
+    fs::create_dir_all(root.join("vanilla")).unwrap();
+    fs::create_dir_all(root.join("source")).unwrap();
+    let source = files
+      .iter()
+      .find(|file| file.file_stem().unwrap().to_string_lossy().contains("occl"))
+      .unwrap();
+    let bytes = fs::read(source).unwrap();
+    let meta = MetaResource::parse(&Rsc7Resource::decode(&bytes).unwrap()).unwrap();
+    let mut compatible = MetaSchemaCatalog::default();
+    compatible.add_resource(&meta);
+    let (model, entities) = ymap_to_model_with_entities(&bytes, &compatible.hash_names).unwrap();
+    let name = source.file_name().unwrap();
+    let vanilla = root.join("vanilla").join(name);
+    let source_path = root.join("source").join(name);
+    fs::write(&vanilla, &bytes).unwrap();
+    fs::write(&source_path, &bytes).unwrap();
+    let merge = MergeYmap {
+      vanilla_dir: root.join("vanilla"),
+      mod_dir: root.join("source"),
+      mod_ymap_dir: root.join("source"),
+      output_dir: root.join("output"),
+      rebuild_all: true,
+      blacklist_config: None,
+    };
+    merge
+      .run_with_latest_vanilla_files(
+        std::slice::from_ref(&vanilla),
+        Some(&[("resource".into(), source_path.clone())]),
+      )
+      .unwrap();
+    assert!(!root.join("output").join(name).exists());
+    let mut edited = model.clone();
+    let bit = (!model.content_flags).trailing_zeros();
+    assert!(bit < 32);
+    edited.content_flags |= 1u32 << bit;
+    fs::write(
+      &source_path,
+      crate::core::format::ymap::binary::write_ymap(&edited, &entities, &compatible).unwrap(),
+    )
+    .unwrap();
+    merge
+      .run_with_latest_vanilla_files(
+        std::slice::from_ref(&vanilla),
+        Some(&[("resource".into(), source_path.clone())]),
+      )
+      .unwrap();
+    let output = fs::read(root.join("output").join(name)).unwrap();
+    assert!(output.starts_with(b"RSC7"));
+    assert!(!root.join("output").join(format!("{}.xml", name.to_string_lossy())).exists());
+    let (restored, restored_entities) =
+      ymap_to_model_with_entities(&output, &compatible.hash_names).unwrap();
+    assert_eq!(restored.content_flags, edited.content_flags);
+    assert_eq!(restored_entities, entities);
+    fs::write(&source_path, bytes).unwrap();
+    merge
+      .run_with_latest_vanilla_files(&[vanilla], Some(&[("resource".into(), source_path)]))
+      .unwrap();
+    assert!(!root.join("output").join(name).exists());
+    fs::remove_dir_all(root).unwrap();
+  }
+
+  #[test]
+  fn final_ymap_edit_detection_ignores_internal_keys_but_keeps_repairs() {
+    let sample =
+      Path::new(env!("CARGO_MANIFEST_DIR")).join("docs/sample/parent_refs/vanilla_parent.ymap.xml");
+    let original = Rc::new(OriginalMap::load(&sample).unwrap());
+    let mut output = PlannedMap {
+      name: "parent.ymap.xml".into(),
+      model: original.model.clone(),
+      clone_entities: None,
+      original: Rc::clone(&original),
+      copy_target: None,
+      rebuild: true,
+    };
+    output.model.entity_map = original
+      .entities
+      .iter()
+      .enumerate()
+      .map(|(index, entity)| (index as u32 + 1, entity.clone()))
+      .collect();
+    assert!(!output.differs_from_original());
+    output.model.flags ^= 1;
+    assert!(output.differs_from_original());
+    output.model.flags ^= 1;
+    output.model.entity_map.swap_indices(0, 1);
+    assert!(output.differs_from_original());
+    output.model.entity_map.swap_indices(0, 1);
+    assert!(!output.differs_from_original());
+    output.clone_entities = Some(original.entities.clone());
+    assert!(!output.differs_from_original());
+    output.clone_entities.as_mut().unwrap()[0].parent_index += 1;
+    assert!(output.differs_from_original());
+    output.clone_entities = Some(original.entities.clone());
+    output.clone_entities.as_mut().unwrap()[0].flags ^= 8;
+    assert!(output.differs_from_original());
+  }
+
+  #[test]
+  fn merge_emits_only_edited_ymaps_when_rebuilding() {
+    let root = std::env::temp_dir().join(format!("ymap_edited_only_{}", std::process::id()));
+    let _ = fs::remove_dir_all(&root);
+    let vanilla = root.join("vanilla");
+    let mods = root.join("mods");
+    let output = root.join("output");
+    fs::create_dir_all(&vanilla).unwrap();
+    fs::create_dir_all(&mods).unwrap();
+    let sample =
+      Path::new(env!("CARGO_MANIFEST_DIR")).join("docs/sample/parent_refs/vanilla_parent.ymap.xml");
+    fs::copy(&sample, vanilla.join("parent.ymap.xml")).unwrap();
+    fs::copy(&sample, mods.join("resource_a___parent.ymap.xml")).unwrap();
+    let merge = MergeYmap {
+      vanilla_dir: vanilla,
+      mod_dir: mods.clone(),
+      mod_ymap_dir: mods.clone(),
+      output_dir: output.clone(),
+      rebuild_all: true,
+      blacklist_config: None,
+    };
+    merge.run().unwrap();
+    assert!(!output.join("parent.ymap.xml").exists());
+    fs::copy(&sample, mods.join("resource_b___parent.ymap.xml")).unwrap();
+    merge.run().unwrap();
+    assert!(!output.join("parent.ymap.xml").exists());
+    let mut edited = parse_ymap_xml(&sample).unwrap();
+    edited.entity_map.values_mut().next().unwrap().position.x += 1.0;
+    let xml: XmlYmap = edited.into();
+    fs::write(mods.join("resource_a___parent.ymap.xml"), quick_xml::se::to_string(&xml).unwrap())
+      .unwrap();
+    merge.run().unwrap();
+    assert!(output.join("parent.ymap.xml").exists());
+    fs::copy(&sample, mods.join("resource_a___parent.ymap.xml")).unwrap();
+    merge.run().unwrap();
+    assert!(!output.join("parent.ymap.xml").exists());
+    fs::remove_dir_all(root).unwrap();
+  }
+
+  #[test]
   fn merge_preserves_vanilla_entities_omitted_by_mods() {
     let base = Path::new(env!("CARGO_MANIFEST_DIR"));
     let staging = std::env::temp_dir().join(format!("mlo_parent_refs_{}", std::process::id()));
@@ -738,7 +952,8 @@ mod tests {
     }
     .run()
     .unwrap();
-    let parent = OriginalMap::load(&output.join("parent.ymap.xml")).unwrap();
+    assert!(!output.join("parent.ymap.xml").exists());
+    let parent = OriginalMap::load(&staging.join("vanilla/parent.ymap.xml")).unwrap();
     assert_eq!(parent.entities.len(), 2);
     assert_eq!(parent.entities.iter().map(|entity| entity.guid).collect::<Vec<_>>(), [100, 200]);
     let clone = output.join("clone/child.ymap");
