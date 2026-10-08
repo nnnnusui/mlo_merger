@@ -155,6 +155,29 @@ mod tests {
   use super::*;
 
   #[test]
+  fn stale_algorithm_version_invalidates_merge_cache_metadata() {
+    let output =
+      std::env::temp_dir().join(format!("merge_cache_algorithm_version_{}", std::process::id()));
+    let _ = fs::remove_dir_all(&output);
+    fs::create_dir_all(&output).unwrap();
+    fs::write(
+      output.join("merge_cache_info.json"),
+      serde_json::to_vec(&serde_json::json!({
+        "format_version": 1,
+        "algorithm_version": ALGORITHM_VERSION - 1,
+        "generated_at": "2026-10-08T00:00:00Z",
+        "files": {}
+      }))
+      .unwrap(),
+    )
+    .unwrap();
+
+    assert!(MergeMetadata::load(&output).unwrap().is_none());
+
+    fs::remove_dir_all(output).unwrap();
+  }
+
+  #[test]
   fn configured_tolerances_invalidate_cached_merge_results() {
     use crate::core::config::matching::{MatchTolerances, with_tolerances};
     let files = BTreeMap::new();

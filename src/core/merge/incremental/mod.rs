@@ -17,7 +17,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 /// Bump when merge policy, encoding or cached result/report semantics change.
-const ALGORITHM_VERSION: u32 = 4;
+const ALGORITHM_VERSION: u32 = 5;
 
 pub(super) struct IncrementalMerge<'a> {
   pub source_dir: &'a Path,

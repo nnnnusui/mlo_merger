@@ -10,6 +10,8 @@ mod distant_lod_light;
 mod entity;
 mod instanced_data;
 mod lod_light;
+#[cfg(test)]
+mod merge_tests;
 mod metadata;
 mod occlude_model;
 mod time_cycle_modifier;
@@ -106,7 +108,9 @@ impl YmapDiff {
       } => !removed.contains(&vanilla.guid),
     });
     self.box_occluder_diffs.extend(other.box_occluder_diffs);
+    resolve_box_occluder_removals(&mut self.box_occluder_diffs);
     self.occlude_model_diffs.extend(other.occlude_model_diffs);
+    resolve_occlude_model_removals(&mut self.occlude_model_diffs);
     self.lod_light_diffs.extend(other.lod_light_diffs);
     self.distant_lod_light_diffs.extend(other.distant_lod_light_diffs);
     self.car_generator_diffs.extend(other.car_generator_diffs);
@@ -461,6 +465,81 @@ impl YmapDiff {
     }
 
     modded
+  }
+}
+
+fn resolve_box_occluder_removals(diffs: &mut Vec<YmapBoxOccluderDiff>) {
+  let removed = diffs
+    .iter()
+    .filter_map(|diff| match diff {
+      YmapBoxOccluderDiff::Removed(item) => Some(item.clone()),
+      _ => None,
+    })
+    .collect::<Vec<_>>();
+  diffs.retain(|diff| match diff {
+    YmapBoxOccluderDiff::Removed(_) => true,
+    YmapBoxOccluderDiff::Added(item) => !removed.iter().any(|removed| removed.is_same(item)),
+    YmapBoxOccluderDiff::Modified {
+      vanilla,
+      ..
+    } => !removed.iter().any(|removed| removed.is_same(vanilla)),
+  });
+}
+
+fn resolve_occlude_model_removals(diffs: &mut Vec<YmapOccludeModelDiff>) {
+  let removed_models = diffs
+    .iter()
+    .filter_map(|diff| match diff {
+      YmapOccludeModelDiff::Removed(model) => Some(model.clone()),
+      _ => None,
+    })
+    .collect::<Vec<_>>();
+  diffs.retain(|diff| match diff {
+    YmapOccludeModelDiff::Removed(_) => true,
+    YmapOccludeModelDiff::Added(model) => {
+      !removed_models.iter().any(|removed| removed.is_same(model))
+    }
+    YmapOccludeModelDiff::Modified {
+      vanilla,
+      ..
+    } => !removed_models.iter().any(|removed| removed.is_same(vanilla)),
+  });
+
+  let removed_triangles = diffs
+    .iter()
+    .filter_map(|diff| match diff {
+      YmapOccludeModelDiff::Modified {
+        vanilla,
+        triangle_diffs,
+        ..
+      } => {
+        let triangles = triangle_diffs
+          .iter()
+          .filter_map(|diff| match diff {
+            YmapOccludeModelTriangleDiff::Removed(triangle) => Some(triangle.clone()),
+            YmapOccludeModelTriangleDiff::Added(_) => None,
+          })
+          .collect::<Vec<_>>();
+        (!triangles.is_empty()).then(|| (vanilla.clone(), triangles))
+      }
+      _ => None,
+    })
+    .collect::<Vec<_>>();
+  for diff in diffs {
+    if let YmapOccludeModelDiff::Modified {
+      vanilla,
+      triangle_diffs,
+      ..
+    } = diff
+    {
+      triangle_diffs.retain(|diff| match diff {
+        YmapOccludeModelTriangleDiff::Removed(_) => true,
+        YmapOccludeModelTriangleDiff::Added(triangle) => !removed_triangles
+          .iter()
+          .filter(|(model, _)| model.is_same(vanilla))
+          .any(|(_, removed)| removed.contains(triangle)),
+      });
+    }
   }
 }
 
