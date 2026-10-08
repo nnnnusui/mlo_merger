@@ -1,26 +1,17 @@
 # MLO Merger
 
+[![SUSHI-WARE LICENSE](https://img.shields.io/badge/license-SUSHI--WARE%F0%9F%8D%A3-blue.svg)](https://github.com/MakeNowJust/sushi-ware)
+
+[English](../Readme.md) | [設計](ARCHITECTURE.md) | [実装計画](TODO.md)
+
 FiveM の YMAP と YBN コリジョンの変更を vanilla データにマージし、
 生成したストリームファイルを配置するツールです。
-
-[English](../Readme.md) | [設計](ARCHITECTURE.md) | [ロードマップ](TODO.md)
-
-## 必要環境
-
-- ソースからビルドする場合は、Windows・macOS・Linux と Rust stable。
-- ゲームアーカイブから抽出する場合は、インストール済み GTA V と
-  ローカルに用意した CodeWalker のブリッジ・アセンブリ。
-  既存の vanilla アーカイブがあれば再利用できます。
-
-```bash
-cargo build
-```
 
 ## パイプラインを実行する
 
 ```bash
-cargo run
-cargo run -- -i resources -o merged_mlo --game-dir /mnt/gtav
+mlo_merger
+mlo_merger -i resources -o merged_mlo --game-dir /mnt/gtav
 ```
 
 操作フラグを省略すると、vanilla アーカイブがない場合だけ抽出し、
@@ -50,12 +41,12 @@ vanilla に対応しないファイルは元のリソースに残ります。
 ## 操作を個別に実行する
 
 ```bash
-cargo run -- --generate-vanilla -i /mnt/gtav -o asset/vanilla
-cargo run -- --generate-vanilla-cache --vanilla asset/vanilla -o asset/vanilla-cache
-cargo run -- --generate-source-cache -i asset/source --vanilla-cache asset/vanilla-cache -o asset/source-cache
-cargo run -- --generate-source-cache resourceName -i asset/source -f
-cargo run -- --merge --vanilla-cache asset/vanilla-cache --source-cache asset/source-cache -o asset/merged
-cargo run -- --deploy -i asset/merged --source-cache asset/source-cache -o asset/merged_mlo
+mlo_merger --generate-vanilla -i /mnt/gtav -o asset/vanilla
+mlo_merger --generate-vanilla-cache --vanilla asset/vanilla -o asset/vanilla-cache
+mlo_merger --generate-source-cache -i asset/source --vanilla-cache asset/vanilla-cache -o asset/source-cache
+mlo_merger --generate-source-cache resourceName -i asset/source -f
+mlo_merger --merge --vanilla-cache asset/vanilla-cache --source-cache asset/source-cache -o asset/merged
+mlo_merger --deploy -i asset/merged --source-cache asset/source-cache -o asset/merged_mlo
 ```
 
 source-cache の対象は、リソース名または入力ディレクトリからの相対パスで指定できます。
@@ -80,7 +71,7 @@ source-cache の対象は、リソース名または入力ディレクトリか�
 削除対象がローカルで変更されていた場合は、削除せずエラーにします。
 空になったストリームディレクトリも整理します。
 
-各コマンドのオプションと出力先の既定値は `cargo run -- --help` で確認できます。
+各コマンドのオプションと出力先の既定値は `mlo_merger --help` で確認できます。
 vanilla の抽出範囲を限定する場合は、明示的な生成コマンドの `--gamebuild` で
 ステージを指定します。数値の GTA ビルド ID への対応付けは未実装です。
 短縮コマンドは [.cargo/config.toml](../.cargo/config.toml) にあります。
@@ -112,9 +103,9 @@ YMAP の比較では境界を含みません。エンティティ座標の完全
 ## 既存データを検索する
 
 ```bash
-cargo run -- --find entity-guid 2443198849 --filter '*cs4_10_strm_0.ymap' --diff-all
-cargo run -- --find entity-position 3.5,4.2,0.0 --round 1.0
-cargo run -- --find ybn-position 1211.126,-507.5948,67.54723 --radius 1.0 --type box --filter id2_21_c_0.ybn --diff-all
+mlo_merger --find entity-guid 2443198849 --filter '*cs4_10_strm_0.ymap' --diff-all
+mlo_merger --find entity-position 3.5,4.2,0.0 --round 1.0
+mlo_merger --find ybn-position 1211.126,-507.5948,67.54723 --radius 1.0 --type box --filter id2_21_c_0.ybn --diff-all
 ```
 
 検索はパイプラインを実行せず、生成物も変更せずに XML を標準出力へ返します。
@@ -138,9 +129,9 @@ YBN の番号は入力ごとの値で、再構築すると変わる場合があ�
 ## ファイルを変換する
 
 ```bash
-cargo run -- --to-xml collision.ybn -o exported
-cargo run -- --from-xml exported/collision.ybn.xml -o rebuilt
-cargo run -- --from-xml map.ymap.xml -o rebuilt --vanilla asset/vanilla
+mlo_merger --to-xml collision.ybn -o exported
+mlo_merger --from-xml exported/collision.ybn.xml -o rebuilt
+mlo_merger --from-xml map.ymap.xml -o rebuilt --vanilla asset/vanilla
 ```
 
 入力にはファイルまたはディレクトリを指定できます。
@@ -148,38 +139,7 @@ cargo run -- --from-xml map.ymap.xml -o rebuilt --vanilla asset/vanilla
 META リソースには互換スキーマが必要で、`--vanilla` はスキーマやテンプレートの
 入力に使います。YBN の変換には外部スキーマディレクトリは不要です。
 
-## TypeScript の型定義
-
-Rust の Serde モデルから生成した `asset/gen_mlo_merger.ts` を Release アーカイブに
-同梱します。マージ診断、vanilla/source/merge/deploy のキャッシュ、ストリーム競合、
-diff-cache レポート、バージョン一覧、照合設定・blacklist 設定の型を含みます。
-YMAP/YBN の差分データと JSON Schema 文書は対象外です。
-Release workflow が梱包前に生成するため、このファイルはリポジトリには含めません。
-
-```bash
-cargo export-types
-cargo export-types -o /tmp/mlo_merger.ts
-cargo export-types --output /tmp/mlo_merger.ts
-cargo test --features typescript --lib typescript::tests
-```
-
-Specta は Serde が使う Rust モデルから定義を生成します。
-ローカルで生成した場合は、出力先から import してください。
-`typescript` feature は生成・検証時のみ必要で、通常ビルドでは不要です。
-
-```typescript
-import type { DuplicateReport, MatchingConfig } from "../asset/gen_mlo_merger";
-
-const config: MatchingConfig = { tolerance: { ybn: 0.05 } };
-```
-
-JSON のフィールド名、null、省略可能な入力を型に反映します。
-パスは文字列、集合は配列です。サイズや時刻は JSON の数値なので、
-TypeScript では `bigint` ではなく `number` を使います。
-`Number.MAX_SAFE_INTEGER` を超える値は、精度を保持する JSON 読み込みが必要です。
-型定義だけでは、実行時のデータ検証は行いません。
-
-## 制限とテスト
+## 制限
 
 - `--get-diff` は現在、模擬呼び出しの表示のみでファイルを比較しません。
 - vanilla の履歴はアーカイブの上書き順であり、過去のゲーム環境や完全な
@@ -190,11 +150,4 @@ TypeScript では `bigint` ではなく `number` を使います。
   拡張できず、RBF YMT の再構築は未対応です。
 - 変換の成功はゲーム内の安全性を保証しません。GTA V/FiveM 上でも検証してください。
 
-```bash
-cargo test --lib
-cargo test --doc
-cargo test --test codewalker_roundtrip
-```
-
-一部のテストにはローカルのゲーム資産や CodeWalker が必要で、
-多くは既定で無視されます。ゲーム資産と CodeWalker のバイナリは同梱していません。
+ゲーム資産と CodeWalker のバイナリは同梱していません。

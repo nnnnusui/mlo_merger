@@ -6,21 +6,13 @@
 
 Merges FiveM YMAP resources and conflicting YBN collision files against vanilla data.
 
-## Requirements
+## Usage
 
-- Rust stable on Windows or Linux.
-- An installed GTA V and locally supplied CodeWalker bridge/assemblies for
-	extraction from game archives. An existing vanilla archive can be reused.
+### Run The Pipeline
 
 ```bash
-cargo build
-```
-
-## Run The Pipeline
-
-```bash
-cargo run
-cargo run -- -i resources -o merged_mlo --game-dir /mnt/gtav
+mlo_merger
+mlo_merger -i resources -o merged_mlo --game-dir /mnt/gtav
 ```
 
 The default operation extracts vanilla only when its archive is missing, updates
@@ -45,15 +37,15 @@ Pipeline `-f` forces the derived caches, merge and deployment, but reuses an
 existing raw vanilla archive. Pipeline-wide `--gamebuild` and `--step-name`
 selection are not implemented.
 
-## Run Individual Operations
+### Run Individual Operations
 
 ```bash
-cargo run -- --generate-vanilla -i /mnt/gtav -o asset/vanilla
-cargo run -- --generate-vanilla-cache --vanilla asset/vanilla -o asset/vanilla-cache
-cargo run -- --generate-source-cache -i asset/source --vanilla-cache asset/vanilla-cache -o asset/source-cache
-cargo run -- --generate-source-cache resourceName -i asset/source -f
-cargo run -- --merge --vanilla-cache asset/vanilla-cache --source-cache asset/source-cache -o asset/merged
-cargo run -- --deploy -i asset/merged --source-cache asset/source-cache -o asset/merged_mlo
+mlo_merger --generate-vanilla -i /mnt/gtav -o asset/vanilla
+mlo_merger --generate-vanilla-cache --vanilla asset/vanilla -o asset/vanilla-cache
+mlo_merger --generate-source-cache -i asset/source --vanilla-cache asset/vanilla-cache -o asset/source-cache
+mlo_merger --generate-source-cache resourceName -i asset/source -f
+mlo_merger --merge --vanilla-cache asset/vanilla-cache --source-cache asset/source-cache -o asset/merged
+mlo_merger --deploy -i asset/merged --source-cache asset/source-cache -o asset/merged_mlo
 ```
 
 Source-cache selection accepts a resource name or input-relative resource path;
@@ -76,12 +68,12 @@ Deploy skips unchanged copies, repairs missing/changed outputs, and removes stal
 managed files. Unrelated files are preserved; locally modified stale files are
 rejected rather than deleted. Empty managed stream directories are pruned.
 
-Run `cargo run -- --help` for options and per-command output defaults. To extract
+Run `mlo_merger --help` for options and per-command output defaults. To extract
 a limited vanilla archive, use the explicit generator's `--gamebuild` stage
 selector; numeric GTA build-ID mapping is not implemented. Convenience aliases
 are in [.cargo/config.toml](.cargo/config.toml).
 
-## Matching Configuration
+### Matching Configuration
 
 Merge and diff-cache operations read [asset/config.toml](asset/config.toml) once
 per operation. Missing files or omitted keys use these defaults:
@@ -106,12 +98,12 @@ and invalid TOML are errors. Effective settings are included in merge freshness,
 so changing them causes regeneration on the next merge without requiring `-f`.
 Larger tolerances can treat intentionally different nearby shapes as identical.
 
-## Inspect Existing Data
+### Inspect Existing Data
 
 ```bash
-cargo run -- --find entity-guid 2443198849 --filter '*cs4_10_strm_0.ymap' --diff-all
-cargo run -- --find entity-position 3.5,4.2,0.0 --round 1.0
-cargo run -- --find ybn-position 1211.126,-507.5948,67.54723 --radius 1.0 --type box --filter id2_21_c_0.ybn --diff-all
+mlo_merger --find entity-guid 2443198849 --filter '*cs4_10_strm_0.ymap' --diff-all
+mlo_merger --find entity-position 3.5,4.2,0.0 --round 1.0
+mlo_merger --find ybn-position 1211.126,-507.5948,67.54723 --radius 1.0 --type box --filter id2_21_c_0.ybn --diff-all
 ```
 
 Searches write XML to stdout without running the pipeline or modifying artifacts.
@@ -130,19 +122,19 @@ and path. `found="false"` marks a stage without a match. Changed input fingerpri
 cause an error requiring a fresh merge. This is a snapshot comparison, not a
 computed semantic diff. YBN indices are input-local and may change on rebuild.
 
-## Convert Files
+### Convert Files
 
 ```bash
-cargo run -- --to-xml collision.ybn -o exported
-cargo run -- --from-xml exported/collision.ybn.xml -o rebuilt
-cargo run -- --from-xml map.ymap.xml -o rebuilt --vanilla asset/vanilla
+mlo_merger --to-xml collision.ybn -o exported
+mlo_merger --from-xml exported/collision.ybn.xml -o rebuilt
+mlo_merger --from-xml map.ymap.xml -o rebuilt --vanilla asset/vanilla
 ```
 
 Inputs can be files or directories. Conversion output defaults to the current
 directory. META resources need compatible schemas; `--vanilla` supplies schema
 or template inputs. YBN conversion does not require an external schema directory.
 
-## TypeScript Types
+### TypeScript Types
 
 The release archives contain `asset/gen_mlo_merger.ts`, generated from the Rust
 Serde models for merge diagnostics, vanilla/source/merge/deploy caches, stream
@@ -151,16 +143,7 @@ configuration. It does not include YMAP/YBN difference payloads or JSON Schema
 documents. The release workflow regenerates it before packaging; it is not
 checked into the repository.
 
-```bash
-cargo export-types
-cargo export-types -o /tmp/mlo_merger.ts
-cargo export-types --output /tmp/mlo_merger.ts
-cargo test --features typescript --lib typescript::tests
-```
-
-Specta reads the Rust models used by Serde. The optional `typescript` feature is
-needed only for generation and verification, not normal builds. After generating
-locally, import the file from its output path:
+When generating it locally, import it from its output path:
 
 ```typescript
 import type { DuplicateReport, MatchingConfig } from "./asset/gen_mlo_merger";
@@ -173,7 +156,7 @@ strings; sets are arrays. File sizes and timestamps are JSON numbers, represente
 as TypeScript `number`, not `bigint`. Values above `Number.MAX_SAFE_INTEGER` need
 a precision-aware JSON reader. These definitions do not validate data at runtime.
 
-## Limitations
+### Limitations
 
 - `--get-diff` currently prints a mock invocation and does not compare files.
 - Merge uses the latest selected vanilla, without historical baseline inference.
@@ -182,7 +165,35 @@ a precision-aware JSON reader. These definitions do not validate data at runtime
 - Conversion support depends on the resource family and available schemas. PSO rebuilding cannot grow arrays or allocated strings; RBF YMT is unsupported.
 - Matching XML or stable rebuilds does not establish in-game load safety. Validate generated resources in the target game environment.
 
-## Tests
+## Development Environment
+
+- Rust stable on Windows or Linux.
+- An installed GTA V and locally supplied CodeWalker bridge/assemblies are needed
+	to extract from game archives. An existing vanilla archive can be reused.
+
+Build the executable with:
+
+```bash
+cargo build
+```
+
+The examples above use `mlo_merger` as the executable name. If it is not on your
+`PATH`, invoke it using its path (for example, `./target/debug/mlo_merger`).
+
+### Generate TypeScript Types
+
+TypeScript definitions are generated from Rust's Serde models. The optional
+`typescript` feature is required only for generation and verification, not for
+normal builds.
+
+```bash
+cargo export-types
+cargo export-types -o /tmp/mlo_merger.ts
+cargo export-types --output /tmp/mlo_merger.ts
+cargo test --features typescript --lib typescript::tests
+```
+
+### Run Tests
 
 ```bash
 cargo test --lib
