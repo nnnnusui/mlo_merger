@@ -1,7 +1,18 @@
+#[test]
+fn bounds_filter_uses_inclusive_sphere_aabb_intersection() {
+  assert_eq!(
+    aabb_intersects_radius([1.0, 0.0, 0.0], 1.0, [2.0, -1.0, -1.0], [3.0, 1.0, 1.0]),
+    Some(true)
+  );
+  assert_eq!(
+    aabb_intersects_radius([1.0, 1.0, 0.0], 1.0, [2.0, 2.0, -1.0], [3.0, 3.0, 1.0]),
+    Some(false)
+  );
+  assert_eq!(aabb_intersects_radius([0.0; 3], 1.0, [2.0, 0.0, 0.0], [1.0, 1.0, 1.0]), None);
+}
+
 use crate::core::format::{
-  gamefile::{
-    meta_resource::MetaResource, meta_xml::ymap_to_model_with_entities, resource_file::Rsc7Resource,
-  },
+  gamefile::{meta_resource::MetaResource, resource_file::Rsc7Resource},
   ymap::{model::YmapEntity, xml::XmlYmapEntity},
 };
 use globset::{GlobBuilder, GlobMatcher};
@@ -14,11 +25,13 @@ use std::{
   path::{Component, Path, PathBuf},
 };
 
+mod file_from_position;
+mod occlude_position;
 mod ybn;
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
-/// Condition selecting entities or collision shapes from merged and recorded inputs.
+/// Condition selecting YMAP entities, collision shapes, file bounds or occluders.
 #[derive(Debug, Clone, PartialEq)]
 pub enum EntityQuery {
   /// Select every occurrence of this unsigned entity GUID.
@@ -39,6 +52,18 @@ pub enum EntityQuery {
     /// Optional lowercase shape type: box, triangle, sphere, capsule or cylinder.
     kind: Option<String>,
   },
+  /// Select files whose declared spatial bounds contain the position.
+  FileFromPosition {
+    /// World-space position at native coordinate precision.
+    position: [f64; 3],
+  },
+  /// Select YMAP box occluders and occlude models within an inclusive radius.
+  OccludePosition {
+    /// World-space search center at native coordinate precision.
+    position: [f64; 3],
+    /// Finite nonnegative distance from the center or model bounds.
+    radius: f64,
+  },
 }
 
 impl EntityQuery {
@@ -51,6 +76,23 @@ impl EntityQuery {
       position,
       radius,
       ..
+    } = self
+      && (!position.iter().all(|value| value.is_finite() && (*value as f32).is_finite())
+        || !radius.is_finite()
+        || *radius < 0.0)
+    {
+      return Err("Position and radius must be finite; radius must be nonnegative".into());
+    }
+    if let Self::FileFromPosition {
+      position,
+    } = self
+      && !position.iter().all(|value| value.is_finite() && (*value as f32).is_finite())
+    {
+      return Err("Position coordinates must be finite and in range".into());
+    }
+    if let Self::OccludePosition {
+      position,
+      radius,
     } = self
       && (!position.iter().all(|value| value.is_finite() && (*value as f32).is_finite())
         || !radius.is_finite()
@@ -77,6 +119,12 @@ impl EntityQuery {
       Self::Guid(guid) => entity.guid == *guid,
       Self::YbnPosition {
         ..
+      }
+      | Self::FileFromPosition {
+        ..
+      } => false,
+      Self::OccludePosition {
+        ..
       } => false,
       Self::Position {
         position,
@@ -94,7 +142,7 @@ impl EntityQuery {
   }
 }
 
-/// Searches existing merged binaries for entities or collision centers and renders XML.
+/// Searches existing merged binaries for entities, collision shapes or YMAP occluders.
 #[derive(Debug, Clone)]
 pub struct FindEntity {
   /// Validated GUID or three-dimensional position condition.
@@ -130,14 +178,14 @@ struct Record {
   merge_sources: Vec<Input>,
   vanilla: Option<Input>,
 }
-#[derive(Deserialize)]
+#[derive(Clone, Deserialize)]
 struct Input {
   path: PathBuf,
   resource: Option<String>,
   original_path: Option<PathBuf>,
   fingerprint: InputFingerprint,
 }
-#[derive(Deserialize)]
+#[derive(Clone, Deserialize)]
 struct InputFingerprint {
   sha256: String,
   size: u64,
@@ -150,7 +198,7 @@ struct SearchResult {
   guid: Option<u32>,
   #[serde(rename = "@position", skip_serializing_if = "Option::is_none")]
   position: Option<String>,
-  #[serde(rename = "@round", skip_serializing_if = "Option::is_none")]
+  #[serde(rename = "@radius", skip_serializing_if = "Option::is_none")]
   radius: Option<f64>,
   #[serde(rename = "File")]
   files: Vec<FileResult>,
@@ -212,6 +260,12 @@ impl FindEntity {
   /// ```
   pub fn run(&self) -> Result<String> {
     self.query.validate()?;
+    if let EntityQuery::FileFromPosition {
+      position,
+    } = &self.query
+    {
+      return file_from_position::run(self, *position);
+    }
     if let EntityQuery::YbnPosition {
       position,
       radius,
@@ -219,6 +273,13 @@ impl FindEntity {
     } = &self.query
     {
       return ybn::run(self, *position, *radius, kind.as_deref());
+    }
+    if let EntityQuery::OccludePosition {
+      position,
+      radius,
+    } = &self.query
+    {
+      return occlude_position::run(self, *position, *radius);
     }
     let (paths, cache, names) = search_inputs(self, "ymap")?;
     let mut files = Vec::new();
@@ -265,6 +326,12 @@ impl FindEntity {
       EntityQuery::YbnPosition {
         ..
       } => unreachable!(),
+      EntityQuery::FileFromPosition {
+        ..
+      } => unreachable!(),
+      EntityQuery::OccludePosition {
+        ..
+      } => unreachable!(),
     };
     let mut serializer = quick_xml::se::Serializer::with_root(&mut xml, Some(root))?;
     serializer.indent(' ', 2);
@@ -294,6 +361,12 @@ fn search_result(
       files,
     },
     EntityQuery::YbnPosition {
+      ..
+    }
+    | EntityQuery::FileFromPosition {
+      ..
+    }
+    | EntityQuery::OccludePosition {
       ..
     } => unreachable!(),
   }
@@ -388,9 +461,80 @@ fn read_entities(
 ) -> Result<EntityData> {
   let bytes = read_input(path, stage, input)?;
   let meta = MetaResource::parse(&Rsc7Resource::decode(&bytes)?)?;
+  if let EntityQuery::Position {
+    position,
+    radius,
+  } = query
+    && let Some((minimum, maximum)) = file_from_position::ymap_extents(&meta)?
+    && !aabb_intersects_radius(position.map(|value| value as f32 as f64), *radius, minimum, maximum)
+      .unwrap_or(true)
+  {
+    return Ok(EntityData {
+      stage,
+      path: Some(path.to_string_lossy().replace('\\', "/")),
+      resource: input.and_then(|input| input.resource.clone()),
+      original_path: input
+        .and_then(|input| input.original_path.as_ref())
+        .map(|path| path.to_string_lossy().replace('\\', "/")),
+      found: false,
+      entities: Vec::new(),
+    });
+  }
   let names: HashMap<_, _> = meta.hash_names();
-  let (_, entities) = ymap_to_model_with_entities(&bytes, &names)?;
+  let (model, entities) =
+    crate::core::format::gamefile::meta_xml::ymap_to_model_with_entities_from_meta(&meta, &names)?;
+  if let EntityQuery::Position {
+    radius,
+    position,
+  } = query
+    && file_from_position::ymap_extents(&meta)?.is_none()
+  {
+    let minimum = [
+      model.entities_extents_min.x as f64,
+      model.entities_extents_min.y as f64,
+      model.entities_extents_min.z as f64,
+    ];
+    let maximum = [
+      model.entities_extents_max.x as f64,
+      model.entities_extents_max.y as f64,
+      model.entities_extents_max.z as f64,
+    ];
+    if !aabb_intersects_radius(position.map(|value| value as f32 as f64), *radius, minimum, maximum)
+      .unwrap_or(true)
+    {
+      return Ok(EntityData {
+        stage,
+        path: Some(path.to_string_lossy().replace('\\', "/")),
+        resource: input.and_then(|input| input.resource.clone()),
+        original_path: input
+          .and_then(|input| input.original_path.as_ref())
+          .map(|path| path.to_string_lossy().replace('\\', "/")),
+        found: false,
+        entities: Vec::new(),
+      });
+    }
+  }
   Ok(entity_data(path, query, stage, input, entities))
+}
+
+fn aabb_intersects_radius(
+  position: [f64; 3],
+  radius: f64,
+  minimum: [f64; 3],
+  maximum: [f64; 3],
+) -> Option<bool> {
+  if (0..3).any(|axis| {
+    !position[axis].is_finite()
+      || !minimum[axis].is_finite()
+      || !maximum[axis].is_finite()
+      || minimum[axis] > maximum[axis]
+  }) {
+    return None;
+  }
+  let nearest: [f64; 3] =
+    std::array::from_fn(|axis| position[axis].clamp(minimum[axis], maximum[axis]));
+  let delta: [f64; 3] = std::array::from_fn(|axis| position[axis] - nearest[axis]);
+  Some(delta[0].hypot(delta[1]).hypot(delta[2]) <= radius)
 }
 
 fn read_input(
@@ -578,6 +722,7 @@ mod tests {
   #[ignore = "requires local vanilla YMAP schemas"]
   fn find_searches_native_merged_and_recorded_before_entities_without_writes() {
     use crate::core::format::gamefile::meta_resource::MetaSchemaCatalog;
+    use crate::core::format::gamefile::meta_xml::ymap_to_model_with_entities;
     let base = Path::new(env!("CARGO_MANIFEST_DIR")).join("asset/vanilla-cache/latest/ymap");
     let mut paths =
       fs::read_dir(base).unwrap().map(|entry| entry.unwrap().path()).collect::<Vec<_>>();
@@ -647,11 +792,28 @@ mod tests {
     let nearby_xml = nearby.run().unwrap();
     assert!(nearby_xml.starts_with("<EntityPositionSearch"));
     assert!(nearby_xml.contains("position=\""));
-    assert!(nearby_xml.contains("round=\"1"));
+    assert!(nearby_xml.contains("radius=\"1"));
     assert!(!nearby_xml.contains(" guid=\""));
     assert!(nearby_xml.contains("stage=\"vanilla\""));
     assert!(nearby_xml.contains("stage=\"source\""));
     assert_eq!(nearby_xml.matches("<guid value=\"2443198849\"").count(), 3);
+    let file_xml = FindEntity {
+      query: EntityQuery::FileFromPosition {
+        position: [
+          f64::from((model.entities_extents_min.x + model.entities_extents_max.x) / 2.0),
+          f64::from((model.entities_extents_min.y + model.entities_extents_max.y) / 2.0),
+          f64::from((model.entities_extents_min.z + model.entities_extents_max.z) / 2.0),
+        ],
+      },
+      merged_dir: merged.clone(),
+      filter: query.filter.clone(),
+      diff_all: true,
+    }
+    .run()
+    .unwrap();
+    assert!(file_xml.starts_with("<FileFromPositionSearch position=\""));
+    assert!(file_xml.contains("type=\"ymap\" stage=\"merged\""));
+    assert!(file_xml.contains("stage=\"vanilla\"") && file_xml.contains("stage=\"source\""));
     let mut all = query.clone();
     all.diff_all = true;
     let xml = all.run().unwrap();

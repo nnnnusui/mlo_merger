@@ -73,10 +73,12 @@
 
 ## Conversion and Diff Commands
 
-- [x] Add read-only `--find entity-guid <GUID>` with filename filtering and XML stdout; `--diff-all` includes fingerprint-validated pre-merge vanilla/source entities.
+- [x] Add read-only `--find entity-guid <GUID>` with filename filtering and XML stdout; `--all` includes fingerprint-validated pre-merge vanilla/source entities.
 - [x] Support case-insensitive filename glob filters in entity searches and pre-merge record selection.
-- [x] Add `--find entity-position X,Y,Z --round R` with inclusive 3D distance, validated coordinates/radius and existing glob/pre-merge XML support.
+- [x] Add `--find entity-position X,Y,Z --radius R` with inclusive 3D distance, validated coordinates/radius and existing glob/pre-merge XML support.
 - [x] Add `--find ybn-position X,Y,Z --radius R --type box` with world-space collision centers, shape filtering and existing glob/pre-merge XML support.
+- [x] Add read-only `--find file-from-position X,Y,Z` using YMAP entity extents and transform-aware YBN BoxMin/BoxMax bounds; `--all` also scans source, active source-cache files and latest vanilla-cache artifacts with stderr progress.
+- [x] Add `--find occlude-position X,Y,Z --radius R` to return nearby YMAP boxOccluder and occludeModel entries with file provenance.
 
 - [ ] Provide `--to-xml <path>`, `--from-xml <path>`, and `--get-diff <a> <b>` commands, each accepting `-o <path>` with `.` as the default output path.
 - [ ] Make these commands use the same format dispatch and prerequisite/freshness behavior where applicable, without coupling their format-specific conversion or diff implementations.

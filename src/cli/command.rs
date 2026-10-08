@@ -91,6 +91,56 @@ mod tests {
   use std::path::PathBuf;
 
   #[test]
+  fn find_file_from_position_accepts_coordinates_without_radius() {
+    let Command::Find(command) = parser()
+      .to_options()
+      .run_inner(&["--find", "file-from-position", "-3.5,4.2,-2.0", "--filter", "*.ymap", "--all"])
+      .unwrap()
+    else {
+      panic!("Expected file position search")
+    };
+    assert_eq!(
+      command.query,
+      crate::core::find::EntityQuery::FileFromPosition {
+        position: [-3.5, 4.2, -2.0]
+      }
+    );
+    assert!(command.diff_all);
+    for args in [
+      vec!["--find", "file-from-position", "1,2"],
+      vec!["--find", "file-from-position", "NaN,0,0"],
+      vec!["--find", "file-from-position", "0,0,0", "--radius", "1"],
+      vec!["--find", "file-from-position", "0,0,0", "--diff-all"],
+    ] {
+      assert!(parser().to_options().run_inner(args.as_slice()).is_err(), "{args:?}");
+    }
+  }
+
+  #[test]
+  fn find_occlude_position_accepts_radius_and_rejects_invalid_values() {
+    let Command::Find(command) = parser()
+      .to_options()
+      .run_inner(&["--find", "occlude-position", "1,2,3", "--radius", "1.5"])
+      .unwrap()
+    else {
+      panic!("Expected occluder position search")
+    };
+    assert_eq!(
+      command.query,
+      crate::core::find::EntityQuery::OccludePosition {
+        position: [1.0, 2.0, 3.0],
+        radius: 1.5
+      }
+    );
+    for args in [
+      vec!["--find", "occlude-position", "1,2,3", "--radius", "-1"],
+      vec!["--find", "occlude-position", "1,2,3", "--radius", "NaN"],
+    ] {
+      assert!(parser().to_options().run_inner(args.as_slice()).is_err(), "{args:?}");
+    }
+  }
+
+  #[test]
   fn default_pipeline_parses_source_and_deployment_paths() {
     let Command::Pipeline(command) = parser().to_options().run_inner(&[] as &[&str]).unwrap()
     else {
@@ -285,7 +335,7 @@ mod tests {
         "2443198849",
         "--filter",
         "lr_cs4_10_strm_0.ymap",
-        "--diff-all",
+        "--all",
       ])
       .unwrap()
     else {
@@ -312,7 +362,7 @@ mod tests {
         "2443198849",
         "--filter",
         "*cs4_10_strm_0.ymap",
-        "--diff-all",
+        "--all",
       ])
       .unwrap()
     else {
@@ -320,6 +370,12 @@ mod tests {
     };
     assert_eq!(command.filter.as_deref(), Some("*cs4_10_strm_0.ymap"));
     assert!(command.diff_all);
+    assert!(
+      parser()
+        .to_options()
+        .run_inner(&["--find", "entity-guid", "2443198849", "--diff-all"])
+        .is_err()
+    );
     assert!(parser().to_options().run_inner(&["--find", "unknown", "2443198849"]).is_err());
     assert!(parser().to_options().run_inner(&["--find", "entity-guid", "4294967296"]).is_err());
   }
@@ -332,11 +388,11 @@ mod tests {
         "--find",
         "entity-position",
         "3.5,4.2,0.0",
-        "--round",
+        "--radius",
         "1.0",
         "--filter",
         "*.ymap",
-        "--diff-all",
+        "--all",
       ])
       .unwrap()
     else {
@@ -365,9 +421,10 @@ mod tests {
     for args in [
       vec!["--find", "entity-position", "3.5,4.2"],
       vec!["--find", "entity-position", "NaN,0,0"],
-      vec!["--find", "entity-position", "0,0,0", "--round", "-1"],
-      vec!["--find", "entity-position", "0,0,0", "--round", "inf"],
-      vec!["--find", "entity-guid", "2443198849", "--round", "1"],
+      vec!["--find", "entity-position", "0,0,0", "--radius", "-1"],
+      vec!["--find", "entity-position", "0,0,0", "--radius", "inf"],
+      vec!["--find", "entity-guid", "2443198849", "--radius", "1"],
+      vec!["--find", "entity-position", "0,0,0", "--round", "1"],
     ] {
       assert!(parser().to_options().run_inner(args.as_slice()).is_err(), "{args:?}");
     }
@@ -387,7 +444,7 @@ mod tests {
         "box",
         "--filter",
         "id2_21_c_0.ybn",
-        "--diff-all",
+        "--all",
       ])
       .unwrap()
     else {
@@ -428,7 +485,6 @@ mod tests {
       vec!["--find", "ybn-position", "0,0,0", "--radius", "inf"],
       vec!["--find", "ybn-position", "0,0,0", "--type", "unknown"],
       vec!["--find", "ybn-position", "0,0,0", "--round", "1"],
-      vec!["--find", "entity-position", "0,0,0", "--radius", "1"],
       vec!["--find", "entity-guid", "1", "--type", "box"],
     ] {
       assert!(parser().to_options().run_inner(args.as_slice()).is_err(), "{args:?}");

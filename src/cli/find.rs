@@ -2,7 +2,7 @@ use crate::core::find::EntityQuery;
 use bpaf::*;
 use std::{io::Write, path::PathBuf};
 
-/// Arguments for a read-only entity or collision search of merged native files.
+/// Arguments for a read-only search of merged native files and optional source inputs.
 #[derive(Debug, Clone)]
 pub struct Find {
   /// GUID or inclusive three-dimensional entity/collision radius condition.
@@ -15,11 +15,20 @@ pub struct Find {
   pub merged_dir: PathBuf,
 }
 
-/// Parses entity and collision searches without invoking any pipeline stages.
+/// Parses find searches without invoking any pipeline stages.
 pub fn parser() -> impl Parser<Find> {
   let kind = long("find").argument::<String>("KIND").guard(
-    |kind| matches!(kind.as_str(), "entity-guid" | "entity-position" | "ybn-position"),
-    "Use --find entity-guid, entity-position or ybn-position",
+    |kind| {
+      matches!(
+        kind.as_str(),
+        "entity-guid"
+          | "entity-position"
+          | "ybn-position"
+          | "file-from-position"
+          | "occlude-position"
+      )
+    },
+    "Use --find entity-guid, entity-position, ybn-position, file-from-position or occlude-position",
   );
   let merged_dir = short('i')
     .long("input")
@@ -30,14 +39,13 @@ pub fn parser() -> impl Parser<Find> {
     .help("Restrict resource filenames with a case-insensitive glob (quote wildcard patterns)")
     .argument::<String>("GLOB")
     .optional();
-  let diff_all =
-    long("diff-all").help("Also output recorded vanilla and source data before merging").switch();
-  let radius = long("round")
-    .help("Inclusive 3D radius for entity-position (default: 1.0)")
-    .argument::<f64>("DISTANCE")
-    .optional();
-  let ybn_radius = long("radius")
-    .help("Inclusive 3D radius for ybn-position (default: 1.0)")
+  let all = long("all")
+    .help("Search all available inputs, including vanilla and source data before merging")
+    .switch();
+  let radius = long("radius")
+    .help(
+      "Inclusive 3D radius for entity-position, ybn-position and occlude-position (default: 1.0)",
+    )
     .argument::<f64>("DISTANCE")
     .optional();
   let shape_type = long("type")
@@ -45,19 +53,14 @@ pub fn parser() -> impl Parser<Find> {
     .argument::<String>("TYPE")
     .optional();
   let value = any::<String, _, _>("GUID|X,Y,Z", Some);
-  construct!(kind, merged_dir, filter, diff_all, radius, ybn_radius, shape_type, value).parse(
-    |(kind, merged_dir, filter, diff_all, radius, ybn_radius, shape_type, value)| {
-      if kind != "ybn-position" && (ybn_radius.is_some() || shape_type.is_some()) {
-        return Err("--radius and --type apply only to ybn-position".to_string());
-      }
-      if kind == "ybn-position" && radius.is_some() {
-        return Err(
-          "Use --radius for ybn-position; --round applies only to entity-position".to_string(),
-        );
+  construct!(kind, merged_dir, filter, all, radius, shape_type, value).parse(
+    |(kind, merged_dir, filter, all, radius, shape_type, value)| {
+      if kind != "ybn-position" && shape_type.is_some() {
+        return Err("--type applies only to ybn-position".to_string());
       }
       let query = if kind == "entity-guid" {
         if radius.is_some() {
-          return Err("--round applies only to entity-position".to_string());
+          return Err("--radius applies only to position searches".to_string());
         }
         EntityQuery::Guid(
           value
@@ -74,29 +77,45 @@ pub fn parser() -> impl Parser<Find> {
         let position: [f64; 3] = coordinates
           .try_into()
           .map_err(|_| "Position must contain exactly three coordinates".to_string())?;
-        let radius = ybn_radius.or(radius).unwrap_or(1.0);
-        if !position.iter().all(|value| value.is_finite() && (*value as f32).is_finite())
-          || !radius.is_finite()
-          || radius < 0.0
-        {
-          return Err("Position and radius must be finite; radius must be nonnegative".to_string());
+        if !position.iter().all(|value| value.is_finite() && (*value as f32).is_finite()) {
+          return Err("Position coordinates must be finite and in range".to_string());
         }
-        if kind == "ybn-position" {
-          let kind = shape_type.map(|value| value.to_ascii_lowercase());
-          if kind.as_ref().is_some_and(|value| {
-            !matches!(value.as_str(), "box" | "triangle" | "sphere" | "capsule" | "cylinder")
-          }) {
-            return Err("YBN type must be box, triangle, sphere, capsule or cylinder".to_string());
+        if kind == "file-from-position" {
+          if radius.is_some() {
+            return Err("--radius does not apply to file-from-position".to_string());
           }
-          EntityQuery::YbnPosition {
+          EntityQuery::FileFromPosition {
             position,
-            radius,
-            kind,
           }
         } else {
-          EntityQuery::Position {
-            position,
-            radius,
+          let radius = radius.unwrap_or(1.0);
+          if !radius.is_finite() || radius < 0.0 {
+            return Err("Radius must be finite and nonnegative".to_string());
+          }
+          if kind == "occlude-position" {
+            EntityQuery::OccludePosition {
+              position,
+              radius,
+            }
+          } else if kind == "ybn-position" {
+            let kind = shape_type.map(|value| value.to_ascii_lowercase());
+            if kind.as_ref().is_some_and(|value| {
+              !matches!(value.as_str(), "box" | "triangle" | "sphere" | "capsule" | "cylinder")
+            }) {
+              return Err(
+                "YBN type must be box, triangle, sphere, capsule or cylinder".to_string(),
+              );
+            }
+            EntityQuery::YbnPosition {
+              position,
+              radius,
+              kind,
+            }
+          } else {
+            EntityQuery::Position {
+              position,
+              radius,
+            }
           }
         }
       };
@@ -104,7 +123,7 @@ pub fn parser() -> impl Parser<Find> {
         query,
         merged_dir,
         filter,
-        diff_all,
+        diff_all: all,
       })
     },
   )

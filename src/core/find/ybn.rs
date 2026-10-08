@@ -83,6 +83,75 @@ impl From<[f64; 3]> for Point {
   }
 }
 
+pub(super) fn bounds_overlap(
+  root: &Bound,
+  position: [f64; 3],
+  radius: f64,
+) -> Result<bool> {
+  let position = position.map(|value| value as f32 as f64);
+  bounds_overlap_inner(root, &mut Vec::new(), root.transform, position, radius)
+}
+
+fn bounds_overlap_inner(
+  bound: &Bound,
+  transforms: &mut Vec<[f32; 16]>,
+  transform: Option<[f32; 16]>,
+  position: [f64; 3],
+  radius: f64,
+) -> Result<bool> {
+  if let Some(transform) = transform {
+    transforms.push(transform);
+  }
+  let mut overlaps = false;
+  if bound.kind != "None" {
+    let minimum = common_vec3(bound, 48)?;
+    let maximum = common_vec3(bound, 32)?;
+    if (0..3).any(|axis| minimum[axis] > maximum[axis]) {
+      return Err("Invalid YBN BoxMin/BoxMax bounds".into());
+    }
+    let mut world_minimum = [f64::INFINITY; 3];
+    let mut world_maximum = [f64::NEG_INFINITY; 3];
+    for corner in 0..8 {
+      let point =
+        std::array::from_fn(
+          |axis| {
+            if corner & (1 << axis) == 0 { minimum[axis] } else { maximum[axis] }
+          },
+        );
+      let point = world(point.map(f64::from), transforms)?;
+      for axis in 0..3 {
+        world_minimum[axis] = world_minimum[axis].min(point[axis]);
+        world_maximum[axis] = world_maximum[axis].max(point[axis]);
+      }
+    }
+    overlaps = super::aabb_intersects_radius(position, radius, world_minimum, world_maximum)
+      .unwrap_or(false);
+  }
+  if !overlaps {
+    for (index, child) in bound.children.iter().enumerate() {
+      let transform = child.transform.or_else(|| bound.transforms.get(index).copied());
+      if bounds_overlap_inner(child, transforms, transform, position, radius)? {
+        overlaps = true;
+        break;
+      }
+    }
+  }
+  if transform.is_some() {
+    transforms.pop();
+  }
+  Ok(overlaps)
+}
+
+fn common_vec3(
+  bound: &Bound,
+  offset: usize,
+) -> Result<[f32; 3]> {
+  let bytes = bound.common.get(offset..offset + 12).ok_or("Truncated YBN BoxMin/BoxMax bounds")?;
+  Ok(std::array::from_fn(|axis| {
+    f32::from_le_bytes(bytes[axis * 4..axis * 4 + 4].try_into().unwrap())
+  }))
+}
+
 pub(super) fn run(
   search: &FindEntity,
   position: [f64; 3],
@@ -157,15 +226,17 @@ fn read_collisions(
   let mut items = Vec::new();
   if let Some(path) = path {
     let root = read_ybn(&read_input(path, stage, input)?)?;
-    collect(&root, &mut Vec::new(), &mut Vec::new(), root.transform, &mut items)?;
-    let center = position.map(|value| value as f32 as f64);
-    items.retain(|item| {
-      kind.is_none_or(|kind| item.kind == kind)
-        && (item.position.x - center[0])
-          .hypot(item.position.y - center[1])
-          .hypot(item.position.z - center[2])
-          <= radius
-    });
+    if bounds_overlap(&root, position, radius)? {
+      collect(&root, &mut Vec::new(), &mut Vec::new(), root.transform, &mut items)?;
+      let center = position.map(|value| value as f32 as f64);
+      items.retain(|item| {
+        kind.is_none_or(|kind| item.kind == kind)
+          && (item.position.x - center[0])
+            .hypot(item.position.y - center[1])
+            .hypot(item.position.z - center[2])
+            <= radius
+      });
+    }
   }
   Ok(CollisionData {
     stage,
@@ -368,6 +439,42 @@ mod tests {
   }
 
   #[test]
+  fn ybn_bounds_filter_applies_nested_composite_transforms() {
+    let make_bound = |kind: &str, minimum: [f32; 3], maximum: [f32; 3], transform| {
+      let mut common = vec![0; 112];
+      for axis in 0..3 {
+        common[48 + axis * 4..52 + axis * 4].copy_from_slice(&minimum[axis].to_le_bytes());
+        common[32 + axis * 4..36 + axis * 4].copy_from_slice(&maximum[axis].to_le_bytes());
+      }
+      Bound {
+        kind: kind.into(),
+        common,
+        extension: Vec::new(),
+        geometry: None,
+        children: Vec::new(),
+        transform,
+        composite_flags: [0; 2],
+        transforms: Vec::new(),
+        flags: Vec::new(),
+      }
+    };
+    let mut root = make_bound("None", [0.0; 3], [0.0; 3], None);
+    let mut composite =
+      make_bound("None", [0.0; 3], [0.0; 3], Some(translation([10.0, 20.0, 30.0])));
+    composite.children.push(make_bound(
+      "Box",
+      [-1.0; 3],
+      [1.0; 3],
+      Some(translation([1.0, 0.0, 0.0])),
+    ));
+    root.children.push(composite);
+
+    assert!(bounds_overlap(&root, [11.0, 20.0, 30.0], 0.0).unwrap());
+    assert!(bounds_overlap(&root, [13.0, 20.0, 30.0], 1.0).unwrap());
+    assert!(!bounds_overlap(&root, [13.01, 20.0, 30.0], 1.0).unwrap());
+  }
+
+  #[test]
   fn ybn_positions_apply_geometry_center_and_nested_parent_transforms() {
     let mut root = fixture();
     let mut geometry = root.children.remove(0);
@@ -515,6 +622,22 @@ mod tests {
     assert!(xml.contains("resource=\"removes\"") && xml.contains("found=\"false\""));
     assert!(xml.contains("<Vertex ") && xml.contains("<Material>"));
     assert_eq!(fs::metadata(&output).unwrap().modified().unwrap(), modified);
+    let paths = FindEntity {
+      query: EntityQuery::FileFromPosition {
+        position: [0.0; 3],
+      },
+      merged_dir: merged.clone(),
+      filter: Some("collision.ybn".into()),
+      diff_all: true,
+    }
+    .run()
+    .unwrap();
+    assert!(paths.starts_with("<FileFromPositionSearch position=\"0,0,0\""));
+    assert!(paths.contains("type=\"ybn\" stage=\"merged\""));
+    assert!(paths.contains("stage=\"vanilla\"") && paths.contains("stage=\"source\""));
+    assert!(
+      paths.contains("path=\"") && paths.contains("originalPath=\"resource/stream/collision.ybn\"")
+    );
     query.filter = Some("*collision.ybn".into());
     assert_eq!(query.run().unwrap().matches("<File ").count(), 2);
     query.diff_all = false;

@@ -27,6 +27,16 @@ pub(crate) fn ymap_to_model_with_entities(
 )> {
   let resource = Rsc7Resource::decode(bytes)?;
   let meta = MetaResource::parse(&resource)?;
+  ymap_to_model_with_entities_from_meta(&meta, shared_hash_names)
+}
+
+pub(crate) fn ymap_to_model_with_entities_from_meta(
+  meta: &MetaResource,
+  shared_hash_names: &HashMap<u32, String>,
+) -> io::Result<(
+  crate::core::format::ymap::model::Ymap,
+  Vec<crate::core::format::ymap::model::YmapEntity>,
+)> {
   let value = meta_to_value(&meta, shared_hash_names)?;
   let mut parsed: crate::core::format::ymap::xml::XmlYmap =
     serde_json::from_value(value).map_err(|error| invalid_data(&error.to_string()))?;

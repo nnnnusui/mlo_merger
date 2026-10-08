@@ -11,8 +11,8 @@ mod schema;
 mod write;
 
 use helpers::*;
-pub(crate) use model::ymap_to_model_with_entities;
 pub use model::{ymap_to_model, ymap_to_xml};
+pub(crate) use model::{ymap_to_model_with_entities, ymap_to_model_with_entities_from_meta};
 pub(crate) use schema::known_hash_names;
 use schema::{ARRAY, ARRAY_INFO_HASH, STRUCTURE, STRUCTURE_POINTER, fallback_structure};
 pub use write::meta_to_xml;
