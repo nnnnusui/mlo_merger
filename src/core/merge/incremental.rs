@@ -5,6 +5,7 @@ use std::{
   path::{Component, Path, PathBuf},
 };
 
+use super::duplicates::{DuplicateReport, EntityDuplicate};
 use super::merge::Result;
 use super::{run::MergeYmap, ybn_conflicts::MergeYbnConflicts};
 use crate::core::{
@@ -15,8 +16,8 @@ use crate::core::{
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
-/// Bump when fixed merge policy, schema selection or native encoding semantics change.
-const ALGORITHM_VERSION: u32 = 1;
+/// Bump when merge policy, encoding or cached result/report semantics change.
+const ALGORITHM_VERSION: u32 = 3;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub(super) struct Fingerprint {
@@ -82,7 +83,7 @@ pub(super) struct OutputFile {
   pub fingerprint: Fingerprint,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub(super) struct FileRecord {
   pub merge_sources: Vec<InputFile>,
   pub vanilla: Option<InputFile>,
@@ -90,6 +91,8 @@ pub(super) struct FileRecord {
   pub dependency_fingerprint: String,
   pub output: Option<OutputFile>,
   pub merged_at: String,
+  #[serde(default)]
+  pub duplicates: Vec<EntityDuplicate>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -263,6 +266,7 @@ impl IncrementalMerge<'_> {
             dependency_fingerprint: String::new(),
             output: None,
             merged_at: now.clone(),
+            duplicates: Vec::new(),
           },
         );
       }
@@ -293,6 +297,7 @@ impl IncrementalMerge<'_> {
         for (name, record) in &mut planned {
           let old = &previous.as_ref().ok_or("Merge cache missing")?.files[name];
           record.merged_at = old.merged_at.clone();
+          record.duplicates = old.duplicates.clone();
           if let Some(output) = &old.output {
             let from = output_path(self.output, &output.path)?;
             let to = output_path(self.staging, &output.path)?;
@@ -307,7 +312,12 @@ impl IncrementalMerge<'_> {
       } else {
         rebuilt += 1;
         log::info!("Updating {} merge group ({} files)", group.extension, group.names.len());
-        self.merge_group(&group, &sources, &baselines)?;
+        let duplicates = self.merge_group(&group, &sources, &baselines)?;
+        for (name, entries) in duplicates.files {
+          if let Some(record) = planned.get_mut(&name) {
+            record.duplicates = entries;
+          }
+        }
         let directory = self.staging.join(group.extension);
         if directory.is_dir() {
           for entry in fs::read_dir(&directory)? {
@@ -339,9 +349,23 @@ impl IncrementalMerge<'_> {
       files.extend(planned);
     }
     let omit_text = omitted.into_iter().collect::<Vec<_>>().join("\n");
+    let duplicates = DuplicateReport {
+      format_version: 1,
+      files: files
+        .iter()
+        .filter(|(_, record)| !record.duplicates.is_empty())
+        .map(|(name, record)| (name.clone(), record.duplicates.clone()))
+        .collect(),
+    };
+    let duplicate_path = output_path(self.output, "duplicates.json")?;
+    let duplicate_current = fs::File::open(&duplicate_path)
+      .ok()
+      .and_then(|file| serde_json::from_reader::<_, DuplicateReport>(BufReader::new(file)).ok())
+      .is_some_and(|previous| previous == duplicates);
     if rebuilt == 0
       && !self.force
       && previous.as_ref().is_some_and(|previous| previous.files == files)
+      && duplicate_current
       && fs::read_to_string(self.output.join("_omit.txt")).ok().as_deref() == Some(&omit_text)
     {
       log::info!("Merge output is current; nothing to do");
@@ -351,6 +375,7 @@ impl IncrementalMerge<'_> {
       retain_file(&from, &to)?;
     }
     fs::write(self.staging.join("_omit.txt"), omit_text)?;
+    write_json(&self.staging.join("duplicates.json"), &duplicates)?;
     write_json(
       &self.staging.join("merge_cache_info.json"),
       &MergeMetadata {
@@ -369,7 +394,7 @@ impl IncrementalMerge<'_> {
     group: &Group,
     sources: &BTreeMap<String, Vec<&MergeSourceFile>>,
     baselines: &BTreeMap<String, &PathBuf>,
-  ) -> Result<()> {
+  ) -> Result<DuplicateReport> {
     let vanilla = group
       .names
       .iter()
@@ -419,11 +444,19 @@ impl IncrementalMerge<'_> {
         blacklist_config: None,
       }
       .run_with_latest_vanilla_files(&vanilla, Some(&sources))?;
+      let duplicate_path = directory.join(".duplicates.json");
+      let duplicates: DuplicateReport =
+        serde_json::from_reader(BufReader::new(fs::File::open(&duplicate_path)?))?;
+      fs::remove_file(duplicate_path)?;
       let _ = fs::remove_file(directory.join("_copy_targets.txt"));
       let _ = fs::remove_file(directory.join("_managed_ymaps.txt"));
       let _ = fs::remove_dir_all(directory.join("clone"));
+      return Ok(duplicates);
     }
-    Ok(())
+    Ok(DuplicateReport {
+      format_version: 1,
+      files: BTreeMap::new(),
+    })
   }
 
   fn ymap_graph(&self) -> Result<BTreeMap<String, BTreeSet<String>>> {
@@ -578,6 +611,7 @@ mod tests {
         fingerprint: fingerprint.clone(),
       }),
       merged_at: "original".into(),
+      duplicates: Vec::new(),
     };
     assert!(reusable(&record, "signature", &root, false).unwrap());
     assert!(!reusable(&record, "changed", &root, false).unwrap());
@@ -647,6 +681,7 @@ mod tests {
       dependency_fingerprint: String::new(),
       output: None,
       merged_at: "cached".into(),
+      duplicates: Vec::new(),
     };
     let mut connected = BTreeMap::from([
       ("parent.ymap".into(), record("parent.ymap")),

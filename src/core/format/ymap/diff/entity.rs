@@ -7,6 +7,8 @@ use structdiff::StructDiff;
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub enum YmapEntityDiff {
   Added(YmapEntity),
+  /// Removes this entity; deletion takes precedence over additions or modifications.
+  Removed(YmapEntity),
   Modified {
     vanilla: YmapEntity,
     diffs: Vec<YmapEntityStructDiffEnum>,
@@ -27,6 +29,9 @@ impl YmapEntityDiff {
       match diff {
         Self::Added(e) => {
           log::info!("      [Added] Entity: {} {}", e.guid, e.archetype_name);
+        }
+        Self::Removed(e) => {
+          log::info!("      [Removed] Entity: {} {}", e.guid, e.archetype_name);
         }
         Self::Modified {
           vanilla: _,
@@ -66,10 +71,64 @@ pub fn check_entity_diff(
             diffs,
           })
         }
-        (Some(_), None) => None,
+        (Some(vanilla), None) => Some(YmapEntityDiff::Removed(vanilla.clone())),
         (None, Some(modded)) => Some(YmapEntityDiff::Added(modded.clone())),
         (None, None) => None,
       }
     })
     .collect::<Vec<_>>()
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+  use crate::core::format::ymap::{diff::YmapDiff, xml::XmlYmap};
+
+  #[test]
+  fn entity_deletion_wins_over_modification_and_readdition_in_every_order() {
+    let xml: XmlYmap = quick_xml::de::from_str(include_str!(concat!(
+      env!("CARGO_MANIFEST_DIR"),
+      "/docs/sample/parent_refs/vanilla_parent.ymap.xml"
+    )))
+    .unwrap();
+    let vanilla: Ymap = xml.into();
+    let guid = *vanilla.entity_map.keys().next().unwrap();
+    let mut deleted = vanilla.clone();
+    deleted.entity_map.shift_remove(&guid);
+    let diffs = YmapEntityDiff::extract_from(&vanilla, &deleted);
+    assert!(
+      diffs
+        .iter()
+        .any(|diff| matches!(diff, YmapEntityDiff::Removed(entity) if entity.guid == guid))
+    );
+    let mut modified = vanilla.clone();
+    modified.entity_map.get_mut(&guid).unwrap().position.x += 1.0;
+    for reverse in [false, true] {
+      let delete = YmapDiff::extract_from(&vanilla, &deleted);
+      let modify = YmapDiff::extract_from(&vanilla, &modified);
+      let merged_diff = if reverse { modify.merge(delete) } else { delete.merge(modify) };
+      assert!(
+        merged_diff
+          .entity_diffs
+          .iter()
+          .all(|diff| matches!(diff, YmapEntityDiff::Removed(entity) if entity.guid == guid))
+      );
+      let merged_diff = merged_diff.merge(YmapDiff::extract_from(&vanilla, &modified));
+      assert!(
+        merged_diff
+          .entity_diffs
+          .iter()
+          .all(|diff| matches!(diff, YmapEntityDiff::Removed(entity) if entity.guid == guid))
+      );
+      let merged = merged_diff.apply_to(&vanilla, None);
+      assert!(!merged.entity_map.contains_key(&guid));
+      assert_eq!(merged.entity_map.len(), vanilla.entity_map.len() - 1);
+      let mut diff = YmapDiff::extract_from(&vanilla, &deleted);
+      diff.entity_diffs.push(YmapEntityDiff::Added(vanilla.entity_map[&guid].clone()));
+      if reverse {
+        diff.entity_diffs.reverse();
+      }
+      assert!(!diff.apply_to(&vanilla, None).entity_map.contains_key(&guid));
+    }
+  }
 }

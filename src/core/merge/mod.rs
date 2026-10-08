@@ -1,4 +1,5 @@
 mod cache_inputs;
+mod duplicates;
 mod incremental;
 pub mod merge;
 pub mod run;

@@ -58,6 +58,7 @@
 - [x] Emit source omit information alongside merged stream files in `_omit.txt`.
 - [x] Group merged stream files into extension-specific directories.
 - [x] Cache merge sources, vanilla baselines, dependency groups, algorithm version and output/no-output results to remerge only invalid groups; preserve unchanged files and remove stale results atomically.
+- [x] Write YMAP entity duplicate diagnostics to merged `duplicates.json`, including original GUIDs, applied/ignored source data and resolution reasons, retaining entries across incremental reuse.
 - [x] Add `--deploy` to copy merged files and remaining source-cache files into `stream/{extension}/merged` and `stream/{extension}/clone`.
 - [x] Cache deployment input/output mtime, size and fingerprints to copy only needed files, repair missing/changed copies and remove stale managed output safely.
 - [x] Write deployment `files.txt` with original source-relative paths of active moved cache files, including merged inputs and clones.
@@ -79,6 +80,7 @@
 
 - [x] Support latest-vanilla YBN merge: apply supported source changes directly to the latest vanilla file and emit merged files and omit information.
 - [x] Support latest-vanilla YMAP merge without historical baseline inference.
+- [x] Merge entity deletions with deletion-wins precedence across resources and repair references to deleted parents.
 - [x] Generate only YMAPs whose final supported model or repaired parent references differ from vanilla; allow no-op merges without emitting YMAPs or omit entries.
 - [x] Keep YBN on its own merge path; versioned JSON diff output is out of scope for this version.
 - [x] Replace the YMAP model-to-native XML conversion adapter with a direct binary writer.

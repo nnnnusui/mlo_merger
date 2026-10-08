@@ -89,6 +89,22 @@ impl YmapDiff {
     other: Self,
   ) -> Self {
     self.entity_diffs.extend(other.entity_diffs);
+    let removed =
+      self
+        .entity_diffs
+        .iter()
+        .filter_map(|diff| {
+          if let YmapEntityDiff::Removed(entity) = diff { Some(entity.guid) } else { None }
+        })
+        .collect::<HashSet<_>>();
+    self.entity_diffs.retain(|diff| match diff {
+      YmapEntityDiff::Removed(_) => true,
+      YmapEntityDiff::Added(entity) => !removed.contains(&entity.guid),
+      YmapEntityDiff::Modified {
+        vanilla,
+        ..
+      } => !removed.contains(&vanilla.guid),
+    });
     self.box_occluder_diffs.extend(other.box_occluder_diffs);
     self.occlude_model_diffs.extend(other.occlude_model_diffs);
     self.lod_light_diffs.extend(other.lod_light_diffs);
@@ -128,7 +144,7 @@ impl YmapDiff {
     let entity_diffs_map: HashMap<u32, Vec<YmapEntityDiff>> =
       unique_entity_diffs.into_iter().fold(HashMap::new(), |mut map, diff| {
         let guid = match &diff {
-          YmapEntityDiff::Added(e) => e.guid,
+          YmapEntityDiff::Added(e) | YmapEntityDiff::Removed(e) => e.guid,
           YmapEntityDiff::Modified {
             vanilla,
             ..
@@ -139,9 +155,13 @@ impl YmapDiff {
       });
 
     for (guid, diffs) in entity_diffs_map {
-      let diff = diffs.first().unwrap();
+      let diff = diffs
+        .iter()
+        .find(|diff| matches!(diff, YmapEntityDiff::Removed(_)))
+        .unwrap_or_else(|| diffs.first().unwrap());
       if diffs.len() > 1 {
-        let tails = diffs.iter().skip(1).collect::<Vec<_>>();
+        let tails =
+          diffs.iter().filter(|candidate| !std::ptr::eq(*candidate, diff)).collect::<Vec<_>>();
         log::warn!(
           "    Multiple diffs for entity GUID {}. applied: {:?} ignored: {:?}",
           guid,
@@ -152,6 +172,9 @@ impl YmapDiff {
       match diff {
         YmapEntityDiff::Added(it) => {
           modded.entity_map.insert(it.guid, it.clone());
+        }
+        YmapEntityDiff::Removed(it) => {
+          modded.entity_map.shift_remove(&it.guid);
         }
         YmapEntityDiff::Modified {
           vanilla: it,

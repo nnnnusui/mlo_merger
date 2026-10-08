@@ -58,6 +58,13 @@ needed; their modification times are preserved. Removed inputs and results that
 become no-ops disappear from the new publication. Failed runs leave existing
 merged files and merge metadata intact. A fully current run does not replace
 the merged directory.
+Entity duplicate diagnostics are collected before identical-diff deduplication
+and deletion filtering. The merged-root `duplicates.json` records original
+GUIDs and raw vanilla/source entity snapshots, applied/ignored source identities
+and the resolution rule. Diagnostics use normalized entity identities internally
+to distinguish ambiguous GUID occurrences, but do not expose those internal IDs
+as real GUIDs. File-level entries are stored in merge metadata, retained during
+incremental reuse, and removed when the contributing inputs no longer conflict.
 
 ## Inspection
 
@@ -97,7 +104,9 @@ preserves the list's modification time.
 
 ## Merge Policy
 
-YMAP merging preserves vanilla entities omitted by a mod. Parent relationships
+YMAP merging treats vanilla entities omitted by a mod as deletions. Any deletion
+for an entity takes precedence over additions, modifications or retention by
+other resources, regardless of processing order. Parent relationships
 are resolved before merging and repaired after the final entity layout is known.
 Files affected by those repairs are rebuilt even when their own mod data is
 otherwise unchanged. Ambiguous references are rejected rather than guessed.

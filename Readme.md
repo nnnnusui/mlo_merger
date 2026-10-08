@@ -142,6 +142,13 @@ parent/child relationships. Timestamp-only changes do not require remerging;
 missing or changed generated files are rebuilt. Unchanged outputs retain mtime,
 and removed inputs or newly unchanged results remove obsolete output and omit
 entries. `-f` forces this merge stage without forcing its prerequisites.
+Merge also writes `duplicates.json` for YMAP entities receiving multiple source
+diffs. Entries are grouped by filename and include the original GUID, vanilla
+snapshot, applied source and ignored sources with resource names, paths and
+source entity snapshots. Reasons are `identical_duplicate`, `deletion_wins`,
+or `first_change_wins`. This is an entity-diff report, separate from filename
+conflicts. Cached groups retain their report entries, and missing reports are
+restored from merge metadata without remerging unchanged data.
 
 ## Deployment
 
