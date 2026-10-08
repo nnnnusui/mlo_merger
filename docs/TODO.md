@@ -56,6 +56,7 @@
 
 ## Merged Output
 
+- [x] Load YBN/YMAP matching tolerances from `asset/config.toml`, default YBN to `0.05`, and invalidate merge results when effective settings change.
 - [x] Add `--merge` to validate/update `source-cache`, perform format-specific merges against latest vanilla, and write results to the selected `-o` path.
 - [x] Emit source omit information alongside merged stream files in `_omit.txt`.
 - [x] Group merged stream files into extension-specific directories.

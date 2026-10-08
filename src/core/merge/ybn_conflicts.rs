@@ -109,6 +109,18 @@ impl MergeYbnConflicts {
     vanilla_files: Option<&[PathBuf]>,
     source_files: Option<&[PathBuf]>,
   ) -> Result<(), Box<dyn std::error::Error>> {
+    crate::core::config::matching::with_config(|| {
+      self.run_configured_inner(codewalker, history, vanilla_files, source_files)
+    })?
+  }
+
+  fn run_configured_inner(
+    &self,
+    codewalker: Option<&CodeWalker>,
+    history: Option<&VanillaHistory>,
+    vanilla_files: Option<&[PathBuf]>,
+    source_files: Option<&[PathBuf]>,
+  ) -> Result<(), Box<dyn std::error::Error>> {
     let groups = if let Some(paths) = source_files {
       collect_ybn_groups_from_paths(paths.iter())
     } else {

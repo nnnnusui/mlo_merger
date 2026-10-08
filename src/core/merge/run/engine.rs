@@ -7,6 +7,17 @@ impl MergeYmap {
     latest_files: Option<&[PathBuf]>,
     raw_sources: Option<&[(String, PathBuf)]>,
   ) -> Result<(), Box<dyn std::error::Error>> {
+    crate::core::config::matching::with_config(|| {
+      self.run_configured_inner(history, latest_files, raw_sources)
+    })?
+  }
+
+  fn run_configured_inner(
+    &self,
+    history: Option<&VanillaHistory>,
+    latest_files: Option<&[PathBuf]>,
+    raw_sources: Option<&[(String, PathBuf)]>,
+  ) -> Result<(), Box<dyn std::error::Error>> {
     log::info!(
       "Merging YMAP files from {} and {} into {}",
       self.vanilla_dir.display(),

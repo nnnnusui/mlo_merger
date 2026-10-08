@@ -111,11 +111,11 @@ fn are_generators_equal(
   a: &YmapCarGenerator,
   b: &YmapCarGenerator,
 ) -> bool {
-  const FLOAT_EPSILON: f32 = 0.001;
+  let tolerance = crate::core::config::matching::current().ymap;
 
-  (a.orient_x - b.orient_x).abs() < FLOAT_EPSILON
-    && (a.orient_y - b.orient_y).abs() < FLOAT_EPSILON
-    && (a.perpendicular_length - b.perpendicular_length).abs() < FLOAT_EPSILON
+  (a.orient_x - b.orient_x).abs() < tolerance
+    && (a.orient_y - b.orient_y).abs() < tolerance
+    && (a.perpendicular_length - b.perpendicular_length).abs() < tolerance
     && a.car_model == b.car_model
     && a.flags == b.flags
     && a.body_color_remap_1 == b.body_color_remap_1
@@ -221,6 +221,26 @@ mod tests {
     let diffs = check_car_generator_diff(&vanilla_ymap, &modded_ymap);
     assert_eq!(diffs.len(), 1);
     assert!(matches!(diffs[0], YmapCarGeneratorDiff::Added(_)));
+  }
+
+  #[test]
+  fn configured_ymap_tolerance_controls_generator_scalars() {
+    use crate::core::config::matching::{MatchTolerances, with_tolerances};
+    let original = create_test_generator(100.0, 200.0, 30.0);
+    let mut changed = original.clone();
+    changed.orient_x += 0.02;
+    assert!(!are_generators_equal(&original, &changed));
+    with_tolerances(
+      MatchTolerances {
+        ymap: 0.05,
+        ..Default::default()
+      },
+      || {
+        assert!(are_generators_equal(&original, &changed));
+        changed.car_model = "different_model".into();
+        assert!(!are_generators_equal(&original, &changed));
+      },
+    );
   }
 
   #[test]

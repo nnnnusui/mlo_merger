@@ -46,6 +46,13 @@ impl BuildDiffCache {
     &self,
     reader: ModelReader,
   ) -> Result<()> {
+    crate::core::config::matching::with_config(|| self.run_configured(reader))?
+  }
+
+  fn run_configured(
+    &self,
+    reader: ModelReader,
+  ) -> Result<()> {
     let input = self.input_dir.canonicalize()?;
     let resources = get_resource_directories(&input)?;
     if resources.is_empty() {

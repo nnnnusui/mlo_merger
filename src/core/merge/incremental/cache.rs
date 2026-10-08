@@ -134,12 +134,61 @@ pub(super) fn signature(files: &BTreeMap<String, FileRecord>) -> Result<String> 
       (name, serde_json::json!({"dependencies": record.dependencies, "inputs": inputs}))
     })
     .collect::<BTreeMap<_, _>>();
-  Ok(format!("{:x}", Sha256::digest(serde_json::to_vec(&(ALGORITHM_VERSION, inputs))?)))
+  Ok(format!(
+    "{:x}",
+    Sha256::digest(serde_json::to_vec(&(
+      ALGORITHM_VERSION,
+      crate::core::config::matching::current(),
+      inputs
+    ))?)
+  ))
 }
 
 #[cfg(test)]
 mod tests {
   use super::*;
+
+  #[test]
+  fn configured_tolerances_invalidate_cached_merge_results() {
+    use crate::core::config::matching::{MatchTolerances, with_tolerances};
+    let files = BTreeMap::new();
+    let defaults = MatchTolerances::default();
+    let original = with_tolerances(defaults, || signature(&files).unwrap());
+    for configured in [
+      MatchTolerances {
+        ybn: 0.025,
+        ..defaults
+      },
+      MatchTolerances {
+        ymap: 0.002,
+        ..defaults
+      },
+      MatchTolerances {
+        ymap_occlude_model: 0.02,
+        ..defaults
+      },
+      MatchTolerances {
+        ymap_box_occluder: 2,
+        ..defaults
+      },
+    ] {
+      with_tolerances(configured, || {
+        let changed = signature(&files).unwrap();
+        assert_ne!(original, changed);
+        let record = FileRecord {
+          merge_sources: Vec::new(),
+          vanilla: None,
+          dependencies: BTreeSet::new(),
+          dependency_fingerprint: original.clone(),
+          output: None,
+          merged_at: "before".into(),
+          duplicates: Vec::new(),
+        };
+        assert!(!reusable(&record, &changed, Path::new("unused"), false).unwrap());
+      });
+    }
+    assert_eq!(with_tolerances(defaults, || signature(&files).unwrap()), original);
+  }
 
   #[test]
   fn merge_cache_checks_content_outputs_and_noop_results() {

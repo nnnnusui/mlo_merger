@@ -50,7 +50,7 @@ pub struct YbnDiff {
 }
 
 impl YbnDiff {
-  /// Extracts changes using the existing 5 mm collision matching policy.
+  /// Extracts changes using the operation's configured collision tolerance.
   ///
   /// ```no_run
   /// let before = mlo_merger::core::format::ybn::read_ybn(&std::fs::read("vanilla.ybn")?)?;
@@ -62,7 +62,9 @@ impl YbnDiff {
     before: &Bound,
     after: &Bound,
   ) -> io::Result<Self> {
-    Self::with_tolerance(before, after, 0.005)
+    crate::core::config::matching::with_config(|| {
+      Self::with_tolerance(before, after, crate::core::config::matching::current().ybn)
+    })?
   }
 
   /// Extracts per-Bounds multiset changes. Ambiguous edits are removed plus added.

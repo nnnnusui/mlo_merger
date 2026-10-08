@@ -81,6 +81,31 @@ a limited vanilla archive, use the explicit generator's `--gamebuild` stage
 selector; numeric GTA build-ID mapping is not implemented. Convenience aliases
 are in [.cargo/config.toml](.cargo/config.toml).
 
+## Matching Configuration
+
+Merge and diff-cache operations read [asset/config.toml](asset/config.toml) once
+per operation. Missing files or omitted keys use these defaults:
+
+```toml
+[tolerance]
+ybn = 0.05
+ymap = 0.001
+ymap_occlude_model = 0.01
+ymap_box_occluder = 1
+```
+
+`ybn` controls inclusive per-axis polygon coordinates and radius matching across
+all supported polygon types, not only boxes. `ymap` controls floating scalar
+comparisons for car generators and LOD lights. Occlude models use their XY extent
+tolerance; box occluders use integer stored-coordinate units. YMAP comparisons
+remain exclusive of the boundary. Entity coordinates remain exact, and existing
+position-key rounding is unchanged. These settings do not change search radii.
+
+All values must be positive; floating values must also be finite. Unknown keys
+and invalid TOML are errors. Effective settings are included in merge freshness,
+so changing them causes regeneration on the next merge without requiring `-f`.
+Larger tolerances can treat intentionally different nearby shapes as identical.
+
 ## Inspect Existing Data
 
 ```bash

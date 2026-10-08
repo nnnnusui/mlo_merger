@@ -37,7 +37,6 @@ const BOUNDS_SIZE: usize = 112;
 const GEOMETRY_SIZE: usize = 304;
 const GEOMETRY_BVH_SIZE: usize = 336;
 const COMPOSITE_SIZE: usize = 176;
-const YBN_POLYGON_MATCH_TOLERANCE: f32 = 0.005;
 
 #[cfg(test)]
 mod tests;

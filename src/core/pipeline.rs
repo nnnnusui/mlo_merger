@@ -46,7 +46,9 @@ impl Pipeline {
   /// # Ok::<(), Box<dyn std::error::Error>>(())
   /// ```
   pub fn run(&self) -> Result<DeploySummary, Box<dyn std::error::Error>> {
-    self.run_with_generation(GenerateVanilla::run_with_initialized_logger)
+    crate::core::config::matching::with_config(|| {
+      self.run_with_generation(GenerateVanilla::run_with_initialized_logger)
+    })?
   }
 
   fn run_with_generation(

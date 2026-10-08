@@ -1,0 +1,5 @@
+[tolerance]
+ybn = 0.05
+ymap = 0.001
+ymap_occlude_model = 0.01
+ymap_box_occluder = 1

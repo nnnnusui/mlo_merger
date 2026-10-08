@@ -112,15 +112,15 @@ fn are_lights_equal(
   a: &YmapLodLight,
   b: &YmapLodLight,
 ) -> bool {
-  const FLOAT_EPSILON: f32 = 0.001;
+  let tolerance = crate::core::config::matching::current().ymap;
 
-  (a.falloff - b.falloff).abs() < FLOAT_EPSILON
+  (a.falloff - b.falloff).abs() < tolerance
     && a.falloff_exponent == b.falloff_exponent
     && a.time_and_state_flags == b.time_and_state_flags
     && a.hash == b.hash
     && a.cone_inner_angle == b.cone_inner_angle
     && a.cone_outer_angle_or_cap_ext == b.cone_outer_angle_or_cap_ext
-    && (a.corona_intensity - b.corona_intensity).abs() < FLOAT_EPSILON
+    && (a.corona_intensity - b.corona_intensity).abs() < tolerance
 }
 
 #[cfg(test)]
@@ -214,6 +214,26 @@ mod tests {
     let diffs = check_lod_light_diff(&vanilla_ymap, &modded_ymap);
     assert_eq!(diffs.len(), 1);
     assert!(matches!(diffs[0], YmapLodLightDiff::Added(_)));
+  }
+
+  #[test]
+  fn configured_ymap_tolerance_controls_light_scalars() {
+    use crate::core::config::matching::{MatchTolerances, with_tolerances};
+    let original = create_test_light(0.0, 0.0, -1.0);
+    let mut changed = original.clone();
+    changed.falloff += 0.02;
+    assert!(!are_lights_equal(&original, &changed));
+    with_tolerances(
+      MatchTolerances {
+        ymap: 0.05,
+        ..Default::default()
+      },
+      || {
+        assert!(are_lights_equal(&original, &changed));
+        changed.hash = "different_hash".into();
+        assert!(!are_lights_equal(&original, &changed));
+      },
+    );
   }
 
   #[test]

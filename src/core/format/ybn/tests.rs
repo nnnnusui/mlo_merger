@@ -272,6 +272,85 @@ fn merges_mod_child_additions_and_removals_against_vanilla() {
 }
 
 #[test]
+fn configured_ybn_tolerance_removes_shifted_boxes_but_preserves_distinct_additions() {
+  use crate::core::config::matching::{MatchTolerances, with_tolerances};
+  let mut baseline = read_ybn_root(&triangle_root(
+    &[[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
+    &[([0, 1, 2], [false; 3])],
+  ))
+  .unwrap();
+  let geometry = baseline.children[0].geometry.as_mut().unwrap();
+  geometry.vertices.extend([[0.1, 0.1, 0.0], [0.2, 0.1, 0.0], [0.2, 0.2, 0.0], [0.1, 0.2, 0.0]]);
+  geometry.polygons.push(Polygon::Box {
+    material: 0,
+    vertices: [3, 4, 5, 6],
+  });
+  let vanilla = encode_ybn_bound(&baseline).unwrap();
+  let baseline = read_ybn_root(&vanilla).unwrap();
+  let mut deleted = baseline.clone();
+  deleted.children[0]
+    .geometry
+    .as_mut()
+    .unwrap()
+    .polygons
+    .retain(|polygon| !matches!(polygon, Polygon::Box { .. }));
+  let deleted = encode_ybn_bound(&deleted).unwrap();
+  let shifted = |distance| {
+    let mut changed = baseline.clone();
+    let geometry = changed.children[0].geometry.as_mut().unwrap();
+    let vertices = geometry
+      .polygons
+      .iter()
+      .find_map(|polygon| match polygon {
+        Polygon::Box {
+          vertices,
+          ..
+        } => Some(*vertices),
+        _ => None,
+      })
+      .unwrap();
+    for index in vertices {
+      geometry.vertices[index as usize][0] += distance;
+    }
+    encode_ybn_bound(&changed).unwrap()
+  };
+  let count_boxes = |bytes: &[u8]| {
+    read_ybn_root(bytes)
+      .unwrap()
+      .children
+      .iter()
+      .filter_map(|child| child.geometry.as_ref())
+      .map(|geometry| {
+        geometry.polygons.iter().filter(|polygon| matches!(polygon, Polygon::Box { .. })).count()
+      })
+      .sum::<usize>()
+  };
+  let moved = shifted(0.024);
+  for (tolerance, expected) in [(0.005, 1), (0.05, 0)] {
+    with_tolerances(
+      MatchTolerances {
+        ybn: tolerance,
+        ..Default::default()
+      },
+      || {
+        for mods in [[deleted.as_slice(), moved.as_slice()], [moved.as_slice(), deleted.as_slice()]]
+        {
+          assert_eq!(count_boxes(&merge_ybn_deltas(&vanilla, &mods).unwrap()), expected);
+        }
+      },
+    );
+  }
+  let distinct = shifted(0.08);
+  with_tolerances(MatchTolerances::default(), || {
+    assert_eq!(count_boxes(&merge_ybn_deltas(&vanilla, &[&deleted, &distinct]).unwrap()), 1);
+    assert!(super::points_match([0.0; 3], [0.05; 3]));
+    assert!(!super::points_match([0.0; 3], [0.0501, 0.0, 0.0]));
+    assert!(super::matches_radius(Some(0.0), Some(0.05)));
+    assert!(!super::matches_radius(Some(0.0), Some(0.0501)));
+  });
+}
+
+#[test]
 fn merges_independent_additions_from_multiple_mods() {
   let vanilla = sample("vanilla_empty.ybn.xml");
   let first_mod = sample("resource_a.ybn.xml");
@@ -282,4 +361,76 @@ fn merges_independent_additions_from_multiple_mods() {
   assert_eq!(children, 2, "the same addition from two mods must be deduplicated");
   assert_eq!(minimum[0], -1.0);
   assert_eq!(maximum[0], 11.0);
+}
+
+#[test]
+#[ignore = "requires local Mirror Park vanilla and cached source YBNs"]
+fn configured_ybn_tolerance_removes_reported_mirrorpark_box() {
+  use crate::core::config::matching::{MatchTolerances, with_tolerances};
+  let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+  let vanilla = std::fs::read(root.join("asset/vanilla-cache/latest/ybn/id2_21_c_0.ybn")).unwrap();
+  let gabz = std::fs::read(
+    root.join("asset/source-cache/resources/cfx-gabz-mirrorpark1/vanilla/id2_21_c_0.ybn"),
+  )
+  .unwrap();
+  let hane =
+    std::fs::read(root.join("asset/source-cache/resources/hane_data_mirrorpark/id2_21_c_0.ybn"))
+      .unwrap();
+  let count = |bytes: &[u8]| {
+    let bounds = read_ybn_root(bytes).unwrap();
+    bounds
+      .children
+      .iter()
+      .map(|child| {
+        let Some(geometry) = &child.geometry else {
+          return 0;
+        };
+        geometry
+          .polygons
+          .iter()
+          .filter(|polygon| {
+            let Polygon::Box {
+              vertices,
+              ..
+            } = polygon
+            else {
+              return false;
+            };
+            let points = vertices.map(|index| {
+              let vertex = geometry.vertices[index as usize];
+              super::transform_ybn_point(
+                std::array::from_fn(|axis| vertex[axis] + geometry.center[axis]),
+                child.transform,
+              )
+            });
+            let center: [f32; 3] =
+              std::array::from_fn(|axis| points.iter().map(|point| point[axis]).sum::<f32>() / 4.0);
+            center
+              .into_iter()
+              .zip([1211.126, -507.5948, 67.54723])
+              .map(|(coordinate, target)| (coordinate - target).powi(2))
+              .sum::<f32>()
+              < 1.0
+          })
+          .count()
+      })
+      .sum::<usize>()
+  };
+  assert_eq!(count(&vanilla), 1);
+  assert_eq!(count(&gabz), 1);
+  assert_eq!(count(&hane), 0);
+  for (tolerance, expected) in [(0.005, 1), (0.05, 0)] {
+    with_tolerances(
+      MatchTolerances {
+        ybn: tolerance,
+        ..Default::default()
+      },
+      || {
+        let merged = merge_ybn_deltas(&vanilla, &[&gabz, &hane]).unwrap();
+        let found = count(&merged);
+        eprintln!("Mirror Park Box: tolerance={tolerance}, matches={found}");
+        assert_eq!(found, expected);
+      },
+    );
+  }
 }

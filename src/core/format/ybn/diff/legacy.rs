@@ -7,6 +7,13 @@ pub fn merge_ybn_deltas(
   vanilla: &[u8],
   mods: &[&[u8]],
 ) -> io::Result<Vec<u8>> {
+  crate::core::config::matching::with_config(|| merge_ybn_deltas_inner(vanilla, mods))?
+}
+
+fn merge_ybn_deltas_inner(
+  vanilla: &[u8],
+  mods: &[&[u8]],
+) -> io::Result<Vec<u8>> {
   let mut merged = read_ybn_root(vanilla)?;
   if merged.kind != "Composite" {
     return Err(invalid("YBN delta merge requires a Composite vanilla root"));
@@ -296,7 +303,7 @@ pub(in crate::core::format::ybn) fn polygon_bucket_key(
   identity: &PolygonIdentity
 ) -> (Vec<u8>, [i64; 3]) {
   let centroid = identity.centroid();
-  let bucket_width = f64::from(YBN_POLYGON_MATCH_TOLERANCE) * 2.0;
+  let bucket_width = f64::from(crate::core::config::matching::current().ybn) * 2.0;
   (identity.signature(), centroid.map(|value| (f64::from(value) / bucket_width).floor() as i64))
 }
 
@@ -304,7 +311,8 @@ pub(in crate::core::format::ybn) fn points_match(
   first: [f32; 3],
   second: [f32; 3],
 ) -> bool {
-  (0..3).all(|axis| (first[axis] - second[axis]).abs() <= YBN_POLYGON_MATCH_TOLERANCE)
+  let tolerance = crate::core::config::matching::current().ybn;
+  (0..3).all(|axis| (first[axis] - second[axis]).abs() <= tolerance)
 }
 
 pub(in crate::core::format::ybn) fn matches_radius(
@@ -312,7 +320,9 @@ pub(in crate::core::format::ybn) fn matches_radius(
   second: Option<f32>,
 ) -> bool {
   match (first, second) {
-    (Some(first), Some(second)) => (first - second).abs() <= YBN_POLYGON_MATCH_TOLERANCE,
+    (Some(first), Some(second)) => {
+      (first - second).abs() <= crate::core::config::matching::current().ybn
+    }
     (None, None) => true,
     _ => false,
   }

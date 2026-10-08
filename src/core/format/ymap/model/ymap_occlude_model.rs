@@ -18,14 +18,45 @@ impl YmapOccludeModel {
     &self,
     other: &YmapOccludeModel,
   ) -> bool {
-    const EPSILON: f32 = 0.01;
+    let tolerance = crate::core::config::matching::current().ymap_occlude_model;
     let is_position_similar =
       |p1: &crate::core::common::position::Position,
        p2: &crate::core::common::position::Position| {
-        (p1.x - p2.x).abs() < EPSILON && (p1.y - p2.y).abs() < EPSILON
-        // && (p1.z - p2.z).abs() < EPSILON
+        (p1.x - p2.x).abs() < tolerance && (p1.y - p2.y).abs() < tolerance
       };
 
     is_position_similar(&self.bmin, &other.bmin) || is_position_similar(&self.bmax, &other.bmax)
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+  use crate::core::config::matching::{MatchTolerances, with_tolerances};
+
+  #[test]
+  fn configured_occlude_model_tolerance_controls_xy_matching() {
+    let original = YmapOccludeModel {
+      bmin: Position::default(),
+      bmax: Position::default(),
+      triangles: Vec::new(),
+      flags: 0,
+    };
+    let mut changed = original.clone();
+    changed.bmin.x = 0.02;
+    changed.bmax.x = 0.02;
+    assert!(!original.is_same(&changed));
+    with_tolerances(
+      MatchTolerances {
+        ymap_occlude_model: 0.05,
+        ..Default::default()
+      },
+      || {
+        assert!(original.is_same(&changed));
+        changed.bmin.x = 0.06;
+        changed.bmax.x = 0.06;
+        assert!(!original.is_same(&changed));
+      },
+    );
   }
 }

@@ -99,6 +99,12 @@ polygon or vertex indices. A geometrically different shape from another resource
 can therefore remain as an addition even where a baseline shape was deleted.
 Source groups without a vanilla baseline are skipped or rejected when conflicting.
 
+Matching tolerances are validated from configuration before each operation and
+kept constant throughout it. Effective values participate in merge freshness so
+configuration changes cannot reuse results computed under another matching policy.
+YMAP's exact entity comparisons and format-specific identity rules remain separate
+from configurable approximate comparisons and inspection search radii.
+
 ## Vanilla Archive And Derived Cache
 
 The raw vanilla archive preserves ordered YMAP/YBN overlays from the base game,

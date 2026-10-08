@@ -32,6 +32,19 @@ pub fn run(
   output_dir: &Path,
   force: bool,
 ) -> Result<()> {
+  crate::core::config::matching::with_config(|| {
+    run_inner(source_dir, vanilla_dir, vanilla_cache_dir, source_cache_dir, output_dir, force)
+  })?
+}
+
+fn run_inner(
+  source_dir: &Path,
+  vanilla_dir: &Path,
+  vanilla_cache_dir: &Path,
+  source_cache_dir: &Path,
+  output_dir: &Path,
+  force: bool,
+) -> Result<()> {
   let source_dir = source_dir.canonicalize()?;
   let vanilla_dir = vanilla_dir.canonicalize()?;
   BuildSourceCache {
