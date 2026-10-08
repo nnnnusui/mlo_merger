@@ -374,6 +374,68 @@ mod tests {
   }
 
   #[test]
+  fn find_ybn_position_accepts_type_radius_and_rejects_invalid_options() {
+    let Command::Find(command) = parser()
+      .to_options()
+      .run_inner(&[
+        "--find",
+        "ybn-position",
+        "1211.126,-507.5948,67.54723",
+        "--radius",
+        "1.0",
+        "--type",
+        "box",
+        "--filter",
+        "id2_21_c_0.ybn",
+        "--diff-all",
+      ])
+      .unwrap()
+    else {
+      panic!("Expected YBN position search")
+    };
+    assert_eq!(
+      command.query,
+      crate::core::find::EntityQuery::YbnPosition {
+        position: [1211.126, -507.5948, 67.54723],
+        radius: 1.0,
+        kind: Some("box".into()),
+      }
+    );
+    assert_eq!(command.filter.as_deref(), Some("id2_21_c_0.ybn"));
+    assert!(command.diff_all);
+    for kind in ["box", "triangle", "sphere", "capsule", "cylinder", "BOX"] {
+      let args = ["--find", "ybn-position", "-1,2,-3", "--type", kind, "--radius", "0"];
+      assert!(parser().to_options().run_inner(args.as_slice()).is_ok());
+    }
+    let Command::Find(defaults) =
+      parser().to_options().run_inner(&["--find", "ybn-position", "-1,2,-3"]).unwrap()
+    else {
+      panic!("Expected YBN position search")
+    };
+    assert_eq!(
+      defaults.query,
+      crate::core::find::EntityQuery::YbnPosition {
+        position: [-1.0, 2.0, -3.0],
+        radius: 1.0,
+        kind: None,
+      }
+    );
+    for args in [
+      vec!["--find", "ybn-position", "1,2"],
+      vec!["--find", "ybn-position", "NaN,0,0"],
+      vec!["--find", "ybn-position", "1e100,0,0"],
+      vec!["--find", "ybn-position", "0,0,0", "--radius", "-1"],
+      vec!["--find", "ybn-position", "0,0,0", "--radius", "inf"],
+      vec!["--find", "ybn-position", "0,0,0", "--type", "unknown"],
+      vec!["--find", "ybn-position", "0,0,0", "--round", "1"],
+      vec!["--find", "entity-position", "0,0,0", "--radius", "1"],
+      vec!["--find", "entity-guid", "1", "--type", "box"],
+    ] {
+      assert!(parser().to_options().run_inner(args.as_slice()).is_err(), "{args:?}");
+    }
+  }
+
+  #[test]
   fn get_diff_accepts_two_positional_inputs() {
     let Command::GetDiff(command) =
       parser().to_options().run_inner(&["--get-diff", "before.ybn", "after.ybn"]).unwrap()

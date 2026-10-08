@@ -78,6 +78,13 @@ does not claim historical data when recorded input files have changed.
 Position searches use an inclusive 3D Euclidean radius, native coordinate
 precision and the same predicate across merged, vanilla and source stages.
 
+YBN position searches use world-space collision centers with optional shape-type
+filtering, including polygon primitives and supported standalone Bounds.
+Geometry centers and ancestor transforms are applied before the inclusive
+distance check. XML retains input-local hierarchy paths and polygon indices
+alongside resolved vertices and materials; those indices are not cross-input IDs.
+File selection and fingerprint validation are shared with entity searches.
+
 ## Deploy
 
 Deployment consumes existing merged output and `source-cache/resources` without

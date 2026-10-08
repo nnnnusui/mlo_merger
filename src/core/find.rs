@@ -14,9 +14,11 @@ use std::{
   path::{Component, Path, PathBuf},
 };
 
+mod ybn;
+
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
-/// Condition selecting entities from merged and recorded pre-merge YMAPs.
+/// Condition selecting entities or collision shapes from merged and recorded inputs.
 #[derive(Debug, Clone, PartialEq)]
 pub enum EntityQuery {
   /// Select every occurrence of this unsigned entity GUID.
@@ -28,6 +30,15 @@ pub enum EntityQuery {
     /// Finite nonnegative distance from the center.
     radius: f64,
   },
+  /// Select YBN collision centers within an inclusive three-dimensional radius.
+  YbnPosition {
+    /// World-space search center at native coordinate precision.
+    position: [f64; 3],
+    /// Finite nonnegative distance from the center.
+    radius: f64,
+    /// Optional lowercase shape type: box, triangle, sphere, capsule or cylinder.
+    kind: Option<String>,
+  },
 }
 
 impl EntityQuery {
@@ -35,12 +46,25 @@ impl EntityQuery {
     if let Self::Position {
       position,
       radius,
+    }
+    | Self::YbnPosition {
+      position,
+      radius,
+      ..
     } = self
       && (!position.iter().all(|value| value.is_finite() && (*value as f32).is_finite())
         || !radius.is_finite()
         || *radius < 0.0)
     {
-      return Err("Entity position and radius must be finite; --round must be nonnegative".into());
+      return Err("Position and radius must be finite; radius must be nonnegative".into());
+    }
+    if let Self::YbnPosition {
+      kind: Some(kind),
+      ..
+    } = self
+      && !matches!(kind.as_str(), "box" | "triangle" | "sphere" | "capsule" | "cylinder")
+    {
+      return Err("YBN type must be box, triangle, sphere, capsule or cylinder".into());
     }
     Ok(())
   }
@@ -51,6 +75,9 @@ impl EntityQuery {
   ) -> bool {
     match self {
       Self::Guid(guid) => entity.guid == *guid,
+      Self::YbnPosition {
+        ..
+      } => false,
       Self::Position {
         position,
         radius,
@@ -67,12 +94,12 @@ impl EntityQuery {
   }
 }
 
-/// Searches existing merged binaries by GUID or position and renders matching entities as XML.
+/// Searches existing merged binaries for entities or collision centers and renders XML.
 #[derive(Debug, Clone)]
 pub struct FindEntity {
   /// Validated GUID or three-dimensional position condition.
   pub query: EntityQuery,
-  /// Directory containing merged YMAPs.
+  /// Directory containing merged YMAPs and YBNs.
   pub merged_dir: PathBuf,
   /// Optional case-insensitive filename glob.
   pub filter: Option<String>,
@@ -185,51 +212,15 @@ impl FindEntity {
   /// ```
   pub fn run(&self) -> Result<String> {
     self.query.validate()?;
-    let merged = self.merged_dir.canonicalize()?;
-    let filter = filename_filter(self.filter.as_deref())?;
-    let mut paths = BTreeMap::new();
-    for entry in walkdir::WalkDir::new(&merged).follow_links(false) {
-      let entry = entry?;
-      if !entry.file_type().is_file() {
-        continue;
-      }
-      let path = entry.path();
-      if path.extension().is_none_or(|extension| !extension.eq_ignore_ascii_case("ymap")) {
-        continue;
-      }
-      let name = path
-        .file_name()
-        .and_then(|name| name.to_str())
-        .ok_or("YMAP filename is not UTF-8")?
-        .to_ascii_lowercase();
-      if !matches(&filter, &name) {
-        continue;
-      }
-      if paths.insert(name.clone(), path.to_path_buf()).is_some() {
-        return Err(format!("Duplicate merged YMAP filename: {name}").into());
-      }
+    if let EntityQuery::YbnPosition {
+      position,
+      radius,
+      kind,
+    } = &self.query
+    {
+      return ybn::run(self, *position, *radius, kind.as_deref());
     }
-    let cache = if self.diff_all {
-      let cache: MergeCache = serde_json::from_reader(BufReader::new(fs::File::open(
-        merged.join("merge_cache_info.json"),
-      )?))?;
-      if cache.format_version != 1 {
-        return Err("Unsupported merge cache schema for --diff-all".into());
-      }
-      Some(cache)
-    } else {
-      None
-    };
-    let mut names = paths.keys().cloned().collect::<BTreeSet<_>>();
-    if let Some(cache) = &cache {
-      names.extend(
-        cache
-          .files
-          .keys()
-          .filter(|name| name.ends_with(".ymap") && matches(&filter, name))
-          .cloned(),
-      );
-    }
+    let (paths, cache, names) = search_inputs(self, "ymap")?;
     let mut files = Vec::new();
     for name in names {
       let mut data = Vec::new();
@@ -271,6 +262,9 @@ impl FindEntity {
       EntityQuery::Position {
         ..
       } => "EntityPositionSearch",
+      EntityQuery::YbnPosition {
+        ..
+      } => unreachable!(),
     };
     let mut serializer = quick_xml::se::Serializer::with_root(&mut xml, Some(root))?;
     serializer.indent(' ', 2);
@@ -299,7 +293,64 @@ fn search_result(
       radius: Some(*radius),
       files,
     },
+    EntityQuery::YbnPosition {
+      ..
+    } => unreachable!(),
   }
+}
+
+type SearchInputs = (BTreeMap<String, PathBuf>, Option<MergeCache>, BTreeSet<String>);
+
+fn search_inputs(
+  search: &FindEntity,
+  extension: &str,
+) -> Result<SearchInputs> {
+  let merged = search.merged_dir.canonicalize()?;
+  let filter = filename_filter(search.filter.as_deref())?;
+  let mut paths = BTreeMap::new();
+  for entry in walkdir::WalkDir::new(&merged).follow_links(false) {
+    let entry = entry?;
+    if !entry.file_type().is_file() {
+      continue;
+    }
+    let path = entry.path();
+    if path.extension().is_none_or(|value| !value.eq_ignore_ascii_case(extension)) {
+      continue;
+    }
+    let name = path
+      .file_name()
+      .and_then(|name| name.to_str())
+      .ok_or("Resource filename is not UTF-8")?
+      .to_ascii_lowercase();
+    if matches(&filter, &name) && paths.insert(name.clone(), path.to_path_buf()).is_some() {
+      return Err(format!("Duplicate merged {extension} filename: {name}").into());
+    }
+  }
+  let cache = if search.diff_all {
+    let cache: MergeCache = serde_json::from_reader(BufReader::new(fs::File::open(
+      merged.join("merge_cache_info.json"),
+    )?))?;
+    if cache.format_version != 1 {
+      return Err("Unsupported merge cache schema for --diff-all".into());
+    }
+    Some(cache)
+  } else {
+    None
+  };
+  let mut names = paths.keys().cloned().collect::<BTreeSet<_>>();
+  if let Some(cache) = &cache {
+    names.extend(
+      cache
+        .files
+        .keys()
+        .filter(|name| {
+          Path::new(name).extension().is_some_and(|value| value.eq_ignore_ascii_case(extension))
+            && matches(&filter, name)
+        })
+        .cloned(),
+    );
+  }
+  Ok((paths, cache, names))
 }
 
 fn filename_filter(pattern: Option<&str>) -> Result<Option<GlobMatcher>> {
@@ -335,10 +386,22 @@ fn read_entities(
   stage: &'static str,
   input: Option<&Input>,
 ) -> Result<EntityData> {
+  let bytes = read_input(path, stage, input)?;
+  let meta = MetaResource::parse(&Rsc7Resource::decode(&bytes)?)?;
+  let names: HashMap<_, _> = meta.hash_names();
+  let (_, entities) = ymap_to_model_with_entities(&bytes, &names)?;
+  Ok(entity_data(path, query, stage, input, entities))
+}
+
+fn read_input(
+  path: &Path,
+  stage: &str,
+  input: Option<&Input>,
+) -> Result<Vec<u8>> {
   let bytes = fs::read(path).map_err(|error| {
     std::io::Error::new(
       error.kind(),
-      format!("Cannot read {stage} YMAP {}: {error}", path.display()),
+      format!("Cannot read {stage} resource {}: {error}", path.display()),
     )
   })?;
   if let Some(input) = input
@@ -353,10 +416,7 @@ fn read_entities(
       .into(),
     );
   }
-  let meta = MetaResource::parse(&Rsc7Resource::decode(&bytes)?)?;
-  let names: HashMap<_, _> = meta.hash_names();
-  let (_, entities) = ymap_to_model_with_entities(&bytes, &names)?;
-  Ok(entity_data(path, query, stage, input, entities))
+  Ok(bytes)
 }
 
 fn entity_data(

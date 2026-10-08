@@ -102,7 +102,7 @@ raw archive. The single `names` map contains embedded YMAP names and entity
 archetypes as `hash: text` entries; entity GUIDs are not included. Regenerate an older raw
 cache once to populate the RPF-name candidates used to resolve prop names.
 
-## Entity Search
+## Entity And Collision Search
 
 `--find entity-guid <GUID>` searches existing merged native YMAPs and writes a
 single XML document to stdout without running the pipeline or creating XML files.
@@ -115,6 +115,7 @@ Duplicate GUID occurrences are retained.
 ```bash
 cargo run -- --find entity-guid 2443198849 --filter '*cs4_10_strm_0.ymap' --diff-all
 cargo run -- --find entity-position 3.5,4.2,0.0 --round 1.0
+cargo run -- --find ybn-position 1211.126,-507.5948,67.54723 --radius 1.0 --type box --filter id2_21_c_0.ybn --diff-all
 ```
 
 `--find entity-position X,Y,Z --round R` selects every entity whose 3D Euclidean
@@ -125,12 +126,26 @@ Negative coordinates are supported. Non-finite/out-of-range coordinates and
 negative/non-finite radii are rejected. Position searches also accept glob filters
 and `--diff-all`, and XML identifies the requested center and radius.
 
+`--find ybn-position X,Y,Z --radius R [--type TYPE]` searches collision centers
+in native YBNs. Radius defaults to `1.0` and includes the 3D distance boundary.
+Supported types are `box`, `triangle`, `sphere`, `capsule` and `cylinder`;
+omitting `--type` selects all supported shapes. Box/triangle centers are the
+mean of their reference vertices, spheres use their center vertex, and
+capsules/cylinders use their endpoint midpoint. Standalone primitive Bounds
+use their stored box/sphere center. Geometry centers and all ancestor transforms
+are applied to obtain world coordinates. The same coordinate/radius validation
+as entity searches applies. Opaque polygons and unsupported Bounds types are skipped.
+XML includes the type, Bound hierarchy path, polygon index when applicable,
+world center, reference vertices and decoded polygon material. Indices are
+local to each input and can change after rebuilding; they are not persistent IDs.
+YBN searches also support filename globs and `--diff-all` without writing artifacts.
+
 `--diff-all` also reads vanilla and each source input recorded in
 `merge_cache_info.json`; XML entries identify their stage, path and resource.
-`found="false"` marks a stage without matching entities, including removed entities or
-maps with no generated output. Recorded input fingerprints must still match;
+`found="false"` marks a stage without matching entities or collision shapes,
+including removed items or files with no generated output. Recorded input fingerprints must still match;
 otherwise the command fails and requests a fresh merge instead of presenting
-changed inputs as historical data. This option outputs entity snapshots for
+changed inputs as historical data. This option outputs matching snapshots for
 comparison, not a computed semantic diff.
 
 ## Incremental Merge
