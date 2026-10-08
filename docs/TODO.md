@@ -80,7 +80,8 @@
 - [x] Add read-only `--find file-from-position X,Y,Z` using YMAP entity extents and transform-aware YBN BoxMin/BoxMax bounds; `--all` also scans source, active source-cache files and latest vanilla-cache artifacts with stderr progress.
 - [x] Add `--find occlude-position X,Y,Z --radius R` to return nearby YMAP boxOccluder and occludeModel entries with file provenance.
 
-- [ ] Provide `--to-xml <path>`, `--from-xml <path>`, and `--get-diff <a> <b>` commands, each accepting `-o <path>` with `.` as the default output path.
+- [x] Add `--get-diff <source.ymap|directory>` to compare YMAPs against matching latest vanilla-cache files; `-o` is a filename for one input and an output directory for multiple inputs.
+- [ ] Provide `--to-xml <path>` and `--from-xml <path>` commands, each accepting `-o <path>` with `.` as the default output path.
 - [ ] Make these commands use the same format dispatch and prerequisite/freshness behavior where applicable, without coupling their format-specific conversion or diff implementations.
 - [ ] Reconcile direct command names (`--generate-vanilla`, `--generate-vanilla-cache`, `--generate-source-cache`, `--merge`) with `--step-name` so each stage has one unambiguous selection and force behavior.
 

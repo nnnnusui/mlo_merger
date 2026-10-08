@@ -80,7 +80,7 @@ pub fn run(command: Command) -> Result<(), Box<dyn std::error::Error>> {
     Command::ToXml(command) => to_xml::run(command)?,
     Command::FromXml(command) => from_xml::run(command)?,
     Command::Find(command) => find::run(command)?,
-    Command::GetDiff(command) => get_diff::run_mock(command),
+    Command::GetDiff(command) => get_diff::run(command)?,
   }
   Ok(())
 }
@@ -499,7 +499,24 @@ mod tests {
       panic!("Expected get-diff command")
     };
     assert_eq!(command.before, PathBuf::from("before.ybn"));
-    assert_eq!(command.after, PathBuf::from("after.ybn"));
+    assert_eq!(command.after, Some(PathBuf::from("after.ybn")));
     assert_eq!(command.common.output, PathBuf::from("."));
+    let Command::GetDiff(command) =
+      parser().to_options().run_inner(&["--get-diff", "source.ymap"]).unwrap()
+    else {
+      panic!("Expected get-diff command")
+    };
+    assert_eq!(command.before, PathBuf::from("source.ymap"));
+    assert!(command.after.is_none());
+    assert_eq!(command.common.output, PathBuf::from("."));
+    let Command::GetDiff(command) = parser()
+      .to_options()
+      .run_inner(&["--get-diff", "source.ymap", "-o", "out", "--vanilla-cache", "vanilla-cache"])
+      .unwrap()
+    else {
+      panic!("Expected get-diff command")
+    };
+    assert_eq!(command.common.output, PathBuf::from("out"));
+    assert_eq!(command.common.vanilla_cache, PathBuf::from("vanilla-cache"));
   }
 }

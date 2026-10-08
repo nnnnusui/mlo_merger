@@ -249,7 +249,7 @@ impl MergeYmap {
         let ymap_diff = if let Some(history) = history {
           best_cached_ymap_diff(history, &mut sources, &mut references, hash, ymap_name, &mod_ymap)?
         } else {
-          YmapDiff::extract_from(&vanilla_ymap, &mod_ymap)
+          YmapDiff::extract_for_merge(&vanilla_ymap, &mod_ymap)
         };
         let source_originals = mod_entities
           .iter()

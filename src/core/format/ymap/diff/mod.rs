@@ -52,13 +52,37 @@ impl YmapDiff {
     vanilla: &Ymap,
     modded: &Ymap,
   ) -> Self {
-    check_diffs(vanilla, modded);
+    Self::extract_with_options(vanilla, modded, false)
+  }
+
+  /// Extracts a merge diff without copying baseline occlude-model triangle arrays.
+  pub(crate) fn extract_for_merge(
+    vanilla: &Ymap,
+    modded: &Ymap,
+  ) -> Self {
+    Self::extract_with_options(vanilla, modded, true)
+  }
+
+  fn extract_with_options(
+    vanilla: &Ymap,
+    modded: &Ymap,
+    omit_baseline_occlude_triangles: bool,
+  ) -> Self {
+    if omit_baseline_occlude_triangles {
+      check_diffs_without_full_model_diff(vanilla, modded);
+    } else {
+      check_diffs(vanilla, modded);
+    }
 
     let entity_diffs = YmapEntityDiff::extract_from(vanilla, modded);
     YmapEntityDiff::print_diffs(&entity_diffs);
     let box_occluder_diffs = YmapBoxOccluderDiff::extract_from(vanilla, modded);
     YmapBoxOccluderDiff::print_diffs(&box_occluder_diffs);
-    let occlude_model_diffs = YmapOccludeModelDiff::extract_from(vanilla, modded);
+    let occlude_model_diffs = if omit_baseline_occlude_triangles {
+      YmapOccludeModelDiff::extract_for_merge(vanilla, modded)
+    } else {
+      YmapOccludeModelDiff::extract_from(vanilla, modded)
+    };
     YmapOccludeModelDiff::print_diffs(&occlude_model_diffs);
     let lod_light_diffs = YmapLodLightDiff::extract_from(vanilla, modded);
     YmapLodLightDiff::print_diffs(&lod_light_diffs);
@@ -469,6 +493,37 @@ impl YmapDiff {
     }
 
     modded
+  }
+}
+
+fn check_diffs_without_full_model_diff(
+  vanilla: &Ymap,
+  modded: &Ymap,
+) {
+  if vanilla.name != modded.name {
+    log::info!("    skip changes: <name /> _ {} -> {}", vanilla.name, modded.name);
+  }
+  if vanilla.flags != modded.flags {
+    log::info!(
+      "    skip changes: <contentFlags /> _ {:?} -> {:?}",
+      vanilla.content_flags,
+      modded.content_flags
+    );
+  }
+  if vanilla.streaming_extents_max != modded.streaming_extents_max {
+    log::info!("    skip changes: <streamingExtentsMax />");
+  }
+  if vanilla.streaming_extents_min != modded.streaming_extents_min {
+    log::info!("    skip changes: <streamingExtentsMin />");
+  }
+  if vanilla.entities_extents_max != modded.entities_extents_max {
+    log::info!("    skip changes: <entitiesExtentsMax />");
+  }
+  if vanilla.entities_extents_min != modded.entities_extents_min {
+    log::info!("    skip changes: <entitiesExtentsMin />");
+  }
+  if vanilla.block != modded.block {
+    log::info!("    skip changes: <block/>");
   }
 }
 

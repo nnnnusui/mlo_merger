@@ -41,7 +41,7 @@ pub(super) fn best_ymap_diff(
     let score = ymap_distance(&candidate, modded)?;
     log::info!("Candidate YMAP baseline {version}: {score} changes");
     if best.as_ref().is_none_or(|(best_score, _, _)| score < *best_score) {
-      best = Some((score, version, YmapDiff::extract_from(&candidate, modded)));
+      best = Some((score, version, YmapDiff::extract_for_merge(&candidate, modded)));
     }
   }
   best.ok_or_else(|| "No usable vanilla YMAP candidates".into())
