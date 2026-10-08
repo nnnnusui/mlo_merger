@@ -108,3 +108,25 @@ pub(super) fn create_staging_directory(output: &Path) -> Result<PathBuf> {
   fs::create_dir(&staging)?;
   Ok(staging)
 }
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn source_cache_content_freshness_ignores_timestamp_only_changes() {
+    let fingerprint = FileFingerprint {
+      sha256: "same-content".into(),
+      modified_seconds: 10,
+      modified_nanos: 20,
+      size: 30,
+    };
+    let cached = BTreeMap::from([("resource/stream/map.ymap".into(), fingerprint.clone())]);
+    let mut touched = fingerprint;
+    touched.modified_seconds += 1;
+    touched.modified_nanos += 1;
+    let current = BTreeMap::from([("resource/stream/map.ymap".into(), touched)]);
+
+    assert!(same_source_content(&cached, &current));
+  }
+}

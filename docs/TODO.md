@@ -2,6 +2,7 @@
 
 ## Pipeline Foundation
 
+- [x] Split large conversion, merge and cache modules into same-named directories by responsibility; keep small unit tests beside their implementation and module/integration tests in separate files.
 - [x] Dispatch stream files to separate format-specific workflows by extension; initially support YMAP and YBN without forcing them through one diff implementation.
 - [x] Run the full pipeline by default without an operation flag: generate missing vanilla, update vanilla-cache/source-cache, merge and deploy; connect `-i` to source resources and `-o` to deployment.
 - [x] Share one pipeline logger, reuse valid raw vanilla, validate artifact path separation before processing, and retain derived-stage freshness checks.

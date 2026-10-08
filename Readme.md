@@ -209,3 +209,7 @@ cargo test --doc
 
 Some tests require local game assets or CodeWalker and are ignored by default.
 Game assets and CodeWalker binaries are not redistributed.
+
+Large modules are organized under same-named directories with a small `mod.rs`
+entry point. Focused unit tests stay in their implementation file; module-wide
+and integration tests live in separate files grouped by workflow.

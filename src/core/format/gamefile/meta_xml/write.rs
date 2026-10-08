@@ -1,0 +1,456 @@
+use super::*;
+
+/// Serializes a parsed META resource to the schema-driven XML representation.
+pub fn meta_to_xml(
+  meta: &MetaResource,
+  shared_hash_names: &HashMap<u32, String>,
+) -> io::Result<String> {
+  if meta.root_block_index <= 0 {
+    return Err(invalid_data("META resource has no root data block"));
+  }
+  let root_index = meta.root_block_index as usize - 1;
+  let root_block = meta
+    .data_blocks
+    .get(root_index)
+    .ok_or_else(|| invalid_data("META root data block is missing"))?;
+  let mut names = known_hash_names();
+  names.extend(meta.hash_names());
+  names.extend(shared_hash_names.iter().map(|(hash, name)| (*hash, name.clone())));
+
+  let mut output = String::from("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
+  let root_name = resolve_name(root_block.structure_name_hash, &names);
+  write_open_tag(&mut output, 0, &root_name, meta.name.as_deref().map(|name| ("name", name)));
+  write_structure(meta, root_index, 0, root_block.structure_name_hash, &names, 1, &mut output)?;
+  write_close_tag(&mut output, 0, &root_name);
+  Ok(output)
+}
+
+fn write_structure(
+  meta: &MetaResource,
+  block_index: usize,
+  offset: usize,
+  structure_hash: u32,
+  names: &HashMap<u32, String>,
+  depth: usize,
+  output: &mut String,
+) -> io::Result<()> {
+  let block = meta
+    .data_blocks
+    .get(block_index)
+    .ok_or_else(|| invalid_data("META structure references a missing data block"))?;
+  let fallback;
+  let structure = match meta.structures.iter().find(|s| s.name_hash == structure_hash) {
+    Some(structure) => structure,
+    None => {
+      fallback = fallback_structure(structure_hash).ok_or_else(|| {
+        invalid_data(&format!("META structure schema {structure_hash:08X} is missing"))
+      })?;
+      &fallback
+    }
+  };
+  let mut array_info: Option<&MetaStructureEntry> = None;
+
+  for entry in &structure.entries {
+    if entry.name_hash == ARRAY_INFO_HASH {
+      array_info = Some(entry);
+      continue;
+    }
+    let name = if structure_hash == jenk_hash("CLODLight")
+      && entry.data_offset == 72
+      && entry.data_type == ARRAY
+      && entry.name_hash == 0x4a
+    {
+      "hash".to_string()
+    } else {
+      resolve_name(entry.name_hash, names)
+    };
+    let field_offset = offset
+      .checked_add(entry.data_offset as usize)
+      .ok_or_else(|| invalid_data("META field offset overflows"))?;
+    let entry_data = slice(&block.data, field_offset, field_size(entry.data_type))?;
+    match entry.data_type {
+      ARRAY => write_array(meta, array_info, entry_data, &name, names, depth, output)?,
+      0x01 => write_value(output, depth, &name, if entry_data[0] == 0 { "false" } else { "true" }),
+      0x10 => write_value(output, depth, &name, &(entry_data[0] as i8).to_string()),
+      0x11 => write_value(output, depth, &name, &entry_data[0].to_string()),
+      0x12 => write_value(output, depth, &name, &i16_at(entry_data, 0)?.to_string()),
+      0x13 => write_value(output, depth, &name, &u16_at(entry_data, 0)?.to_string()),
+      0x14 => write_value(output, depth, &name, &i32_at(entry_data, 0)?.to_string()),
+      0x15 => write_value(output, depth, &name, &u32_at(entry_data, 0)?.to_string()),
+      0x21 => write_value(output, depth, &name, &format_float(f32_at(entry_data, 0)?)),
+      0x33 => write_vector(output, depth, &name, entry_data, 3)?,
+      0x34 => write_vector(output, depth, &name, entry_data, 4)?,
+      0x40 => write_text_pair(
+        output,
+        depth,
+        &name,
+        &array_of_chars(block, field_offset, entry.reference_key as usize)?,
+      ),
+      0x44 => write_text_pair(output, depth, &name, &read_string_pointer(meta, entry_data)?),
+      0x4a => write_text(output, depth, &name, &resolve_hash(u32_at(entry_data, 0)?, names)),
+      0x50 => {
+        write_inline_bytes(output, depth, &name, entry, array_info, &block.data, field_offset)?
+      }
+      0x59 => write_data_block_pointer(meta, output, depth, &name, entry_data)?,
+      0x60 => write_value(output, depth, &name, &entry_data[0].to_string()),
+      0x62..=0x65 => write_enum_value(meta, output, depth, &name, entry, entry_data, names)?,
+      0x05 => {
+        write_open_tag(output, depth, &name, None);
+        write_structure(
+          meta,
+          block_index,
+          field_offset,
+          entry.reference_key,
+          names,
+          depth + 1,
+          output,
+        )?;
+        write_close_tag(output, depth, &name);
+      }
+      _ => {
+        return Err(invalid_data(&format!(
+          "unsupported META field type 0x{:02X} for {name}",
+          entry.data_type
+        )));
+      }
+    }
+    array_info = None;
+  }
+  Ok(())
+}
+
+fn write_array(
+  meta: &MetaResource,
+  array_info: Option<&MetaStructureEntry>,
+  descriptor: &[u8],
+  name: &str,
+  names: &HashMap<u32, String>,
+  depth: usize,
+  output: &mut String,
+) -> io::Result<()> {
+  let info = array_info
+    .ok_or_else(|| invalid_data(&format!("META array {name} has no ARRAYINFO schema")))?;
+  let pointer = u64_at(descriptor, 0)?;
+  let count = u16_at(descriptor, 8)? as usize;
+  let block_id = (pointer & 0xfff) as usize;
+  let offset = ((pointer >> 12) & 0xfffff) as usize;
+  let type_hash = info.reference_key;
+  let item_type = resolve_name(type_hash, names);
+  match info.data_type {
+    STRUCTURE => {
+      let Some(block_index) = block_id.checked_sub(1) else {
+        return write_empty_array(output, depth, name, Some(("itemType", &item_type)));
+      };
+      if count == 0 {
+        return write_empty_array(output, depth, name, Some(("itemType", &item_type)));
+      }
+      write_open_tag(output, depth, name, Some(("itemType", &item_type)));
+      let structure =
+        meta.structures.iter().find(|structure| structure.name_hash == type_hash).ok_or_else(
+          || invalid_data(&format!("META array structure {type_hash:08X} is missing")),
+        )?;
+      let mut current_block = block_index;
+      let mut current_offset = offset;
+      for _ in 0..count {
+        write_open_tag(output, depth + 1, "Item", None);
+        write_structure(meta, current_block, current_offset, type_hash, names, depth + 2, output)?;
+        write_close_tag(output, depth + 1, "Item");
+        current_offset += structure.structure_size as usize;
+        if current_offset >= meta.data_blocks[current_block].data.len() {
+          current_offset -= meta.data_blocks[current_block].data.len();
+          current_block += 1;
+        }
+      }
+      write_close_tag(output, depth, name);
+    }
+    STRUCTURE_POINTER => {
+      if count == 0 || block_id == 0 {
+        return write_empty_array(output, depth, name, None);
+      }
+      let pointer_block = meta
+        .data_blocks
+        .get(block_id - 1)
+        .ok_or_else(|| invalid_data("META pointer array references a missing block"))?;
+      write_open_tag(output, depth, name, None);
+      for index in 0..count {
+        let pointer_offset = offset + index * 8;
+        let pointer_value = u64_at(slice(&pointer_block.data, pointer_offset, 8)?, 0)?;
+        let target_block_id = (pointer_value & 0xfff) as usize;
+        let target_offset = ((pointer_value >> 12) & 0xfffff) as usize;
+        if target_block_id == 0 {
+          write_empty_array(output, depth + 1, "Item", None)?;
+          continue;
+        }
+        let target_block = meta
+          .data_blocks
+          .get(target_block_id - 1)
+          .ok_or_else(|| invalid_data("META structure pointer references a missing block"))?;
+        let target_type = resolve_name(target_block.structure_name_hash, names);
+        write_open_tag(output, depth + 1, "Item", Some(("type", &target_type)));
+        write_structure(
+          meta,
+          target_block_id - 1,
+          target_offset,
+          target_block.structure_name_hash,
+          names,
+          depth + 2,
+          output,
+        )?;
+        write_close_tag(output, depth + 1, "Item");
+      }
+      write_close_tag(output, depth, name);
+    }
+    0x11 | 0x13 | 0x15 | 0x21 | 0x4a => {
+      if count == 0 || block_id == 0 {
+        return write_empty_array(output, depth, name, None);
+      }
+      let data_block = meta
+        .data_blocks
+        .get(block_id - 1)
+        .ok_or_else(|| invalid_data("META primitive array references a missing block"))?;
+      let (stride, is_hash) = match info.data_type {
+        0x11 => (1, false),
+        0x13 => (2, false),
+        0x15 | 0x4a | 0x21 => (4, info.data_type == 0x4a),
+        _ => unreachable!(),
+      };
+      if is_hash {
+        write_open_tag(output, depth, name, None);
+        for index in 0..count {
+          let value = u32_at(slice(&data_block.data, offset + index * stride, stride)?, 0)?;
+          write_text(output, depth + 1, "Item", &resolve_hash(value, names));
+        }
+        write_close_tag(output, depth, name);
+      } else {
+        let values = (0..count)
+          .map(|index| {
+            let bytes = slice(&data_block.data, offset + index * stride, stride)?;
+            Ok(match info.data_type {
+              0x11 => bytes[0].to_string(),
+              0x13 => u16_at(bytes, 0)?.to_string(),
+              0x15 => u32_at(bytes, 0)?.to_string(),
+              _ => format_float(f32_at(bytes, 0)?),
+            })
+          })
+          .collect::<io::Result<Vec<_>>>()?;
+        write_text(output, depth, name, &values.join(" "));
+      }
+    }
+    _ => {
+      return Err(invalid_data(&format!(
+        "unsupported META array element type 0x{:02X} for {name}",
+        info.data_type
+      )));
+    }
+  }
+  Ok(())
+}
+
+fn write_inline_bytes(
+  output: &mut String,
+  depth: usize,
+  name: &str,
+  entry: &MetaStructureEntry,
+  array_info: Option<&MetaStructureEntry>,
+  data: &[u8],
+  offset: usize,
+) -> io::Result<()> {
+  let info =
+    array_info.ok_or_else(|| invalid_data("META inline byte array is missing ARRAYINFO"))?;
+  let count = entry.reference_key as usize;
+  let stride = match info.data_type {
+    0x12 | 0x13 => 2,
+    0x14 | 0x15 | 0x21 => 4,
+    _ => 1,
+  };
+  let bytes = slice(data, offset, count.saturating_mul(stride))?;
+  let text = match info.data_type {
+    0x10 => bytes.iter().map(|byte| (*byte as i8).to_string()).collect::<Vec<_>>().join(" "),
+    0x11 => bytes.iter().map(u8::to_string).collect::<Vec<_>>().join(" "),
+    0x12 => (0..count)
+      .map(|index| i16_at(bytes, index * stride).map(|value| value.to_string()))
+      .collect::<io::Result<Vec<_>>>()?
+      .join(" "),
+    0x13 => (0..count)
+      .map(|index| u16_at(bytes, index * stride).map(|value| value.to_string()))
+      .collect::<io::Result<Vec<_>>>()?
+      .join(" "),
+    0x14 => (0..count)
+      .map(|index| i32_at(bytes, index * stride).map(|value| value.to_string()))
+      .collect::<io::Result<Vec<_>>>()?
+      .join(" "),
+    0x15 => (0..count)
+      .map(|index| u32_at(bytes, index * stride).map(|value| value.to_string()))
+      .collect::<io::Result<Vec<_>>>()?
+      .join(" "),
+    0x21 => (0..count)
+      .map(|index| f32_at(bytes, index * stride).map(format_float))
+      .collect::<io::Result<Vec<_>>>()?
+      .join(" "),
+    _ => bytes.iter().map(|byte| format!("{byte:02X}")).collect::<String>(),
+  };
+  write_text(output, depth, name, &text);
+  Ok(())
+}
+
+fn write_data_block_pointer(
+  meta: &MetaResource,
+  output: &mut String,
+  depth: usize,
+  name: &str,
+  bytes: &[u8],
+) -> io::Result<()> {
+  let pointer = u64_at(bytes, 0)?;
+  let block_id = (pointer & 0xfff) as usize;
+  if block_id == 0 {
+    return write_empty_array(output, depth, name, None);
+  }
+  let block = meta
+    .data_blocks
+    .get(block_id - 1)
+    .ok_or_else(|| invalid_data("META data pointer references a missing block"))?;
+  let mut lines = Vec::new();
+  for chunk in block.data.chunks(32) {
+    lines.push(chunk.iter().map(|byte| format!("{byte:02X}")).collect::<Vec<_>>().join(" "));
+  }
+  write_text(output, depth, name, &lines.join("\n"));
+  Ok(())
+}
+
+fn write_enum_value(
+  meta: &MetaResource,
+  output: &mut String,
+  depth: usize,
+  name: &str,
+  entry: &MetaStructureEntry,
+  bytes: &[u8],
+  names: &HashMap<u32, String>,
+) -> io::Result<()> {
+  let enum_info = meta.enums.iter().find(|info| info.name_hash == entry.reference_key);
+  let raw = if entry.data_type == 0x64 { i16_at(bytes, 0)? as i32 } else { i32_at(bytes, 0)? };
+  let value = if matches!(entry.data_type, 0x63 | 0x65) {
+    enum_info
+      .into_iter()
+      .flat_map(|info| info.entries.iter())
+      .filter(|item| item.value >= 0 && raw & (1 << item.value) != 0)
+      .map(|item| resolve_name(item.name_hash, names))
+      .collect::<Vec<_>>()
+      .join(", ")
+  } else {
+    enum_info
+      .and_then(|info| info.entries.iter().find(|item| item.value == raw))
+      .map(|item| resolve_name(item.name_hash, names))
+      .unwrap_or_else(|| raw.to_string())
+  };
+  write_text(output, depth, name, &value);
+  Ok(())
+}
+
+fn write_vector(
+  output: &mut String,
+  depth: usize,
+  name: &str,
+  bytes: &[u8],
+  count: usize,
+) -> io::Result<()> {
+  let components = ["x", "y", "z", "w"];
+  let mut attributes = Vec::new();
+  for (index, component) in components.iter().take(count).enumerate() {
+    attributes.push((*component, format_float(f32_at(bytes, index * 4)?)));
+  }
+  write_indent(output, depth);
+  write!(output, "<{name}").unwrap();
+  for (key, value) in attributes {
+    write!(output, " {key}=\"{}\"", escape_attr(&value)).unwrap();
+  }
+  output.push_str(" />\n");
+  Ok(())
+}
+
+fn write_value(
+  output: &mut String,
+  depth: usize,
+  name: &str,
+  value: &str,
+) {
+  write_indent(output, depth);
+  writeln!(output, "<{name} value=\"{}\" />", escape_attr(value)).unwrap();
+}
+
+fn write_text(
+  output: &mut String,
+  depth: usize,
+  name: &str,
+  text: &str,
+) {
+  if text.is_empty() {
+    write_indent(output, depth);
+    writeln!(output, "<{name} />").unwrap();
+  } else {
+    write_indent(output, depth);
+    write!(output, "<{name}>").unwrap();
+    crate::core::format::gamefile::xml_tree::write_text_content(output, depth, text);
+    writeln!(output, "</{name}>").unwrap();
+  }
+}
+
+fn write_text_pair(
+  output: &mut String,
+  depth: usize,
+  name: &str,
+  text: &str,
+) {
+  write_indent(output, depth);
+  write!(output, "<{name}>").unwrap();
+  crate::core::format::gamefile::xml_tree::write_text_content(output, depth, text);
+  writeln!(output, "</{name}>").unwrap();
+}
+
+fn write_empty_array(
+  output: &mut String,
+  depth: usize,
+  name: &str,
+  attribute: Option<(&str, &str)>,
+) -> io::Result<()> {
+  write_indent(output, depth);
+  write!(output, "<{name}").unwrap();
+  if let Some((key, value)) = attribute {
+    write!(output, " {key}=\"{}\"", escape_attr(value)).unwrap();
+  }
+  output.push_str(" />\n");
+  Ok(())
+}
+
+fn write_open_tag(
+  output: &mut String,
+  depth: usize,
+  name: &str,
+  attribute: Option<(&str, &str)>,
+) {
+  write_indent(output, depth);
+  write!(output, "<{name}").unwrap();
+  if let Some((key, value)) = attribute {
+    write!(output, " {key}=\"{}\"", escape_attr(value)).unwrap();
+  }
+  output.push_str(">\n");
+}
+
+fn write_close_tag(
+  output: &mut String,
+  depth: usize,
+  name: &str,
+) {
+  write_indent(output, depth);
+  writeln!(output, "</{name}>").unwrap();
+}
+
+fn write_indent(
+  output: &mut String,
+  depth: usize,
+) {
+  output.extend(std::iter::repeat_n(' ', depth));
+}
+
+fn escape_attr(value: &str) -> String {
+  value.replace('&', "&amp;").replace('<', "&lt;").replace('"', "&quot;")
+}

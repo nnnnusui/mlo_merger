@@ -11,6 +11,10 @@ The application provides three related workflows:
 Native Rust handles game-file conversion and merging. CodeWalker is an optional
 conversion backend and supplies RPF reading for vanilla cache generation.
 
+Large modules keep a small entry point and group implementation files by
+responsibility in a same-named directory. Focused unit tests stay beside the
+implementation; module-wide and integration tests are separate and grouped by workflow.
+
 ## Pipeline
 
 The default command runs vanilla extraction when no raw archive exists, then
