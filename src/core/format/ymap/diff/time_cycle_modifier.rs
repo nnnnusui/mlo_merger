@@ -97,7 +97,7 @@ pub fn check_time_cycle_modifier_diff(
   diffs
 }
 
-fn is_same_time_cycle_modifier(
+pub(super) fn is_same_time_cycle_modifier(
   a: &YmapTimeCycleModifier,
   b: &YmapTimeCycleModifier,
 ) -> bool {

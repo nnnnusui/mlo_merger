@@ -98,7 +98,7 @@ pub fn check_car_generator_diff(
 }
 
 /// Convert Position to integer key for HashMap (rounds to 3 decimal places)
-fn position_to_key(pos: &Position) -> (i32, i32, i32) {
+pub(super) fn position_to_key(pos: &Position) -> (i32, i32, i32) {
   (
     (pos.x * 1000.0).round() as i32,
     (pos.y * 1000.0).round() as i32,

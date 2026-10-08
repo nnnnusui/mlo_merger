@@ -1,10 +1,15 @@
 use super::{
-  YmapBoxOccluderDiff, YmapOccludeModelDiff, YmapOccludeModelTriangleDiff,
-  resolve_box_occluder_removals, resolve_occlude_model_removals,
+  YmapBoxOccluderDiff, YmapCarGeneratorDiff, YmapDistantLodLightDiff, YmapLodLightDiff,
+  YmapOccludeModelDiff, YmapOccludeModelTriangleDiff, YmapTimeCycleModifierDiff,
+  resolve_box_occluder_removals, resolve_car_generator_removals,
+  resolve_distant_lod_light_removals, resolve_lod_light_removals, resolve_occlude_model_removals,
+  resolve_time_cycle_modifier_removals,
 };
 use crate::core::common::{position::Position, triangle::Triangle};
 use crate::core::format::ymap::model::{
-  YmapBoxOccluder, YmapOccludeModel, ymap_occlude_model::YmapOccludeModelStructDiffEnum,
+  YmapBoxOccluder, YmapCarGenerator, YmapDistantLodLight, YmapLodLight, YmapOccludeModel,
+  YmapTimeCycleModifier, ymap_occlude_model::YmapOccludeModelStructDiffEnum,
+  ymap_time_cycle_modifier::YmapTimeCycleModifierStructDiffEnum,
 };
 
 fn box_occluder() -> YmapBoxOccluder {
@@ -54,6 +59,65 @@ fn triangle(offset: f32) -> Triangle {
       y: 1.0,
       z: 0.0,
     },
+  }
+}
+
+fn lod_light() -> YmapLodLight {
+  YmapLodLight {
+    direction: Position {
+      x: 1.0,
+      y: 2.0,
+      z: 3.0,
+    },
+    ..Default::default()
+  }
+}
+
+fn distant_lod_light() -> YmapDistantLodLight {
+  YmapDistantLodLight {
+    position: "1 2 3".into(),
+    rgbi: "255".into(),
+  }
+}
+
+fn car_generator() -> YmapCarGenerator {
+  YmapCarGenerator {
+    position: Position {
+      x: 1.0,
+      y: 2.0,
+      z: 3.0,
+    },
+    orient_x: 1.0,
+    orient_y: 0.0,
+    perpendicular_length: 5.0,
+    car_model: "adder".into(),
+    flags: 0,
+    body_color_remap_1: 0,
+    body_color_remap_2: 0,
+    body_color_remap_3: 0,
+    body_color_remap_4: 0,
+    pop_group: String::new(),
+    livery: 0,
+  }
+}
+
+fn time_cycle_modifier() -> YmapTimeCycleModifier {
+  YmapTimeCycleModifier {
+    name: "test".into(),
+    min_extents: Position {
+      x: 1.0,
+      y: 2.0,
+      z: 3.0,
+    },
+    max_extents: Position {
+      x: 4.0,
+      y: 5.0,
+      z: 6.0,
+    },
+    percentage: 50.0,
+    range: 5.0,
+    start_hour: 0,
+    end_hour: 23,
   }
 }
 
@@ -144,4 +208,68 @@ fn removed_triangle_wins_over_matching_addition_in_either_merge_order() {
       YmapOccludeModelTriangleDiff::Added(triangle) if triangle == &other
     )));
   }
+}
+
+#[test]
+fn lod_light_removal_wins_over_matching_addition_and_modification() {
+  let item = lod_light();
+  let mut diffs = vec![
+    YmapLodLightDiff::Added(item.clone()),
+    YmapLodLightDiff::Modified {
+      vanilla: item.clone(),
+      modded: item.clone(),
+    },
+    YmapLodLightDiff::Removed(item),
+  ];
+  resolve_lod_light_removals(&mut diffs);
+  assert_eq!(diffs.len(), 1);
+  assert!(matches!(diffs[0], YmapLodLightDiff::Removed(_)));
+}
+
+#[test]
+fn distant_lod_light_removal_wins_over_matching_addition_and_modification() {
+  let item = distant_lod_light();
+  let mut diffs = vec![
+    YmapDistantLodLightDiff::Added(item.clone()),
+    YmapDistantLodLightDiff::Modified {
+      vanilla: item.clone(),
+      modded: item.clone(),
+    },
+    YmapDistantLodLightDiff::Removed(item),
+  ];
+  resolve_distant_lod_light_removals(&mut diffs);
+  assert_eq!(diffs.len(), 1);
+  assert!(matches!(diffs[0], YmapDistantLodLightDiff::Removed(_)));
+}
+
+#[test]
+fn car_generator_removal_wins_over_matching_addition_and_modification() {
+  let item = car_generator();
+  let mut diffs = vec![
+    YmapCarGeneratorDiff::Added(item.clone()),
+    YmapCarGeneratorDiff::Modified {
+      vanilla: item.clone(),
+      modded: item.clone(),
+    },
+    YmapCarGeneratorDiff::Removed(item),
+  ];
+  resolve_car_generator_removals(&mut diffs);
+  assert_eq!(diffs.len(), 1);
+  assert!(matches!(diffs[0], YmapCarGeneratorDiff::Removed(_)));
+}
+
+#[test]
+fn time_cycle_modifier_removal_wins_over_matching_addition_and_modification() {
+  let item = time_cycle_modifier();
+  let mut diffs = vec![
+    YmapTimeCycleModifierDiff::Added(item.clone()),
+    YmapTimeCycleModifierDiff::Modified {
+      vanilla: item.clone(),
+      diffs: Vec::<YmapTimeCycleModifierStructDiffEnum>::new(),
+    },
+    YmapTimeCycleModifierDiff::Removed(item),
+  ];
+  resolve_time_cycle_modifier_removals(&mut diffs);
+  assert_eq!(diffs.len(), 1);
+  assert!(matches!(diffs[0], YmapTimeCycleModifierDiff::Removed(_)));
 }

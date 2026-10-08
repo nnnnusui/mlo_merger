@@ -95,7 +95,7 @@ pub fn check_distant_lod_light_diff(
 }
 
 /// Convert position string to integer key for HashMap (rounds to 3 decimal places)
-fn position_string_to_key(pos_str: &str) -> (i32, i32, i32) {
+pub(super) fn position_string_to_key(pos_str: &str) -> (i32, i32, i32) {
   let coords: Vec<&str> = pos_str.split_whitespace().collect();
   if coords.len() >= 3 {
     let x = coords[0].parse::<f32>().unwrap_or(0.0);

@@ -112,9 +112,13 @@ impl YmapDiff {
     self.occlude_model_diffs.extend(other.occlude_model_diffs);
     resolve_occlude_model_removals(&mut self.occlude_model_diffs);
     self.lod_light_diffs.extend(other.lod_light_diffs);
+    resolve_lod_light_removals(&mut self.lod_light_diffs);
     self.distant_lod_light_diffs.extend(other.distant_lod_light_diffs);
+    resolve_distant_lod_light_removals(&mut self.distant_lod_light_diffs);
     self.car_generator_diffs.extend(other.car_generator_diffs);
+    resolve_car_generator_removals(&mut self.car_generator_diffs);
     self.time_cycle_modifier_diffs.extend(other.time_cycle_modifier_diffs);
+    resolve_time_cycle_modifier_removals(&mut self.time_cycle_modifier_diffs);
     // Merge content_flags using bitwise OR
     self.content_flags |= other.content_flags;
     self.metadata.merge(other.metadata);
@@ -541,6 +545,92 @@ fn resolve_occlude_model_removals(diffs: &mut Vec<YmapOccludeModelDiff>) {
       });
     }
   }
+}
+
+fn resolve_lod_light_removals(diffs: &mut Vec<YmapLodLightDiff>) {
+  let removed = diffs
+    .iter()
+    .filter_map(|diff| match diff {
+      YmapLodLightDiff::Removed(light) => Some(lod_light::position_to_key(&light.direction)),
+      _ => None,
+    })
+    .collect::<HashSet<_>>();
+  diffs.retain(|diff| match diff {
+    YmapLodLightDiff::Removed(_) => true,
+    YmapLodLightDiff::Added(light) => {
+      !removed.contains(&lod_light::position_to_key(&light.direction))
+    }
+    YmapLodLightDiff::Modified {
+      vanilla,
+      ..
+    } => !removed.contains(&lod_light::position_to_key(&vanilla.direction)),
+  });
+}
+
+fn resolve_distant_lod_light_removals(diffs: &mut Vec<YmapDistantLodLightDiff>) {
+  let removed = diffs
+    .iter()
+    .filter_map(|diff| match diff {
+      YmapDistantLodLightDiff::Removed(light) => {
+        Some(distant_lod_light::position_string_to_key(&light.position))
+      }
+      _ => None,
+    })
+    .collect::<HashSet<_>>();
+  diffs.retain(|diff| match diff {
+    YmapDistantLodLightDiff::Removed(_) => true,
+    YmapDistantLodLightDiff::Added(light) => {
+      !removed.contains(&distant_lod_light::position_string_to_key(&light.position))
+    }
+    YmapDistantLodLightDiff::Modified {
+      vanilla,
+      ..
+    } => !removed.contains(&distant_lod_light::position_string_to_key(&vanilla.position)),
+  });
+}
+
+fn resolve_car_generator_removals(diffs: &mut Vec<YmapCarGeneratorDiff>) {
+  let removed = diffs
+    .iter()
+    .filter_map(|diff| match diff {
+      YmapCarGeneratorDiff::Removed(generator) => {
+        Some(car_generator::position_to_key(&generator.position))
+      }
+      _ => None,
+    })
+    .collect::<HashSet<_>>();
+  diffs.retain(|diff| match diff {
+    YmapCarGeneratorDiff::Removed(_) => true,
+    YmapCarGeneratorDiff::Added(generator) => {
+      !removed.contains(&car_generator::position_to_key(&generator.position))
+    }
+    YmapCarGeneratorDiff::Modified {
+      vanilla,
+      ..
+    } => !removed.contains(&car_generator::position_to_key(&vanilla.position)),
+  });
+}
+
+fn resolve_time_cycle_modifier_removals(diffs: &mut Vec<YmapTimeCycleModifierDiff>) {
+  let removed = diffs
+    .iter()
+    .filter_map(|diff| match diff {
+      YmapTimeCycleModifierDiff::Removed(modifier) => Some(modifier.clone()),
+      _ => None,
+    })
+    .collect::<Vec<_>>();
+  diffs.retain(|diff| match diff {
+    YmapTimeCycleModifierDiff::Removed(_) => true,
+    YmapTimeCycleModifierDiff::Added(modifier) => !removed
+      .iter()
+      .any(|removed| time_cycle_modifier::is_same_time_cycle_modifier(removed, modifier)),
+    YmapTimeCycleModifierDiff::Modified {
+      vanilla,
+      ..
+    } => !removed
+      .iter()
+      .any(|removed| time_cycle_modifier::is_same_time_cycle_modifier(removed, vanilla)),
+  });
 }
 
 #[rustfmt::skip]
