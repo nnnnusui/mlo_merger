@@ -61,6 +61,7 @@
 - [x] Write YMAP entity duplicate diagnostics to merged `duplicates.json`, including original GUIDs, applied/ignored source data and resolution reasons, retaining entries across incremental reuse.
 - [x] Add `--deploy` to copy merged files and remaining source-cache files into `stream/{extension}/merged` and `stream/{extension}/clone`.
 - [x] Cache deployment input/output mtime, size and fingerprints to copy only needed files, repair missing/changed copies and remove stale managed output safely.
+- [x] Remove empty deployment stream directories bottom-up after updates, preserving nonempty content, links and root metadata.
 - [x] Write deployment `files.txt` with original source-relative paths of active moved cache files, including merged inputs and clones.
 - [ ] Later, read additional diffs from `asset/overwrite` and apply them to vanilla stream files before resource merges.
 - [ ] Later, define overwrite targets as `{resourceName or vanilla}/{vanilla stream file}` and validate target/baseline identity before applying changes.

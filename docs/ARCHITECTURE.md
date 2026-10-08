@@ -96,6 +96,9 @@ and they have not been locally modified; unrelated files remain untouched.
 Each copy is staged individually and preserves source mtime. Deployment metadata
 is published after the file updates. `-f` forces copying without forcing merge or
 source-cache generation. The default output is `asset/merged_mlo`.
+After a successful update, empty directories within `stream/` are removed
+bottom-up without following symlinks. Nonempty or unrelated output content and
+the deployment root remain intact.
 Deployment's `files.txt` records original source-relative paths of active moved
 cache files, including both merged inputs and clones. It is derived from
 source-cache provenance, not from the merged omit list; unmoved and archived

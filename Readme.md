@@ -170,6 +170,9 @@ The output's `deploy_cache_info.json` records source/destination mtime, size and
 SHA-256. Unchanged copies are skipped, missing or modified copies are repaired,
 and stale managed copies are removed; unrelated output files are preserved.
 Modified stale copies are rejected instead of deleted. `-f` forces all copies.
+After updating files, deployment removes empty directories under `stream/`
+from the leaves upward, including old empty folders. Nonempty folders, symlinks,
+the deployment root and its metadata are preserved.
 Deployment also writes `files.txt`, a sorted, deduplicated list of original
 source-relative paths for moved files still present in source-cache. This includes
 both merged inputs and clone files, but excludes unmoved and archived files.

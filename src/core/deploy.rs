@@ -184,8 +184,32 @@ impl Deploy {
       drop(writer);
       fs::rename(temporary, moved_files_path)?;
     }
+    remove_empty_stream_directories(&output)?;
     Ok(summary)
   }
+}
+
+fn remove_empty_stream_directories(output: &Path) -> Result<()> {
+  let stream = destination(output, "stream")?;
+  if !stream.is_dir() {
+    return Ok(());
+  }
+  for entry in WalkDir::new(&stream).follow_links(false).contents_first(true) {
+    let entry = entry?;
+    if !entry.file_type().is_dir() {
+      continue;
+    }
+    match fs::remove_dir(entry.path()) {
+      Ok(()) => {}
+      Err(error)
+        if matches!(
+          error.kind(),
+          std::io::ErrorKind::DirectoryNotEmpty | std::io::ErrorKind::NotFound
+        ) => {}
+      Err(error) => return Err(error.into()),
+    }
+  }
+  Ok(())
 }
 
 fn plan(
@@ -362,6 +386,9 @@ mod tests {
     fs::create_dir_all(merged.join("ymap")).unwrap();
     fs::create_dir_all(cache.join("resources/resource_a/nested")).unwrap();
     fs::create_dir_all(cache.join("_old/timestamp/resource_a")).unwrap();
+    fs::create_dir_all(output.join("stream/obsolete/clone/resource/nested")).unwrap();
+    fs::create_dir_all(output.join("stream/unmanaged")).unwrap();
+    fs::write(output.join("stream/unmanaged/keep.txt"), b"keep").unwrap();
     fs::write(merged.join("ymap/map.ymap"), b"merged map").unwrap();
     fs::write(merged.join("_omit.txt"), b"source paths").unwrap();
     fs::write(cache.join("resources/resource_a/nested/MAP.YMAP"), b"must not clone").unwrap();
@@ -382,6 +409,8 @@ mod tests {
       }
     );
     let cloned = output.join("stream/ybn/clone/resource_a/nested/collision.ybn");
+    assert!(!output.join("stream/obsolete").exists());
+    assert!(output.join("stream/unmanaged/keep.txt").is_file());
     assert_eq!(fs::read_to_string(output.join("files.txt")).unwrap(), "");
     assert_eq!(fs::read(output.join("stream/ymap/merged/map.ymap")).unwrap(), b"merged map");
     assert_eq!(fs::read(&cloned).unwrap(), b"clone bytes");
@@ -437,6 +466,8 @@ mod tests {
       }
     );
     assert!(!cloned.exists());
+    assert!(!output.join("stream/ybn/clone").exists());
+    assert!(output.join("stream/ybn/merged/collision.ybn").is_file());
     assert!(output.join("unmanaged.txt").exists());
     fs::remove_file(merged.join("ybn/collision.ybn")).unwrap();
     assert_eq!(
@@ -448,6 +479,7 @@ mod tests {
       }
     );
     assert!(cloned.is_file());
+    assert!(!output.join("stream/ybn/merged").exists());
     let mut forced = deploy.clone();
     forced.force = true;
     assert_eq!(forced.run().unwrap().copied, 2);
@@ -469,6 +501,40 @@ mod tests {
     let mut overlapping = deploy.clone();
     overlapping.output_dir = merged;
     assert!(overlapping.run().is_err());
+    fs::remove_dir_all(root).unwrap();
+  }
+
+  #[test]
+  fn deploy_directory_cleanup_keeps_the_root_and_does_not_follow_links() {
+    let root =
+      std::env::temp_dir().join(format!("deploy_empty_directories_{}", std::process::id()));
+    let _ = fs::remove_dir_all(&root);
+    let output = root.join("merged_mlo");
+    fs::create_dir_all(output.join("stream/ymap/clone/resource/nested")).unwrap();
+    fs::write(output.join("deploy_cache_info.json"), b"metadata").unwrap();
+    fs::write(output.join("files.txt"), b"source paths").unwrap();
+    remove_empty_stream_directories(&output).unwrap();
+    assert!(!output.join("stream").exists());
+    assert!(output.is_dir());
+    assert!(output.join("deploy_cache_info.json").is_file());
+    assert!(output.join("files.txt").is_file());
+    remove_empty_stream_directories(&output).unwrap();
+    #[cfg(unix)]
+    {
+      let external = root.join("external");
+      fs::create_dir_all(external.join("empty/nested")).unwrap();
+      fs::create_dir_all(output.join("stream/clone")).unwrap();
+      std::os::unix::fs::symlink(&external, output.join("stream/clone/link")).unwrap();
+      remove_empty_stream_directories(&output).unwrap();
+      assert!(external.join("empty/nested").is_dir());
+      assert!(
+        fs::symlink_metadata(output.join("stream/clone/link")).unwrap().file_type().is_symlink()
+      );
+      fs::remove_dir_all(output.join("stream")).unwrap();
+      std::os::unix::fs::symlink(&external, output.join("stream")).unwrap();
+      assert!(remove_empty_stream_directories(&output).is_err());
+      assert!(external.join("empty/nested").is_dir());
+    }
     fs::remove_dir_all(root).unwrap();
   }
 
