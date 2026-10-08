@@ -131,6 +131,12 @@ existing binary template and cannot change allocated shapes or capacities.
 CodeWalker requires locally supplied assemblies. Unsupported required data must
 fail explicitly rather than be silently discarded.
 
+TypeScript consumers use declarations generated at release time for persisted
+reports and configuration inputs, derived from the serialization models rather
+than separate handwritten contracts. Generation is independent of the asset
+pipeline and does not provide runtime JSON validation or lossless handling of
+large JavaScript numbers.
+
 ## Boundaries
 
 - The installed-game cache is an archive-overlay history, not a reconstruction of previous game releases.

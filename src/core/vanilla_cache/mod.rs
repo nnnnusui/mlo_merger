@@ -38,6 +38,7 @@ pub struct BuildVanillaCache {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 struct DerivedManifest {
   format_version: u32,
   vanilla_manifest_sha256: String,
@@ -47,6 +48,7 @@ struct DerivedManifest {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 struct SourceTimestamp {
   modified_seconds: u64,
   modified_nanos: u32,
@@ -54,6 +56,7 @@ struct SourceTimestamp {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 struct LatestFile {
   version: String,
   sha256: String,
@@ -63,6 +66,7 @@ struct LatestFile {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 struct YmapRelationshipIndex {
   format_version: u32,
   vanilla_manifest_sha256: String,

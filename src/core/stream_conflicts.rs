@@ -9,6 +9,7 @@ use crate::core::extract::get_resource_directories;
 
 /// JSON report containing only basenames that occur more than once.
 #[derive(Debug, Clone, Deserialize, PartialEq, Serialize)]
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[serde(rename_all = "camelCase")]
 pub struct StreamConflictReport {
   /// Input directory used for the scan.
@@ -23,6 +24,7 @@ pub struct StreamConflictReport {
 
 /// One normalized filename and all relative paths where it occurs.
 #[derive(Debug, Clone, Deserialize, PartialEq, Serialize)]
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[serde(rename_all = "camelCase")]
 pub struct StreamFileConflict {
   /// Basename normalized to lowercase for case-insensitive matching.

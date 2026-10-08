@@ -1,6 +1,7 @@
 use structdiff::{Difference, StructDiff};
 
 #[derive(Clone, Debug, Default, Difference, PartialEq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 pub struct Position {
   pub x: f32,
   pub y: f32,

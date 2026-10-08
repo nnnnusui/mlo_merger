@@ -1,6 +1,8 @@
 use super::*;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
+#[cfg_attr(feature = "typescript", specta(rename = "MergeFingerprint"))]
 pub(in crate::core::merge) struct Fingerprint {
   pub sha256: String,
   pub size: u64,
@@ -51,6 +53,7 @@ impl Fingerprint {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 pub(in crate::core::merge) struct InputFile {
   pub path: PathBuf,
   pub resource: Option<String>,
@@ -59,12 +62,14 @@ pub(in crate::core::merge) struct InputFile {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 pub(in crate::core::merge) struct OutputFile {
   pub path: String,
   pub fingerprint: Fingerprint,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 pub(in crate::core::merge) struct FileRecord {
   pub merge_sources: Vec<InputFile>,
   pub vanilla: Option<InputFile>,
@@ -77,6 +82,7 @@ pub(in crate::core::merge) struct FileRecord {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 pub(in crate::core::merge) struct MergeMetadata {
   pub format_version: u32,
   pub algorithm_version: u32,

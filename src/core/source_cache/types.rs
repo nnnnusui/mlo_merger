@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 
 /// Cache-relative conflicts with conflicts among source files remaining after extraction.
 #[derive(Debug, Deserialize, Serialize, PartialEq)]
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 pub(super) struct SourceCacheConflictReport {
   #[serde(flatten)]
   pub(super) report: StreamConflictReport,
@@ -14,6 +15,7 @@ pub(super) struct SourceCacheConflictReport {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 pub(super) struct FileFingerprint {
   pub(super) sha256: String,
   pub(super) modified_seconds: u64,
@@ -22,6 +24,7 @@ pub(super) struct FileFingerprint {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 pub(super) struct VanillaMatch {
   pub(super) version: String,
   pub(super) sha256: String,
@@ -29,6 +32,7 @@ pub(super) struct VanillaMatch {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 pub(super) struct SourceFile {
   pub(super) path: String,
   pub(super) file_name: String,
@@ -44,12 +48,14 @@ pub(super) struct SourceFile {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 pub(super) struct ResourceInventory {
   pub(super) source: PathBuf,
   pub(super) files_by_format: BTreeMap<String, Vec<SourceFile>>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq, PartialOrd, Ord)]
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 pub(super) struct SourceYmapRef {
   pub(super) resource: String,
   pub(super) source_path: String,
@@ -57,12 +63,14 @@ pub(super) struct SourceYmapRef {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 pub(super) struct YmapLoadPlan {
   pub(super) changed_source_parents: BTreeSet<SourceYmapRef>,
   pub(super) additional_source_children: BTreeSet<SourceYmapRef>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 pub(super) struct ResourceCheck {
   pub(super) checked_at: String,
   pub(super) vanilla_revision: String,
@@ -70,6 +78,7 @@ pub(super) struct ResourceCheck {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 pub(super) struct SourceCacheMetadata {
   pub(super) format_version: u32,
   pub(super) source_dir: PathBuf,

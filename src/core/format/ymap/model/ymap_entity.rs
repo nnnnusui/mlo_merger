@@ -6,6 +6,7 @@ use crate::core::common::{position::Position, rotation::Rotation};
 #[derive(Debug, Clone, PartialEq, Difference)]
 #[difference(expose)]
 #[derive(serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 pub struct YmapEntity {
   pub entity_type: String,
   pub archetype_name: String,

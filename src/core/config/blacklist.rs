@@ -3,16 +3,20 @@ use std::fs;
 use std::path::Path;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 pub struct BlacklistConfig {
   #[serde(default)]
   pub occlude_models: Vec<OccludeModelBlacklist>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 pub struct OccludeModelBlacklist {
   #[serde(default)]
+  #[cfg_attr(feature = "typescript", specta(type = Option<(f32, f32, f32)>))]
   pub bmin: Option<[f32; 3]>,
   #[serde(default)]
+  #[cfg_attr(feature = "typescript", specta(type = Option<(f32, f32, f32)>))]
   pub bmax: Option<[f32; 3]>,
 }
 

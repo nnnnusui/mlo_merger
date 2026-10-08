@@ -7,7 +7,7 @@ FiveM の YMAP と YBN コリジョンの変更を vanilla データにマージ
 
 ## 必要環境
 
-- Windows または Linux と Rust stable。
+- ソースからビルドする場合は、Windows・macOS・Linux と Rust stable。
 - ゲームアーカイブから抽出する場合は、インストール済み GTA V と
   ローカルに用意した CodeWalker のブリッジ・アセンブリ。
   既存の vanilla アーカイブがあれば再利用できます。
@@ -147,6 +147,37 @@ cargo run -- --from-xml map.ymap.xml -o rebuilt --vanilla asset/vanilla
 出力先の既定値はカレントディレクトリです。
 META リソースには互換スキーマが必要で、`--vanilla` はスキーマやテンプレートの
 入力に使います。YBN の変換には外部スキーマディレクトリは不要です。
+
+## TypeScript の型定義
+
+Rust の Serde モデルから生成した `asset/gen_mlo_merger.ts` を Release アーカイブに
+同梱します。マージ診断、vanilla/source/merge/deploy のキャッシュ、ストリーム競合、
+diff-cache レポート、バージョン一覧、照合設定・blacklist 設定の型を含みます。
+YMAP/YBN の差分データと JSON Schema 文書は対象外です。
+Release workflow が梱包前に生成するため、このファイルはリポジトリには含めません。
+
+```bash
+cargo export-types
+cargo export-types -o /tmp/mlo_merger.ts
+cargo export-types --output /tmp/mlo_merger.ts
+cargo test --features typescript --lib typescript::tests
+```
+
+Specta は Serde が使う Rust モデルから定義を生成します。
+ローカルで生成した場合は、出力先から import してください。
+`typescript` feature は生成・検証時のみ必要で、通常ビルドでは不要です。
+
+```typescript
+import type { DuplicateReport, MatchingConfig } from "../asset/gen_mlo_merger";
+
+const config: MatchingConfig = { tolerance: { ybn: 0.05 } };
+```
+
+JSON のフィールド名、null、省略可能な入力を型に反映します。
+パスは文字列、集合は配列です。サイズや時刻は JSON の数値なので、
+TypeScript では `bigint` ではなく `number` を使います。
+`Number.MAX_SAFE_INTEGER` を超える値は、精度を保持する JSON 読み込みが必要です。
+型定義だけでは、実行時のデータ検証は行いません。
 
 ## 制限とテスト
 

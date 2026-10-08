@@ -36,6 +36,8 @@ pub struct DeploySummary {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
+#[cfg_attr(feature = "typescript", specta(rename = "DeployFingerprint"))]
 struct Fingerprint {
   sha256: String,
   size: u64,
@@ -44,6 +46,7 @@ struct Fingerprint {
 }
 
 #[derive(Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 struct CopiedFile {
   source: PathBuf,
   input: Fingerprint,
@@ -51,6 +54,7 @@ struct CopiedFile {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 struct DeployMetadata {
   format_version: u32,
   merged_dir: PathBuf,

@@ -1,6 +1,7 @@
 # Cargo configuration and aliases
 
 [alias]
+export-types = "run --features typescript --bin export-types --"
 generate-vanilla = "run -- --generate-vanilla -i /mnt/gtav -o asset/vanilla"
 generate-vanilla-cache = "run -- --generate-vanilla-cache"
 generate-source-cache = "run -- --generate-source-cache -i asset/source"

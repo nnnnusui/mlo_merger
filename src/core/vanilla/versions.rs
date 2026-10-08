@@ -19,6 +19,7 @@ pub struct ListVanillaVersions {
 
 /// The kind of recorded file change at a vanilla version.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[serde(rename_all = "snake_case")]
 pub enum VanillaVersionChange {
   /// The filename first became available.
@@ -29,6 +30,7 @@ pub enum VanillaVersionChange {
 
 /// One version that contains a recorded change for a requested vanilla file.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 pub struct VanillaVersionEntry {
   /// Position-prefixed cache version ID, not a game build number.
   pub version: String,

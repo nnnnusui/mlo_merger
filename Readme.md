@@ -142,6 +142,37 @@ Inputs can be files or directories. Conversion output defaults to the current
 directory. META resources need compatible schemas; `--vanilla` supplies schema
 or template inputs. YBN conversion does not require an external schema directory.
 
+## TypeScript Types
+
+The release archives contain `asset/gen_mlo_merger.ts`, generated from the Rust
+Serde models for merge diagnostics, vanilla/source/merge/deploy caches, stream
+conflicts, diff-cache reports, version listings and matching/blacklist
+configuration. It does not include YMAP/YBN difference payloads or JSON Schema
+documents. The release workflow regenerates it before packaging; it is not
+checked into the repository.
+
+```bash
+cargo export-types
+cargo export-types -o /tmp/mlo_merger.ts
+cargo export-types --output /tmp/mlo_merger.ts
+cargo test --features typescript --lib typescript::tests
+```
+
+Specta reads the Rust models used by Serde. The optional `typescript` feature is
+needed only for generation and verification, not normal builds. After generating
+locally, import the file from its output path:
+
+```typescript
+import type { DuplicateReport, MatchingConfig } from "./asset/gen_mlo_merger";
+
+const config: MatchingConfig = { tolerance: { ybn: 0.05 } };
+```
+
+Types preserve JSON field names, nullability and optional inputs. Paths are
+strings; sets are arrays. File sizes and timestamps are JSON numbers, represented
+as TypeScript `number`, not `bigint`. Values above `Number.MAX_SAFE_INTEGER` need
+a precision-aware JSON reader. These definitions do not validate data at runtime.
+
 ## Limitations
 
 - `--get-diff` currently prints a mock invocation and does not compare files.

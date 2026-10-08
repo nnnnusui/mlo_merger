@@ -2,6 +2,7 @@
 
 ## Pipeline Foundation
 
+- [x] Generate TypeScript report/cache/configuration bindings from Serde models with Specta during release packaging.
 - [x] Provide concise English/Japanese usage guides and workflow-level architecture documentation.
 - [x] Split large conversion, merge and cache modules into same-named directories by responsibility; keep small unit tests beside their implementation and module/integration tests in separate files.
 - [x] Dispatch stream files to separate format-specific workflows by extension; initially support YMAP and YBN without forcing them through one diff implementation.

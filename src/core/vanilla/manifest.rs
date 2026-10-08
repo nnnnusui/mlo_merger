@@ -9,6 +9,7 @@ use super::Result;
 
 /// A cache artifact and its source within the game's archive hierarchy.
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 pub struct CachedFile {
   /// SHA-256 of the extracted, standalone native file.
   pub sha256: String,
@@ -20,6 +21,7 @@ pub struct CachedFile {
 
 /// A raw file addition or replacement relative to the preceding stage.
 #[derive(Debug, Clone, Deserialize, Serialize)]
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 pub struct FileChange {
   /// Previous content hash, or None for an added file.
   pub previous_sha256: Option<String>,
@@ -29,6 +31,7 @@ pub struct FileChange {
 
 /// One cumulative vanilla stage, identified by dlclist order rather than build number.
 #[derive(Debug, Clone, Deserialize, Serialize)]
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 pub struct CacheVersion {
   /// Stable position-prefixed ID, such as 0000-base or 0002-mpbeach.
   pub id: String,
@@ -45,6 +48,7 @@ pub struct CacheVersion {
 
 /// Ordered manifest of changed raw files from a particular installed game's archives.
 #[derive(Debug, Clone, Deserialize, Serialize)]
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 pub struct VanillaCacheManifest {
   /// Cache schema version, currently 1.
   pub format_version: u32,

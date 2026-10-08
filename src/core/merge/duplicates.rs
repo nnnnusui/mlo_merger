@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, path::PathBuf};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 pub(super) struct Contribution {
   pub resource: String,
   pub path: PathBuf,
@@ -11,6 +12,7 @@ pub(super) struct Contribution {
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 pub(super) enum Change {
   Added,
   Modified,
@@ -18,12 +20,14 @@ pub(super) enum Change {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 pub(super) struct IgnoredContribution {
   pub source: Contribution,
   pub reason: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 pub(super) struct EntityDuplicate {
   pub guid: u32,
   pub vanilla: Option<YmapEntity>,
@@ -32,6 +36,7 @@ pub(super) struct EntityDuplicate {
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 pub(super) struct DuplicateReport {
   pub format_version: u32,
   pub files: BTreeMap<String, Vec<EntityDuplicate>>,

@@ -5,15 +5,20 @@ use std::{cell::Cell, fs, io, path::Path};
 
 /// Coordinate and scalar tolerances used by collision and map comparisons.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[serde(default, deny_unknown_fields)]
 pub struct MatchTolerances {
   /// Inclusive per-axis polygon coordinate and radius tolerance for YBNs.
+  #[cfg_attr(feature = "typescript", specta(optional))]
   pub ybn: f32,
   /// Exclusive scalar tolerance for YMAP car generators and LOD lights.
+  #[cfg_attr(feature = "typescript", specta(optional))]
   pub ymap: f32,
   /// Exclusive XY extent tolerance for YMAP occlude-model matching.
+  #[cfg_attr(feature = "typescript", specta(optional))]
   pub ymap_occlude_model: f32,
   /// Exclusive integer center tolerance for YMAP box occluders, in stored units.
+  #[cfg_attr(feature = "typescript", specta(optional))]
   pub ymap_box_occluder: i32,
 }
 
@@ -29,8 +34,11 @@ impl Default for MatchTolerances {
 }
 
 #[derive(Default, Deserialize)]
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
+#[cfg_attr(feature = "typescript", specta(rename = "MatchingConfig"))]
 #[serde(default, deny_unknown_fields)]
 struct Config {
+  #[cfg_attr(feature = "typescript", specta(optional))]
   tolerance: MatchTolerances,
 }
 
