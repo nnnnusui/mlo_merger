@@ -2,18 +2,12 @@
 
 ## Overview
 
-The application provides three related workflows:
-
-- Merge mod map and collision resources against vanilla data.
-- Cache the installed game's vanilla resources in archive-overlay order.
-- Infer an MLO resource's vanilla baseline and export its differences.
+MLO Merger prepares vanilla data, merges supported FiveM map and collision
+changes, and deploys the resulting stream files. Inspection and conversion are
+separate operations that do not run the pipeline.
 
 Native Rust handles game-file conversion and merging. CodeWalker is an optional
 conversion backend and supplies RPF reading for vanilla cache generation.
-
-Large modules keep a small entry point and group implementation files by
-responsibility in a same-named directory. Focused unit tests stay beside the
-implementation; module-wide and integration tests are separate and grouped by workflow.
 
 ## Pipeline
 
@@ -25,10 +19,9 @@ input is controlled by `-i`; final deployment output by `-o`. Intermediate cache
 and merged output have independent paths. All artifact paths are checked for
 overlap before any stage mutates data, and stages stop on the first error.
 
-The CLI owns one logger for the entire pipeline. Each derived stage retains its
-incremental freshness checks, including checks performed by prerequisite calls.
-Pipeline force applies to derived stages, not existing raw vanilla. Explicit
-stage selection and a pipeline-wide gamebuild ceiling remain unimplemented.
+Each stage retains its own freshness and prerequisite checks. Pipeline force
+applies to derived stages, not existing raw vanilla. Explicit stage selection
+and a pipeline-wide gamebuild ceiling remain unimplemented.
 
 ## Merge
 
@@ -47,47 +40,26 @@ alone do not cause output; changed fields, runtime entity order and repaired
 references do. A run with no edited YMAPs succeeds without generating YMAP files.
 Only source YMAPs replaced by generated output are listed in `_omit.txt`.
 
-Merge records per-filename source and vanilla mtime, size and SHA-256, dependency
-links, an algorithm version, and the output fingerprint or a no-output result
-in `merge_cache_info.json`. Unchanged file stats reuse hashes; timestamp-only
-changes refresh provenance without remerging. YBNs are independent basename
-groups. YMAPs are conservative connected parent/child groups formed from both
-vanilla relationships and source parent references, so a changed layout cannot
-reuse stale related maps. Only groups with changed contents/dependencies or
-missing/altered output are merged again. `-f` forces all current groups while
-prerequisites retain their normal freshness checks.
+Merge records input provenance and output freshness. Timestamp-only changes
+refresh provenance without remerging. YBN groups are independent basenames;
+YMAP groups follow connected vanilla and source parent/child relationships so
+related changes cannot reuse stale outputs. Missing or changed outputs are rebuilt.
+Removed inputs and results that become no-ops disappear from the next publication.
+Failed merges leave prior outputs intact; fully current runs do not republish.
 
-Unchanged outputs are linked or copied into staging only when publication is
-needed; their modification times are preserved. Removed inputs and results that
-become no-ops disappear from the new publication. Failed runs leave existing
-merged files and merge metadata intact. A fully current run does not replace
-the merged directory.
-Entity duplicate diagnostics are collected before identical-diff deduplication
-and deletion filtering. The merged-root `duplicates.json` records original
-GUIDs and raw vanilla/source entity snapshots, applied/ignored source identities
-and the resolution rule. Diagnostics use normalized entity identities internally
-to distinguish ambiguous GUID occurrences, but do not expose those internal IDs
-as real GUIDs. File-level entries are stored in merge metadata, retained during
-incremental reuse, and removed when the contributing inputs no longer conflict.
+YMAP duplicate diagnostics identify applied and ignored source edits with their
+resolution reason. They describe competing entity changes, not filename conflicts.
 
 ## Inspection
 
-Entity GUID and position-radius searches read existing merged native YMAPs without executing pipeline
-stages or writing artifacts. Case-insensitive filename glob filtering limits
-reads for both merged output and recorded pre-merge inputs, and the result is
-one XML document containing all matching occurrences. Optional pre-merge output
-uses recorded vanilla/source provenance from the merge cache, validates those
-input fingerprints, and marks stages where the entity is absent. The command
-does not claim historical data when recorded input files have changed.
-Position searches use an inclusive 3D Euclidean radius, native coordinate
-precision and the same predicate across merged, vanilla and source stages.
+GUID, entity-position and YBN-center searches read existing native files and
+return all matching occurrences as XML, without writing artifacts. Filename
+globs limit reads; position searches use an inclusive 3D radius. YBN centers are
+resolved to world space, and indices are local to each input, not persistent IDs.
 
-YBN position searches use world-space collision centers with optional shape-type
-filtering, including polygon primitives and supported standalone Bounds.
-Geometry centers and ancestor transforms are applied before the inclusive
-distance check. XML retains input-local hierarchy paths and polygon indices
-alongside resolved vertices and materials; those indices are not cross-input IDs.
-File selection and fingerprint validation are shared with entity searches.
+Optional pre-merge inspection reads recorded vanilla and source inputs, verifies
+their fingerprints and marks absent matches. Changed inputs are rejected rather
+than presented as historical data. The same predicate applies to every stage.
 
 ## Deploy
 
@@ -99,22 +71,14 @@ merged basename go to
 case-insensitive; archive and report files are excluded. Duplicate merged
 basenames are rejected rather than selected arbitrarily.
 
-The deployment cache records both input and copied-file mtime, size and SHA-256.
-Unchanged file stats reuse fingerprints; changed stats rehash the file. Content
-matches skip copying, including timestamp-only changes. Missing or altered copies
-are repaired. Files no longer selected are removed only when the cache owns them
-and they have not been locally modified; unrelated files remain untouched.
-Each copy is staged individually and preserves source mtime. Deployment metadata
-is published after the file updates. `-f` forces copying without forcing merge or
-source-cache generation. The default output is `asset/merged_mlo`.
-After a successful update, empty directories within `stream/` are removed
-bottom-up without following symlinks. Nonempty or unrelated output content and
-the deployment root remain intact.
-Deployment's `files.txt` records original source-relative paths of active moved
-cache files, including both merged inputs and clones. It is derived from
-source-cache provenance, not from the merged omit list; unmoved and archived
-files are excluded. Entries are sorted and deduplicated, and unchanged content
-preserves the list's modification time.
+Deployment freshness is tracked independently of merge freshness. Unchanged
+copies are skipped, and missing or altered outputs are repaired. Only managed
+files are removed when stale; modified stale files are rejected and unrelated
+files are preserved. Empty stream directories are pruned without following
+symlinks. Force affects copying, not cache generation or merging.
+
+The moved-source list includes active merged and clone inputs, not unmoved source
+files or archived history. Original resource paths remain available for inspection.
 
 ## Merge Policy
 
@@ -125,136 +89,49 @@ are resolved before merging and repaired after the final entity layout is known.
 Files affected by those repairs are rebuilt even when their own mod data is
 otherwise unchanged. Ambiguous references are rejected rather than guessed.
 
-YMAP difference types and extraction live under `format/ymap/diff` and are
-shared by merge and diff-cache generation. Ver1 compares each source map
-directly with the matching latest vanilla stream file, applies the supported
-changes, repairs parent references, and rebuilds native files. Historical
-baseline inference is planned for ver2. The source-cache is refreshed as a
-prerequisite; merge decodes source and latest vanilla binaries directly into
-YMAP models without an XML input round-trip. Edited models and their ordered
-entities are written directly to RSC7 binaries using compatible embedded META
-schemas from the selected vanilla/source files. Merge does not create intermediate
-XML or schema-copy directories. Explicit XML conversion and legacy XML-input
-merge workflows remain available separately.
-Native YMAP and YBN writers share checked record writes and 16-byte aligned
-storage, while META schemas and collision Bounds remain format-specific.
+Sources are compared directly with the latest selected vanilla files. Historical
+baseline inference is not part of the default merge workflow. YMAP and YBN use
+independent format-specific policies rather than a shared generic diff.
 
-YBN merging applies source files directly to the matching latest vanilla file.
-Multiple resources with the same basename are combined deterministically by
-sorted source path; source files without a vanilla baseline are skipped unless
-multiple resources collide on that name, which is an error. Version-aware
-baseline selection is planned for a later version.
-
-YBN semantic differences describe primitive occurrences and Bounds metadata.
-Merge and MLO diff-cache use this model independently from YMAP merging.
-Vanilla history stores raw native files instead of replaying semantic reports.
+For YBNs, baseline-matched shapes missing from any source are removed and new
+shapes are combined. Matching uses shape, material and coordinate tolerance, not
+polygon or vertex indices. A geometrically different shape from another resource
+can therefore remain as an addition even where a baseline shape was deleted.
+Source groups without a vanilla baseline are skipped or rejected when conflicting.
 
 ## Vanilla Archive And Derived Cache
 
-The raw vanilla archive (`asset/vanilla`) applies base archives, the title update
-and listed DLCs in order. DLC title-update patches are applied with their
-corresponding DLC. A build starts with an empty output directory; an optional
-stage limit emits a complete prefix and avoids reading later DLC archives. Each
-stage records provenance, metadata and generation logs. New or changed YMAP/YBN
-files are stored as raw native files in that stage; unchanged files are omitted.
-The manifest records the predecessor hash and source, and cumulative lookup
-selects the most recent stored file for each name. This preserves source bytes
-without replaying history
-deltas. The manifest schema is currently version 1. Extraction also stores a
-deduplicated set of extensionless RPF entry names in `rpf_names.json` for hash
-resolution.
+The raw vanilla archive preserves ordered YMAP/YBN overlays from the base game,
+title update and DLCs. The derived cache selects the latest files through the
+chosen stage and indexes YMAP parent/child relationships. It can be recreated
+from the raw archive without re-extracting the game.
 
-Raw vanilla generation also writes `hash_names.json`. Its single `names` map
-combines embedded YMAP META strings, RPF entry-name candidates, and entity
-archetype names as `hash -> text` entries. Entity GUIDs are not included. The
-candidates do not reproduce CodeWalker's broader nametable or bundled-string
-index.
+Source-cache generation moves vanilla-named inputs from resources into the cache,
+retaining original paths. Unmatched files stay in the resource; replacements
+archive prior cached files. Resource names must be unique, and colliding stream
+paths are rejected. Scoped updates retain other inventories for global conflict
+and relationship analysis. Missing cached inputs are errors, not silent deletions.
 
-The derived vanilla cache (`asset/vanilla-cache`) links the selected raw files
-under `latest/ymap` and `latest/ybn`, and stores YMAP parent-to-child
-relationships for the selected latest stage only. Its manifest records the raw
-manifest fingerprint and timestamps of referenced raw files. A changed timestamp,
-selected final stage, or missing link triggers a rebuild. This cache is separate
-from the raw archive and can be recreated from it.
-
-The source-cache command first ensures the derived vanilla cache is current,
-then inventories supported YMAP/YBN inputs by resource and format. It records
-source paths, fingerprints, exact latest-vanilla content matches, and
-cross-resource basename conflicts; it does not generate semantic or binary
-diffs. Changed source parents expand the YMAP read/rebuild plan through the
-latest relationship index, including source children in other resources. Input
-and per-resource upstream revisions allow unchanged resources to be skipped.
-Vanilla-named YMAP/YBN files move from each resource's stream directories into
-`source-cache/resources/{resourceName}/{stream-relative-path}`. The leading `stream/` or
-`streams/` component is omitted from cached and archived paths, while metadata
-retains original resource-relative paths for conflict and omit output. Recorded
-legacy cached paths migrate when the resource is checked.
-Legacy resource folders directly under the cache migrate under `resources/`;
-the timestamped history layout under `_old` remains unchanged.
-Colliding relative paths across stream roots are rejected rather than overwritten. Unmatched files stay in
-the resource. Replacements move the previous file and fingerprint/mtime records
-to `_old/{UTC timestamp}` with a snapshot of the prior cache metadata. Resource
-names must be unique. Moving a resource between input groups without changing
-its name preserves its cached files and fingerprints; only its source paths
-and resource keys change. Content changes during a move follow normal update
-and replacement rules. Ambiguous cached names are rejected rather than guessed.
-Resource directories, manifests and stream presence are
-tracked even when a resource has no stream files. An optional resource selection
-limits checks and forced updates; global conflict and load plans still include
-the retained inventories of other resources. Cache metadata is staged before
-publication, while file moves are incremental and do not replace the cache tree.
-The stream-conflict report's `conflicts` scans active resource directories in
-the source cache, excluding `_old` and report files. Its paths are relative to
-the source cache recorded as the input directory; its scan/conflict counts
-describe that cached data.
-`source_conflicts` preserves the original inventory's resource-relative conflict
-paths, including moved files and files left in source resources. Each invocation
-checks the cache report even when no resource inventory needs updating.
-Merge consumes the
-extension-specific conflict inventory and only vanilla-backed source files;
-YMAP model decoding is limited to selected source maps and the recorded vanilla
-parent/child closure. Fingerprinting first compares cached size and nanosecond
-mtime, reusing SHA-256 when both are unchanged and hashing only new or stat-changed
-files. Unchanged file contents reuse decoded inventory metadata. Directory,
-manifest, stream presence, file stat/fingerprint or per-resource upstream changes
-trigger an update. A missing moved file without an original source is an error,
-not a reason to silently discard its inventory.
-
-Raw archive publication occurs after all stages complete; failures retain
-diagnostic logs without publishing an incomplete cache. Version lookup is a
-read-only metadata query over stages that introduced or changed a filename.
-
-## MLO Baseline Selection
-
-Each resource is processed independently. Vanilla-matched files are compared
-with changed content versions newest-first. Each file uses its lowest-difference
-baseline, with ties favoring the newer version; merge then applies its changes to
-the latest vanilla-cache state. Diff-cache generation records these per-file
-comparisons for inspection, but merge reads source files directly.
-
-Output includes differences, selection information, timestamps and logs.
-Unmatched and unsupported stream files are recorded explicitly. The current
-diff-cache workflow compares YMAPs only.
+Input fingerprints and upstream state drive reuse. Raw vanilla and merge outputs
+are staged before publication; failed builds do not publish incomplete results.
+Source-cache file moves are incremental, so the whole pipeline is not one
+transaction. Version lookup reads overlay metadata without modifying artifacts.
 
 ## Conversion and Dependencies
 
-The Native backend reads resource data, converts supported families to XML and
-rebuilds binaries using their schemas. PSO rebuilding edits an existing binary
-template rather than creating an arbitrary new resource. CodeWalker runs in
-the application process and requires locally supplied assemblies.
-
-XML conversion, history reconstruction and semantic comparison have different
-guarantees. Stable repeated conversion is checked independently of parity with
-CodeWalker and in-game behavior. Some resource families and unknown fields
-remain unsupported; failures should be explicit rather than silently dropping
-required data.
+Binary/XML conversion, semantic comparison and in-game behavior provide different
+guarantees. META rebuilding requires compatible schemas; PSO editing uses an
+existing binary template and cannot change allocated shapes or capacities.
+CodeWalker requires locally supplied assemblies. Unsupported required data must
+fail explicitly rather than be silently discarded.
 
 ## Boundaries
 
 - The installed-game cache is an archive-overlay history, not a reconstruction of previous game releases.
 - Full mount enable/disable rules and engine-level deletions are not modeled.
 - Parsed-model equality does not guarantee byte identity with an original resource.
+- Semantic reports are not lossless snapshots or history patches.
 - Conversion tests do not replace runtime validation in GTA V/FiveM.
 
-Command usage is in [../Readme.md](../Readme.md); remaining work is tracked in
-[TODO.md](TODO.md).
+Usage: [English](../Readme.md) / [Japanese](Readme.ja.md).
+Remaining work: [TODO.md](TODO.md).
