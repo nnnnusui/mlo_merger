@@ -1,0 +1,143 @@
+name: Build and release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build:
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            executable: mlo_merger.exe
+            archive: zip
+          - os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            executable: mlo_merger
+            archive: gztar
+          - os: macos-15-intel
+            target: x86_64-apple-darwin
+            executable: mlo_merger
+            archive: gztar
+          - os: macos-15
+            target: aarch64-apple-darwin
+            executable: mlo_merger
+            archive: gztar
+    env:
+      TARGET: ${{ matrix.target }}
+      EXECUTABLE: ${{ matrix.executable }}
+      ARCHIVE_FORMAT: ${{ matrix.archive }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Install Rust stable
+        run: |
+          rustup toolchain install stable --profile minimal --no-self-update
+          rustup default stable
+          rustup target add "$TARGET"
+
+      - name: Build executable
+        run: cargo build --locked --release --bin mlo_merger --target "$TARGET"
+
+      - name: Generate TypeScript bindings
+        run: cargo run --locked --features typescript --bin export-types
+
+      - name: Check executable
+        run: '"target/$TARGET/release/$EXECUTABLE" --help'
+
+      - name: Package executable
+        run: |
+          python_command=python3
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            python_command=python
+          fi
+          "$python_command" - <<'PY'
+          import os
+          from pathlib import Path
+          import shutil
+
+          target = os.environ["TARGET"]
+          name = f"mlo_merger-{target}"
+          package = Path("package") / name
+          package.mkdir(parents=True)
+          shutil.copy2(Path("target") / target / "release" / os.environ["EXECUTABLE"], package)
+          for filename in ("Readme.md", "LICENSE.md", "asset/config.toml",
+                           "docs/Readme.ja.md", "docs/ARCHITECTURE.md", "docs/TODO.md",
+                           ".cargo/config.toml", "asset/gen_mlo_merger.ts"):
+              destination = package / filename
+              destination.parent.mkdir(parents=True, exist_ok=True)
+              shutil.copy2(filename, destination)
+          Path("dist").mkdir()
+          shutil.make_archive(str(Path("dist") / name), os.environ["ARCHIVE_FORMAT"],
+                              root_dir="package", base_dir=name)
+          PY
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: release-${{ matrix.target }}
+          path: dist/*
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
+
+  release:
+    name: Publish release
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_REPO: ${{ github.repository }}
+      RELEASE_TAG: ${{ github.ref_name }}
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          pattern: release-*
+          path: dist
+          merge-multiple: true
+
+      - name: Generate checksums
+        run: |
+          cd dist
+          sha256sum mlo_merger-*.zip mlo_merger-*.tar.gz > SHA256SUMS
+
+      - name: Create or update release
+        run: |
+          release_flags=()
+          if [[ "$RELEASE_TAG" == *-* ]]; then
+            release_flags+=(--prerelease)
+          fi
+          if ! gh release view "$RELEASE_TAG" > /dev/null 2>&1; then
+            gh release create "$RELEASE_TAG" --verify-tag --generate-notes \
+              --title "$RELEASE_TAG" --draft "${release_flags[@]}"
+          fi
+          gh release upload "$RELEASE_TAG" dist/* --clobber
+          gh release edit "$RELEASE_TAG" --draft=false
