@@ -352,7 +352,43 @@ fn moves_vanilla_files_retains_history_and_updates_only_selected_resources() {
   assert!(first.join("streams/nested/collision.ybn").is_file());
   assert_eq!(fs::read_dir(output.join("_old")).unwrap().count(), history_count);
   fs::remove_dir_all(first.join("streams")).unwrap();
+  let metadata_before_removal = read_metadata();
+  let cache_resource = "[changed]/resource_a";
+  let source_key = format!("{cache_resource}/stream/nested/collision.ybn");
+  let inventory_before = &metadata_before_removal.resources[cache_resource];
+  let retained_file = inventory_before.files_by_format[".ybn"]
+    .iter()
+    .find(|file| file.file_name == "custom.ybn")
+    .unwrap()
+    .clone();
+  let retained_cache_path = output.join(retained_file.cached_path.as_ref().unwrap());
+  let retained_modified = fs::metadata(&retained_cache_path).unwrap().modified().unwrap();
   fs::remove_file(output.join("resources/resource_a/nested/collision.ybn")).unwrap();
-  assert!(build.run_selected(Some("resource_a")).is_err());
+
+  assert!(build.run_selected(Some("resource_a")).unwrap());
+
+  let metadata_after_removal = read_metadata();
+  let inventory_after = &metadata_after_removal.resources[cache_resource];
+  assert!(
+    !inventory_after.files_by_format[".ybn"].iter().any(|file| file.file_name == "collision.ybn")
+  );
+  assert!(!metadata_after_removal.source_inputs.contains_key(&source_key));
+  let retained_after = inventory_after.files_by_format[".ybn"]
+    .iter()
+    .find(|file| file.file_name == "custom.ybn")
+    .unwrap();
+  assert_eq!(retained_after, &retained_file);
+  assert_eq!(fs::metadata(&retained_cache_path).unwrap().modified().unwrap(), retained_modified);
+  for (key, fingerprint) in &metadata_before_removal.source_inputs {
+    if key != &source_key && !key.ends_with('/') {
+      assert_eq!(
+        metadata_after_removal.source_inputs.get(key),
+        Some(fingerprint),
+        "source input fingerprint changed for {key}"
+      );
+    }
+  }
+  assert!(!output.join("resources/resource_a/nested/collision.ybn").exists());
+  assert!(!build.run_selected(Some("resource_a")).unwrap());
   fs::remove_dir_all(root).unwrap();
 }

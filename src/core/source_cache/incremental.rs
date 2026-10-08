@@ -170,13 +170,15 @@ pub(super) fn run(
         };
         ensure_safe_path(&output, &cached_path)?;
         if !cached_path.is_file() {
-          if !resource.join(&file.path).is_file() {
-            return Err(
-              format!(
-                "Moved source file is missing and cannot be regenerated: {}",
-                cached_path.display()
-              )
-              .into(),
+          if resource.join(&file.path).is_file() {
+            log::warn!(
+              "Source-cache artifact is missing and will be restored from source: {}",
+              cached_path.display()
+            );
+          } else {
+            log::warn!(
+              "Source file disappeared; dropping stale source-cache record: {}",
+              cached_path.display()
             );
           }
           intact = false;
@@ -222,7 +224,7 @@ pub(super) fn run(
         retained
           .iter()
           .flat_map(|inventory| inventory.files_by_format.values().flatten())
-          .filter(|file| file.cached_path.is_some()),
+          .filter(|file| file.cached_path.as_ref().is_some_and(|path| output.join(path).is_file())),
       )
     {
       let relative = stream_relative_path(&file.path)?.to_ascii_lowercase();
@@ -259,6 +261,9 @@ pub(super) fn run(
               modified_nanos: file.modified_nanos,
             };
             let path = output.join(cached_path);
+            if !path.is_file() {
+              continue;
+            }
             let fingerprint = fingerprint(&path, if build.force { None } else { Some(&recorded) })?;
             if format == ".ymap" && (build.force || fingerprint.sha256 != file.sha256) {
               match crate::core::vanilla_cache::ymap_parent_hash(&path) {
