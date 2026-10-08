@@ -21,7 +21,7 @@ use mlo_merger::core::format::gamefile::{
   resource_file::Rsc7Resource,
 };
 use mlo_merger::core::format::ymap::xml::XmlYmap;
-use mlo_merger::core::merge::{run::MergeYmapXml, ybn_conflicts::MergeYbnConflicts};
+use mlo_merger::core::merge::{run::MergeYmap, ybn_conflicts::MergeYbnConflicts};
 use mlo_merger::core::xmlconvert::Xml2Ymap;
 
 fn sample_parent_refs_dir() -> std::path::PathBuf {
@@ -235,11 +235,14 @@ fn gtav_rpf_extracts_nested_resources_and_preserves_headers() {
 
 fn local_ymap_schema_catalog(base: &Path) -> MetaSchemaCatalog {
   let mut catalog = MetaSchemaCatalog::default();
-  for entry in walkdir::WalkDir::new(base.join("asset/extracted")) {
+  for entry in ["asset/extracted", "asset/vanilla-cache/latest/ymap"]
+    .into_iter()
+    .flat_map(|directory| walkdir::WalkDir::new(base.join(directory)))
+  {
     let Ok(entry) = entry else {
       continue;
     };
-    if !entry.file_type().is_file()
+    if !entry.path().is_file()
       || entry.path().extension().is_none_or(|extension| extension != "ymap")
     {
       continue;
@@ -276,6 +279,7 @@ fn sample_parent_relink_survives_native_and_codewalker_rebuild() {
   use mlo_merger::core::format::ymap::xml::XmlYmap;
   let base = Path::new(env!("CARGO_MANIFEST_DIR"));
   let staging = std::env::temp_dir().join(format!("mlo_parent_refs_binary_{}", std::process::id()));
+  let _ = std::fs::remove_dir_all(&staging);
   let samples = base.join("docs/sample/parent_refs");
   let vanilla_dir = staging.join("vanilla");
   let mod_dir = staging.join("mods");
@@ -303,7 +307,7 @@ fn sample_parent_relink_survives_native_and_codewalker_rebuild() {
     .unwrap();
   std::fs::write(mod_ymap_dir.join("resource_a___child.ymap"), b"placeholder clone binary")
     .unwrap();
-  MergeYmapXml {
+  MergeYmap {
     vanilla_dir,
     mod_dir,
     mod_ymap_dir,
@@ -317,26 +321,11 @@ fn sample_parent_relink_survives_native_and_codewalker_rebuild() {
     base.join("bridge/CodeWalker.Bridge/bin/publish/CodeWalker.Bridge.dll").display().to_string()
   });
   let codewalker = CodeWalker::init(Path::new(&bridge)).unwrap();
-  let mut catalog = MetaSchemaCatalog::default();
-  for entry in walkdir::WalkDir::new(base.join("asset/extracted")) {
-    let Ok(entry) = entry else {
-      continue;
-    };
-    if !entry.file_type().is_file()
-      || entry.path().extension().is_none_or(|extension| extension != "ymap")
-    {
-      continue;
-    }
-    let Ok(bytes) = std::fs::read(entry.path()) else {
-      continue;
-    };
-    let Ok(resource) = Rsc7Resource::decode(&bytes) else {
-      continue;
-    };
-    if let Ok(meta) = MetaResource::parse(&resource) {
-      catalog.add_resource(&meta);
-    }
-  }
+  let catalog = local_ymap_schema_catalog(base);
+  assert!(
+    !catalog.structures.is_empty(),
+    "No local YMAP META schemas found in extracted or vanilla-cache/latest/ymap"
+  );
   let mut native_maps = Vec::new();
   let mut dll_maps = Vec::new();
   for name in ["parent", "child", "dependent"] {

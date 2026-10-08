@@ -68,11 +68,3 @@ pub fn parser(default_output: PathBuf) -> impl Parser<CommonOptions> {
     },
   )
 }
-
-/// Prints a placeholder invocation until the pipeline implementation is connected.
-pub fn run_mock(
-  command_name: &str,
-  options: &CommonOptions,
-) {
-  println!("mock: {command_name} {options:?}");
-}

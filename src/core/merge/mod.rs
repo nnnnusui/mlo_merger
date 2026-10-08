@@ -9,8 +9,3 @@ mod ymap_parent_refs;
 
 pub use crate::core::format::ymap::diff::YmapDiff;
 pub use cache_inputs::VanillaHistory;
-
-/// Builds or updates the cached parent index for vanilla YMAP XML files.
-pub fn build_ymap_parent_cache(vanilla_dir: &std::path::Path) -> std::io::Result<()> {
-  ymap_parent_cache::VanillaParentCache::update(vanilla_dir).map(|_| ())
-}

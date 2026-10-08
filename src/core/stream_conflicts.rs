@@ -1,5 +1,4 @@
 use std::collections::{BTreeMap, BTreeSet};
-use std::fs::{self, File};
 use std::io;
 use std::path::{Path, PathBuf};
 
@@ -7,33 +6,6 @@ use serde::{Deserialize, Serialize};
 use walkdir::WalkDir;
 
 use crate::core::extract::get_resource_directories;
-
-/// Command that scans stream files and writes a JSON report of duplicate filenames.
-#[derive(Debug, Clone)]
-pub struct CheckStreamConflicts {
-  /// Directory containing resource directories or a stream directory itself.
-  pub input_dir: PathBuf,
-  /// Destination JSON report path.
-  pub output_file: PathBuf,
-}
-
-impl CheckStreamConflicts {
-  /// Scans the input tree and writes the conflict report as pretty-printed JSON.
-  pub fn run(&self) -> Result<(), Box<dyn std::error::Error>> {
-    let report = scan_stream_conflicts(&self.input_dir)?;
-    if let Some(parent) = self.output_file.parent() {
-      fs::create_dir_all(parent)?;
-    }
-    serde_json::to_writer_pretty(File::create(&self.output_file)?, &report)?;
-    log::info!(
-      "Scanned {} stream files; found {} conflicting filenames. Report: {}",
-      report.scanned_file_count,
-      report.conflict_count,
-      self.output_file.display()
-    );
-    Ok(())
-  }
-}
 
 /// JSON report containing only basenames that occur more than once.
 #[derive(Debug, Clone, Deserialize, PartialEq, Serialize)]
