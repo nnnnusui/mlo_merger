@@ -505,7 +505,7 @@ fn normalize_cached_layout(
   Ok(())
 }
 
-fn ensure_safe_path(
+pub(super) fn ensure_safe_path(
   root: &Path,
   path: &Path,
 ) -> Result<()> {
@@ -523,7 +523,7 @@ fn ensure_safe_path(
   Ok(())
 }
 
-fn move_file(
+pub(super) fn move_file(
   source: &Path,
   destination: &Path,
 ) -> Result<()> {

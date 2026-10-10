@@ -11,6 +11,7 @@ use super::{
   get_diff::{self, GetDiff},
   merge::{self, Merge},
   pipeline::{self, Pipeline},
+  restore_source_cache::{self, RestoreSourceCache},
   to_xml::{self, ToXml},
 };
 
@@ -25,6 +26,8 @@ pub enum Command {
   GenerateVanillaCache(GenerateVanillaCache),
   /// Build source resource conflict data.
   GenerateSourceCache(GenerateSourceCache),
+  /// Move cached files back to their original resource paths.
+  RestoreSourceCache(RestoreSourceCache),
   /// Generate RBush-compatible stream-file bounding boxes.
   GenerateRTreeJson(GenerateRTreeJson),
   /// Merge source changes into vanilla stream files.
@@ -45,6 +48,7 @@ fn parser() -> impl Parser<Command> {
   let generate_vanilla = generate_vanilla::parser().map(Command::GenerateVanilla);
   let generate_vanilla_cache = generate_vanilla_cache::parser().map(Command::GenerateVanillaCache);
   let generate_source_cache = generate_source_cache::parser().map(Command::GenerateSourceCache);
+  let restore_source_cache = restore_source_cache::parser().map(Command::RestoreSourceCache);
   let generate_rtree_json = generate_rtree_json::parser().map(Command::GenerateRTreeJson);
   let merge = merge::parser().map(Command::Merge);
   let deploy = deploy::parser().map(Command::Deploy);
@@ -57,6 +61,7 @@ fn parser() -> impl Parser<Command> {
     generate_vanilla,
     generate_vanilla_cache,
     generate_source_cache,
+    restore_source_cache,
     generate_rtree_json,
     merge,
     deploy,
@@ -80,6 +85,7 @@ pub fn run(command: Command) -> Result<(), Box<dyn std::error::Error>> {
     Command::GenerateVanilla(command) => generate_vanilla::run(command)?,
     Command::GenerateVanillaCache(command) => generate_vanilla_cache::run(command)?,
     Command::GenerateSourceCache(command) => generate_source_cache::run(command)?,
+    Command::RestoreSourceCache(command) => restore_source_cache::run(command)?,
     Command::GenerateRTreeJson(command) => generate_rtree_json::run(command)?,
     Command::Merge(command) => merge::run(command)?,
     Command::Deploy(command) => deploy::run(command)?,
@@ -95,6 +101,27 @@ pub fn run(command: Command) -> Result<(), Box<dyn std::error::Error>> {
 mod tests {
   use super::*;
   use std::path::PathBuf;
+
+  #[test]
+  fn restore_source_cache_parses_defaults_and_custom_paths() {
+    let Command::RestoreSourceCache(command) =
+      parser().to_options().run_inner(&["--restore-source-cache"]).unwrap()
+    else {
+      panic!("Expected restore-source-cache command")
+    };
+    assert_eq!(command.source_dir, PathBuf::from("asset/source"));
+    assert_eq!(command.cache_dir, PathBuf::from("asset/source-cache"));
+    let Command::RestoreSourceCache(command) = parser()
+      .to_options()
+      .run_inner(&["--restore-source-cache", "-i", "resources", "--source-cache", "cache", "-y"])
+      .unwrap()
+    else {
+      panic!("Expected restore-source-cache command")
+    };
+    assert_eq!(command.source_dir, PathBuf::from("resources"));
+    assert_eq!(command.cache_dir, PathBuf::from("cache"));
+    assert!(parser().to_options().run_inner(&["--restore-source-cache", "-f"]).is_err());
+  }
 
   #[test]
   fn find_file_from_position_accepts_coordinates_without_radius() {

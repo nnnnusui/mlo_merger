@@ -3,6 +3,7 @@
 mod incremental;
 mod inventory;
 mod publication;
+mod restore;
 mod types;
 mod vanilla;
 mod ymap_plan;
@@ -16,6 +17,8 @@ use std::{
 use self::types::{SourceCacheConflictReport, SourceCacheMetadata};
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
+
+pub use restore::restore_source_cache;
 
 /// One source stream file selected for merge from the current source cache.
 #[derive(Debug, Clone, PartialEq, Eq)]

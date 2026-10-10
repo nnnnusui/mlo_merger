@@ -10,4 +10,5 @@ pub mod generate_vanilla_cache;
 pub mod get_diff;
 pub mod merge;
 pub mod pipeline;
+pub mod restore_source_cache;
 pub mod to_xml;

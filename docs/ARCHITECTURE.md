@@ -80,6 +80,17 @@ symlinks. Force affects copying, not cache generation or merging.
 The moved-source list includes active merged and clone inputs, not unmoved source
 files or archived history. Original resource paths remain available for inspection.
 
+## Source Restoration
+
+The explicit restore-source-cache operation returns recorded active cached files
+to their original resource-relative paths under the selected source root. It
+checks all paths and destination conflicts before moving files, preserves file
+modification times, and does not restore archived history or unrecorded files.
+Successful restoration invalidates source-cache indexes without modifying merge
+or deployment output. The next source-cache generation inventories the restored
+resources and applies normal extraction again. Cache generation and restoration
+must not run concurrently.
+
 ## Merge Policy
 
 YMAP merging treats vanilla entities omitted by a mod as deletions. Any deletion
