@@ -72,6 +72,7 @@
 - [x] Cache deployment input/output mtime, size and fingerprints to copy only needed files, repair missing/changed copies and remove stale managed output safely.
 - [x] Remove empty deployment stream directories bottom-up after updates, preserving nonempty content, links and root metadata.
 - [x] Write deployment `files.txt` with original source-relative paths of active moved cache files, including merged inputs and clones.
+- [x] Create a default FiveM map `fxmanifest.lua` in deployment output only when absent.
 - [ ] Later, read additional diffs from `asset/overwrite` and apply them to vanilla stream files before resource merges.
 - [ ] Later, define overwrite targets as `{resourceName or vanilla}/{vanilla stream file}` and validate target/baseline identity before applying changes.
 - [ ] Keep overlapping resource edits deterministic through configured resource priority and report the selected source.

@@ -116,7 +116,7 @@ impl IncrementalMerge<'_> {
             });
           }
         }
-        log::info!("Reusing {} merge group ({} files)", group.extension, group.names.len());
+        log::debug!("Reusing {} merge group ({} files)", group.extension, group.names.len());
       } else {
         rebuilt += 1;
         log::info!("Updating {} merge group ({} files)", group.extension, group.names.len());

@@ -89,6 +89,8 @@ Deploy consumes existing merge and source-cache data without regenerating them:
 Deploy skips unchanged copies, repairs missing/changed outputs, and removes stale
 managed files. Unrelated files are preserved; locally modified stale files are
 rejected rather than deleted. Empty managed stream directories are pruned.
+Deploy also creates `fxmanifest.lua` with the FiveM map declaration and
+`/assetpacks` dependency when absent; existing manifests are never overwritten.
 
 Run `mlo_merger --help` for options and per-command output defaults. To extract
 a limited vanilla archive, use the explicit generator's `--gamebuild` stage

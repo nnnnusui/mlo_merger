@@ -189,6 +189,14 @@ impl Deploy {
       fs::rename(temporary, moved_files_path)?;
     }
     remove_empty_stream_directories(&output)?;
+    match fs::OpenOptions::new().write(true).create_new(true).open(output.join("fxmanifest.lua")) {
+      Ok(mut manifest) => {
+        manifest.write_all(b"fx_version 'cerulean'\ngame 'gta5'\nversion '1.0.0'\nthis_is_a_map 'yes'\n\ndependency '/assetpacks'\n\n")?;
+        manifest.flush()?;
+      }
+      Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
+      Err(error) => return Err(error.into()),
+    }
     Ok(summary)
   }
 }
@@ -416,6 +424,13 @@ mod tests {
     assert!(!output.join("stream/obsolete").exists());
     assert!(output.join("stream/unmanaged/keep.txt").is_file());
     assert_eq!(fs::read_to_string(output.join("files.txt")).unwrap(), "");
+    let manifest = output.join("fxmanifest.lua");
+    assert_eq!(
+      fs::read_to_string(&manifest).unwrap(),
+      "fx_version 'cerulean'\ngame 'gta5'\nversion '1.0.0'\nthis_is_a_map 'yes'\n\ndependency '/assetpacks'\n\n"
+    );
+    fs::write(&manifest, b"custom manifest").unwrap();
+    let manifest_stamp = fs::metadata(&manifest).unwrap().modified().unwrap();
     assert_eq!(fs::read(output.join("stream/ymap/merged/map.ymap")).unwrap(), b"merged map");
     assert_eq!(fs::read(&cloned).unwrap(), b"clone bytes");
     assert!(!output.join("stream/ymap/clone").exists());
@@ -437,6 +452,8 @@ mod tests {
       }
     );
     assert_eq!(fs::metadata(&cloned).unwrap().modified().unwrap(), stamp);
+    assert_eq!(fs::read(&manifest).unwrap(), b"custom manifest");
+    assert_eq!(fs::metadata(&manifest).unwrap().modified().unwrap(), manifest_stamp);
     fs::File::options()
       .write(true)
       .open(cache.join("resources/resource_a/nested/collision.ybn"))
