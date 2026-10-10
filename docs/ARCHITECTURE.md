@@ -96,9 +96,10 @@ must not run concurrently.
 Source-cache exclusion settings are persisted separately from its inventory so
 implicit prerequisite updates and restoration do not silently clear them.
 Excluded resources remain in source and are omitted from indexing and conflict
-scans. Adding an exclusion for a resource whose files have already moved requires
-restoration first, preserving the original-path provenance rather than orphaning
-cached inputs.
+scans. Existing excluded resources are removed from active indexes and their cache
+directories are moved to history with the previous inventory retained for provenance.
+They no longer contribute merge inputs or deployed clone files. Source files are
+untouched; clearing exclusions does not automatically restore archived files.
 
 ## Merge Policy
 

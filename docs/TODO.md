@@ -59,6 +59,7 @@
 - [x] Emit source fingerprint progress at INFO only when that resource's fingerprints differ from cached entries.
 - [x] Restore recorded active source-cache files to original source paths, rejecting conflicting destinations and invalidating source indexes after success.
 - [x] Accept comma-separated resource/path exclusions for source-cache generation and the default pipeline, retaining settings for prerequisite updates.
+- [x] Remove already cached excluded resources from active JSON indexes and archive their files so merge and deployment omit them.
 
 ## Merged Output
 

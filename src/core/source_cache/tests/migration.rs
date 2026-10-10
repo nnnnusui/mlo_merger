@@ -66,10 +66,6 @@ fn moves_vanilla_files_retains_history_and_updates_only_selected_resources() {
     .unwrap()
   };
   let before = read_metadata();
-  let error = build.run_selected_excluding(None, &["resource_a".into()]).unwrap_err();
-  assert!(error.to_string().contains("--restore-source-cache"));
-  assert_eq!(read_metadata(), before);
-  assert!(output.join("resources/resource_a/nested/collision.ybn").is_file());
   assert!(!first.join("stream/nested/collision.ybn").exists());
   assert!(first.join("stream/custom.ybn").is_file());
   assert_eq!(
@@ -394,5 +390,49 @@ fn moves_vanilla_files_retains_history_and_updates_only_selected_resources() {
   }
   assert!(!output.join("resources/resource_a/nested/collision.ybn").exists());
   assert!(!build.run_selected(Some("resource_a")).unwrap());
+  fs::write(output.join("resources/resource_a/unrecorded.ybn"), b"unrecorded").unwrap();
+  assert!(build.run_selected_excluding(None, &["resource_a".into()]).unwrap());
+  let excluded = read_metadata();
+  assert!(!excluded.resources.contains_key(cache_resource));
+  assert!(!excluded.source_inputs.keys().any(|key| key.starts_with("[changed]/resource_a/")));
+  assert!(!excluded.resource_checks.contains_key(cache_resource));
+  assert!(!output.join("resources/resource_a").exists());
+  assert!(first.join("stream/custom.ymap").is_file());
+  let archived = walkdir::WalkDir::new(output.join("_old"))
+    .into_iter()
+    .filter_map(|entry| entry.ok())
+    .find(|entry| entry.path().ends_with("resources/resource_a/unrecorded.ybn"))
+    .unwrap();
+  assert_eq!(fs::read(archived.path()).unwrap(), b"unrecorded");
+  assert!(
+    crate::core::source_cache::load_moved_source_paths(&output)
+      .unwrap()
+      .iter()
+      .all(|path| !path.contains("resource_a/"))
+  );
+  let report: SourceCacheConflictReport =
+    serde_json::from_reader(fs::File::open(output.join("stream_conflicts.json")).unwrap()).unwrap();
+  assert!(
+    report
+      .report
+      .conflicts
+      .values()
+      .flatten()
+      .flat_map(|conflict| &conflict.paths)
+      .all(|path| !path.contains("resource_a/"))
+  );
+  let merged = root.join("merged-empty");
+  fs::create_dir_all(&merged).unwrap();
+  let deployed = root.join("deployed-excluded");
+  crate::core::deploy::Deploy {
+    merged_dir: merged,
+    source_cache_dir: output.clone(),
+    output_dir: deployed.clone(),
+    force: false,
+  }
+  .run()
+  .unwrap();
+  assert!(!deployed.join("stream/ybn/clone/resource_a").exists());
+  assert!(!build.run().unwrap());
   fs::remove_dir_all(root).unwrap();
 }

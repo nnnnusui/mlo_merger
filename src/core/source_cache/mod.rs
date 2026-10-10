@@ -224,8 +224,8 @@ impl BuildSourceCache {
   /// Updates selected resources with explicit exclusions, saving them for subsequent runs.
   ///
   /// Patterns match case-insensitive substrings of source-relative resource paths.
-  /// An empty list clears saved exclusions. Restore already moved files before
-  /// excluding their resource.
+  /// An empty list clears saved exclusions. Existing excluded inventories are
+  /// removed and their active cache files are retained under `_old/`.
   pub fn run_selected_excluding(
     &self,
     resource: Option<&str>,

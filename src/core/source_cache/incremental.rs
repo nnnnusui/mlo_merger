@@ -102,30 +102,20 @@ pub(super) fn run(
     previous.as_ref().map(|metadata| metadata.resource_checks.clone()).unwrap_or_default();
   let excluded_ids =
     inventories.keys().filter(|id| is_excluded(id, &exclusions)).cloned().collect::<Vec<_>>();
+  let exclusions_changed = !excluded_ids.is_empty();
+  let mut excluded_cache_paths = BTreeSet::new();
   for id in excluded_ids {
     let inventory = inventories.get(&id).ok_or("Excluded resource inventory missing")?;
-    if inventory.files_by_format.values().flatten().any(|file| file.cached_path.is_some()) {
-      return Err(
-        format!(
-          "Resource {id} has moved cached files; run --restore-source-cache before excluding it"
-        )
-        .into(),
-      );
-    }
     let name = inventory.source.file_name().ok_or("Resource has no name")?;
-    for cached in [output.join("resources").join(name), output.join(name)] {
+    for relative in [Path::new("resources").join(name), Path::new(name).to_path_buf()] {
+      let cached = output.join(&relative);
       ensure_safe_path(&output, &cached)?;
-      if cached.is_dir()
-        && walkdir::WalkDir::new(&cached)
-          .into_iter()
-          .any(|entry| entry.map_or(true, |entry| entry.file_type().is_file()))
-      {
-        return Err(
-          format!(
-            "Resource {id} has active cache files; restore or relocate them before excluding it"
-          )
-          .into(),
-        );
+      if cached.exists() {
+        for entry in walkdir::WalkDir::new(&cached).follow_links(false) {
+          let entry = entry?;
+          ensure_safe_path(&output, entry.path())?;
+        }
+        excluded_cache_paths.insert(relative);
       }
     }
     inventories.remove(&id);
@@ -191,6 +181,7 @@ pub(super) fn run(
   let history =
     output.join("_old").join(chrono::Utc::now().format("%Y%m%dT%H%M%S%.9fZ").to_string());
   let mut changed = saved_exclusions != exclusions
+    || exclusions_changed
     || relocated
     || upstream_changed
     || previous
@@ -199,6 +190,17 @@ pub(super) fn run(
   fs::create_dir_all(&output)?;
   ensure_safe_path(&output, &history)?;
   let staging = Staging(create_staging_directory(&output)?);
+  if !excluded_cache_paths.is_empty() {
+    fs::create_dir_all(&history)?;
+    if let Some(previous) = &previous {
+      write_json(&history.join("source_cache_info.json"), previous)?;
+    }
+    for relative in excluded_cache_paths {
+      let archived = history.join(&relative);
+      fs::create_dir_all(archived.parent().ok_or("Excluded archive path has no parent")?)?;
+      fs::rename(output.join(&relative), archived)?;
+    }
+  }
   for resource in &selected {
     let id = resource_id(&source_dir, resource)?;
     let prefix = format!("{id}/");

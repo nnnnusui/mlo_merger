@@ -63,8 +63,11 @@ are normalized to `/`; entries are literal text, not globs. Excluded resources
 are not inventoried, fingerprinted, moved, or included in source conflict reports.
 The setting is saved in `source_exclusions.json` inside the source cache and
 reused when `--exclude` is omitted, including merge prerequisite updates.
-Use `--exclude ''` to clear it. Already moved files must be restored before
-excluding their resource; the command refuses to orphan those cached files.
+Use `--exclude ''` to clear it. Previously cached excluded resources are removed
+from the active JSON indexes and their cache directories are archived under
+`_old/`, keeping those files out of merge and clone deployment. Files remaining
+in source are untouched. Clearing exclusions does not automatically restore
+archived files to source.
 
 `--restore-source-cache` moves recorded active cache files back to their original
 resource paths under `-i`, preserving modification times. Different existing
