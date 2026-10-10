@@ -12,6 +12,8 @@ pub struct Pipeline {
   pub game_dir: PathBuf,
   /// Intermediate merged artifact directory.
   pub merged_dir: PathBuf,
+  /// Explicit source resource exclusions, or saved cache settings when absent.
+  pub exclusions: Option<Vec<String>>,
   /// Shared artifact paths and deployment output options.
   pub common: CommonOptions,
 }
@@ -32,12 +34,14 @@ pub fn parser() -> impl Parser<Pipeline> {
     .argument::<PathBuf>("DIR")
     .fallback(PathBuf::from("asset/merged"));
   let common = common::parser(PathBuf::from("asset/merged_mlo"));
-  construct!(source_dir, game_dir, merged_dir, common).map(
-    |(source_dir, game_dir, merged_dir, common)| Pipeline {
+  let exclusions = super::generate_source_cache::exclusions_parser();
+  construct!(source_dir, game_dir, merged_dir, common, exclusions).map(
+    |(source_dir, game_dir, merged_dir, common, exclusions)| Pipeline {
       source_dir,
       game_dir,
       merged_dir,
       common,
+      exclusions,
     },
   )
 }
@@ -54,7 +58,7 @@ pub fn run(command: Pipeline) -> Result<(), Box<dyn std::error::Error>> {
     TermLogger::new(LevelFilter::Info, Config::default(), TerminalMode::Mixed, ColorChoice::Auto),
     crate::core::vanilla::version_logger(),
   ])?;
-  let result = crate::core::pipeline::Pipeline {
+  let pipeline = crate::core::pipeline::Pipeline {
     source_dir: command.source_dir,
     game_dir: command.game_dir,
     vanilla_dir: command.common.vanilla,
@@ -63,8 +67,12 @@ pub fn run(command: Pipeline) -> Result<(), Box<dyn std::error::Error>> {
     merged_dir: command.merged_dir,
     output_dir: command.common.output,
     force: command.common.force,
-  }
-  .run()?;
+  };
+  let result = if let Some(exclusions) = &command.exclusions {
+    pipeline.run_excluding(exclusions)?
+  } else {
+    pipeline.run()?
+  };
   println!(
     "Pipeline complete: {} files deployed; {} unchanged; {} removed.",
     result.copied, result.skipped, result.removed

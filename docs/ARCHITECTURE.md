@@ -91,6 +91,13 @@ or deployment output. The next source-cache generation inventories the restored
 resources and applies normal extraction again. Cache generation and restoration
 must not run concurrently.
 
+Source-cache exclusion settings are persisted separately from its inventory so
+implicit prerequisite updates and restoration do not silently clear them.
+Excluded resources remain in source and are omitted from indexing and conflict
+scans. Adding an exclusion for a resource whose files have already moved requires
+restoration first, preserving the original-path provenance rather than orphaning
+cached inputs.
+
 ## Merge Policy
 
 YMAP merging treats vanilla entities omitted by a mod as deletions. Any deletion

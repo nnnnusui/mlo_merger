@@ -51,9 +51,31 @@ impl Pipeline {
     })?
   }
 
+  /// Runs the pipeline with explicit source exclusions saved for later cache updates.
+  /// An empty list clears the saved exclusions.
+  pub fn run_excluding(
+    &self,
+    exclusions: &[String],
+  ) -> Result<DeploySummary, Box<dyn std::error::Error>> {
+    crate::core::config::matching::with_config(|| {
+      self.run_with_generation_excluding(
+        GenerateVanilla::run_with_initialized_logger,
+        Some(exclusions),
+      )
+    })?
+  }
+
   fn run_with_generation(
     &self,
     generate: impl FnOnce(&GenerateVanilla) -> Result<(), Box<dyn std::error::Error>>,
+  ) -> Result<DeploySummary, Box<dyn std::error::Error>> {
+    self.run_with_generation_excluding(generate, None)
+  }
+
+  fn run_with_generation_excluding(
+    &self,
+    generate: impl FnOnce(&GenerateVanilla) -> Result<(), Box<dyn std::error::Error>>,
+    exclusions: Option<&[String]>,
   ) -> Result<DeploySummary, Box<dyn std::error::Error>> {
     if !self.source_dir.is_dir() {
       return Err(
@@ -90,14 +112,18 @@ impl Pipeline {
     }
     .run()?;
     log::info!("Pipeline: generate-source-cache");
-    BuildSourceCache {
+    let source_cache = BuildSourceCache {
       source_dir: self.source_dir.clone(),
       output_dir: self.source_cache_dir.clone(),
       vanilla_dir: self.vanilla_dir.clone(),
       vanilla_cache_dir: self.vanilla_cache_dir.clone(),
       force: self.force,
+    };
+    if let Some(exclusions) = exclusions {
+      source_cache.run_selected_excluding(None, exclusions)?;
+    } else {
+      source_cache.run()?;
     }
-    .run()?;
     log::info!("Pipeline: merge");
     super::merge::merge::run(
       &self.source_dir,

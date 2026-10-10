@@ -43,6 +43,7 @@ selection are not implemented.
 mlo_merger --generate-vanilla -i /mnt/gtav -o asset/vanilla
 mlo_merger --generate-vanilla-cache --vanilla asset/vanilla -o asset/vanilla-cache
 mlo_merger --generate-source-cache -i asset/source --vanilla-cache asset/vanilla-cache -o asset/source-cache
+mlo_merger --generate-source-cache --exclude 'resourceName,[gabz]/shops'
 mlo_merger --merge --vanilla-cache asset/vanilla-cache --source-cache asset/source-cache -o asset/merged
 mlo_merger --deploy -i asset/merged --source-cache asset/source-cache -o asset/merged_mlo
 
@@ -54,6 +55,16 @@ Source-cache selection accepts a resource name or input-relative resource path;
 retained under `_old/`. Files are cached at
 `resources/{resourceName}/{stream-relative-path}`, without the leading
 `stream/` or `streams/` component.
+
+Source-cache generation and the default pipeline accept `--exclude 'name,partial/path'`.
+Each trimmed entry matches a case-insensitive substring of the resource path
+relative to `-i`; resource names and group paths can both be used. Backslashes
+are normalized to `/`; entries are literal text, not globs. Excluded resources
+are not inventoried, fingerprinted, moved, or included in source conflict reports.
+The setting is saved in `source_exclusions.json` inside the source cache and
+reused when `--exclude` is omitted, including merge prerequisite updates.
+Use `--exclude ''` to clear it. Already moved files must be restored before
+excluding their resource; the command refuses to orphan those cached files.
 
 `--restore-source-cache` moves recorded active cache files back to their original
 resource paths under `-i`, preserving modification times. Different existing

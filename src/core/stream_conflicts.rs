@@ -40,6 +40,25 @@ pub fn scan_stream_conflicts(input_dir: &Path) -> io::Result<StreamConflictRepor
   }
 
   let stream_dirs = find_stream_directories(input_dir)?;
+  scan_directories(input_dir, stream_dirs)
+}
+
+pub(crate) fn scan_resource_stream_conflicts(
+  input_dir: &Path,
+  resources: &[PathBuf],
+) -> io::Result<StreamConflictReport> {
+  let stream_dirs = resources
+    .iter()
+    .flat_map(|resource| ["stream", "streams"].into_iter().map(move |name| resource.join(name)))
+    .filter(|stream| stream.is_dir())
+    .collect();
+  scan_directories(input_dir, stream_dirs)
+}
+
+fn scan_directories(
+  input_dir: &Path,
+  stream_dirs: Vec<PathBuf>,
+) -> io::Result<StreamConflictReport> {
   let mut files_by_name: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
   let mut scanned_paths = BTreeSet::new();
 

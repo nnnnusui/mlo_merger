@@ -9,6 +9,7 @@ use sha2::{Digest, Sha256};
 
 use super::{
   BuildSourceCache, Result, Staging,
+  exclusions::{FILE_NAME as EXCLUSIONS_FILE, is_excluded, parse_exclusions},
   inventory::{
     discover_resources, fingerprint, resource_id, source_fingerprints, source_inventory,
   },
@@ -29,9 +30,29 @@ use crate::core::{
 pub(super) fn run(
   build: &BuildSourceCache,
   selection: Option<&str>,
+  exclusions: Option<&[String]>,
 ) -> Result<bool> {
   let source_dir = build.source_dir.canonicalize()?;
-  let resources = discover_resources(&source_dir)?;
+  let output = prepare_output_path(&build.output_dir)?;
+  let exclusions_path = output.join(EXCLUSIONS_FILE);
+  ensure_safe_path(&output, &exclusions_path)?;
+  let saved_exclusions: Vec<String> = if exclusions_path.is_file() {
+    serde_json::from_reader(BufReader::new(fs::File::open(&exclusions_path)?))?
+  } else {
+    Vec::new()
+  };
+  let exclusions = match exclusions {
+    Some(patterns) => parse_exclusions(&patterns.join(","))?,
+    None => parse_exclusions(&saved_exclusions.join(","))?,
+  };
+  let resources = discover_resources(&source_dir)?
+    .into_iter()
+    .map(|resource| Ok((resource_id(&source_dir, &resource)?, resource)))
+    .collect::<Result<Vec<_>>>()?
+    .into_iter()
+    .filter(|(id, _)| !is_excluded(id, &exclusions))
+    .map(|(_, resource)| resource)
+    .collect::<Vec<_>>();
   let mut selected = Vec::new();
   let mut names = BTreeSet::new();
   for resource in &resources {
@@ -45,7 +66,9 @@ pub(super) fn run(
     }
   }
   if selection.is_some() && selected.is_empty() {
-    return Err(format!("Resource not found: {}", selection.unwrap_or_default()).into());
+    return Err(
+      format!("Resource not found or excluded: {}", selection.unwrap_or_default()).into(),
+    );
   }
   let vanilla_dir = build.vanilla_dir.canonicalize()?;
   BuildVanillaCache {
@@ -56,7 +79,6 @@ pub(super) fn run(
   }
   .run()?;
   let vanilla_cache_dir = build.vanilla_cache_dir.canonicalize()?;
-  let output = prepare_output_path(&build.output_dir)?;
   let previous = if output.join("source_cache_info.json").is_file() {
     let metadata: SourceCacheMetadata = serde_json::from_reader(BufReader::new(fs::File::open(
       output.join("source_cache_info.json"),
@@ -78,6 +100,38 @@ pub(super) fn run(
     previous.as_ref().map(|metadata| metadata.source_inputs.clone()).unwrap_or_default();
   let mut checks =
     previous.as_ref().map(|metadata| metadata.resource_checks.clone()).unwrap_or_default();
+  let excluded_ids =
+    inventories.keys().filter(|id| is_excluded(id, &exclusions)).cloned().collect::<Vec<_>>();
+  for id in excluded_ids {
+    let inventory = inventories.get(&id).ok_or("Excluded resource inventory missing")?;
+    if inventory.files_by_format.values().flatten().any(|file| file.cached_path.is_some()) {
+      return Err(
+        format!(
+          "Resource {id} has moved cached files; run --restore-source-cache before excluding it"
+        )
+        .into(),
+      );
+    }
+    let name = inventory.source.file_name().ok_or("Resource has no name")?;
+    for cached in [output.join("resources").join(name), output.join(name)] {
+      ensure_safe_path(&output, &cached)?;
+      if cached.is_dir()
+        && walkdir::WalkDir::new(&cached)
+          .into_iter()
+          .any(|entry| entry.map_or(true, |entry| entry.file_type().is_file()))
+      {
+        return Err(
+          format!(
+            "Resource {id} has active cache files; restore or relocate them before excluding it"
+          )
+          .into(),
+        );
+      }
+    }
+    inventories.remove(&id);
+    cached_inputs.retain(|key, _| !key.starts_with(&format!("{id}/")));
+    checks.remove(&id);
+  }
   let mut cached_names = BTreeMap::new();
   let mut normalized_names = BTreeSet::new();
   for (id, inventory) in &inventories {
@@ -136,7 +190,8 @@ pub(super) fn run(
   let generated_at = chrono::Utc::now().to_rfc3339();
   let history =
     output.join("_old").join(chrono::Utc::now().format("%Y%m%dT%H%M%S%.9fZ").to_string());
-  let mut changed = relocated
+  let mut changed = saved_exclusions != exclusions
+    || relocated
     || upstream_changed
     || previous
       .as_ref()
@@ -365,7 +420,7 @@ pub(super) fn run(
       checks.remove(&id);
     }
   }
-  let conflicts = conflicts(&source_dir, &output, &inventories)?;
+  let conflicts = conflicts(&source_dir, &output, &inventories, &resources)?;
   let previous_conflicts =
     fs::File::open(output.join("stream_conflicts.json")).ok().and_then(|file| {
       serde_json::from_reader::<_, SourceCacheConflictReport>(BufReader::new(file)).ok()
@@ -387,6 +442,7 @@ pub(super) fn run(
   let vanilla_ymaps =
     ymap_plan::vanilla_ymaps_to_read(&plan.changed_source_parents, &relationships, &derived.files);
   let outputs = BTreeSet::from([
+    EXCLUSIONS_FILE.into(),
     "source_cache.log".into(),
     "stream_conflicts.json".into(),
     "vanilla_ymaps_to_read.json".into(),
@@ -421,6 +477,7 @@ pub(super) fn run(
     ),
   )?;
   write_json(&staging.0.join("source_cache_info.json"), &metadata)?;
+  write_json(&staging.0.join(EXCLUSIONS_FILE), &exclusions)?;
   for name in metadata.outputs.iter().map(String::as_str).chain(["source_cache_info.json"]) {
     fs::rename(staging.0.join(name), output.join(name))?;
   }
@@ -545,6 +602,7 @@ fn conflicts(
   source: &Path,
   output: &Path,
   inventories: &BTreeMap<String, ResourceInventory>,
+  resources: &[std::path::PathBuf],
 ) -> Result<SourceCacheConflictReport> {
   let mut names: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
   let mut scanned_file_count = 0;
@@ -580,7 +638,9 @@ fn conflicts(
       conflict_count: conflicts.values().map(Vec::len).sum(),
       conflicts,
     },
-    source_conflicts: Some(crate::core::stream_conflicts::scan_stream_conflicts(source)?.conflicts),
+    source_conflicts: Some(
+      crate::core::stream_conflicts::scan_resource_stream_conflicts(source, resources)?.conflicts,
+    ),
   })
 }
 

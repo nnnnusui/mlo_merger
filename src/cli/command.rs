@@ -339,6 +339,48 @@ mod tests {
   }
 
   #[test]
+  fn source_exclusions_parse_in_generation_and_default_pipeline() {
+    let Command::GenerateSourceCache(command) = parser()
+      .to_options()
+      .run_inner(&[
+        "--generate-source-cache",
+        "-i",
+        "resources",
+        "--exclude",
+        " resource_a, [GABZ]/shops ",
+      ])
+      .unwrap()
+    else {
+      panic!("Expected source cache command")
+    };
+    assert_eq!(command.exclusions, Some(vec!["resource_a".into(), "[gabz]/shops".into()]));
+    assert_eq!(command.resource, None);
+    let Command::Pipeline(command) = parser()
+      .to_options()
+      .run_inner(&["-i", "resources", "--exclude", "resource_a,[group]/partial"])
+      .unwrap()
+    else {
+      panic!("Expected pipeline command")
+    };
+    assert_eq!(command.exclusions, Some(vec!["resource_a".into(), "[group]/partial".into()]));
+    let Command::GenerateSourceCache(command) = parser()
+      .to_options()
+      .run_inner(&["--generate-source-cache", "resource_a", "--exclude", ""])
+      .unwrap()
+    else {
+      panic!("Expected source cache command")
+    };
+    assert_eq!(command.resource.as_deref(), Some("resource_a"));
+    assert_eq!(command.exclusions, Some(vec![]));
+    assert!(
+      parser()
+        .to_options()
+        .run_inner(&["--generate-source-cache", "--exclude", "resource_a,,resource_b",])
+        .is_err()
+    );
+  }
+
+  #[test]
   fn deploy_parses_paths_and_force() {
     let Command::Deploy(command) = parser()
       .to_options()

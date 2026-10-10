@@ -57,6 +57,7 @@
 - [x] Build `conflicts` from active cached files and retain the original resource inventory's conflicts under `source_conflicts`, excluding archived files from cache scans.
 - [x] Retain a source-cache generation summary log.
 - [x] Restore recorded active source-cache files to original source paths, rejecting conflicting destinations and invalidating source indexes after success.
+- [x] Accept comma-separated resource/path exclusions for source-cache generation and the default pipeline, retaining settings for prerequisite updates.
 
 ## Merged Output
 

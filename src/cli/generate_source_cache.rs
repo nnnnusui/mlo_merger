@@ -12,6 +12,8 @@ pub struct GenerateSourceCache {
   pub source_dir: PathBuf,
   /// Restricts updates to one resource name or relative resource path.
   pub resource: Option<String>,
+  /// Explicit comma-separated exclusions, or saved cache settings when absent.
+  pub exclusions: Option<Vec<String>>,
   /// Shared execution options.
   pub common: CommonOptions,
 }
@@ -28,13 +30,23 @@ pub fn parser() -> impl Parser<GenerateSourceCache> {
     .argument::<PathBuf>("DIR")
     .fallback(PathBuf::from("asset/source"));
   let common = common::parser(PathBuf::from("asset/source-cache"));
-  construct!(command, source_dir, common, resource).map(|(_, source_dir, common, resource)| {
-    GenerateSourceCache {
+  let exclusions = exclusions_parser();
+  construct!(command, source_dir, common, exclusions, resource).map(
+    |(_, source_dir, common, exclusions, resource)| GenerateSourceCache {
       source_dir,
       resource,
+      exclusions,
       common,
-    }
-  })
+    },
+  )
+}
+
+pub(crate) fn exclusions_parser() -> impl Parser<Option<Vec<String>>> {
+  long("exclude")
+    .help("Comma-separated resource names or partial source-relative paths; empty clears saved exclusions")
+    .argument::<String>("PATTERNS")
+    .parse(|value| crate::core::source_cache::exclusions::parse_exclusions(&value))
+    .optional()
 }
 
 /// Builds or reuses the source-derived conflict cache.
@@ -45,14 +57,18 @@ pub fn run(command: GenerateSourceCache) -> Result<(), Box<dyn std::error::Error
     TerminalMode::Mixed,
     ColorChoice::Auto,
   )])?;
-  let rebuilt = crate::core::source_cache::BuildSourceCache {
+  let build = crate::core::source_cache::BuildSourceCache {
     source_dir: command.source_dir,
     output_dir: command.common.output,
     vanilla_dir: command.common.vanilla,
     vanilla_cache_dir: command.common.vanilla_cache,
     force: command.common.force,
-  }
-  .run_selected(command.resource.as_deref())?;
+  };
+  let rebuilt = if let Some(exclusions) = &command.exclusions {
+    build.run_selected_excluding(command.resource.as_deref(), exclusions)?
+  } else {
+    build.run_selected(command.resource.as_deref())?
+  };
   if rebuilt {
     println!("Generated source cache.");
   } else {

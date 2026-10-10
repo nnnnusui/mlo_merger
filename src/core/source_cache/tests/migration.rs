@@ -66,6 +66,10 @@ fn moves_vanilla_files_retains_history_and_updates_only_selected_resources() {
     .unwrap()
   };
   let before = read_metadata();
+  let error = build.run_selected_excluding(None, &["resource_a".into()]).unwrap_err();
+  assert!(error.to_string().contains("--restore-source-cache"));
+  assert_eq!(read_metadata(), before);
+  assert!(output.join("resources/resource_a/nested/collision.ybn").is_file());
   assert!(!first.join("stream/nested/collision.ybn").exists());
   assert!(first.join("stream/custom.ybn").is_file());
   assert_eq!(

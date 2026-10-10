@@ -1,5 +1,6 @@
 //! Source stream inventory, vanilla matching, and conflict/load planning.
 
+pub(crate) mod exclusions;
 mod incremental;
 mod inventory;
 mod publication;
@@ -217,7 +218,20 @@ impl BuildSourceCache {
     &self,
     resource: Option<&str>,
   ) -> Result<bool> {
-    incremental::run(self, resource)
+    incremental::run(self, resource, None)
+  }
+
+  /// Updates selected resources with explicit exclusions, saving them for subsequent runs.
+  ///
+  /// Patterns match case-insensitive substrings of source-relative resource paths.
+  /// An empty list clears saved exclusions. Restore already moved files before
+  /// excluding their resource.
+  pub fn run_selected_excluding(
+    &self,
+    resource: Option<&str>,
+    exclusions: &[String],
+  ) -> Result<bool> {
+    incremental::run(self, resource, Some(exclusions))
   }
 
   /// Builds an inventory and conflict report, skipping when inputs are unchanged.
