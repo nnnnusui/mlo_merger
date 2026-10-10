@@ -78,8 +78,13 @@ impl IncrementalMerge<'_> {
           },
         );
       }
-      let signature = signature(&planned)?;
-      let mut current = !self.force;
+      let signature = signature(group.extension, &planned)?;
+      let mut current = !self.force
+        && previous
+          .as_ref()
+          .map(|metadata| metadata.version_matches(group.extension))
+          .transpose()?
+          .unwrap_or(false);
       for name in &group.names {
         let Some(old) = previous.as_ref().and_then(|metadata| metadata.files.get(name)) else {
           current = false;
@@ -173,6 +178,9 @@ impl IncrementalMerge<'_> {
     if rebuilt == 0
       && !self.force
       && previous.as_ref().is_some_and(|previous| previous.files == files)
+      && previous.as_ref().is_some_and(|previous| {
+        previous.algorithm_version.is_none() && previous.algorithm_versions == algorithm_versions()
+      })
       && duplicate_current
       && fs::read_to_string(self.output.join("_omit.txt")).ok().as_deref() == Some(&omit_text)
     {
@@ -188,7 +196,8 @@ impl IncrementalMerge<'_> {
       &self.staging.join("merge_cache_info.json"),
       &MergeMetadata {
         format_version: 1,
-        algorithm_version: ALGORITHM_VERSION,
+        algorithm_version: None,
+        algorithm_versions: algorithm_versions(),
         generated_at: now,
         files,
       },

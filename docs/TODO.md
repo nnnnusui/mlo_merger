@@ -67,6 +67,7 @@
 - [x] Emit source omit information alongside merged stream files in `_omit.txt`.
 - [x] Group merged stream files into extension-specific directories.
 - [x] Cache merge sources, vanilla baselines, dependency groups, algorithm version and output/no-output results to remerge only invalid groups; preserve unchanged files and remove stale results atomically.
+- [x] Track merge algorithm versions per file type so YMAP and YBN cache invalidation remain independent.
 - [x] Write YMAP entity duplicate diagnostics to merged `duplicates.json`, including original GUIDs, applied/ignored source data and resolution reasons, retaining entries across incremental reuse.
 - [x] Add `--deploy` to copy merged files and remaining source-cache files into `stream/{extension}/merged` and `stream/{extension}/clone`.
 - [x] Cache deployment input/output mtime, size and fingerprints to copy only needed files, repair missing/changed copies and remove stale managed output safely.

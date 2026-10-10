@@ -65,6 +65,7 @@ mod tests {
     assert!(actual.contains("tolerance?: MatchTolerances"));
     assert!(actual.contains("source_conflicts?:"));
     assert!(actual.contains("modified_seconds: number"));
+    assert!(actual.contains("algorithm_versions?: { [key: string]: number }"));
     assert!(!actual.contains(": bigint"));
     fs::remove_file(path).unwrap();
   }

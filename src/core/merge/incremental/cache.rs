@@ -85,7 +85,10 @@ pub(in crate::core::merge) struct FileRecord {
 #[cfg_attr(feature = "typescript", derive(specta::Type))]
 pub(in crate::core::merge) struct MergeMetadata {
   pub format_version: u32,
-  pub algorithm_version: u32,
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub algorithm_version: Option<u32>,
+  #[serde(default)]
+  pub algorithm_versions: BTreeMap<String, u32>,
   pub generated_at: String,
   pub files: BTreeMap<String, FileRecord>,
 }
@@ -97,10 +100,19 @@ impl MergeMetadata {
       return Ok(None);
     }
     let metadata: Self = serde_json::from_reader(BufReader::new(fs::File::open(path)?))?;
-    Ok(
-      (metadata.format_version == 1 && metadata.algorithm_version == ALGORITHM_VERSION)
-        .then_some(metadata),
-    )
+    Ok((metadata.format_version == 1).then_some(metadata))
+  }
+
+  pub(super) fn version_matches(
+    &self,
+    extension: &str,
+  ) -> Result<bool> {
+    let recorded = if self.algorithm_versions.is_empty() {
+      self.algorithm_version
+    } else {
+      self.algorithm_versions.get(extension).copied()
+    };
+    Ok(recorded == Some(algorithm_version(extension)?))
   }
 }
 
@@ -122,7 +134,10 @@ pub(in crate::core::merge) fn reusable(
   }
   Ok(Fingerprint::read(&path, Some(&file.fingerprint), false)?.same_content(&file.fingerprint))
 }
-pub(super) fn signature(files: &BTreeMap<String, FileRecord>) -> Result<String> {
+pub(super) fn signature(
+  extension: &str,
+  files: &BTreeMap<String, FileRecord>,
+) -> Result<String> {
   let inputs = files
     .iter()
     .map(|(name, record)| {
@@ -143,7 +158,7 @@ pub(super) fn signature(files: &BTreeMap<String, FileRecord>) -> Result<String> 
   Ok(format!(
     "{:x}",
     Sha256::digest(serde_json::to_vec(&(
-      ALGORITHM_VERSION,
+      algorithm_version(extension)?,
       crate::core::config::matching::current(),
       inputs
     ))?)
@@ -155,7 +170,7 @@ mod tests {
   use super::*;
 
   #[test]
-  fn stale_algorithm_version_invalidates_merge_cache_metadata() {
+  fn algorithm_versions_invalidate_only_the_changed_file_type() {
     let output =
       std::env::temp_dir().join(format!("merge_cache_algorithm_version_{}", std::process::id()));
     let _ = fs::remove_dir_all(&output);
@@ -164,7 +179,7 @@ mod tests {
       output.join("merge_cache_info.json"),
       serde_json::to_vec(&serde_json::json!({
         "format_version": 1,
-        "algorithm_version": ALGORITHM_VERSION - 1,
+        "algorithm_versions": {"ymap": YMAP_ALGORITHM_VERSION, "ybn": YBN_ALGORITHM_VERSION - 1},
         "generated_at": "2026-10-08T00:00:00Z",
         "files": {}
       }))
@@ -172,9 +187,58 @@ mod tests {
     )
     .unwrap();
 
-    assert!(MergeMetadata::load(&output).unwrap().is_none());
+    let metadata = MergeMetadata::load(&output).unwrap().unwrap();
+    assert!(metadata.version_matches("ymap").unwrap());
+    assert!(!metadata.version_matches("ybn").unwrap());
+    let mut metadata = metadata;
+    metadata.algorithm_versions = BTreeMap::from([
+      ("ymap".into(), YMAP_ALGORITHM_VERSION - 1),
+      ("ybn".into(), YBN_ALGORITHM_VERSION),
+    ]);
+    assert!(!metadata.version_matches("ymap").unwrap());
+    assert!(metadata.version_matches("ybn").unwrap());
+    metadata.algorithm_versions.clear();
+    metadata.algorithm_version = Some(YMAP_ALGORITHM_VERSION);
+    assert!(metadata.version_matches("ymap").unwrap());
+    assert!(!metadata.version_matches("ybn").unwrap());
+    metadata.algorithm_versions.insert("ymap".into(), YMAP_ALGORITHM_VERSION);
+    metadata.algorithm_version = Some(YBN_ALGORITHM_VERSION);
+    assert!(!metadata.version_matches("ybn").unwrap());
+    assert!(metadata.version_matches("unsupported").is_err());
+
+    fs::write(
+      output.join("merge_cache_info.json"),
+      serde_json::to_vec(&serde_json::json!({
+        "format_version": 1,
+        "algorithm_version": YMAP_ALGORITHM_VERSION,
+        "generated_at": "legacy",
+        "files": {}
+      }))
+      .unwrap(),
+    )
+    .unwrap();
+    let legacy = MergeMetadata::load(&output).unwrap().unwrap();
+    assert!(legacy.version_matches("ymap").unwrap());
+    assert!(!legacy.version_matches("ybn").unwrap());
 
     fs::remove_dir_all(output).unwrap();
+  }
+
+  #[test]
+  fn signatures_use_only_the_file_types_algorithm_version() {
+    let files = BTreeMap::new();
+    let inputs = BTreeMap::<String, serde_json::Value>::new();
+    for (extension, version) in [("ymap", YMAP_ALGORITHM_VERSION), ("ybn", YBN_ALGORITHM_VERSION)] {
+      let expected = format!(
+        "{:x}",
+        Sha256::digest(
+          serde_json::to_vec(&(version, crate::core::config::matching::current(), &inputs,))
+            .unwrap()
+        )
+      );
+      assert_eq!(signature(extension, &files).unwrap(), expected);
+    }
+    assert!(signature("unsupported", &files).is_err());
   }
 
   #[test]
@@ -182,7 +246,7 @@ mod tests {
     use crate::core::config::matching::{MatchTolerances, with_tolerances};
     let files = BTreeMap::new();
     let defaults = MatchTolerances::default();
-    let original = with_tolerances(defaults, || signature(&files).unwrap());
+    let original = with_tolerances(defaults, || signature("ymap", &files).unwrap());
     for configured in [
       MatchTolerances {
         ybn: 0.025,
@@ -202,7 +266,7 @@ mod tests {
       },
     ] {
       with_tolerances(configured, || {
-        let changed = signature(&files).unwrap();
+        let changed = signature("ymap", &files).unwrap();
         assert_ne!(original, changed);
         let record = FileRecord {
           merge_sources: Vec::new(),
@@ -216,7 +280,7 @@ mod tests {
         assert!(!reusable(&record, &changed, Path::new("unused"), false).unwrap());
       });
     }
-    assert_eq!(with_tolerances(defaults, || signature(&files).unwrap()), original);
+    assert_eq!(with_tolerances(defaults, || signature("ymap", &files).unwrap()), original);
   }
 
   #[test]

@@ -16,8 +16,22 @@ use crate::core::{
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
-/// Bump when merge policy, encoding or cached result/report semantics change.
-const ALGORITHM_VERSION: u32 = 7;
+/// Bump when YMAP merge policy, encoding or cached reports change.
+const YMAP_ALGORITHM_VERSION: u32 = 6;
+/// Bump when YBN merge policy, encoding or cached reports change.
+const YBN_ALGORITHM_VERSION: u32 = 7;
+
+fn algorithm_versions() -> BTreeMap<String, u32> {
+  BTreeMap::from([("ymap".into(), YMAP_ALGORITHM_VERSION), ("ybn".into(), YBN_ALGORITHM_VERSION)])
+}
+
+fn algorithm_version(extension: &str) -> Result<u32> {
+  match extension {
+    "ymap" => Ok(YMAP_ALGORITHM_VERSION),
+    "ybn" => Ok(YBN_ALGORITHM_VERSION),
+    _ => Err(format!("Unsupported merge file type: {extension}").into()),
+  }
+}
 
 pub(super) struct IncrementalMerge<'a> {
   pub source_dir: &'a Path,

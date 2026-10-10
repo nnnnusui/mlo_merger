@@ -46,6 +46,8 @@ YMAP groups follow connected vanilla and source parent/child relationships so
 related changes cannot reuse stale outputs. Missing or changed outputs are rebuilt.
 Removed inputs and results that become no-ops disappear from the next publication.
 Failed merges leave prior outputs intact; fully current runs do not republish.
+Algorithm versions are tracked separately for YMAP and YBN; changing one format's
+merge behavior invalidates only that format's cached groups.
 
 YMAP duplicate diagnostics identify applied and ignored source edits with their
 resolution reason. They describe competing entity changes, not filename conflicts.
