@@ -73,10 +73,7 @@ pub(super) fn refresh_source_timestamps(
   Ok(())
 }
 
-pub(super) fn prepare_output_path(
-  output: &Path,
-  inputs: &[&Path],
-) -> Result<PathBuf> {
+pub(super) fn prepare_output_path(output: &Path) -> Result<PathBuf> {
   let absolute =
     if output.is_absolute() { output.to_path_buf() } else { std::env::current_dir()?.join(output) };
   let parent = absolute.parent().ok_or("Source-cache output has no parent")?;
@@ -86,11 +83,6 @@ pub(super) fn prepare_output_path(
   let current_dir = std::env::current_dir()?.canonicalize()?;
   if output == current_dir || current_dir.starts_with(&output) {
     return Err("Refusing to replace the workspace directory or one of its parents".into());
-  }
-  for input in inputs {
-    if output == *input || output.starts_with(input) || input.starts_with(&output) {
-      return Err(format!("Source-cache output overlaps input {}", input.display()).into());
-    }
   }
   if fs::symlink_metadata(&output).is_ok_and(|metadata| metadata.file_type().is_symlink()) {
     return Err(format!("Refusing to replace symlink output {}", output.display()).into());

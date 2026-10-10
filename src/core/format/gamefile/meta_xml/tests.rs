@@ -122,25 +122,53 @@ fn lod_light_hash_array_uses_its_canonical_name() {
 
 #[test]
 fn serializes_ytyp_rsc_meta_using_the_shared_meta_writer() {
-  let fixture = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-    .join("asset/source/sb_trainheistmap/stream/sb_train_addonprops.ytyp");
-  let bytes = std::fs::read(fixture).unwrap();
+  let root_hash = super::jenk_hash("CMapTypes");
+  let name_hash = super::jenk_hash("fixture_types");
+  let meta = MetaResource {
+    root_block_index: 1,
+    structures: vec![MetaStructureInfo {
+      name_hash: root_hash,
+      structure_key: 0,
+      unknown_8: 0,
+      unknown_12: 0,
+      unknown_28: 0,
+      structure_size: 4,
+      entries: vec![MetaStructureEntry {
+        name_hash: super::jenk_hash("name"),
+        data_offset: 0,
+        data_type: 0x4a,
+        unknown: 0,
+        reference_type_index: 0,
+        reference_key: 0,
+      }],
+    }],
+    enums: vec![],
+    data_blocks: vec![MetaDataBlock {
+      structure_name_hash: root_hash,
+      data: name_hash.to_le_bytes().to_vec(),
+    }],
+    name: Some("fixture_types".into()),
+  };
+  let bytes = meta.to_rsc7(2).unwrap().encode().unwrap();
   let resource = Rsc7Resource::decode(&bytes).unwrap();
   let meta = MetaResource::parse(&resource).unwrap();
-  let xml = meta_to_xml(&meta, &meta.hash_names()).unwrap();
+  let names = HashMap::from([(name_hash, "fixture_types".to_string())]);
+  let xml = meta_to_xml(&meta, &names).unwrap();
 
   assert!(xml.starts_with("<?xml version=\"1.0\" encoding=\"UTF-8\"?>"));
   assert!(xml.contains("<CMapTypes"));
+  assert!(xml.contains("<name>fixture_types</name>"));
 }
 
 #[test]
-fn serializes_all_checked_in_ymap_resources() {
-  let fixtures = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("asset/extracted");
+fn serializes_latest_vanilla_ymap_resources() {
+  let fixtures =
+    std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("asset/vanilla-cache/latest/ymap");
   let mut converted = 0;
 
   for entry in std::fs::read_dir(fixtures).unwrap() {
     let path = entry.unwrap().path();
-    if path.extension().is_some_and(|extension| extension == "ymap") {
+    if path.is_file() && path.extension().is_some_and(|extension| extension == "ymap") {
       let bytes = std::fs::read(&path).unwrap();
       ymap_to_xml(&bytes, &HashMap::new()).unwrap_or_else(|error| {
         panic!("failed to serialize {}: {error}", path.display());

@@ -500,16 +500,40 @@ fn matching_file(
   candidate: &Candidate,
   position: [f64; 3],
 ) -> Result<Option<FileResult>> {
+  let Some(bounds) = spatial_bounds(candidate)? else {
+    return Ok(None);
+  };
+  let matched = aabb_intersects_radius(
+    position.map(|value| value as f32 as f64),
+    0.0,
+    bounds.minimum,
+    bounds.maximum,
+  )
+  .unwrap_or(false);
+  Ok(matched.then(|| FileResult {
+    name: candidate.name.clone(),
+    kind: candidate.extension,
+    stage: candidate.stage,
+    path: candidate.path.to_string_lossy().replace('\\', "/"),
+    resource: candidate.resource.clone(),
+    original_path: candidate.original_path.clone(),
+    version: candidate.version.clone(),
+  }))
+}
+
+pub(super) struct SpatialBounds {
+  pub(super) minimum: [f64; 3],
+  pub(super) maximum: [f64; 3],
+}
+
+pub(super) fn spatial_bounds(candidate: &Candidate) -> Result<Option<SpatialBounds>> {
   let bytes = read_input(&candidate.path, candidate.stage, candidate.input.as_ref())?;
-  let position = position.map(|value| value as f32 as f64);
-  let matched = match candidate.extension {
+  let bounds = match candidate.extension {
     "ymap" => {
       let resource = Rsc7Resource::decode(&bytes)?;
       let meta = MetaResource::parse(&resource)?;
       match ymap_extents(&meta)? {
-        Some((minimum, maximum)) => {
-          aabb_intersects_radius(position, 0.0, minimum, maximum).unwrap_or(false)
-        }
+        Some((minimum, maximum)) => Some((minimum, maximum)),
         None => {
           let (model, _) = ymap_to_model_with_entities_from_meta(&meta, &HashMap::new())?;
           let minimum = [
@@ -522,24 +546,19 @@ fn matching_file(
             model.entities_extents_max.y as f64,
             model.entities_extents_max.z as f64,
           ];
-          aabb_intersects_radius(position, 0.0, minimum, maximum).unwrap_or(false)
+          Some((minimum, maximum))
         }
       }
     }
     "ybn" => {
       let root = read_ybn(&bytes)?;
-      super::ybn::bounds_overlap(&root, position, 0.0)?
+      super::ybn::world_bounds(&root)?
     }
     _ => unreachable!(),
   };
-  Ok(matched.then(|| FileResult {
-    name: candidate.name.clone(),
-    kind: candidate.extension,
-    stage: candidate.stage,
-    path: candidate.path.to_string_lossy().replace('\\', "/"),
-    resource: candidate.resource.clone(),
-    original_path: candidate.original_path.clone(),
-    version: candidate.version.clone(),
+  Ok(bounds.map(|(minimum, maximum)| SpatialBounds {
+    minimum,
+    maximum,
   }))
 }
 

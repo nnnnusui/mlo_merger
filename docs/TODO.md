@@ -34,6 +34,8 @@
 - [x] Record the raw manifest revision and timestamps of referenced `asset/vanilla` inputs so cache freshness can be checked incrementally.
 - [ ] Retain processing logs for vanilla-cache generation.
 - [x] Precompute the YMAP parent/child relationships for the selected latest vanilla snapshot; parse only its effective YMAP files.
+- [x] Support PSO YMAPs in shared model decoding and vanilla parent/child indexing alongside RSC7 YMAPs.
+- [x] Use current latest vanilla fixtures for META XML tests and a synthetic YTYP resource for shared-writer coverage.
 - [ ] During YMAP merge, load only target files and the parent/child relationship closure needed for that operation, not every vanilla YMAP body.
 - [ ] Leave vanilla-to-vanilla diff generation for a later version; the current diff model is not sufficiently complete.
 
@@ -79,6 +81,7 @@
 - [x] Add `--find ybn-position X,Y,Z --radius R --type box` with world-space collision centers, shape filtering and existing glob/pre-merge XML support.
 - [x] Add read-only `--find file-from-position X,Y,Z` using YMAP entity extents and transform-aware YBN BoxMin/BoxMax bounds; `--all` also scans source, active source-cache files and latest vanilla-cache artifacts with stderr progress.
 - [x] Add `--find occlude-position X,Y,Z --radius R` to return nearby YMAP boxOccluder and occludeModel entries with file provenance.
+- [x] Add `--generate-rtree-json` to write RBush-compatible YMAP/YBN bounds split into merged/source/vanilla indexes with timestamps and counts.
 
 - [x] Add `--get-diff <source.ymap|directory>` to compare YMAPs against matching latest vanilla-cache files; `-o` is a filename for one input and an output directory for multiple inputs.
 - [ ] Provide `--to-xml <path>` and `--from-xml <path>` commands, each accepting `-o <path>` with `.` as the default output path.

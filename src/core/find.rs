@@ -27,6 +27,7 @@ use std::{
 
 mod file_from_position;
 mod occlude_position;
+pub(crate) mod rtree;
 mod ybn;
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;

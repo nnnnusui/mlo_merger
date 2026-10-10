@@ -3,6 +3,7 @@ pub mod common;
 pub mod deploy;
 pub mod find;
 pub mod from_xml;
+pub mod generate_rtree_json;
 pub mod generate_source_cache;
 pub mod generate_vanilla;
 pub mod generate_vanilla_cache;

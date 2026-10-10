@@ -56,8 +56,7 @@ pub(super) fn run(
   }
   .run()?;
   let vanilla_cache_dir = build.vanilla_cache_dir.canonicalize()?;
-  let output =
-    prepare_output_path(&build.output_dir, &[&source_dir, &vanilla_dir, &vanilla_cache_dir])?;
+  let output = prepare_output_path(&build.output_dir)?;
   let previous = if output.join("source_cache_info.json").is_file() {
     let metadata: SourceCacheMetadata = serde_json::from_reader(BufReader::new(fs::File::open(
       output.join("source_cache_info.json"),

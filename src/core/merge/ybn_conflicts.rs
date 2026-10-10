@@ -234,14 +234,20 @@ fn collect_ybn_groups(source_dir: &Path) -> io::Result<BTreeMap<String, Vec<Path
   let resources = get_resource_directories(&source_dir.to_path_buf())
     .map_err(|error| io::Error::other(error.to_string()))?;
   for resource in resources {
-    for entry in WalkDir::new(resource).follow_links(false) {
-      let entry = entry.map_err(|error| io::Error::other(error.to_string()))?;
-      if !entry.file_type().is_file()
-        || entry.path().extension().is_none_or(|extension| !extension.eq_ignore_ascii_case("ybn"))
-      {
+    for stream_name in ["stream"] {
+      let stream = resource.join(stream_name);
+      if !stream.is_dir() {
         continue;
       }
-      paths.push(entry.into_path());
+      for entry in WalkDir::new(stream).follow_links(false) {
+        let entry = entry.map_err(|error| io::Error::other(error.to_string()))?;
+        if !entry.file_type().is_file()
+          || entry.path().extension().is_none_or(|extension| !extension.eq_ignore_ascii_case("ybn"))
+        {
+          continue;
+        }
+        paths.push(entry.into_path());
+      }
     }
   }
   Ok(collect_ybn_groups_from_paths(paths.iter()))
@@ -341,6 +347,8 @@ mod tests {
     fs::write(second.join("SC1_18_0.YBN"), []).unwrap();
     fs::write(first.join("hi@sc1_18_0.ybn"), []).unwrap();
     fs::write(second.join("hi@sc1_18_0.ybn"), []).unwrap();
+    fs::create_dir_all(temp.join("resource_a/vanilla")).unwrap();
+    fs::write(temp.join("resource_a/vanilla/not_a_source.ybn"), []).unwrap();
 
     let groups = collect_ybn_groups(&temp).unwrap();
     assert_eq!(groups["sc1_18_0.ybn"].len(), 2);

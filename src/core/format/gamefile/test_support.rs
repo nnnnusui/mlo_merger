@@ -16,11 +16,14 @@ pub(crate) fn sample_ymap_catalog() -> &'static MetaSchemaCatalog {
   CATALOG.get_or_init(|| {
     let base = Path::new(env!("CARGO_MANIFEST_DIR"));
     let mut catalog = MetaSchemaCatalog::default();
-    for entry in walkdir::WalkDir::new(base.join("asset/extracted")) {
+    for entry in ["asset/extracted", "asset/vanilla-cache/latest/ymap"]
+      .into_iter()
+      .flat_map(|directory| walkdir::WalkDir::new(base.join(directory)))
+    {
       let Ok(entry) = entry else {
         continue;
       };
-      if !entry.file_type().is_file()
+      if !entry.path().is_file()
         || entry.path().extension().is_none_or(|extension| extension != "ymap")
       {
         continue;

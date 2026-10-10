@@ -50,9 +50,15 @@ mod tests {
       "ResourceReport",
       "MatchingConfig",
       "BlacklistConfig",
+      "RTreeIndex",
+      "RTreeItem",
     ] {
       assert!(actual.contains(&format!("export type {name} =")), "Missing {name}");
     }
+    assert!(actual.contains("schemaVersion: number"));
+    assert!(actual.contains("mergedFileCount: number"));
+    assert!(actual.contains("minX: number"));
+    assert!(actual.contains("originalPath?: string"));
     assert!(actual.contains("export type Change = \"Added\" | \"Modified\" | \"Removed\""));
     assert!(actual.contains("bmin?: [number, number, number] | null"));
     assert!(actual.contains("unsupported_files?: string[]"));

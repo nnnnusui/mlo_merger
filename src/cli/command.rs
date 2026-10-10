@@ -4,6 +4,7 @@ use super::{
   deploy::{self, Deploy},
   find::{self, Find},
   from_xml::{self, FromXml},
+  generate_rtree_json::{self, GenerateRTreeJson},
   generate_source_cache::{self, GenerateSourceCache},
   generate_vanilla::{self, GenerateVanilla},
   generate_vanilla_cache::{self, GenerateVanillaCache},
@@ -24,6 +25,8 @@ pub enum Command {
   GenerateVanillaCache(GenerateVanillaCache),
   /// Build source resource conflict data.
   GenerateSourceCache(GenerateSourceCache),
+  /// Generate RBush-compatible stream-file bounding boxes.
+  GenerateRTreeJson(GenerateRTreeJson),
   /// Merge source changes into vanilla stream files.
   Merge(Merge),
   /// Copy merged and unmerged cached files into a deployable stream layout.
@@ -42,6 +45,7 @@ fn parser() -> impl Parser<Command> {
   let generate_vanilla = generate_vanilla::parser().map(Command::GenerateVanilla);
   let generate_vanilla_cache = generate_vanilla_cache::parser().map(Command::GenerateVanillaCache);
   let generate_source_cache = generate_source_cache::parser().map(Command::GenerateSourceCache);
+  let generate_rtree_json = generate_rtree_json::parser().map(Command::GenerateRTreeJson);
   let merge = merge::parser().map(Command::Merge);
   let deploy = deploy::parser().map(Command::Deploy);
   let to_xml = to_xml::parser().map(Command::ToXml);
@@ -53,6 +57,7 @@ fn parser() -> impl Parser<Command> {
     generate_vanilla,
     generate_vanilla_cache,
     generate_source_cache,
+    generate_rtree_json,
     merge,
     deploy,
     to_xml,
@@ -75,6 +80,7 @@ pub fn run(command: Command) -> Result<(), Box<dyn std::error::Error>> {
     Command::GenerateVanilla(command) => generate_vanilla::run(command)?,
     Command::GenerateVanillaCache(command) => generate_vanilla_cache::run(command)?,
     Command::GenerateSourceCache(command) => generate_source_cache::run(command)?,
+    Command::GenerateRTreeJson(command) => generate_rtree_json::run(command)?,
     Command::Merge(command) => merge::run(command)?,
     Command::Deploy(command) => deploy::run(command)?,
     Command::ToXml(command) => to_xml::run(command)?,
@@ -518,5 +524,21 @@ mod tests {
     };
     assert_eq!(command.common.output, PathBuf::from("out"));
     assert_eq!(command.common.vanilla_cache, PathBuf::from("vanilla-cache"));
+  }
+
+  #[test]
+  fn generate_rtree_json_uses_read_cache_default_and_accepts_output_directory() {
+    let Command::GenerateRTreeJson(command) =
+      parser().to_options().run_inner(&["--generate-rtree-json"]).unwrap()
+    else {
+      panic!("Expected R-tree JSON command")
+    };
+    assert_eq!(command.output_dir, PathBuf::from("asset/read_cache"));
+    let Command::GenerateRTreeJson(command) =
+      parser().to_options().run_inner(&["--generate-rtree-json", "-o", "custom-output"]).unwrap()
+    else {
+      panic!("Expected R-tree JSON command")
+    };
+    assert_eq!(command.output_dir, PathBuf::from("custom-output"));
   }
 }

@@ -119,7 +119,7 @@ impl Pipeline {
 
   fn validate_paths(&self) -> Result<(), Box<dyn std::error::Error>> {
     let paths = [
-      ("source", &self.source_dir),
+      // ("source", &self.source_dir),
       ("vanilla", &self.vanilla_dir),
       ("vanilla-cache", &self.vanilla_cache_dir),
       ("source-cache", &self.source_cache_dir),

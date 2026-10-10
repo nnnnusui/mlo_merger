@@ -2,7 +2,7 @@
 
 [![SUSHI-WARE LICENSE](https://img.shields.io/badge/license-SUSHI--WARE%F0%9F%8D%A3-blue.svg)](https://github.com/MakeNowJust/sushi-ware)
 
-[日本語](docs/Readme.ja.md) | [Architecture](docs/ARCHITECTURE.md) | [Roadmap](docs/TODO.md)
+[Architecture](docs/ARCHITECTURE.md) | [Roadmap](docs/TODO.md)
 
 Merges FiveM YMAP resources and conflicting YBN collision files against vanilla data.
 
@@ -101,26 +101,36 @@ Larger tolerances can treat intentionally different nearby shapes as identical.
 ### Inspect Existing Data
 
 ```bash
-mlo_merger --find entity-guid 2443198849 --filter '*cs4_10_strm_0.ymap' --diff-all
-mlo_merger --find entity-position 3.5,4.2,0.0 --round 1.0
-mlo_merger --find ybn-position 1211.126,-507.5948,67.54723 --radius 1.0 --type box --filter id2_21_c_0.ybn --diff-all
+mlo_merger --find entity-guid 2443198849 --filter '*cs4_10_strm_0.ymap'
+mlo_merger --find entity-position 3.5,4.2,0.0 --radius 1.0
+mlo_merger --find ybn-position 1211.126,-507.5948,67.54723 --radius 1.0 --type box
+mlo_merger --find file-from-position 1211.126,-507.5948,67.54723
+mlo_merger --find occlude-position 3.5,4.2,0.0 --radius 1.0
 ```
 
 Searches write XML to stdout without running the pipeline or modifying artifacts.
-`-i` selects the merged directory. `--filter` is a case-insensitive filename glob;
-quote wildcard patterns. Duplicate occurrences are retained.
+`entity-guid` searches by entity GUID. Position searches accept `X,Y,Z`; use
+`--radius` for `entity-position`, `ybn-position` and `occlude-position`
+(default: `1.0`). `file-from-position` finds files whose spatial bounds contain
+the position and does not accept `--radius`.
 
-Position searches include the 3D radius boundary and default to `1.0`. Negative
-coordinates are supported; non-finite/out-of-range coordinates and negative or
-non-finite radii are rejected. For entities, radius `0` selects the exact
-native-precision position. YBN searches match world-space shape centers, not any point inside the
-shape. `--type` accepts `box`, `triangle`, `sphere`, `capsule` or `cylinder`;
-omitting it selects all supported shapes. Unsupported shapes are skipped.
+`ybn-position` searches world-space collision shape centers, not any point
+inside a shape. `--type` accepts `box`, `triangle`, `sphere`, `capsule` or
+`cylinder`; omit it to search all supported shapes. Unsupported shapes are
+skipped.
 
-`--diff-all` includes recorded vanilla/source inputs and identifies their resource
-and path. `found="false"` marks a stage without a match. Changed input fingerprints
-cause an error requiring a fresh merge. This is a snapshot comparison, not a
-computed semantic diff. YBN indices are input-local and may change on rebuild.
+Use `-i` to select a merged directory (default: `asset/merged`). `--filter`
+accepts a case-insensitive filename glob; quote wildcard patterns. `--all`
+includes recorded vanilla and source inputs from before the merge. Duplicate
+occurrences are retained.
+
+Position searches include the 3D radius boundary. Negative coordinates are
+supported; non-finite/out-of-range coordinates and negative or non-finite radii
+are rejected. For entities, radius `0` selects the exact native-precision
+position. `--all` results identify the input resource and path. A changed input
+fingerprint causes an error requiring a fresh merge. This is a snapshot
+comparison, not a computed semantic diff. YBN indices are input-local and may
+change on rebuild.
 
 ### Convert Files
 

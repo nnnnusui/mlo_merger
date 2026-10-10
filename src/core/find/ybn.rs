@@ -92,6 +92,62 @@ pub(super) fn bounds_overlap(
   bounds_overlap_inner(root, &mut Vec::new(), root.transform, position, radius)
 }
 
+pub(super) fn world_bounds(root: &Bound) -> Result<Option<([f64; 3], [f64; 3])>> {
+  let mut bounds = WorldBounds {
+    minimum: [f64::INFINITY; 3],
+    maximum: [f64::NEG_INFINITY; 3],
+    found: false,
+  };
+  collect_world_bounds(root, &mut Vec::new(), root.transform, &mut bounds)?;
+  Ok(bounds.found.then_some((bounds.minimum, bounds.maximum)))
+}
+
+struct WorldBounds {
+  minimum: [f64; 3],
+  maximum: [f64; 3],
+  found: bool,
+}
+
+fn collect_world_bounds(
+  bound: &Bound,
+  transforms: &mut Vec<[f32; 16]>,
+  transform: Option<[f32; 16]>,
+  bounds: &mut WorldBounds,
+) -> Result<()> {
+  if let Some(transform) = transform {
+    transforms.push(transform);
+  }
+  if bound.kind != "None" {
+    let minimum = common_vec3(bound, 48)?;
+    let maximum = common_vec3(bound, 32)?;
+    if (0..3).any(|axis| minimum[axis] > maximum[axis]) {
+      return Err("Invalid YBN BoxMin/BoxMax bounds".into());
+    }
+    for corner in 0..8 {
+      let point =
+        std::array::from_fn(
+          |axis| {
+            if corner & (1 << axis) == 0 { minimum[axis] } else { maximum[axis] }
+          },
+        );
+      let point = world(point.map(f64::from), transforms)?;
+      for (axis, coordinate) in point.iter().enumerate() {
+        bounds.minimum[axis] = bounds.minimum[axis].min(*coordinate);
+        bounds.maximum[axis] = bounds.maximum[axis].max(*coordinate);
+      }
+    }
+    bounds.found = true;
+  }
+  for (index, child) in bound.children.iter().enumerate() {
+    let transform = child.transform.or_else(|| bound.transforms.get(index).copied());
+    collect_world_bounds(child, transforms, transform, bounds)?;
+  }
+  if transform.is_some() {
+    transforms.pop();
+  }
+  Ok(())
+}
+
 fn bounds_overlap_inner(
   bound: &Bound,
   transforms: &mut Vec<[f32; 16]>,
@@ -469,6 +525,7 @@ mod tests {
     ));
     root.children.push(composite);
 
+    assert_eq!(world_bounds(&root).unwrap(), Some(([10.0, 19.0, 29.0], [12.0, 21.0, 31.0])));
     assert!(bounds_overlap(&root, [11.0, 20.0, 30.0], 0.0).unwrap());
     assert!(bounds_overlap(&root, [13.0, 20.0, 30.0], 1.0).unwrap());
     assert!(!bounds_overlap(&root, [13.01, 20.0, 30.0], 1.0).unwrap());

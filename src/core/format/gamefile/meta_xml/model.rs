@@ -1,16 +1,21 @@
 use super::*;
 
-/// Converts a binary RSC7 YMAP into CodeWalker-style META XML using its embedded schema.
+/// Converts a binary RSC7 or PSO YMAP into CodeWalker-style XML using its embedded schema.
 pub fn ymap_to_xml(
   bytes: &[u8],
   shared_hash_names: &HashMap<u32, String>,
 ) -> io::Result<String> {
+  if bytes.starts_with(b"PSIN") {
+    return super::super::pso::PsoResource::parse(bytes)?.to_xml(shared_hash_names);
+  }
   let resource = Rsc7Resource::decode(bytes)?;
   let meta = MetaResource::parse(&resource)?;
   meta_to_xml(&meta, shared_hash_names)
 }
 
-/// Converts a binary YMAP directly into its typed model without serializing XML.
+/// Converts a binary RSC7 or PSO YMAP into its typed model.
+///
+/// RSC7 uses direct model decoding; PSO uses its embedded-schema XML adapter.
 pub fn ymap_to_model(
   bytes: &[u8],
   shared_hash_names: &HashMap<u32, String>,
@@ -25,6 +30,11 @@ pub(crate) fn ymap_to_model_with_entities(
   crate::core::format::ymap::model::Ymap,
   Vec<crate::core::format::ymap::model::YmapEntity>,
 )> {
+  if bytes.starts_with(b"PSIN") {
+    let xml = ymap_to_xml(bytes, shared_hash_names)?;
+    let parsed = quick_xml::de::from_str(&xml).map_err(|error| invalid_data(&error.to_string()))?;
+    return Ok(ymap_from_parsed(parsed));
+  }
   let resource = Rsc7Resource::decode(bytes)?;
   let meta = MetaResource::parse(&resource)?;
   ymap_to_model_with_entities_from_meta(&meta, shared_hash_names)
@@ -38,15 +48,21 @@ pub(crate) fn ymap_to_model_with_entities_from_meta(
   Vec<crate::core::format::ymap::model::YmapEntity>,
 )> {
   let value = meta_to_value(&meta, shared_hash_names)?;
-  let mut parsed: crate::core::format::ymap::xml::XmlYmap =
+  let parsed: crate::core::format::ymap::xml::XmlYmap =
     serde_json::from_value(value).map_err(|error| invalid_data(&error.to_string()))?;
+  Ok(ymap_from_parsed(parsed))
+}
+
+fn ymap_from_parsed(
+  mut parsed: crate::core::format::ymap::xml::XmlYmap
+) -> (crate::core::format::ymap::model::Ymap, Vec<crate::core::format::ymap::model::YmapEntity>) {
   let entities = std::mem::take(&mut parsed.entities.items)
     .into_iter()
     .map(crate::core::format::ymap::model::YmapEntity::from)
     .collect::<Vec<_>>();
   let mut model: crate::core::format::ymap::model::Ymap = parsed.into();
   model.entity_map = entities.iter().map(|entity| (entity.guid, entity.clone())).collect();
-  Ok((model, entities))
+  (model, entities)
 }
 
 fn meta_to_value(

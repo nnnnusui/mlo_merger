@@ -59,10 +59,7 @@ fn run_inner(
   let source_cache_dir = source_cache_dir.canonicalize()?;
   let merge_inputs = source_cache::load_merge_inputs(&source_cache_dir)?;
   let latest_files = dispatch_vanilla_stream_files(&vanilla_cache_dir.join("latest"))?;
-  let output_dir = prepare_output_path(
-    output_dir,
-    &[&source_dir, &vanilla_dir, &vanilla_cache_dir, &source_cache_dir],
-  )?;
+  let output_dir = prepare_output_path(output_dir)?;
   let staging = Staging(create_staging_directory(&output_dir)?);
   let changed = IncrementalMerge {
     source_dir: &source_dir,
@@ -114,10 +111,7 @@ fn dispatch_vanilla_stream_files(latest_dir: &Path) -> Result<VanillaStreamFiles
   Ok(files)
 }
 
-fn prepare_output_path(
-  output: &Path,
-  inputs: &[&Path],
-) -> Result<PathBuf> {
+fn prepare_output_path(output: &Path) -> Result<PathBuf> {
   let absolute =
     if output.is_absolute() { output.to_path_buf() } else { std::env::current_dir()?.join(output) };
   let parent = absolute.parent().ok_or("Merge output has no parent")?;
@@ -126,11 +120,6 @@ fn prepare_output_path(
   let current_dir = std::env::current_dir()?.canonicalize()?;
   if output == current_dir || current_dir.starts_with(&output) {
     return Err("Refusing to replace the workspace directory or one of its parents".into());
-  }
-  for input in inputs {
-    if output == *input || output.starts_with(input) || input.starts_with(&output) {
-      return Err(format!("Merge output overlaps input {}", input.display()).into());
-    }
   }
   if fs::symlink_metadata(&output).is_ok_and(|metadata| metadata.file_type().is_symlink()) {
     return Err(format!("Refusing to replace symlink output {}", output.display()).into());
