@@ -42,6 +42,11 @@ pub(in crate::core::format::ybn) fn compact_polygon_materials(geometry: &mut Geo
   geometry.materials = materials;
 }
 
+/// Rebuilds references rather than copying addresses from the source envelope.
+/// Only the root receives page metadata. Unmodeled optional geometry octants
+/// are omitted; composite AABBs are regenerated from the encoded child bounds.
+/// AABB Min.w uses the smallest positive f32 and Max.w carries the child's margin,
+/// matching CodeWalker's child-bounds records.
 pub(in crate::core::format::ybn) fn encode_bound(
   bound: &Bound,
   data: &mut Vec<u8>,
@@ -69,6 +74,7 @@ pub(in crate::core::format::ybn) fn encode_bound(
     write_f32(&mut common, 20, radius)?;
   }
   data[offset..offset + 112].copy_from_slice(&common[..112]);
+  put_u64(data, offset + 8, 0)?;
   let quantum = match &bound.geometry {
     Some(geometry) => match geometry.vertex_quantum {
       Some(quantum) => quantum,
@@ -103,6 +109,18 @@ pub(in crate::core::format::ybn) fn encode_bound(
       write_matrix_record(&mut matrices, matrix);
     }
     let matrices_at = append(data, &matrices)?;
+    let mut boxes = Vec::new();
+    for child_offset in &child_offsets {
+      let mut record = [0u8; 32];
+      if let Some(child_offset) = child_offset {
+        record[..12].copy_from_slice(&data[child_offset + 48..child_offset + 60]);
+        record[12..16].copy_from_slice(&1u32.to_le_bytes());
+        record[16..28].copy_from_slice(&data[child_offset + 32..child_offset + 44]);
+        record[28..32].copy_from_slice(&data[child_offset + 44..child_offset + 48]);
+      }
+      boxes.extend_from_slice(&record);
+    }
+    let boxes_at = append(data, &boxes)?;
     let mut flags1 = Vec::new();
     let mut flags2 = Vec::new();
     for flags in &bound.flags {
@@ -115,6 +133,8 @@ pub(in crate::core::format::ybn) fn encode_bound(
     let flags2_at = append(data, &flags2)?;
     put_u64(data, offset + 112, pointer_if_nonempty(pointers_at, pointers.len())?)?;
     put_u64(data, offset + 120, pointer_if_nonempty(matrices_at, matrices.len())?)?;
+    put_u64(data, offset + 128, pointer_if_nonempty(matrices_at, matrices.len())?)?;
+    put_u64(data, offset + 136, pointer_if_nonempty(boxes_at, boxes.len())?)?;
     put_u64(data, offset + 144, pointer_if_nonempty(flags1_at, flags1.len())?)?;
     put_u64(data, offset + 152, pointer_if_nonempty(flags2_at, flags2.len())?)?;
     put_u16(data, offset + 160, bound.children.len() as u16)?;
@@ -318,6 +338,8 @@ pub(in crate::core::format::ybn) fn encode_geometry(
   write_f32(data, offset + 172, geometry.unknown_ac)?;
   put_u64(data, offset + 176, pointer_if_nonempty(vertices_at, vertices.len())?)?;
   put_u64(data, offset + 184, pointer_if_nonempty(colors_at, colors.len())?)?;
+  put_u64(data, offset + 192, 0)?;
+  put_u64(data, offset + 200, 0)?;
   put_u32(data, offset + 208, geometry.vertices.len() as u32)?;
   put_u32(data, offset + 212, geometry.polygons.len() as u32)?;
   put_u64(data, offset + 240, pointer_if_nonempty(materials_at, materials.len())?)?;

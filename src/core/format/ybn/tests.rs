@@ -92,6 +92,127 @@ fn triangle_root(
 }
 
 #[test]
+fn rebuild_replaces_source_only_fixup_pointers() {
+  let bytes =
+    triangle_root(&[[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]], &[([0, 1, 2], [false; 3])]);
+  let mut root = read_ybn_root(&bytes).unwrap();
+  let poison = 0xdead_beef_dead_beefu64.to_le_bytes();
+  root.common[8..16].copy_from_slice(&poison);
+  for offset in [128, 136, 168] {
+    root.extension[offset - BOUNDS_SIZE..offset - BOUNDS_SIZE + 8].copy_from_slice(&poison);
+  }
+  let geometry = &mut root.children[0];
+  geometry.common[8..16].copy_from_slice(&poison);
+  for offset in [120, 192, 200, 304] {
+    geometry.extension[offset - BOUNDS_SIZE..offset - BOUNDS_SIZE + 8].copy_from_slice(&poison);
+  }
+  let rebuilt = encode_ybn_bound(&root).unwrap();
+  let resource = super::Rsc7Resource::decode(&rebuilt).unwrap();
+  let read_pointer =
+    |bytes: &[u8], offset| u64::from_le_bytes(bytes[offset..offset + 8].try_into().unwrap());
+  let record = &resource.system_data;
+  assert_eq!(read_pointer(record, 128), read_pointer(record, 120));
+  let boxes = resource.read_address(read_pointer(record, 136), 32).unwrap();
+  assert_eq!(read_pointer(record, 168), 0);
+  let table = resource.read_address(read_pointer(record, 112), 8).unwrap();
+  let child = resource.read_address(read_pointer(table, 0), GEOMETRY_BVH_SIZE).unwrap();
+  assert_eq!(&boxes[..12], &child[48..60]);
+  assert_eq!(&boxes[12..16], &1u32.to_le_bytes());
+  assert_eq!(&boxes[16..28], &child[32..44]);
+  assert_eq!(&boxes[28..32], &child[44..48]);
+  for offset in [8, 120, 192, 200] {
+    assert_eq!(read_pointer(child, offset), 0, "stale child pointer at {offset:#x}");
+  }
+  resource.read_address(read_pointer(record, 8), 16).unwrap();
+  resource.read_address(read_pointer(child, 304), 128).unwrap();
+  assert_eq!(read_ybn_root(&rebuilt).unwrap().children.len(), 1);
+}
+
+#[test]
+#[ignore = "requires local cs6_05_2 and ch1_04b_0 vanilla and source-cache files"]
+fn real_collision_rebuilds_have_relocated_fixup_tables() {
+  let base = Path::new(env!("CARGO_MANIFEST_DIR"));
+  let source =
+    std::fs::read(base.join("asset/source-cache/resources/tw-builder-map/cs6_05_2.ybn")).unwrap();
+  let second = std::fs::read(
+    base.join("asset/source-cache/resources/tw-builder-stream/_shared/map_mainzone/cs6_05_2.ybn"),
+  )
+  .unwrap();
+  let vanilla = std::fs::read(base.join("asset/vanilla-cache/latest/ybn/cs6_05_2.ybn")).unwrap();
+  let merged = merge_ybn_deltas(&vanilla, &[&source, &second]).unwrap();
+  assert_relocated_fixup_tables(&merged);
+  let route68 = std::fs::read(base.join(
+    "asset/source-cache/resources/tstudio_ammunation/tstudio_location_11_route68/ch1_04b_0.ybn",
+  ))
+  .unwrap();
+  let rebuilt = encode_ybn_bound(&read_ybn_root(&route68).unwrap()).unwrap();
+  assert_relocated_fixup_tables(&rebuilt);
+}
+
+fn assert_relocated_fixup_tables(bytes: &[u8]) {
+  fn pointer(
+    bytes: &[u8],
+    offset: usize,
+  ) -> u64 {
+    u64::from_le_bytes(bytes[offset..offset + 8].try_into().unwrap())
+  }
+  fn inspect(
+    resource: &super::Rsc7Resource,
+    address: u64,
+    root: bool,
+  ) {
+    let record = resource.read_address(address, BOUNDS_SIZE).unwrap();
+    if root {
+      resource.read_address(pointer(record, 8), 16).unwrap();
+    } else {
+      assert_eq!(pointer(record, 8), 0);
+    }
+    if record[16] == 10 {
+      let record = resource.read_address(address, COMPOSITE_SIZE).unwrap();
+      let count = u16::from_le_bytes(record[160..162].try_into().unwrap()) as usize;
+      assert_eq!(pointer(record, 120), pointer(record, 128));
+      assert_eq!(pointer(record, 168), 0);
+      if count == 0 {
+        return;
+      }
+      let children = resource.read_address(pointer(record, 112), count * 8).unwrap();
+      resource.read_address(pointer(record, 120), count * 64).unwrap();
+      let boxes = resource.read_address(pointer(record, 136), count * 32).unwrap();
+      for index in 0..count {
+        let child_address = pointer(children, index * 8);
+        let bbox = &boxes[index * 32..(index + 1) * 32];
+        if child_address == 0 {
+          assert_eq!(bbox, [0; 32]);
+          continue;
+        }
+        let child = resource.read_address(child_address, BOUNDS_SIZE).unwrap();
+        assert_eq!(&bbox[..12], &child[48..60]);
+        assert_eq!(&bbox[16..28], &child[32..44]);
+        assert_eq!(&bbox[28..32], &child[44..48]);
+        inspect(resource, child_address, false);
+      }
+    } else if matches!(record[16], 4 | 8) {
+      let length = if record[16] == 8 { GEOMETRY_BVH_SIZE } else { super::GEOMETRY_SIZE };
+      let record = resource.read_address(address, length).unwrap();
+      for offset in [120, 192, 200] {
+        assert_eq!(pointer(record, offset), 0);
+      }
+      if record[16] == 8 && pointer(record, 304) != 0 {
+        let bvh = resource.read_address(pointer(record, 304), 128).unwrap();
+        for offset in [0, 112] {
+          if pointer(bvh, offset) != 0 {
+            resource.read_address(pointer(bvh, offset), 16).unwrap();
+          }
+        }
+      }
+    }
+  }
+  let resource = super::Rsc7Resource::decode(bytes).unwrap();
+  inspect(&resource, super::BASE, true);
+  read_ybn_root(bytes).unwrap();
+}
+
+#[test]
 fn multiline_geometry_text_arrays_are_indented_and_rebuildable() {
   let original =
     triangle_root(&[[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]], &[([0, 1, 2], [false; 3])]);
