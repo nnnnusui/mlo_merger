@@ -7,8 +7,9 @@ pub fn parser() -> impl Parser<ExportLights> {
   let input = long("to-json")
     .help("Export resource-local YMAP light editing JSON")
     .argument::<PathBuf>("YMAP");
-  let resource =
-    long("resource").help("Source resource ID, including bracket groups").argument::<String>("ID");
+  let resource = long("resource")
+    .help("Unique resource name or source-relative resource ID")
+    .argument::<String>("ID");
   let source_dir =
     short('i').long("input").argument::<PathBuf>("DIR").fallback("asset/source".into());
   let source_cache_dir =

@@ -56,6 +56,8 @@ fn moves_vanilla_files_retains_history_and_updates_only_selected_resources() {
     output_dir: output.clone(),
     vanilla_dir: vanilla,
     vanilla_cache_dir: root.join("vanilla-cache"),
+    resource: None,
+    exclusions: None,
     force: false,
   };
   assert!(build.run().unwrap());
@@ -124,7 +126,14 @@ fn moves_vanilla_files_retains_history_and_updates_only_selected_resources() {
     .unwrap()
     .modified()
     .unwrap();
-  assert!(build.run_selected(Some("resource_a")).unwrap());
+  assert!(
+    BuildSourceCache {
+      resource: Some("resource_a").map(str::to_owned),
+      ..build.clone()
+    }
+    .run()
+    .unwrap()
+  );
   assert_eq!(
     fs::metadata(output.join("resources/resource_a/nested/collision.ybn"))
       .unwrap()
@@ -134,7 +143,14 @@ fn moves_vanilla_files_retains_history_and_updates_only_selected_resources() {
   );
   assert!(!output.join("resource_a/stream").exists());
   assert!(output.join("resource_b/nested/collision.ybn").is_file());
-  assert!(!build.run_selected(Some("resource_a")).unwrap());
+  assert!(
+    !BuildSourceCache {
+      resource: Some("resource_a").map(str::to_owned),
+      ..build.clone()
+    }
+    .run()
+    .unwrap()
+  );
   assert!(build.run().unwrap());
   assert!(!output.join("resource_b").exists());
   assert_eq!(
@@ -163,7 +179,14 @@ fn moves_vanilla_files_retains_history_and_updates_only_selected_resources() {
     fs::rename(&first, &moved).unwrap();
     let mut relocation = build.clone();
     relocation.force = force;
-    assert!(relocation.run_selected(selected).unwrap());
+    assert!(
+      BuildSourceCache {
+        resource: selected.map(str::to_owned),
+        ..relocation.clone()
+      }
+      .run()
+      .unwrap()
+    );
     assert!(cached.is_file(), "Relocation must retain the cached stream file");
     assert_eq!(fs::read(&cached).unwrap(), b"original");
     assert_eq!(fs::metadata(&cached).unwrap().modified().unwrap(), modified);
@@ -209,16 +232,37 @@ fn moves_vanilla_files_retains_history_and_updates_only_selected_resources() {
     assert!(conflicts.report.conflicts[".ybn"].iter().any(|conflict| {
       conflict.paths.contains(&"resources/resource_a/nested/collision.ybn".to_owned())
     }));
-    assert!(!build.run_selected(selected).unwrap());
+    assert!(
+      !BuildSourceCache {
+        resource: selected.map(str::to_owned),
+        ..build.clone()
+      }
+      .run()
+      .unwrap()
+    );
     assert!(!build.run().unwrap());
     first = moved;
   }
   let empty_before = read_metadata();
   let moved_empty = source.join("[group]/empty_resource");
   fs::rename(&empty, &moved_empty).unwrap();
-  assert!(!build.run_selected(Some("resource_a")).unwrap());
+  assert!(
+    !BuildSourceCache {
+      resource: Some("resource_a").map(str::to_owned),
+      ..build.clone()
+    }
+    .run()
+    .unwrap()
+  );
   assert_eq!(read_metadata().resources["empty_resource"], empty_before.resources["empty_resource"]);
-  assert!(build.run_selected(Some("[group]/empty_resource")).unwrap());
+  assert!(
+    BuildSourceCache {
+      resource: Some("[group]/empty_resource").map(str::to_owned),
+      ..build.clone()
+    }
+    .run()
+    .unwrap()
+  );
   let empty_after = read_metadata();
   assert!(!empty_after.resources.contains_key("empty_resource"));
   assert_eq!(empty_after.resources["[group]/empty_resource"].source, moved_empty);
@@ -239,7 +283,14 @@ fn moves_vanilla_files_retains_history_and_updates_only_selected_resources() {
   fs::create_dir_all(moved.parent().unwrap()).unwrap();
   fs::rename(&first, &moved).unwrap();
   first = moved;
-  assert!(build.run_selected(Some("resource_a")).unwrap());
+  assert!(
+    BuildSourceCache {
+      resource: Some("resource_a").map(str::to_owned),
+      ..build.clone()
+    }
+    .run()
+    .unwrap()
+  );
   assert_eq!(
     fs::read(output.join("resources/resource_a/nested/collision.ybn")).unwrap(),
     b"replacement"
@@ -261,10 +312,24 @@ fn moves_vanilla_files_retains_history_and_updates_only_selected_resources() {
   )
   .unwrap();
   assert_eq!(old_file.sha256, format!("{:x}", Sha256::digest(b"original")));
-  assert!(!build.run_selected(Some("resource_a")).unwrap());
+  assert!(
+    !BuildSourceCache {
+      resource: Some("resource_a").map(str::to_owned),
+      ..build.clone()
+    }
+    .run()
+    .unwrap()
+  );
   let mut forced = build.clone();
   forced.force = true;
-  assert!(forced.run_selected(Some("resource_a")).unwrap());
+  assert!(
+    BuildSourceCache {
+      resource: Some("resource_a").map(str::to_owned),
+      ..forced.clone()
+    }
+    .run()
+    .unwrap()
+  );
   assert_eq!(fs::read_dir(output.join("_old")).unwrap().count(), 1);
   assert!(second.join("streams/nested/collision.ybn").exists());
 
@@ -285,7 +350,14 @@ fn moves_vanilla_files_retains_history_and_updates_only_selected_resources() {
     },
   );
   write_json(&build.vanilla_dir.join("cache_info.json"), &raw).unwrap();
-  assert!(build.run_selected(Some("resource_a")).unwrap());
+  assert!(
+    BuildSourceCache {
+      resource: Some("resource_a").map(str::to_owned),
+      ..build.clone()
+    }
+    .run()
+    .unwrap()
+  );
   assert!(!first.join("stream/custom.ybn").exists());
   assert!(output.join("resources/resource_a/custom.ybn").is_file());
   assert!(second.join("streams/custom.ybn").exists());
@@ -304,14 +376,49 @@ fn moves_vanilla_files_retains_history_and_updates_only_selected_resources() {
   assert!(!build.run().unwrap());
 
   fs::write(empty.join("fxmanifest.lua"), b"changed manifest").unwrap();
-  assert!(build.run_selected(Some("empty_resource")).unwrap());
+  assert!(
+    BuildSourceCache {
+      resource: Some("empty_resource").map(str::to_owned),
+      ..build.clone()
+    }
+    .run()
+    .unwrap()
+  );
   fs::create_dir_all(empty.join("stream")).unwrap();
-  assert!(build.run_selected(Some("empty_resource")).unwrap());
+  assert!(
+    BuildSourceCache {
+      resource: Some("empty_resource").map(str::to_owned),
+      ..build.clone()
+    }
+    .run()
+    .unwrap()
+  );
   assert!(read_metadata().resource_checks["empty_resource"].has_stream);
-  assert!(!build.run_selected(Some("empty_resource")).unwrap());
+  assert!(
+    !BuildSourceCache {
+      resource: Some("empty_resource").map(str::to_owned),
+      ..build.clone()
+    }
+    .run()
+    .unwrap()
+  );
   fs::remove_dir_all(empty.join("stream")).unwrap();
-  assert!(build.run_selected(Some("empty_resource")).unwrap());
-  assert!(build.run_selected(Some("missing")).is_err());
+  assert!(
+    BuildSourceCache {
+      resource: Some("empty_resource").map(str::to_owned),
+      ..build.clone()
+    }
+    .run()
+    .unwrap()
+  );
+  assert!(
+    BuildSourceCache {
+      resource: Some("missing").map(str::to_owned),
+      ..build.clone()
+    }
+    .run()
+    .is_err()
+  );
   assert!(!build.run().unwrap());
   fs::remove_dir_all(&second).unwrap();
   assert!(build.run().unwrap());
@@ -325,7 +432,12 @@ fn moves_vanilla_files_retains_history_and_updates_only_selected_resources() {
   ambiguous.resources.insert("[duplicate]/resource_a".into(), duplicate);
   write_json(&output.join("source_cache_info.json"), &ambiguous).unwrap();
   let history_count = fs::read_dir(output.join("_old")).unwrap().count();
-  let error = build.run_selected(Some("resource_a")).unwrap_err();
+  let error = BuildSourceCache {
+    resource: Some("resource_a").map(str::to_owned),
+    ..build.clone()
+  }
+  .run()
+  .unwrap_err();
   assert!(error.to_string().contains("Ambiguous cached resource name"));
   assert!(output.join("resources/resource_a/nested/collision.ybn").is_file());
   assert_eq!(fs::read_dir(output.join("_old")).unwrap().count(), history_count);
@@ -339,11 +451,14 @@ fn moves_vanilla_files_retains_history_and_updates_only_selected_resources() {
   fs::create_dir_all(first.join("streams/nested")).unwrap();
   fs::write(first.join("streams/nested/collision.ybn"), b"conflicting streams").unwrap();
   assert!(
-    build
-      .run_selected(Some("resource_a"))
-      .unwrap_err()
-      .to_string()
-      .contains("Conflicting stream-relative cache paths")
+    BuildSourceCache {
+      resource: Some("resource_a").map(str::to_owned),
+      ..build.clone()
+    }
+    .run()
+    .unwrap_err()
+    .to_string()
+    .contains("Conflicting stream-relative cache paths")
   );
   assert_eq!(
     fs::read(output.join("resources/resource_a/nested/collision.ybn")).unwrap(),
@@ -365,7 +480,14 @@ fn moves_vanilla_files_retains_history_and_updates_only_selected_resources() {
   let retained_modified = fs::metadata(&retained_cache_path).unwrap().modified().unwrap();
   fs::remove_file(output.join("resources/resource_a/nested/collision.ybn")).unwrap();
 
-  assert!(build.run_selected(Some("resource_a")).unwrap());
+  assert!(
+    BuildSourceCache {
+      resource: Some("resource_a").map(str::to_owned),
+      ..build.clone()
+    }
+    .run()
+    .unwrap()
+  );
 
   let metadata_after_removal = read_metadata();
   let inventory_after = &metadata_after_removal.resources[cache_resource];
@@ -389,9 +511,23 @@ fn moves_vanilla_files_retains_history_and_updates_only_selected_resources() {
     }
   }
   assert!(!output.join("resources/resource_a/nested/collision.ybn").exists());
-  assert!(!build.run_selected(Some("resource_a")).unwrap());
+  assert!(
+    !BuildSourceCache {
+      resource: Some("resource_a").map(str::to_owned),
+      ..build.clone()
+    }
+    .run()
+    .unwrap()
+  );
   fs::write(output.join("resources/resource_a/unrecorded.ybn"), b"unrecorded").unwrap();
-  assert!(build.run_selected_excluding(None, &["resource_a".into()]).unwrap());
+  assert!(
+    BuildSourceCache {
+      exclusions: Some(vec!["resource_a".into()]),
+      ..build.clone()
+    }
+    .run()
+    .unwrap()
+  );
   let excluded = read_metadata();
   assert!(!excluded.resources.contains_key(cache_resource));
   assert!(!excluded.source_inputs.keys().any(|key| key.starts_with("[changed]/resource_a/")));

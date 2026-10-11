@@ -54,7 +54,26 @@ pub(super) fn inventory_for(
   cache: &Path,
   resource: &str,
 ) -> Result<Inventory> {
-  inventory_selected(source, cache, Some(resource))
+  let exact = inventory_selected(source, cache, Some(resource))?;
+  if !exact.is_empty() || resource.contains('/') {
+    return Ok(exact);
+  }
+  let root = source.canonicalize()?;
+  let matches = get_resource_directories(&root)?
+    .into_iter()
+    .filter(|path| path.file_name().and_then(|name| name.to_str()) == Some(resource))
+    .collect::<Vec<_>>();
+  if matches.len() > 1 {
+    return Err(
+      format!("Ambiguous light resource name {resource}; specify its source-relative group path")
+        .into(),
+    );
+  }
+  let Some(path) = matches.first() else {
+    return Ok(exact);
+  };
+  let id = path.strip_prefix(&root)?.to_string_lossy().replace('\\', "/");
+  inventory_selected(source, cache, Some(&id))
 }
 
 fn inventory_selected(

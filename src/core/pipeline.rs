@@ -1,13 +1,10 @@
 use super::{
   deploy::{Deploy, DeploySummary},
   source_cache::BuildSourceCache,
-  vanilla::{GenerateVanilla, load_manifest},
+  vanilla::GenerateVanilla,
   vanilla_cache::BuildVanillaCache,
 };
-use std::{
-  fs,
-  path::{Component, Path, PathBuf},
-};
+use std::path::{Component, Path, PathBuf};
 
 /// Executes the cached vanilla, source, merge and deployment stages in order.
 #[derive(Debug, Clone)]
@@ -22,6 +19,10 @@ pub struct Pipeline {
   pub vanilla_cache_dir: PathBuf,
   /// Derived source artifact directory.
   pub source_cache_dir: PathBuf,
+  /// Resource-local edit documents consumed by merge.
+  pub overwrite_dir: PathBuf,
+  /// Explicit exclusions; `None` inherits saved settings and an empty list clears them.
+  pub exclusions: Option<Vec<String>>,
   /// Intermediate merged artifact directory.
   pub merged_dir: PathBuf,
   /// Final deployment directory.
@@ -33,7 +34,7 @@ pub struct Pipeline {
 impl Pipeline {
   /// Runs necessary extraction, derived caches, incremental merge and deployment.
   ///
-  /// The CLI initializes the shared logger before calling this method.
+  /// The executable initializes the shared logger before calling this method.
   ///
   /// ```no_run
   /// use mlo_merger::core::pipeline::Pipeline;
@@ -41,108 +42,32 @@ impl Pipeline {
   ///   source_dir: "asset/source".into(), game_dir: "/mnt/gtav".into(),
   ///   vanilla_dir: "asset/vanilla".into(), vanilla_cache_dir: "asset/vanilla-cache".into(),
   ///   source_cache_dir: "asset/source-cache".into(), merged_dir: "asset/merged".into(),
+  ///   overwrite_dir: "asset/overwrite".into(), exclusions: None,
   ///   output_dir: "merged_mlo".into(), force: false,
   /// }.run()?;
   /// # Ok::<(), Box<dyn std::error::Error>>(())
   /// ```
   pub fn run(&self) -> Result<DeploySummary, Box<dyn std::error::Error>> {
-    crate::core::config::matching::with_config(|| {
-      self.run_with_generation(GenerateVanilla::run_with_initialized_logger)
-    })?
+    crate::core::config::matching::with_config(|| self.run_steps())?
   }
 
-  /// Runs the pipeline with explicit source exclusions saved for later cache updates.
-  /// An empty list clears the saved exclusions.
-  pub fn run_excluding(
-    &self,
-    exclusions: &[String],
-  ) -> Result<DeploySummary, Box<dyn std::error::Error>> {
-    crate::core::config::matching::with_config(|| {
-      self.run_with_generation_excluding(
-        GenerateVanilla::run_with_initialized_logger,
-        Some(exclusions),
-      )
-    })?
-  }
-
-  /// Runs resource-local light edits from the specified overwrite directory.
-  /// Source exclusions are inherited when `exclusions` is absent.
-  ///
-  /// ```no_run
-  /// # fn apply(pipeline: &mlo_merger::core::pipeline::Pipeline) -> Result<(), Box<dyn std::error::Error>> {
-  /// pipeline.run_with_overwrite(std::path::Path::new("asset/overwrite"), None)?;
-  /// # Ok(()) }
-  /// ```
-  pub fn run_with_overwrite(
-    &self,
-    overwrite_dir: &Path,
-    exclusions: Option<&[String]>,
-  ) -> Result<DeploySummary, Box<dyn std::error::Error>> {
-    crate::core::config::matching::with_config(|| {
-      self.run_with_options(GenerateVanilla::run_with_initialized_logger, exclusions, overwrite_dir)
-    })?
-  }
-
-  fn run_with_generation(
-    &self,
-    generate: impl FnOnce(&GenerateVanilla) -> Result<(), Box<dyn std::error::Error>>,
-  ) -> Result<DeploySummary, Box<dyn std::error::Error>> {
-    self.run_with_generation_excluding(generate, None)
-  }
-
-  fn run_with_generation_excluding(
-    &self,
-    generate: impl FnOnce(&GenerateVanilla) -> Result<(), Box<dyn std::error::Error>>,
-    exclusions: Option<&[String]>,
-  ) -> Result<DeploySummary, Box<dyn std::error::Error>> {
-    self.run_with_options(generate, exclusions, Path::new("asset/overwrite"))
-  }
-
-  fn run_with_options(
-    &self,
-    generate: impl FnOnce(&GenerateVanilla) -> Result<(), Box<dyn std::error::Error>>,
-    exclusions: Option<&[String]>,
-    overwrite_dir: &Path,
-  ) -> Result<DeploySummary, Box<dyn std::error::Error>> {
+  fn run_steps(&self) -> Result<DeploySummary, Box<dyn std::error::Error>> {
     if !self.source_dir.is_dir() {
       return Err(
         format!("Source resource directory does not exist: {}", self.source_dir.display()).into(),
       );
     }
     self.validate_paths()?;
-    let overwrite = absolute_path(overwrite_dir)?;
-    for path in [
-      &self.vanilla_dir,
-      &self.vanilla_cache_dir,
-      &self.source_cache_dir,
-      &self.merged_dir,
-      &self.output_dir,
-    ] {
-      let path = absolute_path(path)?;
-      if overwrite.starts_with(&path) || path.starts_with(&overwrite) {
-        return Err("Overwrite directory overlaps a pipeline artifact directory".into());
-      }
+
+    log::info!("Pipeline: generate-vanilla");
+    GenerateVanilla {
+      game_dir: self.game_dir.clone(),
+      output_dir: self.vanilla_dir.clone(),
+      gamebuild: None,
+      reuse_existing: true,
     }
-    if !self.vanilla_dir.join("cache_info.json").is_file() {
-      if self.vanilla_dir.is_dir() && fs::read_dir(&self.vanilla_dir)?.next().is_some() {
-        return Err(
-          "Vanilla directory is nonempty but has no manifest; refusing automatic replacement"
-            .into(),
-        );
-      }
-      if !self.game_dir.is_dir() {
-        return Err(format!("Vanilla archive is missing; specify --game-dir with an installed GTA V directory (current: {})", self.game_dir.display()).into());
-      }
-      log::info!("Pipeline: generate-vanilla");
-      generate(&GenerateVanilla {
-        game_dir: self.game_dir.clone(),
-        output_dir: self.vanilla_dir.clone(),
-        gamebuild: None,
-      })?;
-    } else {
-      load_manifest(&self.vanilla_dir)?;
-      log::info!("Pipeline: reusing existing vanilla archive");
-    }
+    .run()?;
+
     log::info!("Pipeline: generate-vanilla-cache");
     BuildVanillaCache {
       vanilla_dir: self.vanilla_dir.clone(),
@@ -151,19 +76,19 @@ impl Pipeline {
       force: self.force,
     }
     .run()?;
+
     log::info!("Pipeline: generate-source-cache");
     let source_cache = BuildSourceCache {
       source_dir: self.source_dir.clone(),
       output_dir: self.source_cache_dir.clone(),
       vanilla_dir: self.vanilla_dir.clone(),
       vanilla_cache_dir: self.vanilla_cache_dir.clone(),
+      resource: None,
+      exclusions: self.exclusions.clone(),
       force: self.force,
     };
-    if let Some(exclusions) = exclusions {
-      source_cache.run_selected_excluding(None, exclusions)?;
-    } else {
-      source_cache.run()?;
-    }
+    source_cache.run()?;
+
     log::info!("Pipeline: merge");
     super::merge::merge::run_with_overwrite(
       &self.source_dir,
@@ -172,8 +97,9 @@ impl Pipeline {
       &self.source_cache_dir,
       &self.merged_dir,
       self.force,
-      overwrite_dir,
+      &self.overwrite_dir,
     )?;
+
     log::info!("Pipeline: deploy");
     Deploy {
       merged_dir: self.merged_dir.clone(),
@@ -184,21 +110,24 @@ impl Pipeline {
     .run()
   }
 
+  /// Source nesting is intentional: source can be `resources` while execution and
+  /// generated artifacts live under `resources/mlo_merged`. Only artifact/edit
+  /// paths are checked for overlap; the source root is excluded from this list.
   fn validate_paths(&self) -> Result<(), Box<dyn std::error::Error>> {
     let paths = [
-      // ("source", &self.source_dir),
       ("vanilla", &self.vanilla_dir),
       ("vanilla-cache", &self.vanilla_cache_dir),
       ("source-cache", &self.source_cache_dir),
       ("merged", &self.merged_dir),
       ("deployment", &self.output_dir),
+      ("overwrite", &self.overwrite_dir),
     ]
     .into_iter()
     .map(|(name, path)| Ok((name, absolute_path(path)?)))
     .collect::<Result<Vec<_>, std::io::Error>>()?;
     let workspace = std::env::current_dir()?.canonicalize()?;
     for (index, (name, path)) in paths.iter().enumerate() {
-      if index != 0 && workspace.starts_with(path) {
+      if *name != "vanilla" && workspace.starts_with(path) {
         return Err(format!("Pipeline {name} output overlaps the workspace").into());
       }
       for (other_name, other) in paths.iter().skip(index + 1) {
@@ -258,6 +187,7 @@ mod tests {
   };
   use sha2::{Digest, Sha256};
   use std::collections::BTreeMap;
+  use std::fs;
 
   #[test]
   fn pipeline_routes_resources_through_merge_and_deploy_and_reuses_vanilla() {
@@ -269,6 +199,8 @@ mod tests {
       vanilla_dir: root.join("vanilla"),
       vanilla_cache_dir: root.join("vanilla-cache"),
       source_cache_dir: root.join("source-cache"),
+      overwrite_dir: root.join("overwrite"),
+      exclusions: None,
       merged_dir: root.join("merged"),
       output_dir: root.join("merged_mlo"),
       force: false,
@@ -350,7 +282,7 @@ mod tests {
   }
 
   #[test]
-  fn pipeline_generates_vanilla_only_when_missing() {
+  fn pipeline_reuses_vanilla_and_persists_exclusions() {
     let root = std::env::temp_dir().join(format!("pipeline_generation_{}", std::process::id()));
     let _ = fs::remove_dir_all(&root);
     let pipeline = Pipeline {
@@ -359,6 +291,8 @@ mod tests {
       vanilla_dir: root.join("vanilla"),
       vanilla_cache_dir: root.join("vanilla-cache"),
       source_cache_dir: root.join("source-cache"),
+      overwrite_dir: root.join("overwrite"),
+      exclusions: Some(vec!["unused-resource".into()]),
       merged_dir: root.join("merged"),
       output_dir: root.join("output"),
       force: false,
@@ -366,34 +300,40 @@ mod tests {
     fs::create_dir_all(pipeline.source_dir.join("resource")).unwrap();
     fs::write(pipeline.source_dir.join("resource/fxmanifest.lua"), []).unwrap();
     fs::create_dir_all(&pipeline.game_dir).unwrap();
-    let mut generated = false;
-    pipeline
-      .run_with_generation(|request| {
-        generated = true;
-        assert_eq!(request.game_dir, pipeline.game_dir);
-        assert_eq!(request.output_dir, pipeline.vanilla_dir);
-        fs::create_dir_all(&request.output_dir)?;
-        write_json(
-          &request.output_dir.join("cache_info.json"),
-          &VanillaCacheManifest {
-            format_version: 1,
-            game_dir: request.game_dir.clone(),
-            versions: vec![CacheVersion {
-              id: "0000-base".into(),
-              parent: None,
-              archives: vec![],
-              changes: BTreeMap::new(),
-              unchanged: 0,
-            }],
-          },
-        )
-      })
-      .unwrap();
-    assert!(generated);
+    fs::create_dir_all(&pipeline.vanilla_dir).unwrap();
+    write_json(
+      &pipeline.vanilla_dir.join("cache_info.json"),
+      &VanillaCacheManifest {
+        format_version: 1,
+        game_dir: pipeline.game_dir.clone(),
+        versions: vec![CacheVersion {
+          id: "0000-base".into(),
+          parent: None,
+          archives: vec![],
+          changes: BTreeMap::new(),
+          unchanged: 0,
+        }],
+      },
+    )
+    .unwrap();
+    pipeline.run().unwrap();
     assert!(pipeline.output_dir.join("deploy_cache_info.json").is_file());
-    pipeline
-      .run_with_generation(|_| panic!("Existing vanilla must not be extracted again"))
-      .unwrap();
+    let mut overlapping = pipeline.clone();
+    overlapping.overwrite_dir = pipeline.merged_dir.join("edits");
+    assert!(overlapping.run().unwrap_err().to_string().contains("Pipeline paths overlap"));
+    pipeline.run().unwrap();
+    let exclusions_path = pipeline.source_cache_dir.join("source_exclusions.json");
+    let saved = || {
+      serde_json::from_reader::<_, Vec<String>>(fs::File::open(&exclusions_path).unwrap()).unwrap()
+    };
+    assert_eq!(saved(), ["unused-resource"]);
+    let mut inherited = pipeline.clone();
+    inherited.exclusions = None;
+    inherited.run().unwrap();
+    assert_eq!(saved(), ["unused-resource"]);
+    inherited.exclusions = Some(Vec::new());
+    inherited.run().unwrap();
+    assert!(saved().is_empty());
     fs::remove_dir_all(root).unwrap();
   }
 
@@ -408,6 +348,8 @@ mod tests {
       vanilla_dir: root.join("vanilla"),
       vanilla_cache_dir: root.join("vanilla-cache"),
       source_cache_dir: root.join("source-cache"),
+      overwrite_dir: root.join("overwrite"),
+      exclusions: None,
       merged_dir: root.join("merged"),
       output_dir: root.join("output"),
       force: false,
@@ -422,7 +364,25 @@ mod tests {
     assert_eq!(fs::read(pipeline.vanilla_dir.join("keep.txt")).unwrap(), b"keep");
     let mut overlapping = pipeline.clone();
     overlapping.output_dir = pipeline.source_dir.clone();
-    assert!(overlapping.run().unwrap_err().to_string().contains("Pipeline paths overlap"));
+    assert!(overlapping.validate_paths().is_ok());
+    let mut nested = pipeline.clone();
+    nested.source_dir = root.clone();
+    assert!(nested.validate_paths().is_ok());
+    for artifact in [
+      &pipeline.vanilla_dir,
+      &pipeline.vanilla_cache_dir,
+      &pipeline.source_cache_dir,
+      &pipeline.merged_dir,
+      &pipeline.output_dir,
+    ] {
+      for overwrite in [artifact.clone(), artifact.join("edits"), root.clone()] {
+        let mut overlapping = pipeline.clone();
+        overlapping.overwrite_dir = overwrite;
+        assert!(
+          overlapping.validate_paths().unwrap_err().to_string().contains("Pipeline paths overlap")
+        );
+      }
+    }
     assert!(!pipeline.vanilla_cache_dir.exists());
     let mut overlapping = pipeline.clone();
     overlapping.merged_dir = pipeline.source_cache_dir.join("nested");

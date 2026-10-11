@@ -8,11 +8,12 @@
 - [x] Dispatch stream files to separate format-specific workflows by extension; initially support YMAP and YBN without forcing them through one diff implementation.
 - [x] Run the full pipeline by default without an operation flag: generate missing vanilla, update vanilla-cache/source-cache, merge and deploy; connect `-i` to source resources and `-o` to deployment.
 - [x] Share one pipeline logger, reuse valid raw vanilla, validate artifact path separation before processing, and retain derived-stage freshness checks.
-- [ ] Define stable internal step names matching the artifact stages: `vanilla`, `vanilla-cache`, `source-cache`, and `merge`.
-- [ ] Let every command run its required prerequisite steps, skipping valid outputs; support selecting individual stages with `--step-name` and define whether multiple names are accepted.
-- [ ] Use `-f` to force regeneration of the command's own stage only; prerequisite stages still use normal freshness checks unless explicitly forced.
-- [ ] Accept `-y` on all pipeline commands for non-interactive execution.
-- [ ] Support custom artifact paths through options such as `--vanilla`, `--vanilla-cache`, and `--source-cache`; default generated command output to `-o .`.
+- [x] Delegate raw vanilla generation/reuse to GenerateVanilla, keep pipeline steps visually separated, and unify overwrite/artifact overlap validation while allowing source nesting.
+- [x] Define stable internal step names matching the artifact stages: `vanilla`, `vanilla-cache`, `source-cache`, and `merge`.
+- [x] Let every command run its required prerequisite steps, skipping valid outputs; support selecting individual stages with `--step-name` and define whether multiple names are accepted.
+- [x] Use `-f` to force regeneration of the command's own stage only; prerequisite stages still use normal freshness checks unless explicitly forced.
+- [x] Accept `-y` on all pipeline commands for non-interactive execution.
+- [x] Support custom artifact paths through options such as `--vanilla`, `--vanilla-cache`, and `--source-cache`; default generated command output to `-o .`.
 - [ ] Support `--gamebuild` as either a named build/version or a number. Treat it as an upper bound: ignore vanilla versions after the selected version even when their files are present; define normalization and ordering for both forms.
 - [ ] Track source inputs, relevant settings, upstream cache revisions and generated outputs per stage so only affected work is rerun. Invalidate stale results when inputs are removed, outputs are missing, or relevant settings/upstream revisions change.
 - [ ] Define the incremental-run manifest, log retention, and which timestamp/fingerprint is authoritative for each artifact.
@@ -129,11 +130,15 @@
 
 - [x] Define a light-only JSON contract with numeric properties, resource-local LOD/distant references, influence OBB/AABBs and generated TypeScript types.
 - [x] Add cached on-demand `--to-json` exports with input/output fingerprints and dependency-aware freshness.
+- [x] Accept unique resource names in `--to-json`, retaining canonical grouped IDs and rejecting ambiguous names.
 - [x] Retain exact grouped resource IDs in the original file-bounds R-tree, keeping light influence calculations separate in on-demand JSON exports.
 - [x] Read typed resource-local light removals from `overwrite/**/*.diff.json` during merge/pipeline, preserving other resource providers.
 - [x] Validate snapshot/file identity, compact related arrays together, and support edited custom YMAPs without changing source/cache bytes.
 - [x] Track edits in incremental merge freshness and include replaced custom source paths in deployment omission provenance.
 - [x] Cache validated overwrite preparation with mtime/size/SHA-256 checks, invalidate on diff/source/topology changes, and commit only after successful merge.
+- [x] Keep overwrite configuration in the core Pipeline alongside other input paths, without a separate compatibility execution API.
+- [x] Store optional exclusions in Pipeline configuration and use a single execution API, preserving saved-setting inheritance and explicit clearing.
+- [x] Unify source-cache execution with resource selection and exclusions in BuildSourceCache configuration.
 - [ ] Implement the separate FiveM resource and validate in-game selection/rendering.
 - [ ] Extend the editor contract beyond light removals; generic post-merge overwrite application remains separate.
 

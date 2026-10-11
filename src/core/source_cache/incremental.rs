@@ -27,11 +27,8 @@ use crate::core::{
   vanilla_cache::BuildVanillaCache,
 };
 
-pub(super) fn run(
-  build: &BuildSourceCache,
-  selection: Option<&str>,
-  exclusions: Option<&[String]>,
-) -> Result<bool> {
+pub(super) fn run(build: &BuildSourceCache) -> Result<bool> {
+  let selection = build.resource.as_deref();
   let source_dir = build.source_dir.canonicalize()?;
   let output = prepare_output_path(&build.output_dir)?;
   let exclusions_path = output.join(EXCLUSIONS_FILE);
@@ -41,7 +38,7 @@ pub(super) fn run(
   } else {
     Vec::new()
   };
-  let exclusions = match exclusions {
+  let exclusions = match build.exclusions.as_deref() {
     Some(patterns) => parse_exclusions(&patterns.join(","))?,
     None => parse_exclusions(&saved_exclusions.join(","))?,
   };

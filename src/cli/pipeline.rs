@@ -1,6 +1,5 @@
 use super::common::{self, CommonOptions};
 use bpaf::*;
-use simplelog::{ColorChoice, CombinedLogger, Config, LevelFilter, TermLogger, TerminalMode};
 use std::path::PathBuf;
 
 /// Arguments for the default vanilla-to-deployment pipeline.
@@ -51,7 +50,7 @@ pub fn parser() -> impl Parser<Pipeline> {
   )
 }
 
-/// Runs all cached stages with one logger and deployment-scoped `-o`.
+/// Runs all cached stages with deployment-scoped `-o`.
 pub fn run(command: Pipeline) -> Result<(), Box<dyn std::error::Error>> {
   if !command.common.step_names.is_empty() {
     return Err("--step-name selection is not implemented for the default pipeline; use an explicit operation".into());
@@ -59,22 +58,19 @@ pub fn run(command: Pipeline) -> Result<(), Box<dyn std::error::Error>> {
   if command.common.gamebuild.is_some() {
     return Err("--gamebuild ceilings are not implemented across the default pipeline; generate a limited vanilla archive explicitly".into());
   }
-  CombinedLogger::init(vec![
-    TermLogger::new(LevelFilter::Info, Config::default(), TerminalMode::Mixed, ColorChoice::Auto),
-    crate::core::vanilla::version_logger(),
-  ])?;
   let pipeline = crate::core::pipeline::Pipeline {
     source_dir: command.source_dir,
     game_dir: command.game_dir,
     vanilla_dir: command.common.vanilla,
     vanilla_cache_dir: command.common.vanilla_cache,
     source_cache_dir: command.common.source_cache,
+    overwrite_dir: command.overwrite_dir,
+    exclusions: command.exclusions,
     merged_dir: command.merged_dir,
     output_dir: command.common.output,
     force: command.common.force,
   };
-  let result =
-    pipeline.run_with_overwrite(&command.overwrite_dir, command.exclusions.as_deref())?;
+  let result = pipeline.run()?;
   println!(
     "Pipeline complete: {} files deployed; {} unchanged; {} removed.",
     result.copied, result.skipped, result.removed

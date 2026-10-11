@@ -99,6 +99,8 @@ fn run_inner(
     output_dir: source_cache_dir.to_path_buf(),
     vanilla_dir: vanilla_dir.clone(),
     vanilla_cache_dir: vanilla_cache_dir.to_path_buf(),
+    resource: None,
+    exclusions: None,
     force: false,
   }
   .run()?;

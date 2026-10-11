@@ -208,35 +208,32 @@ pub struct BuildSourceCache {
   pub vanilla_dir: PathBuf,
   /// Derived latest files and YMAP relationship index.
   pub vanilla_cache_dir: PathBuf,
+  /// One resource name or source-relative path; `None` updates all resources.
+  pub resource: Option<String>,
+  /// Explicit exclusions; `None` inherits saved settings and an empty list clears them.
+  pub exclusions: Option<Vec<String>>,
   /// Rebuilds even when all inputs and upstream revisions are current.
   pub force: bool,
 }
 
 impl BuildSourceCache {
-  /// Updates one named resource, or all discovered resources when no name is supplied.
-  pub fn run_selected(
-    &self,
-    resource: Option<&str>,
-  ) -> Result<bool> {
-    incremental::run(self, resource, None)
-  }
-
-  /// Updates selected resources with explicit exclusions, saving them for subsequent runs.
+  /// Updates configured resources and exclusions, skipping unchanged inputs.
   ///
-  /// Patterns match case-insensitive substrings of source-relative resource paths.
-  /// An empty list clears saved exclusions. Existing excluded inventories are
-  /// removed and their active cache files are retained under `_old/`.
-  pub fn run_selected_excluding(
-    &self,
-    resource: Option<&str>,
-    exclusions: &[String],
-  ) -> Result<bool> {
-    incremental::run(self, resource, Some(exclusions))
-  }
-
-  /// Builds an inventory and conflict report, skipping when inputs are unchanged.
+  /// Exclusions match case-insensitive substrings of source-relative resource paths.
+  /// An empty list clears saved exclusions; `None` inherits them. Excluded active
+  /// cache files are retained under `_old/`.
+  ///
+  /// ```no_run
+  /// use mlo_merger::core::source_cache::BuildSourceCache;
+  /// BuildSourceCache {
+  ///   source_dir: "asset/source".into(), output_dir: "asset/source-cache".into(),
+  ///   vanilla_dir: "asset/vanilla".into(), vanilla_cache_dir: "asset/vanilla-cache".into(),
+  ///   resource: Some("maps".into()), exclusions: None, force: false,
+  /// }.run()?;
+  /// # Ok::<(), Box<dyn std::error::Error>>(())
+  /// ```
   pub fn run(&self) -> Result<bool> {
-    self.run_selected(None)
+    incremental::run(self)
   }
 }
 

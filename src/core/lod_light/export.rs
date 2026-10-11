@@ -14,7 +14,7 @@ const EXPORT_VERSION: u32 = 3;
 pub struct ExportLights {
   /// Native YMAP path from the live resource or active source cache.
   pub input: PathBuf,
-  /// Exact resource identifier, including bracket groups when present.
+  /// Unique resource name or exact source-relative identifier, including bracket groups.
   pub resource: String,
   /// Root containing the FiveM source resources.
   pub source_dir: PathBuf,
@@ -77,7 +77,7 @@ impl ExportLights {
   pub fn run(&self) -> Result<ExportLightResult> {
     safe_relative(&self.resource)?;
     let inventory = inventory_for(&self.source_dir, &self.source_cache_dir, &self.resource)?;
-    let files = inventory.get(&self.resource).ok_or("Unknown or excluded light resource")?;
+    let (resource, files) = inventory.iter().next().ok_or("Unknown or excluded light resource")?;
     reject_symlinks(&self.input)?;
     let input = self.input.canonicalize()?;
     let mut targets = files.iter().filter_map(|(relative, file)| {
@@ -87,7 +87,7 @@ impl ExportLights {
     if targets.next().is_some() {
       return Err("Ambiguous light input".into());
     }
-    let output = self.output_dir.join(&self.resource).join(format!("{target}.json"));
+    let output = self.output_dir.join(resource).join(format!("{target}.json"));
     reject_symlinks(&output)?;
     if files.values().any(|file| file.path == output) {
       return Err("JSON would overwrite source input".into());
@@ -174,7 +174,7 @@ impl ExportLights {
       .iter()
       .map(|path| Ok((path.clone(), read_map(&files[path])?)))
       .collect::<Result<BTreeMap<_, _>>>()?;
-    let document = document(&self.resource, target, &maps, &fingerprints)?;
+    let document = document(resource, target, &maps, &fingerprints)?;
     verify_inputs(files, &inputs)?;
     atomic_json(&output, &document)?;
     atomic_json(

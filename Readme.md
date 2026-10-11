@@ -31,7 +31,9 @@ the vanilla and source caches, merges, then deploys. Unchanged stages are reused
 **Source-cache generation moves vanilla-named YMAP/YBN files out of resource
 stream directories.** They remain available in the source cache; unmatched files
 stay in the original resources. Resource names must be unique across groups.
-Overlapping input and artifact directories are rejected.
+Overlapping artifact and overwrite directories are rejected. The source root
+can contain them: for example, use `resources` as source while running the tool
+from `resources/mlo_merged`.
 
 Pipeline `-f` forces the derived caches, merge and deployment, but reuses an
 existing raw vanilla archive. Pipeline-wide `--gamebuild` and `--step-name`
@@ -103,13 +105,15 @@ are in [.cargo/config.toml](.cargo/config.toml).
 ### Export And Remove LOD Lights
 
 ```bash
-mlo_merger --to-json 'asset/source/[group]/maps/stream/nested/map_lodlights.ymap' --resource '[group]/maps'
+mlo_merger --to-json 'asset/source/[group]/resource_name/stream/nested/map_lodlights.ymap' --resource 'resource_name'
 mlo_merger --merge --overwrite-dir asset/overwrite
 ```
 
 `--to-json` exports a light-only view, not the complete YMAP. Use paths and
 resource IDs from the R-tree `source` entries; active source-cache paths also
-work. Output defaults to
+work. `--resource` also accepts a unique resource name without bracket groups;
+ambiguous names require the full source-relative ID. JSON identity and output
+paths always retain the full resource ID. Output defaults to
 `asset/read_cache/ymap/<resource>/<stream-relative-path>.json`.
 The sidecar caches input/output mtime, size, SHA-256 and light relationships;
 unchanged exports skip native parsing and JSON writing. `-f` forces verification

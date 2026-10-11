@@ -5,6 +5,35 @@ use std::collections::BTreeMap;
 mod fixtures;
 use fixtures::{fixture, native_catalog, native_resources};
 
+#[test]
+fn export_accepts_unique_resource_basename_and_preserves_canonical_identity() {
+  use std::fs;
+  let root = std::env::temp_dir().join(format!("light_resource_name_{}", std::process::id()));
+  let _ = fs::remove_dir_all(&root);
+  let source = native_resources(&root, &["[group]/resource"]);
+  let mut command = ExportLights {
+    input: source.join("[group]/resource/stream/nested/parent.ymap"),
+    resource: "resource".into(),
+    source_dir: source.clone(),
+    source_cache_dir: root.join("cache"),
+    output_dir: root.join("json"),
+    force: false,
+  };
+  let result = command.run().unwrap();
+  let document: YmapLightDocument =
+    serde_json::from_reader(fs::File::open(&result.path).unwrap()).unwrap();
+  assert_eq!(document.resource, "[group]/resource");
+  assert_eq!(result.path, root.join("json/[group]/resource/nested/parent.ymap.json"));
+  command.resource = "[group]/resource".into();
+  assert!(command.run().unwrap().skipped);
+  native_resources(&root, &["[other]/resource"]);
+  command.resource = "resource".into();
+  assert!(command.run().unwrap_err().to_string().contains("Ambiguous light resource name"));
+  command.resource = "[group]/resource".into();
+  assert!(command.run().is_ok());
+  fs::remove_dir_all(root).unwrap();
+}
+
 #[path = "overwrite_cache_tests.rs"]
 mod overwrite_cache_tests;
 

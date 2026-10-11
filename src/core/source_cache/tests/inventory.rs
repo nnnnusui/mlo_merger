@@ -37,9 +37,18 @@ fn builds_source_inventory_and_skips_unchanged_inputs_without_diffing() {
     output_dir: output.clone(),
     vanilla_dir: vanilla.clone(),
     vanilla_cache_dir: derived.clone(),
+    resource: None,
+    exclusions: None,
     force: false,
   };
-  assert!(build().run_selected_excluding(None, &["resource_b".into()]).unwrap());
+  assert!(
+    BuildSourceCache {
+      exclusions: Some(vec!["resource_b".into()]),
+      ..build()
+    }
+    .run()
+    .unwrap()
+  );
   assert!(second_resource.join("stream/unmatched.ymap").is_file());
   assert!(!build().run().unwrap());
   let excluded_info: SourceCacheMetadata =
@@ -51,14 +60,35 @@ fn builds_source_inventory_and_skips_unchanged_inputs_without_diffing() {
   let excluded_report: SourceCacheConflictReport =
     serde_json::from_reader(fs::File::open(output.join("stream_conflicts.json")).unwrap()).unwrap();
   assert!(excluded_report.source_conflicts.unwrap().is_empty());
-  assert!(build().run_selected(Some("resource_b")).is_err());
-  assert!(build().run_selected_excluding(None, &["resource_".into()]).unwrap());
+  assert!(
+    BuildSourceCache {
+      resource: Some("resource_b".into()),
+      ..build()
+    }
+    .run()
+    .is_err()
+  );
+  assert!(
+    BuildSourceCache {
+      exclusions: Some(vec!["resource_".into()]),
+      ..build()
+    }
+    .run()
+    .unwrap()
+  );
   let empty_info: SourceCacheMetadata =
     serde_json::from_reader(fs::File::open(output.join("source_cache_info.json")).unwrap())
       .unwrap();
   assert!(empty_info.resources.is_empty());
   assert!(!build().run().unwrap());
-  assert!(build().run_selected_excluding(None, &[]).unwrap());
+  assert!(
+    BuildSourceCache {
+      exclusions: Some(Vec::new()),
+      ..build()
+    }
+    .run()
+    .unwrap()
+  );
   assert!(output.join("source_cache_info.json").is_file());
   assert!(output.join("stream_conflicts.json").is_file());
   assert!(output.join("vanilla_ymaps_to_read.json").is_file());

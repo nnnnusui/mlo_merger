@@ -19,6 +19,13 @@ input is controlled by `-i`; final deployment output by `-o`. Intermediate cache
 and merged output have independent paths. All artifact paths are checked for
 overlap before any stage mutates data, and stages stop on the first error.
 
+The pipeline sequences stages without inspecting their storage formats.
+GenerateVanilla owns raw-archive validation and the generate-or-reuse decision;
+explicit vanilla generation can still rebuild an existing archive. Overwrite
+and artifact paths share one overlap check. Source nesting is intentionally
+allowed for execution and artifacts under `resources/mlo_merged` with `resources`
+as the source root.
+
 Each stage retains its own freshness and prerequisite checks. Pipeline force
 applies to derived stages, not existing raw vanilla. Explicit stage selection
 and a pipeline-wide gamebuild ceiling remain unimplemented.

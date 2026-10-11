@@ -1,7 +1,6 @@
 use std::path::PathBuf;
 
 use bpaf::*;
-use simplelog::{ColorChoice, CombinedLogger, Config, LevelFilter, TermLogger, TerminalMode};
 
 use super::common::{self, CommonOptions};
 
@@ -38,12 +37,6 @@ pub fn parser() -> impl Parser<Merge> {
 
 /// Merges supported source changes into the latest vanilla stream files.
 pub fn run(command: Merge) -> Result<(), Box<dyn std::error::Error>> {
-  CombinedLogger::init(vec![TermLogger::new(
-    LevelFilter::Info,
-    Config::default(),
-    TerminalMode::Mixed,
-    ColorChoice::Auto,
-  )])?;
   crate::core::merge::merge::run_with_overwrite(
     &command.source_dir,
     &command.common.vanilla,

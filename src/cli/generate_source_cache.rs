@@ -1,7 +1,6 @@
 use std::path::PathBuf;
 
 use bpaf::*;
-use simplelog::{ColorChoice, CombinedLogger, Config, LevelFilter, TermLogger, TerminalMode};
 
 use super::common::{self, CommonOptions};
 
@@ -51,24 +50,16 @@ pub(crate) fn exclusions_parser() -> impl Parser<Option<Vec<String>>> {
 
 /// Builds or reuses the source-derived conflict cache.
 pub fn run(command: GenerateSourceCache) -> Result<(), Box<dyn std::error::Error>> {
-  CombinedLogger::init(vec![TermLogger::new(
-    LevelFilter::Info,
-    Config::default(),
-    TerminalMode::Mixed,
-    ColorChoice::Auto,
-  )])?;
   let build = crate::core::source_cache::BuildSourceCache {
     source_dir: command.source_dir,
     output_dir: command.common.output,
     vanilla_dir: command.common.vanilla,
     vanilla_cache_dir: command.common.vanilla_cache,
+    resource: command.resource,
+    exclusions: command.exclusions,
     force: command.common.force,
   };
-  let rebuilt = if let Some(exclusions) = &command.exclusions {
-    build.run_selected_excluding(command.resource.as_deref(), exclusions)?
-  } else {
-    build.run_selected(command.resource.as_deref())?
-  };
+  let rebuilt = build.run()?;
   if rebuilt {
     println!("Generated source cache.");
   } else {

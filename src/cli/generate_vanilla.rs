@@ -32,6 +32,7 @@ pub fn run(command: GenerateVanilla) -> Result<(), Box<dyn std::error::Error>> {
     game_dir: command.game_dir,
     output_dir: command.common.output,
     gamebuild: command.common.gamebuild,
+    reuse_existing: false,
   }
   .run()
 }

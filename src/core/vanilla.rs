@@ -2,8 +2,6 @@
 
 use std::{error::Error, path::PathBuf};
 
-use simplelog::{ColorChoice, CombinedLogger, Config, LevelFilter, TermLogger, TerminalMode};
-
 mod archives;
 mod generate;
 mod hash_index;
@@ -41,21 +39,52 @@ pub struct GenerateVanilla {
   pub output_dir: PathBuf,
   /// Optional final installed version/stage to include.
   pub gamebuild: Option<String>,
+  /// Reuses a valid existing archive; otherwise generates only into an empty destination.
+  pub reuse_existing: bool,
 }
 
 impl GenerateVanilla {
-  /// Loads CodeWalker.Core and generates the requested vanilla archive prefix.
+  /// Reuses an archive when configured, or loads CodeWalker to generate it.
+  ///
+  /// Reuse validates the existing archive without requiring an installed game or
+  /// loading the bridge. `gamebuild` selects extraction stages only when generating.
+  /// Logger initialization belongs to the calling application.
+  ///
+  /// ```no_run
+  /// mlo_merger::core::vanilla::GenerateVanilla {
+  ///   game_dir: "/mnt/gtav".into(), output_dir: "asset/vanilla".into(),
+  ///   gamebuild: None, reuse_existing: true,
+  /// }.run()?;
+  /// # Ok::<(), Box<dyn std::error::Error>>(())
+  /// ```
   pub fn run(&self) -> std::result::Result<(), Box<dyn Error>> {
-    CombinedLogger::init(vec![
-      TermLogger::new(LevelFilter::Info, Config::default(), TerminalMode::Mixed, ColorChoice::Auto),
-      version_logger(),
-    ])?;
-
-    self.run_with_initialized_logger()
+    self.run_with_generation(|| self.generate())
   }
 
-  /// Generates the archive when the caller already owns the shared pipeline logger.
-  pub(crate) fn run_with_initialized_logger(&self) -> std::result::Result<(), Box<dyn Error>> {
+  fn run_with_generation(
+    &self,
+    generate: impl FnOnce() -> Result<()>,
+  ) -> Result<()> {
+    if self.reuse_existing {
+      if self.output_dir.join("cache_info.json").is_file() {
+        load_manifest(&self.output_dir)?;
+        log::info!("Reusing existing vanilla archive");
+        return Ok(());
+      }
+      if self.output_dir.is_dir() && std::fs::read_dir(&self.output_dir)?.next().is_some() {
+        return Err(
+          "Vanilla directory is nonempty but has no manifest; refusing automatic replacement"
+            .into(),
+        );
+      }
+      if !self.game_dir.is_dir() {
+        return Err(format!("Vanilla archive is missing; specify --game-dir with an installed GTA V directory (current: {})", self.game_dir.display()).into());
+      }
+    }
+    generate()
+  }
+
+  fn generate(&self) -> Result<()> {
     let bridge_dll =
       std::env::var_os("CODEWALKER_BRIDGE_DLL").map(PathBuf::from).unwrap_or_else(|| {
         PathBuf::from("bridge/CodeWalker.Bridge/bin/publish/CodeWalker.Bridge.dll")
