@@ -32,8 +32,54 @@ pub fn run(
   output_dir: &Path,
   force: bool,
 ) -> Result<()> {
+  run_with_overwrite(
+    source_dir,
+    vanilla_dir,
+    vanilla_cache_dir,
+    source_cache_dir,
+    output_dir,
+    force,
+    Path::new("asset/overwrite"),
+  )
+}
+
+/// Merges sources with resource-local light removals from a configurable directory.
+///
+/// ```no_run
+/// use std::path::Path;
+/// mlo_merger::core::merge::merge::run_with_overwrite(
+///   Path::new("asset/source"), Path::new("asset/vanilla"),
+///   Path::new("asset/vanilla-cache"), Path::new("asset/source-cache"),
+///   Path::new("asset/merged"), false, Path::new("asset/overwrite"),
+/// )?;
+/// # Ok::<(), Box<dyn std::error::Error>>(())
+/// ```
+pub fn run_with_overwrite(
+  source_dir: &Path,
+  vanilla_dir: &Path,
+  vanilla_cache_dir: &Path,
+  source_cache_dir: &Path,
+  output_dir: &Path,
+  force: bool,
+  overwrite_dir: &Path,
+) -> Result<()> {
+  let overwrite = crate::core::pipeline::absolute_path(overwrite_dir)?;
+  for path in [vanilla_dir, vanilla_cache_dir, source_cache_dir, output_dir] {
+    let path = crate::core::pipeline::absolute_path(path)?;
+    if overwrite.starts_with(&path) || path.starts_with(&overwrite) {
+      return Err("Overwrite directory overlaps a merge artifact directory".into());
+    }
+  }
   crate::core::config::matching::with_config(|| {
-    run_inner(source_dir, vanilla_dir, vanilla_cache_dir, source_cache_dir, output_dir, force)
+    run_inner(
+      source_dir,
+      vanilla_dir,
+      vanilla_cache_dir,
+      source_cache_dir,
+      output_dir,
+      force,
+      overwrite_dir,
+    )
   })?
 }
 
@@ -44,6 +90,7 @@ fn run_inner(
   source_cache_dir: &Path,
   output_dir: &Path,
   force: bool,
+  overwrite_dir: &Path,
 ) -> Result<()> {
   let source_dir = source_dir.canonicalize()?;
   let vanilla_dir = vanilla_dir.canonicalize()?;
@@ -57,7 +104,18 @@ fn run_inner(
   .run()?;
   let vanilla_cache_dir = vanilla_cache_dir.canonicalize()?;
   let source_cache_dir = source_cache_dir.canonicalize()?;
-  let merge_inputs = source_cache::load_merge_inputs(&source_cache_dir)?;
+  let mut merge_inputs = source_cache::load_merge_inputs(&source_cache_dir)?;
+  let (edits, overwrite_cache) = crate::core::lod_light::PreparedEdits::load_cached(
+    &source_dir,
+    &source_cache_dir,
+    overwrite_dir,
+    force,
+  )?;
+  for source in &edits.sources {
+    if !merge_inputs.ymap.iter().any(|existing| existing.path == source.path) {
+      merge_inputs.ymap.push(source.clone());
+    }
+  }
   let latest_files = dispatch_vanilla_stream_files(&vanilla_cache_dir.join("latest"))?;
   let output_dir = prepare_output_path(output_dir)?;
   let staging = Staging(create_staging_directory(&output_dir)?);
@@ -72,11 +130,13 @@ fn run_inner(
     inputs: &merge_inputs,
     force,
   }
-  .run()?;
+  .run_with_edits(&edits)?;
   if !changed {
+    overwrite_cache.save(&source_cache_dir)?;
     return Ok(());
   }
   publish_directory(&staging.0, &output_dir)?;
+  overwrite_cache.save(&source_cache_dir)?;
   log::info!("Published merged stream files to {}", output_dir.display());
   Ok(())
 }

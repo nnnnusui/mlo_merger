@@ -207,6 +207,62 @@ mod tests {
   use super::*;
 
   #[test]
+  fn file_bounds_do_not_require_lod_decoding_or_resource_inventory() {
+    use crate::core::format::gamefile::meta_resource::{
+      MetaDataBlock, MetaResource, MetaStructureEntry, MetaStructureInfo, jenk_hash,
+    };
+    let root_hash = jenk_hash("CMapData");
+    let field = |name: &str, offset, kind, key| MetaStructureEntry {
+      name_hash: jenk_hash(name),
+      data_offset: offset,
+      data_type: kind,
+      unknown: 0,
+      reference_type_index: 0,
+      reference_key: key,
+    };
+    let data = [1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0].into_iter().flat_map(f32::to_le_bytes).collect();
+    let meta = MetaResource {
+      root_block_index: 1,
+      structures: vec![MetaStructureInfo {
+        name_hash: root_hash,
+        structure_key: 0,
+        unknown_8: 0,
+        unknown_12: 0,
+        unknown_28: 0,
+        structure_size: 24,
+        entries: vec![
+          field("entitiesExtentsMin", 0, 0x33, 0),
+          field("entitiesExtentsMax", 12, 0x33, 0),
+          field("LODLightsSOA", 24, 0x05, jenk_hash("CLODLight")),
+        ],
+      }],
+      enums: Vec::new(),
+      data_blocks: vec![MetaDataBlock {
+        structure_name_hash: root_hash,
+        data,
+      }],
+      name: None,
+    };
+    let path = std::env::temp_dir().join(format!("rtree_file_bounds_{}.ymap", std::process::id()));
+    std::fs::write(&path, meta.to_rsc7(2).unwrap().encode().unwrap()).unwrap();
+    let candidate = Candidate {
+      name: "vw_lodlights_test.ymap".into(),
+      extension: "ymap",
+      path: path.clone(),
+      stage: "source",
+      resource: Some("[group]/unavailable-resource".into()),
+      original_path: None,
+      version: None,
+      input: None,
+      strict: false,
+    };
+    let indexed = index_item(&candidate).unwrap().unwrap();
+    assert_eq!([indexed.min_x, indexed.min_y, indexed.min_z], [1.0, 2.0, 3.0]);
+    assert_eq!([indexed.max_x, indexed.max_y, indexed.max_z], [4.0, 5.0, 6.0]);
+    std::fs::remove_file(path).unwrap();
+  }
+
+  #[test]
   fn groups_sources_and_emits_rbush_bbox_properties_and_counts() {
     let mut groups = Groups::default();
     groups.push("merged", item("merged.ymap"));

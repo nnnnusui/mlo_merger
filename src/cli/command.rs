@@ -12,6 +12,7 @@ use super::{
   merge::{self, Merge},
   pipeline::{self, Pipeline},
   restore_source_cache::{self, RestoreSourceCache},
+  to_json,
   to_xml::{self, ToXml},
 };
 
@@ -36,6 +37,8 @@ pub enum Command {
   Deploy(Deploy),
   /// Convert native files to XML.
   ToXml(ToXml),
+  /// Export cached, resource-local light editing JSON.
+  ToJson(crate::core::lod_light::ExportLights),
   /// Convert XML files to native files.
   FromXml(FromXml),
   /// Search generated merge data and optionally its recorded inputs.
@@ -53,6 +56,7 @@ fn parser() -> impl Parser<Command> {
   let merge = merge::parser().map(Command::Merge);
   let deploy = deploy::parser().map(Command::Deploy);
   let to_xml = to_xml::parser().map(Command::ToXml);
+  let to_json = to_json::parser().map(Command::ToJson);
   let from_xml = from_xml::parser().map(Command::FromXml);
   let get_diff = get_diff::parser().map(Command::GetDiff);
   let find = find::parser().map(Command::Find);
@@ -66,6 +70,7 @@ fn parser() -> impl Parser<Command> {
     merge,
     deploy,
     to_xml,
+    to_json,
     from_xml,
     get_diff,
     find,
@@ -90,6 +95,7 @@ pub fn run(command: Command) -> Result<(), Box<dyn std::error::Error>> {
     Command::Merge(command) => merge::run(command)?,
     Command::Deploy(command) => deploy::run(command)?,
     Command::ToXml(command) => to_xml::run(command)?,
+    Command::ToJson(command) => to_json::run(command)?,
     Command::FromXml(command) => from_xml::run(command)?,
     Command::Find(command) => find::run(command)?,
     Command::GetDiff(command) => get_diff::run(command)?,
@@ -101,6 +107,32 @@ pub fn run(command: Command) -> Result<(), Box<dyn std::error::Error>> {
 mod tests {
   use super::*;
   use std::path::PathBuf;
+
+  #[test]
+  fn light_json_and_overwrite_options_parse_without_pipeline_fallback() {
+    let Command::ToJson(command) = parser()
+      .to_options()
+      .run_inner(&["--to-json", "maps/child.ymap", "--resource", "[group]/maps"])
+      .unwrap()
+    else {
+      panic!("Expected to-json")
+    };
+    assert_eq!(command.resource, "[group]/maps");
+    assert_eq!(command.output_dir, PathBuf::from("asset/read_cache/ymap"));
+    assert!(parser().to_options().run_inner(&["--to-json", "map.ymap"]).is_err());
+    let Command::Merge(command) =
+      parser().to_options().run_inner(&["--merge", "--overwrite-dir", "edits"]).unwrap()
+    else {
+      panic!("Expected merge")
+    };
+    assert_eq!(command.overwrite_dir, PathBuf::from("edits"));
+    let Command::Pipeline(command) =
+      parser().to_options().run_inner(&["--overwrite-dir", "edits"]).unwrap()
+    else {
+      panic!("Expected pipeline")
+    };
+    assert_eq!(command.overwrite_dir, PathBuf::from("edits"));
+  }
 
   #[test]
   fn restore_source_cache_parses_defaults_and_custom_paths() {

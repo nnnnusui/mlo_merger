@@ -10,6 +10,8 @@ use super::common::{self, CommonOptions};
 pub struct Merge {
   /// Source resource directory.
   pub source_dir: PathBuf,
+  /// Resource-local light edit directory.
+  pub overwrite_dir: PathBuf,
   /// Shared execution options.
   pub common: CommonOptions,
 }
@@ -23,10 +25,15 @@ pub fn parser() -> impl Parser<Merge> {
     .argument::<PathBuf>("DIR")
     .fallback(PathBuf::from("asset/source"));
   let common = common::parser(PathBuf::from("asset/merged"));
-  construct!(command, source_dir, common).map(|(_, source_dir, common)| Merge {
-    source_dir,
-    common,
-  })
+  let overwrite_dir =
+    long("overwrite-dir").argument::<PathBuf>("DIR").fallback("asset/overwrite".into());
+  construct!(command, source_dir, common, overwrite_dir).map(
+    |(_, source_dir, common, overwrite_dir)| Merge {
+      source_dir,
+      common,
+      overwrite_dir,
+    },
+  )
 }
 
 /// Merges supported source changes into the latest vanilla stream files.
@@ -37,12 +44,13 @@ pub fn run(command: Merge) -> Result<(), Box<dyn std::error::Error>> {
     TerminalMode::Mixed,
     ColorChoice::Auto,
   )])?;
-  crate::core::merge::merge::run(
+  crate::core::merge::merge::run_with_overwrite(
     &command.source_dir,
     &command.common.vanilla,
     &command.common.vanilla_cache,
     &command.common.source_cache,
     &command.common.output,
     command.common.force,
+    &command.overwrite_dir,
   )
 }

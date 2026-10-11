@@ -30,14 +30,39 @@ pub(crate) fn ymap_to_model_with_entities(
   crate::core::format::ymap::model::Ymap,
   Vec<crate::core::format::ymap::model::YmapEntity>,
 )> {
+  ymap_to_model_with_entities_inner(bytes, shared_hash_names, false)
+}
+
+/// Reads a light-editing snapshot without silently truncating malformed SOA arrays.
+pub(crate) fn ymap_to_light_model_with_entities(
+  bytes: &[u8],
+  shared_hash_names: &HashMap<u32, String>,
+) -> io::Result<(
+  crate::core::format::ymap::model::Ymap,
+  Vec<crate::core::format::ymap::model::YmapEntity>,
+)> {
+  ymap_to_model_with_entities_inner(bytes, shared_hash_names, true)
+}
+
+fn ymap_to_model_with_entities_inner(
+  bytes: &[u8],
+  shared_hash_names: &HashMap<u32, String>,
+  strict_lights: bool,
+) -> io::Result<(
+  crate::core::format::ymap::model::Ymap,
+  Vec<crate::core::format::ymap::model::YmapEntity>,
+)> {
   if bytes.starts_with(b"PSIN") {
     let xml = ymap_to_xml(bytes, shared_hash_names)?;
     let parsed = quick_xml::de::from_str(&xml).map_err(|error| invalid_data(&error.to_string()))?;
+    if strict_lights {
+      super::light_validation::validate(&parsed)?;
+    }
     return Ok(ymap_from_parsed(parsed));
   }
   let resource = Rsc7Resource::decode(bytes)?;
   let meta = MetaResource::parse(&resource)?;
-  ymap_to_model_with_entities_from_meta(&meta, shared_hash_names)
+  ymap_from_meta_inner(&meta, shared_hash_names, strict_lights)
 }
 
 pub(crate) fn ymap_to_model_with_entities_from_meta(
@@ -47,9 +72,23 @@ pub(crate) fn ymap_to_model_with_entities_from_meta(
   crate::core::format::ymap::model::Ymap,
   Vec<crate::core::format::ymap::model::YmapEntity>,
 )> {
+  ymap_from_meta_inner(meta, shared_hash_names, false)
+}
+
+fn ymap_from_meta_inner(
+  meta: &MetaResource,
+  shared_hash_names: &HashMap<u32, String>,
+  strict_lights: bool,
+) -> io::Result<(
+  crate::core::format::ymap::model::Ymap,
+  Vec<crate::core::format::ymap::model::YmapEntity>,
+)> {
   let value = meta_to_value(&meta, shared_hash_names)?;
   let parsed: crate::core::format::ymap::xml::XmlYmap =
     serde_json::from_value(value).map_err(|error| invalid_data(&error.to_string()))?;
+  if strict_lights {
+    super::light_validation::validate(&parsed)?;
+  }
   Ok(ymap_from_parsed(parsed))
 }
 

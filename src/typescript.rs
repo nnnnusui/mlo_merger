@@ -52,12 +52,21 @@ mod tests {
       "BlacklistConfig",
       "RTreeIndex",
       "RTreeItem",
+      "YmapLightDocument",
+      "YmapLightEditDocument",
+      "LightView",
+      "LodLightView",
+      "LightObb",
+      "LightEditProvenance",
+      "LightExportCache",
     ] {
       assert!(actual.contains(&format!("export type {name} =")), "Missing {name}");
     }
     assert!(actual.contains("schemaVersion: number"));
     assert!(actual.contains("mergedFileCount: number"));
     assert!(actual.contains("minX: number"));
+    assert!(actual.contains("lightId: string"));
+    assert!(actual.contains("halfExtents: [number, number, number]"));
     assert!(actual.contains("originalPath?: string"));
     assert!(actual.contains("export type Change = \"Added\" | \"Modified\" | \"Removed\""));
     assert!(actual.contains("bmin?: [number, number, number] | null"));

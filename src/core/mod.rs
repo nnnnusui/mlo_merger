@@ -9,6 +9,7 @@ pub mod find;
 pub mod format;
 pub mod get_diff;
 pub mod getprop;
+pub mod lod_light;
 pub mod merge;
 pub mod pipeline;
 #[path = "source_cache/mod.rs"]

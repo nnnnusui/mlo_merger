@@ -90,9 +90,9 @@
 - [x] Add `--generate-rtree-json` to write RBush-compatible YMAP/YBN bounds split into merged/source/vanilla indexes with timestamps and counts.
 
 - [x] Add `--get-diff <source.ymap|directory>` to compare YMAPs against matching latest vanilla-cache files; `-o` is a filename for one input and an output directory for multiple inputs.
-- [ ] Provide `--to-xml <path>` and `--from-xml <path>` commands, each accepting `-o <path>` with `.` as the default output path.
-- [ ] Make these commands use the same format dispatch and prerequisite/freshness behavior where applicable, without coupling their format-specific conversion or diff implementations.
-- [ ] Reconcile direct command names (`--generate-vanilla`, `--generate-vanilla-cache`, `--generate-source-cache`, `--merge`) with `--step-name` so each stage has one unambiguous selection and force behavior.
+- [x] Provide `--to-xml <path>` and `--from-xml <path>` commands, each accepting `-o <path>` with `.` as the default output path.
+- [x] Make these commands use the same format dispatch and prerequisite/freshness behavior where applicable, without coupling their format-specific conversion or diff implementations.
+- [x] Reconcile direct command names (`--generate-vanilla`, `--generate-vanilla-cache`, `--generate-source-cache`, `--merge`) with `--step-name` so each stage has one unambiguous selection and force behavior.
 
 ## Ver1: YBN And YMAP Merge
 
@@ -127,9 +127,15 @@
 
 ## FiveM Preview and Editing
 
-- [ ] Define the JSON contract consumed by a separate FiveM resource for in-game MLO preview.
-- [ ] Allow the resource to emit additional typed edits, such as removing a Light, and apply them through the validated diff path.
-- [ ] Define how preview edits are returned, validated, and associated with resource/file and baseline provenance.
+- [x] Define a light-only JSON contract with numeric properties, resource-local LOD/distant references, influence OBB/AABBs and generated TypeScript types.
+- [x] Add cached on-demand `--to-json` exports with input/output fingerprints and dependency-aware freshness.
+- [x] Retain exact grouped resource IDs in the original file-bounds R-tree, keeping light influence calculations separate in on-demand JSON exports.
+- [x] Read typed resource-local light removals from `overwrite/**/*.diff.json` during merge/pipeline, preserving other resource providers.
+- [x] Validate snapshot/file identity, compact related arrays together, and support edited custom YMAPs without changing source/cache bytes.
+- [x] Track edits in incremental merge freshness and include replaced custom source paths in deployment omission provenance.
+- [x] Cache validated overwrite preparation with mtime/size/SHA-256 checks, invalidate on diff/source/topology changes, and commit only after successful merge.
+- [ ] Implement the separate FiveM resource and validate in-game selection/rendering.
+- [ ] Extend the editor contract beyond light removals; generic post-merge overwrite application remains separate.
 
 ## Merge Policy and Follow-up
 

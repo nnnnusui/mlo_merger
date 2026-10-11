@@ -321,14 +321,13 @@ fn collect_source_candidates(
       continue;
     }
     let resource = path
-      .strip_prefix(source_dir)
-      .ok()
-      .and_then(|relative| relative.components().next())
-      .and_then(|component| match component {
-        Component::Normal(name) => name.to_str(),
-        _ => None,
+      .ancestors()
+      .skip(1)
+      .find(|directory| {
+        directory.join("fxmanifest.lua").is_file() || directory.join("__resource.lua").is_file()
       })
-      .map(str::to_string);
+      .and_then(|directory| directory.strip_prefix(source_dir).ok())
+      .map(|relative| relative.to_string_lossy().replace('\\', "/"));
     push_candidate(
       candidates,
       paths,

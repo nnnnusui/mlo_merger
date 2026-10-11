@@ -87,7 +87,7 @@ Deploy consumes existing merge and source-cache data without regenerating them:
 
 - Merged files: `stream/{extension}/merged/{filename}`.
 - Remaining cached files: `stream/{extension}/clone/{resourceName}/{stream-relative-path}`.
-- `files.txt`: original source-relative paths of active files moved into the cache.
+- `files.txt`: original source-relative paths of active moved files and custom files replaced by light edits.
 
 Deploy skips unchanged copies, repairs missing/changed outputs, and removes stale
 managed files. Unrelated files are preserved; locally modified stale files are
@@ -99,6 +99,54 @@ Run `mlo_merger --help` for options and per-command output defaults. To extract
 a limited vanilla archive, use the explicit generator's `--gamebuild` stage
 selector; numeric GTA build-ID mapping is not implemented. Convenience aliases
 are in [.cargo/config.toml](.cargo/config.toml).
+
+### Export And Remove LOD Lights
+
+```bash
+mlo_merger --to-json 'asset/source/[group]/maps/stream/nested/map_lodlights.ymap' --resource '[group]/maps'
+mlo_merger --merge --overwrite-dir asset/overwrite
+```
+
+`--to-json` exports a light-only view, not the complete YMAP. Use paths and
+resource IDs from the R-tree `source` entries; active source-cache paths also
+work. Output defaults to
+`asset/read_cache/ymap/<resource>/<stream-relative-path>.json`.
+The sidecar caches input/output mtime, size, SHA-256 and light relationships;
+unchanged exports skip native parsing and JSON writing. `-f` forces verification
+and export. Do not run source-cache moves or restoration concurrently with exports.
+
+The JSON joins child LOD arrays to parent distant arrays by their original index
+within the same resource. Each logical light has explicit file references and
+precomputed world-space OBB/AABB data. OBBs conservatively enclose the influence
+volume; they are not exact rendered lighting. Unresolved relationships are
+diagnosed and cannot be removed. No vanilla or other-resource parent fallback
+is performed. The stream R-tree retains file bounds; light influence OBB/AABBs
+are available separately in the on-demand light JSON.
+
+The external editor writes
+`asset/overwrite/<resource>/<stream-relative-path>.diff.json` with
+`format: "mlo_lod_light_edits"`, `schemaVersion: 1`, the export's `resource`,
+`path` and `files`, and `operations: [{"op":"remove","lightId":"..."}]`.
+Copy IDs from editable exported lights; do not construct them from direction,
+position or hash. Types are in [asset/gen_mlo_merger.ts](asset/gen_mlo_merger.ts).
+
+Merge and the default pipeline accept `--overwrite-dir`. Edits change only the
+selected resource's light contribution: another resource retaining the light
+can keep it in the result. Linked arrays are compacted together; original source
+and cached bytes are untouched. Changed dependencies require a fresh export and
+diff. Unsupported edits, ambiguous relationships and custom non-light conflicts
+fail before merged output publication. Removing a diff withdraws the edit on the
+next merge/deploy. Applying native light edits currently requires RSC7 YMAPs;
+PSO inputs can be inspected but are not edited.
+
+Merge saves validated overwrite preparation in
+`<source-cache>/overwrite_cache_info.json`. Unchanged mtime/size reuse stored
+SHA-256 values; unchanged diff contents, source contents and resource membership
+reuse prepared edits without parsing diffs or decoding related YMAPs again.
+Timestamp-only changes refresh fingerprints without rebuilding. Diff additions,
+removals, changed inputs or resource topology invalidate preparation; `-f`
+bypasses reuse. The cache is updated only after a successful merge, and a missing
+or unreadable cache is rebuilt. File enumeration and stat checks still run.
 
 ### Matching Configuration
 

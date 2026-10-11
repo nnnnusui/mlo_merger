@@ -65,6 +65,24 @@ impl Pipeline {
     })?
   }
 
+  /// Runs resource-local light edits from the specified overwrite directory.
+  /// Source exclusions are inherited when `exclusions` is absent.
+  ///
+  /// ```no_run
+  /// # fn apply(pipeline: &mlo_merger::core::pipeline::Pipeline) -> Result<(), Box<dyn std::error::Error>> {
+  /// pipeline.run_with_overwrite(std::path::Path::new("asset/overwrite"), None)?;
+  /// # Ok(()) }
+  /// ```
+  pub fn run_with_overwrite(
+    &self,
+    overwrite_dir: &Path,
+    exclusions: Option<&[String]>,
+  ) -> Result<DeploySummary, Box<dyn std::error::Error>> {
+    crate::core::config::matching::with_config(|| {
+      self.run_with_options(GenerateVanilla::run_with_initialized_logger, exclusions, overwrite_dir)
+    })?
+  }
+
   fn run_with_generation(
     &self,
     generate: impl FnOnce(&GenerateVanilla) -> Result<(), Box<dyn std::error::Error>>,
@@ -77,12 +95,34 @@ impl Pipeline {
     generate: impl FnOnce(&GenerateVanilla) -> Result<(), Box<dyn std::error::Error>>,
     exclusions: Option<&[String]>,
   ) -> Result<DeploySummary, Box<dyn std::error::Error>> {
+    self.run_with_options(generate, exclusions, Path::new("asset/overwrite"))
+  }
+
+  fn run_with_options(
+    &self,
+    generate: impl FnOnce(&GenerateVanilla) -> Result<(), Box<dyn std::error::Error>>,
+    exclusions: Option<&[String]>,
+    overwrite_dir: &Path,
+  ) -> Result<DeploySummary, Box<dyn std::error::Error>> {
     if !self.source_dir.is_dir() {
       return Err(
         format!("Source resource directory does not exist: {}", self.source_dir.display()).into(),
       );
     }
     self.validate_paths()?;
+    let overwrite = absolute_path(overwrite_dir)?;
+    for path in [
+      &self.vanilla_dir,
+      &self.vanilla_cache_dir,
+      &self.source_cache_dir,
+      &self.merged_dir,
+      &self.output_dir,
+    ] {
+      let path = absolute_path(path)?;
+      if overwrite.starts_with(&path) || path.starts_with(&overwrite) {
+        return Err("Overwrite directory overlaps a pipeline artifact directory".into());
+      }
+    }
     if !self.vanilla_dir.join("cache_info.json").is_file() {
       if self.vanilla_dir.is_dir() && fs::read_dir(&self.vanilla_dir)?.next().is_some() {
         return Err(
@@ -125,13 +165,14 @@ impl Pipeline {
       source_cache.run()?;
     }
     log::info!("Pipeline: merge");
-    super::merge::merge::run(
+    super::merge::merge::run_with_overwrite(
       &self.source_dir,
       &self.vanilla_dir,
       &self.vanilla_cache_dir,
       &self.source_cache_dir,
       &self.merged_dir,
       self.force,
+      overwrite_dir,
     )?;
     log::info!("Pipeline: deploy");
     Deploy {
@@ -170,7 +211,7 @@ impl Pipeline {
   }
 }
 
-fn absolute_path(path: &Path) -> std::io::Result<PathBuf> {
+pub(crate) fn absolute_path(path: &Path) -> std::io::Result<PathBuf> {
   let absolute =
     if path.is_absolute() { path.to_path_buf() } else { std::env::current_dir()?.join(path) };
   let mut normalized = PathBuf::new();

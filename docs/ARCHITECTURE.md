@@ -54,6 +54,41 @@ resolution reason. They describe competing entity changes, not filename conflict
 
 ## Inspection
 
+### Resource Light Editing
+
+On-demand light JSON exports resolve source and moved-cache paths to the original
+resource identity. Only resource-local LOD/distant relationships are followed;
+light metadata indexing avoids loading unrelated entity hierarchies. Linked array
+occurrences, dependency fingerprints and conservative influence OBB/AABBs let an
+external editor select lights without repeated relationship or geometry work.
+Per-document sidecars reuse unchanged exports and repair missing or altered JSON.
+The stream R-tree uses the original file bounds independently of light editing.
+Light influence bounds are computed only for on-demand light exports and edits.
+
+Typed removal documents under the overwrite directory are validated against the
+exported source snapshot. Editing withdraws occurrences from a resource's light
+contribution, not from every resource sharing a basename. Edited groups compose
+linked light pairs while the normal merge continues to own non-light data.
+Resource providers retain exact duplicate multiplicity, and parent/child arrays
+are emitted in the same final order. Unsupported or stale changes fail before
+publication; original source/cache bytes are never overwritten.
+
+Validated overwrite preparation is cached independently in source-cache. Input
+mtime and size permit fingerprint reuse; diff membership, resource paths and
+source content determine whether prepared light models can be reused. Force
+bypasses preparation reuse. The cache is committed only after successful merge
+publication or a successful no-op run; failed validation does not update it.
+Input verification and group signatures reuse the same checked fingerprints.
+
+Diff contents and participating inputs affect the YMAP group signature. Custom
+light maps without vanilla are supported when their non-light data does not
+conflict. Merge records original paths replaced by these outputs so deployment
+can include unmoved custom files in its omission list. Withdrawing edits restores
+ordinary merge/clone behavior. Generic global post-merge overwrites remain a
+separate future workflow. FiveM rendering and editing are external to this tool.
+
+### Read-Only Searches
+
 GUID, entity-position and YBN-center searches read existing native files and
 return all matching occurrences as XML, without writing artifacts. Filename
 globs limit reads; position searches use an inclusive 3D radius. YBN centers are
@@ -79,8 +114,9 @@ files are removed when stale; modified stale files are rejected and unrelated
 files are preserved. Empty stream directories are pruned without following
 symlinks. Force affects copying, not cache generation or merging.
 
-The moved-source list includes active merged and clone inputs, not unmoved source
-files or archived history. Original resource paths remain available for inspection.
+The source omission list includes active moved merged/clone inputs and original
+custom files superseded by light edits, not archived history or untouched source
+files. Original resource paths remain available for inspection.
 
 ## Source Restoration
 

@@ -22,7 +22,7 @@ type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 pub use restore::restore_source_cache;
 
 /// One source stream file selected for merge from the current source cache.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct MergeSourceFile {
   /// Resource identifier recorded by the source inventory.
   pub resource: String,

@@ -200,7 +200,10 @@ mod tests {
     metadata.algorithm_versions.clear();
     metadata.algorithm_version = Some(YMAP_ALGORITHM_VERSION);
     assert!(metadata.version_matches("ymap").unwrap());
-    assert!(!metadata.version_matches("ybn").unwrap());
+    assert_eq!(
+      metadata.version_matches("ybn").unwrap(),
+      YMAP_ALGORITHM_VERSION == YBN_ALGORITHM_VERSION
+    );
     metadata.algorithm_versions.insert("ymap".into(), YMAP_ALGORITHM_VERSION);
     metadata.algorithm_version = Some(YBN_ALGORITHM_VERSION);
     assert!(!metadata.version_matches("ybn").unwrap());
@@ -219,7 +222,10 @@ mod tests {
     .unwrap();
     let legacy = MergeMetadata::load(&output).unwrap().unwrap();
     assert!(legacy.version_matches("ymap").unwrap());
-    assert!(!legacy.version_matches("ybn").unwrap());
+    assert_eq!(
+      legacy.version_matches("ybn").unwrap(),
+      YMAP_ALGORITHM_VERSION == YBN_ALGORITHM_VERSION
+    );
 
     fs::remove_dir_all(output).unwrap();
   }
