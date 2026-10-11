@@ -7,9 +7,12 @@ use walkdir::WalkDir;
 
 use super::{
   Result,
-  types::{DerivedVanillaFile, FileFingerprint, ResourceInventory, SourceFile, VanillaMatch},
+  types::{FileFingerprint, ResourceInventory, SourceFile, VanillaMatch},
 };
-use crate::core::{common::function::get_resource_directories, vanilla_cache::ymap_parent_hash};
+use crate::core::{
+  common::function::get_resource_directories,
+  vanilla_cache::{DerivedVanillaFile, ymap_parent_hash},
+};
 
 pub(super) fn discover_resources(source_dir: &Path) -> Result<Vec<PathBuf>> {
   let resources = get_resource_directories(source_dir)?;

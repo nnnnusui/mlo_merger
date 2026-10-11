@@ -1,5 +1,6 @@
 use super::{
   deploy::{Deploy, DeploySummary},
+  merge::Merge,
   source_cache::BuildSourceCache,
   vanilla::GenerateVanilla,
   vanilla_cache::BuildVanillaCache,
@@ -69,16 +70,17 @@ impl Pipeline {
     .run()?;
 
     log::info!("Pipeline: generate-vanilla-cache");
-    BuildVanillaCache {
+    let vanilla_cache = BuildVanillaCache {
       vanilla_dir: self.vanilla_dir.clone(),
       output_dir: self.vanilla_cache_dir.clone(),
       through_version: None,
       force: self.force,
     }
     .run()?;
+    log::info!("{}", vanilla_cache.summary());
 
     log::info!("Pipeline: generate-source-cache");
-    let source_cache = BuildSourceCache {
+    BuildSourceCache {
       source_dir: self.source_dir.clone(),
       output_dir: self.source_cache_dir.clone(),
       vanilla_dir: self.vanilla_dir.clone(),
@@ -86,19 +88,20 @@ impl Pipeline {
       resource: None,
       exclusions: self.exclusions.clone(),
       force: self.force,
-    };
-    source_cache.run()?;
+    }
+    .run()?;
 
     log::info!("Pipeline: merge");
-    super::merge::merge::run_with_overwrite(
-      &self.source_dir,
-      &self.vanilla_dir,
-      &self.vanilla_cache_dir,
-      &self.source_cache_dir,
-      &self.merged_dir,
-      self.force,
-      &self.overwrite_dir,
-    )?;
+    Merge {
+      source_dir: self.source_dir.clone(),
+      vanilla_dir: self.vanilla_dir.clone(),
+      vanilla_cache_dir: self.vanilla_cache_dir.clone(),
+      source_cache_dir: self.source_cache_dir.clone(),
+      output_dir: self.merged_dir.clone(),
+      overwrite_dir: self.overwrite_dir.clone(),
+      force: self.force,
+    }
+    .run()?;
 
     log::info!("Pipeline: deploy");
     Deploy {

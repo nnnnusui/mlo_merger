@@ -2,7 +2,7 @@ use std::{collections::BTreeSet, fs, io::BufReader, path::Path};
 
 use super::{
   Result,
-  incremental::{ensure_safe_path, move_file},
+  filesystem::{ensure_safe_path, move_file},
   types::SourceCacheMetadata,
 };
 

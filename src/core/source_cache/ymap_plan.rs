@@ -1,24 +1,25 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::core::format::ymap::diff::reference_hash;
+use crate::core::vanilla_cache::{DerivedVanillaFile, YmapRelationshipIndex};
 
-use super::types::{
-  DerivedVanillaFile, ResourceInventory, SourceYmapRef, YmapLoadPlan, YmapRelationshipIndex,
-};
+use super::types::{ResourceInventory, SourceYmapRef, YmapLoadPlan};
 
 pub(super) fn build(resources: &BTreeMap<String, ResourceInventory>) -> YmapLoadPlan {
   let changed_source_parents: BTreeSet<_> = resources
     .iter()
     .flat_map(|(resource_id, resource)| {
-      resource.files_by_format.get(".ymap").into_iter().flatten().filter_map(|file| {
-        file.vanilla.as_ref().is_none_or(|baseline| !baseline.content_matches).then(|| {
-          SourceYmapRef {
-            resource: resource_id.clone(),
-            source_path: file.path.clone(),
-            file_name: file.file_name.clone(),
-          }
+      resource
+        .files_by_format
+        .get(".ymap")
+        .into_iter()
+        .flatten()
+        .filter(|&file| file.vanilla.as_ref().is_none_or(|baseline| !baseline.content_matches))
+        .map(|file| SourceYmapRef {
+          resource: resource_id.clone(),
+          source_path: file.path.clone(),
+          file_name: file.file_name.clone(),
         })
-      })
     })
     .collect();
 

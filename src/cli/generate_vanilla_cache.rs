@@ -24,11 +24,13 @@ pub fn parser() -> impl Parser<GenerateVanillaCache> {
 
 /// Builds the derived vanilla cache from versioned raw vanilla files.
 pub fn run(command: GenerateVanillaCache) -> Result<(), Box<dyn std::error::Error>> {
-  crate::core::vanilla_cache::BuildVanillaCache {
+  let result = crate::core::vanilla_cache::BuildVanillaCache {
     vanilla_dir: command.common.vanilla,
     output_dir: command.common.output,
     through_version: command.common.gamebuild,
     force: command.common.force,
   }
-  .run()
+  .run()?;
+  log::info!("{}", result.summary());
+  Ok(())
 }

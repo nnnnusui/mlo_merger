@@ -2,18 +2,11 @@ use super::*;
 
 impl BuildVanillaCache {
   /// Builds the requested vanilla-cache prefix and publishes it atomically.
-  pub fn run(&self) -> Result<()> {
+  pub fn run(&self) -> Result<VanillaCacheResult> {
     let vanilla_dir = self.vanilla_dir.canonicalize()?;
-    let manifest_path = vanilla_dir.join("cache_info.json");
-    let manifest_bytes = fs::read(&manifest_path)?;
-    let manifest: VanillaCacheManifest =
-      serde_json::from_reader(BufReader::new(manifest_bytes.as_slice()))?;
-    if manifest.format_version != 1 {
-      return Err(format!("Unsupported vanilla archive schema {}", manifest.format_version).into());
-    }
+    let (manifest, revision) = crate::core::vanilla::load_manifest_with_revision(&vanilla_dir)?;
     let through_index = resolve_through_version(&manifest, self.through_version.as_deref())?;
     let latest_version = manifest.versions[through_index].id.clone();
-    let revision = format!("{:x}", Sha256::digest(&manifest_bytes));
     let current = resolve_files(&manifest, through_index)?;
     let input_timestamps = source_timestamps(&vanilla_dir, &current)?;
     let output_dir = prepare_output_path(&self.output_dir, &vanilla_dir)?;
@@ -21,8 +14,10 @@ impl BuildVanillaCache {
     if !self.force
       && cache_is_current(&output_dir, &vanilla_dir, &revision, &latest_version, &input_timestamps)?
     {
-      log::info!("Vanilla derived cache is current through {latest_version}");
-      return Ok(());
+      return Ok(VanillaCacheResult {
+        latest_version,
+        rebuilt: false,
+      });
     }
 
     let staging = Staging(create_staging_directory(&output_dir)?);
@@ -36,8 +31,10 @@ impl BuildVanillaCache {
       &input_timestamps,
     )?;
     publish_directory(&staging.0, &output_dir)?;
-    log::info!("Built vanilla derived cache through {latest_version}");
-    Ok(())
+    Ok(VanillaCacheResult {
+      latest_version,
+      rebuilt: true,
+    })
   }
 
   fn build(

@@ -19,7 +19,7 @@ pub use versions::{ListVanillaVersions, VanillaVersionChange, VanillaVersionEntr
 
 pub(crate) use io::{read_ymap, write_json};
 pub(crate) use logging::VersionLog;
-pub(crate) use manifest::load_manifest;
+pub(crate) use manifest::{load_manifest, load_manifest_with_revision};
 
 #[cfg(test)]
 pub(crate) use logging::init_test_version_logger;

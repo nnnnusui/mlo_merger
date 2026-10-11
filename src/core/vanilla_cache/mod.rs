@@ -7,9 +7,6 @@ use std::{
   path::{Component, Path, PathBuf},
 };
 
-use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
-
 pub use crate::core::vanilla::VanillaCacheManifest;
 use crate::core::{
   format::gamefile::{
@@ -19,10 +16,37 @@ use crate::core::{
   format::ymap::diff::reference_hash,
   vanilla::{CachedFile, read_ymap},
 };
+use serde::{Deserialize, Serialize};
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
 const CACHE_SCHEMA: u32 = 2;
+
+/// Outcome of building or reusing a derived vanilla cache.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VanillaCacheResult {
+  /// Final vanilla stage selected for this cache.
+  pub latest_version: String,
+  /// Whether the cache was rebuilt and published.
+  pub rebuilt: bool,
+}
+
+impl VanillaCacheResult {
+  /// Returns a human-readable summary without emitting a log record.
+  ///
+  /// ```
+  /// use mlo_merger::core::vanilla_cache::VanillaCacheResult;
+  /// let result = VanillaCacheResult { latest_version: "0000-base".into(), rebuilt: false };
+  /// assert_eq!(result.summary(), "Vanilla derived cache is current through 0000-base");
+  /// ```
+  pub fn summary(&self) -> String {
+    if self.rebuilt {
+      format!("Built vanilla derived cache through {}", self.latest_version)
+    } else {
+      format!("Vanilla derived cache is current through {}", self.latest_version)
+    }
+  }
+}
 
 /// Builds a derived cache from versioned native files in the vanilla archive.
 #[derive(Debug, Clone)]
@@ -67,21 +91,23 @@ struct LatestFile {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "typescript", derive(specta::Type))]
-struct YmapRelationshipIndex {
-  format_version: u32,
-  vanilla_manifest_sha256: String,
-  version: String,
-  children_by_parent_hash: BTreeMap<String, Vec<String>>,
+pub(crate) struct YmapRelationshipIndex {
+  pub(crate) format_version: u32,
+  pub(crate) vanilla_manifest_sha256: String,
+  pub(crate) version: String,
+  pub(crate) children_by_parent_hash: BTreeMap<String, Vec<String>>,
 }
 
 mod build;
 mod filesystem;
 mod freshness;
+mod read;
 mod relationships;
 mod source;
 
 use filesystem::*;
 use freshness::cache_is_current;
+pub(crate) use read::{DerivedVanillaFile, LoadedCache, load_cache};
 use relationships::children_by_parent_hash;
 pub(crate) use relationships::ymap_parent_hash;
 use source::*;

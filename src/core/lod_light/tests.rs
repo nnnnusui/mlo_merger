@@ -251,15 +251,16 @@ fn native_custom_light_edits_merge_deploy_reuse_and_retract() {
   let diff = overwrite.join("a/nested/child.ymap.diff.json");
   write_json(&diff, &edit).unwrap();
   let run = || {
-    crate::core::merge::merge::run_with_overwrite(
-      &source,
-      &vanilla,
-      &cache,
-      &source_cache,
-      &output,
-      false,
-      &overwrite,
-    )
+    crate::core::merge::Merge {
+      source_dir: source.clone(),
+      vanilla_dir: vanilla.clone(),
+      vanilla_cache_dir: cache.clone(),
+      source_cache_dir: source_cache.clone(),
+      output_dir: output.clone(),
+      overwrite_dir: overwrite.clone(),
+      force: false,
+    }
+    .run()
     .unwrap()
   };
   run();
@@ -415,15 +416,16 @@ fn cached_baseline_inputs_accept_combined_removals_and_keep_unchanged_provider()
   )
   .unwrap();
   let run = || {
-    crate::core::merge::merge::run_with_overwrite(
-      &source,
-      &vanilla,
-      &cache,
-      &source_cache,
-      &output,
-      false,
-      &overwrite,
-    )
+    crate::core::merge::Merge {
+      source_dir: source.clone(),
+      vanilla_dir: vanilla.clone(),
+      vanilla_cache_dir: cache.clone(),
+      source_cache_dir: source_cache.clone(),
+      output_dir: output.clone(),
+      overwrite_dir: overwrite.clone(),
+      force: false,
+    }
+    .run()
     .unwrap()
   };
   run();

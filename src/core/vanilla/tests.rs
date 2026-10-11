@@ -1,5 +1,6 @@
 //! GTAV archive, stage, logging and publication regression tests.
 
+use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -131,6 +132,12 @@ fn cache_manifest_requires_schema_one_and_root_metadata() {
   };
   write_json(&root.join("cache_info.json"), &manifest).unwrap();
   assert_eq!(load_manifest(&root).unwrap().format_version, 1);
+  let (loaded, revision) = load_manifest_with_revision(&root).unwrap();
+  assert_eq!(loaded.format_version, 1);
+  assert_eq!(
+    revision,
+    format!("{:x}", Sha256::digest(fs::read(root.join("cache_info.json")).unwrap()))
+  );
   manifest.format_version = 2;
   write_json(&root.join("cache_info.json"), &manifest).unwrap();
   assert!(

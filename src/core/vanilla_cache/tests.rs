@@ -1,5 +1,6 @@
 use super::*;
 use crate::core::vanilla::{CacheVersion, FileChange, read_ymap, write_json};
+use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 
 #[test]
@@ -50,7 +51,7 @@ fn builds_latest_files_through_selected_stage_and_reuses_valid_output() {
   };
   write_json(&vanilla.join("cache_info.json"), &manifest).unwrap();
 
-  BuildVanillaCache {
+  let built = BuildVanillaCache {
     vanilla_dir: vanilla.clone(),
     output_dir: output.clone(),
     through_version: Some("base".into()),
@@ -58,6 +59,9 @@ fn builds_latest_files_through_selected_stage_and_reuses_valid_output() {
   }
   .run()
   .unwrap();
+  assert!(built.rebuilt);
+  assert_eq!(built.latest_version, "0000-base");
+  assert_eq!(built.summary(), "Built vanilla derived cache through 0000-base");
   assert_eq!(fs::read(output.join("latest/ybn/map.ybn")).unwrap(), b"base");
   let relationships: YmapRelationshipIndex =
     serde_json::from_reader(fs::File::open(output.join("ymap_relationships.json")).unwrap())
@@ -106,7 +110,7 @@ fn builds_latest_files_through_selected_stage_and_reuses_valid_output() {
   );
   assert!(fs::symlink_metadata(&latest_link).unwrap().file_type().is_symlink());
 
-  BuildVanillaCache {
+  let reused = BuildVanillaCache {
     vanilla_dir: root.join("vanilla"),
     output_dir: output.clone(),
     through_version: Some("0000".into()),
@@ -114,6 +118,9 @@ fn builds_latest_files_through_selected_stage_and_reuses_valid_output() {
   }
   .run()
   .unwrap();
+  assert!(!reused.rebuilt);
+  assert_eq!(reused.latest_version, "0000-base");
+  assert_eq!(reused.summary(), "Vanilla derived cache is current through 0000-base");
   assert_eq!(fs::read(output.join("latest/ybn/map.ybn")).unwrap(), b"base");
 
   fs::remove_file(output.join("latest/ybn/map.ybn")).unwrap();
@@ -127,7 +134,7 @@ fn builds_latest_files_through_selected_stage_and_reuses_valid_output() {
   .unwrap();
   assert_eq!(fs::read(output.join("latest/ybn/map.ybn")).unwrap(), b"base");
 
-  BuildVanillaCache {
+  let latest = BuildVanillaCache {
     vanilla_dir: root.join("vanilla"),
     output_dir: output.clone(),
     through_version: None,
@@ -135,11 +142,51 @@ fn builds_latest_files_through_selected_stage_and_reuses_valid_output() {
   }
   .run()
   .unwrap();
+  assert!(latest.rebuilt);
+  assert_eq!(latest.latest_version, "0001-patch");
   assert_eq!(fs::read(output.join("latest/ybn/map.ybn")).unwrap(), b"patch");
   let relationships: YmapRelationshipIndex =
     serde_json::from_reader(fs::File::open(output.join("ymap_relationships.json")).unwrap())
       .unwrap();
   assert_eq!(relationships.version, "0001-patch");
+  let (_, raw_revision) = crate::core::vanilla::load_manifest_with_revision(&vanilla).unwrap();
+  let loaded = load_cache(&output, &raw_revision).unwrap();
+  assert_eq!(loaded.latest_version, "0001-patch");
+  assert_eq!(loaded.files["map.ybn"].version, "0001-patch");
+  assert_eq!(loaded.relationships.version, "0001-patch");
+  let mut digest = Sha256::new();
+  for name in ["cache_info.json", "ymap_relationships.json"] {
+    digest.update(name.as_bytes());
+    digest.update(fs::read(output.join(name)).unwrap());
+  }
+  assert_eq!(loaded.revision, format!("{:x}", digest.finalize()));
+  assert!(load_cache(&output, "stale").err().unwrap().to_string().contains("stale"));
+  let relationship_path = output.join("ymap_relationships.json");
+  let relationship_bytes = fs::read(&relationship_path).unwrap();
+  let mut stale_relationships: YmapRelationshipIndex =
+    serde_json::from_slice(&relationship_bytes).unwrap();
+  stale_relationships.version = "0000-base".into();
+  write_json(&relationship_path, &stale_relationships).unwrap();
+  assert!(
+    load_cache(&output, &raw_revision)
+      .err()
+      .unwrap()
+      .to_string()
+      .contains("relationship index is stale")
+  );
+  fs::write(&relationship_path, relationship_bytes).unwrap();
+  fs::remove_file(output.join("latest/ybn/map.ybn")).unwrap();
+  assert!(
+    load_cache(&output, &raw_revision)
+      .err()
+      .unwrap()
+      .to_string()
+      .contains("latest file is missing")
+  );
+  fs::remove_dir(output.join("latest/ybn")).unwrap();
+  assert!(
+    load_cache(&output, &raw_revision).err().unwrap().to_string().contains("missing latest/ybn")
+  );
   fs::remove_dir_all(root).unwrap();
 }
 

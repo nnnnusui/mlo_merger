@@ -37,13 +37,14 @@ pub fn parser() -> impl Parser<Merge> {
 
 /// Merges supported source changes into the latest vanilla stream files.
 pub fn run(command: Merge) -> Result<(), Box<dyn std::error::Error>> {
-  crate::core::merge::merge::run_with_overwrite(
-    &command.source_dir,
-    &command.common.vanilla,
-    &command.common.vanilla_cache,
-    &command.common.source_cache,
-    &command.common.output,
-    command.common.force,
-    &command.overwrite_dir,
-  )
+  crate::core::merge::Merge {
+    source_dir: command.source_dir,
+    vanilla_dir: command.common.vanilla,
+    vanilla_cache_dir: command.common.vanilla_cache,
+    source_cache_dir: command.common.source_cache,
+    output_dir: command.common.output,
+    overwrite_dir: command.overwrite_dir,
+    force: command.common.force,
+  }
+  .run()
 }

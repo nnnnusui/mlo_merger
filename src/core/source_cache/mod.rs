@@ -1,12 +1,14 @@
 //! Source stream inventory, vanilla matching, and conflict/load planning.
 
+mod conflicts;
 pub(crate) mod exclusions;
-mod incremental;
+mod filesystem;
+mod generate;
 mod inventory;
+mod layout;
 mod publication;
 mod restore;
 mod types;
-mod vanilla;
 mod ymap_plan;
 
 use std::{
@@ -233,7 +235,7 @@ impl BuildSourceCache {
   /// # Ok::<(), Box<dyn std::error::Error>>(())
   /// ```
   pub fn run(&self) -> Result<bool> {
-    incremental::run(self)
+    generate::run(self)
   }
 }
 

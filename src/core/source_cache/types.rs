@@ -97,26 +97,3 @@ pub(super) struct SourceCacheMetadata {
   pub(super) ymap_load_plan: YmapLoadPlan,
   pub(super) outputs: BTreeSet<String>,
 }
-
-#[derive(Debug, Deserialize)]
-pub(super) struct DerivedVanillaCache {
-  pub(super) format_version: u32,
-  pub(super) vanilla_manifest_sha256: String,
-  pub(super) latest_version: String,
-  pub(super) files: BTreeMap<String, DerivedVanillaFile>,
-}
-
-#[derive(Debug, Deserialize)]
-pub(super) struct DerivedVanillaFile {
-  pub(super) version: String,
-  pub(super) sha256: String,
-  pub(super) object: String,
-}
-
-#[derive(Debug, Deserialize)]
-pub(super) struct YmapRelationshipIndex {
-  pub(super) format_version: u32,
-  pub(super) vanilla_manifest_sha256: String,
-  pub(super) version: String,
-  pub(super) children_by_parent_hash: BTreeMap<String, Vec<String>>,
-}
