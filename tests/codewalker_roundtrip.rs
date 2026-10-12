@@ -17,12 +17,13 @@ use mlo_merger::core::codewalker::CodeWalker;
 use mlo_merger::core::format::gamefile::{
   meta_resource::{MetaResource, MetaSchemaCatalog},
   meta_xml::ymap_to_xml,
-  resource_convert::{NativeResourceFormat, resource_to_xml, xml_to_resource},
+  resource_convert::{
+    NativeResourceFormat, convert_files_from_xml, resource_to_xml, xml_to_resource,
+  },
   resource_file::Rsc7Resource,
 };
 use mlo_merger::core::format::ymap::xml::XmlYmap;
 use mlo_merger::core::merge::{run::MergeYmap, ybn_conflicts::MergeYbnConflicts};
-use mlo_merger::core::xmlconvert::Xml2Ymap;
 
 #[path = "codewalker_roundtrip/archive.rs"]
 mod archive;

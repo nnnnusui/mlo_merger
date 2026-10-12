@@ -1,39 +1,23 @@
-//! Parsed-state comparison and closest-version selection.
-
-use super::{
-  Result,
-  types::{CandidateScore, Variant},
-};
 use crate::core::format::{gamefile::meta_resource::jenk_hash, ymap::model::Ymap};
 use serde_json::Value;
 use std::collections::BTreeSet;
 
-pub(super) struct ModelState {
-  pub(super) model: Ymap,
-  pub(super) comparison: Value,
-}
-
-impl ModelState {
-  /// Export names and block bookkeeping must not influence baseline selection.
-  pub(super) fn new(model: Ymap) -> Result<Self> {
-    let mut comparison = serde_json::to_value(&model)?;
-    let fields = comparison.as_object_mut().ok_or("YMAP model is not an object")?;
-    fields.remove("name");
-    fields.remove("block");
-    Ok(Self {
-      model,
-      comparison,
-    })
-  }
-}
-
-pub(crate) fn ymap_distance(
+pub(super) fn ymap_distance(
   before: &Ymap,
   after: &Ymap,
-) -> Result<usize> {
-  let before = ModelState::new(before.clone())?;
-  let after = ModelState::new(after.clone())?;
-  Ok(distance(&before.comparison, &after.comparison))
+) -> Result<usize, Box<dyn std::error::Error>> {
+  let before = comparison(before)?;
+  let after = comparison(after)?;
+  Ok(distance(&before, &after))
+}
+
+/// Export names and block bookkeeping must not influence baseline selection.
+fn comparison(model: &Ymap) -> Result<Value, Box<dyn std::error::Error>> {
+  let mut comparison = serde_json::to_value(model)?;
+  let fields = comparison.as_object_mut().ok_or("YMAP model is not an object")?;
+  fields.remove("name");
+  fields.remove("block");
+  Ok(comparison)
 }
 
 fn reference(value: &str) -> u32 {
@@ -47,7 +31,7 @@ fn reference(value: &str) -> u32 {
 }
 
 /// Counts unequal leaves and unmatched entries; arrays remain ordered and hash spellings compare equally.
-pub(super) fn distance(
+fn distance(
   before: &Value,
   after: &Value,
 ) -> usize {
@@ -77,17 +61,24 @@ pub(super) fn distance(
   }
 }
 
-/// Ties select the newest content-change stage, not a later unchanged DLC stage.
-pub(super) fn best_candidate(
-  scores: &[CandidateScore],
-  variants: &[Variant],
-) -> Result<usize> {
-  scores
-    .iter()
-    .enumerate()
-    .min_by_key(|(index, score)| {
-      (score.difference_count, std::cmp::Reverse(variants[*index].index))
-    })
-    .map(|(index, _)| index)
-    .ok_or_else(|| "No vanilla candidates".into())
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn distance_is_symmetric_and_counts_model_changes() {
+    let before = serde_json::json!({"entity_map": {"1": {"x": 1, "y": 2}}, "parent": "map"});
+    let after =
+      serde_json::json!({"entity_map": {"1": {"x": 3, "y": 4}, "2": {"x": 7}}, "parent": "map"});
+    assert_eq!(distance(&before, &after), 3);
+    assert_eq!(distance(&after, &before), 3);
+    assert_eq!(distance(&before, &before), 0);
+    assert_eq!(
+      distance(
+        &Value::String("parent".into()),
+        &Value::String(format!("hash_{:08X}", jenk_hash("parent")))
+      ),
+      0
+    );
+  }
 }

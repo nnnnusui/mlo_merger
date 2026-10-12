@@ -196,12 +196,8 @@ fn native_xml_to_ymap_rebuilds_full_extracted_xml_corpus() {
   let output_dir = std::env::temp_dir().join("mlo_merger_native_xml_corpus");
   std::fs::create_dir_all(&output_dir).unwrap();
 
-  Xml2Ymap {
-    input_dir: input_dir.clone(),
-    output_dir: output_dir.clone(),
-  }
-  .run_native(&schema_dir)
-  .unwrap();
+  let (_, failed) = convert_files_from_xml(&input_dir, &output_dir, Some(&schema_dir)).unwrap();
+  assert_eq!(failed, 0);
 
   let inputs = std::fs::read_dir(input_dir)
     .unwrap()
@@ -232,12 +228,9 @@ fn native_xml_to_ymap_matches_codewalker_corpus() {
   let roundtrip_dir = output_dir.join("codewalker-xml");
   std::fs::create_dir_all(&roundtrip_dir).unwrap();
 
-  Xml2Ymap {
-    input_dir: input_dir.clone(),
-    output_dir: output_dir.join("native-ymap"),
-  }
-  .run_native(&schema_dir)
-  .unwrap();
+  let (_, failed) =
+    convert_files_from_xml(&input_dir, &output_dir.join("native-ymap"), Some(&schema_dir)).unwrap();
+  assert_eq!(failed, 0);
 
   let binary_inputs = std::fs::read_dir(&schema_dir)
     .unwrap()

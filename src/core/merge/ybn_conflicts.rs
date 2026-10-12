@@ -8,7 +8,7 @@ use walkdir::WalkDir;
 
 use crate::core::{
   codewalker::CodeWalker,
-  extract::get_resource_directories,
+  common::function::get_resource_directories,
   format::ybn::{diff::YbnDiff, merge_ybn_deltas, read_ybn, write_ybn, ybn_to_xml},
 };
 
@@ -231,8 +231,7 @@ impl MergeYbnConflicts {
 
 fn collect_ybn_groups(source_dir: &Path) -> io::Result<BTreeMap<String, Vec<PathBuf>>> {
   let mut paths = Vec::new();
-  let resources = get_resource_directories(&source_dir.to_path_buf())
-    .map_err(|error| io::Error::other(error.to_string()))?;
+  let resources = get_resource_directories(source_dir)?;
   for resource in resources {
     for stream_name in ["stream"] {
       let stream = resource.join(stream_name);

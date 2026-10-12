@@ -24,7 +24,6 @@ mod format;
 mod names;
 mod resource;
 
-pub(crate) use batch::prune_managed_ymap_outputs;
 pub use batch::{convert_files_from_xml, convert_files_to_xml};
 pub use format::NativeResourceFormat;
 pub(crate) use names::load_vanilla_hash_names;

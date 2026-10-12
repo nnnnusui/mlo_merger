@@ -65,7 +65,7 @@ pub(super) fn collect_modded_ymaps_map(
     let file_name = mod_file.file_name().and_then(|n| n.to_str()).ok_or("Invalid file name")?;
 
     // Extract mod name and ymap name from "modname___ymapname.ymap.xml" format
-    if let Some((mod_name, ymap_xml_name)) = file_name.split_once(ExtractYmap::FLATTEN_DELIMITER) {
+    if let Some((mod_name, ymap_xml_name)) = file_name.split_once("___") {
       let ymap_name = ymap_xml_name.trim_end_matches(".xml");
       let info = ModYmapReference {
         mod_name: mod_name.to_string(),

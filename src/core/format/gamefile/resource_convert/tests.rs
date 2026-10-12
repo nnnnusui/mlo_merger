@@ -10,6 +10,35 @@ use crate::core::format::gamefile::{
   resource_file::Rsc7Resource,
 };
 
+#[test]
+fn managed_output_cleanup_preserves_rebuilt_and_unmanaged_files() {
+  let temp =
+    std::env::temp_dir().join(format!("mlo_managed_output_cleanup_{}", std::process::id()));
+  let input = temp.join("input");
+  let output = temp.join("output");
+  std::fs::create_dir_all(&input).unwrap();
+  std::fs::create_dir_all(&output).unwrap();
+  std::fs::write(input.join("_managed_ymaps.txt"), "clone.ymap\nrebuilt.ymap\nvanilla.ymap\n")
+    .unwrap();
+  std::fs::write(input.join("rebuilt.ymap.xml"), "xml").unwrap();
+  for name in ["clone.ymap", "rebuilt.ymap", "vanilla.ymap", "unmanaged.ymap"] {
+    std::fs::write(output.join(name), "binary").unwrap();
+  }
+  let prune = || super::batch::prune_managed_ymap_outputs(&input, &output);
+  prune().unwrap();
+  assert!(!output.join("clone.ymap").exists());
+  assert!(!output.join("vanilla.ymap").exists());
+  assert!(output.join("rebuilt.ymap").exists());
+  assert!(output.join("unmanaged.ymap").exists());
+  std::fs::write(input.join("_managed_ymaps.txt"), "unmanaged.ymap\n../escape.ymap\n").unwrap();
+  assert!(prune().is_err());
+  assert!(
+    output.join("unmanaged.ymap").exists(),
+    "validate the complete manifest before removing files"
+  );
+  std::fs::remove_dir_all(temp).unwrap();
+}
+
 fn assert_repeated_xml_conversion_is_stable(
   format: NativeResourceFormat,
   original_xml: &str,

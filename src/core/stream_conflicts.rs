@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 use walkdir::WalkDir;
 
-use crate::core::extract::get_resource_directories;
+use crate::core::common::function::get_resource_directories;
 
 /// JSON report containing only basenames that occur more than once.
 #[derive(Debug, Clone, Deserialize, PartialEq, Serialize)]
@@ -117,8 +117,7 @@ fn find_stream_directories(input_dir: &Path) -> io::Result<Vec<PathBuf>> {
     if input_dir.join("fxmanifest.lua").is_file() || input_dir.join("__resource.lua").is_file() {
       vec![input_dir.to_path_buf()]
     } else {
-      get_resource_directories(&input_dir.to_path_buf())
-        .map_err(|error| io::Error::other(error.to_string()))?
+      get_resource_directories(input_dir)?
     };
 
   Ok(

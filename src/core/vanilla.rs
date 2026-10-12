@@ -18,7 +18,6 @@ pub use manifest::{CacheVersion, CachedFile, FileChange, VanillaCacheManifest};
 pub use versions::{ListVanillaVersions, VanillaVersionChange, VanillaVersionEntry};
 
 pub(crate) use io::{read_ymap, write_json};
-pub(crate) use logging::VersionLog;
 pub(crate) use manifest::{load_manifest, load_manifest_with_revision};
 
 #[cfg(test)]

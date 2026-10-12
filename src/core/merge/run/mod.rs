@@ -2,8 +2,6 @@ use super::cache_inputs::VanillaHistory;
 use super::duplicates::{Change, Collector, Contribution, DuplicateReport};
 use crate::core::common::function::collect_files_with_suffix;
 use crate::core::config::blacklist::BlacklistConfig;
-use crate::core::diff_cache::ymap_distance;
-use crate::core::extract::ExtractYmap;
 use crate::core::format::ymap::diff::{YmapDiff, reference_hash};
 use crate::core::format::ymap::model::ymap::Ymap;
 use crate::core::format::ymap::xml::XmlYmap;
@@ -52,11 +50,13 @@ impl MergeYmap {
   }
 }
 
+mod comparison;
 mod engine;
 mod inputs;
 mod output;
 mod plan;
 
+use comparison::ymap_distance;
 use inputs::{
   ModYmapReference, best_cached_ymap_diff, collect_modded_ymaps_map, latest_ymap_paths,
 };
