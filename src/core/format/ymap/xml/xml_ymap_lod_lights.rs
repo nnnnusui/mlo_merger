@@ -38,7 +38,7 @@ impl From<XmlYmapLodLightsSoa> for Vec<YmapLodLight> {
   fn from(v: XmlYmapLodLightsSoa) -> Self {
     // If there's an error, log it and return empty data
     if let Some(error) = v.error.filter(|error| !error.trim().is_empty()) {
-      log::warn!("LODLightsSOA error: {}", error);
+      tracing::warn!("LODLightsSOA error: {}", error);
       return Self::default();
     }
 

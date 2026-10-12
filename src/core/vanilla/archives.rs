@@ -80,7 +80,7 @@ pub(super) fn extract(
   subtree: Option<&str>,
   rpf_names: &mut BTreeSet<String>,
 ) -> Result<Vec<ExtractedFile>> {
-  log::info!("Scanning {relative}");
+  tracing::info!("Scanning {relative}");
   let archive = game_path(game_dir, Path::new(relative))?;
   match subtree {
     Some(subtree) => codewalker.extract_rpf_subtree(&archive, subtree, output)?,
@@ -123,7 +123,7 @@ pub(super) fn platform_archives(
   let mut archives = BTreeMap::new();
   for relative in roots.into_iter().filter(|name| name.starts_with("x64") && name.ends_with(".rpf"))
   {
-    log::info!("Indexing platform archives in {relative}");
+    tracing::info!("Indexing platform archives in {relative}");
     let output = staging.join("archives.json");
     codewalker.list_rpf_paths(&game_path(game_dir, Path::new(&relative))?, &output)?;
     let paths: Vec<String> = serde_json::from_reader(BufReader::new(fs::File::open(output)?))?;

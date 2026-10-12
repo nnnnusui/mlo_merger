@@ -116,7 +116,7 @@ impl Merge {
     }
     publish_directory(&staging.0, &output_dir)?;
     overwrite_cache.save(&source_cache_dir)?;
-    log::info!("Published merged stream files to {}", output_dir.display());
+    tracing::info!("Published merged stream files to {}", output_dir.display());
     Ok(())
   }
 }
@@ -139,11 +139,11 @@ fn dispatch_vanilla_stream_files(latest_dir: &Path) -> Result<VanillaStreamFiles
       Some(extension) if extension.eq_ignore_ascii_case("ybn") => {
         files.ybn.push(path.to_path_buf());
       }
-      Some(extension) => log::debug!(
+      Some(extension) => tracing::debug!(
         "Skipping unsupported vanilla stream extension .{extension}: {}",
         path.display()
       ),
-      None => log::debug!("Skipping extensionless vanilla stream file: {}", path.display()),
+      None => tracing::debug!("Skipping extensionless vanilla stream file: {}", path.display()),
     }
   }
   files.ymap.sort();
@@ -201,7 +201,7 @@ fn publish_directory(
     return Err(error.into());
   }
   if existed && let Err(error) = fs::remove_dir_all(backup) {
-    log::warn!("Could not remove previous merge output: {error}");
+    tracing::warn!("Could not remove previous merge output: {error}");
   }
   Ok(())
 }

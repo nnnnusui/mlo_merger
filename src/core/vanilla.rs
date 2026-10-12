@@ -6,22 +6,18 @@ mod archives;
 mod generate;
 mod hash_index;
 mod io;
-mod logging;
 mod manifest;
 mod publication;
 mod stage;
 mod versions;
 
 pub(crate) use generate::BuildVanillaArchive;
-pub use logging::version_logger;
 pub use manifest::{CacheVersion, CachedFile, FileChange, VanillaCacheManifest};
 pub use versions::{ListVanillaVersions, VanillaVersionChange, VanillaVersionEntry};
 
 pub(crate) use io::{read_ymap, write_json};
 pub(crate) use manifest::{load_manifest, load_manifest_with_revision};
 
-#[cfg(test)]
-pub(crate) use logging::init_test_version_logger;
 #[cfg(test)]
 mod tests;
 
@@ -67,7 +63,7 @@ impl GenerateVanilla {
     if self.reuse_existing {
       if self.output_dir.join("cache_info.json").is_file() {
         load_manifest(&self.output_dir)?;
-        log::info!("Reusing existing vanilla archive");
+        tracing::info!("Reusing existing vanilla archive");
         return Ok(());
       }
       if self.output_dir.is_dir() && std::fs::read_dir(&self.output_dir)?.next().is_some() {

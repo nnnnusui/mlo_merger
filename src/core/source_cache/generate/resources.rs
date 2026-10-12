@@ -70,12 +70,12 @@ pub(super) fn update_selected_resources(
         ensure_safe_path(output, &cached_path)?;
         if !cached_path.is_file() {
           if resource.join(&file.path).is_file() {
-            log::warn!(
+            tracing::warn!(
               "Source-cache artifact is missing and will be restored from source: {}",
               cached_path.display()
             );
           } else {
-            log::warn!(
+            tracing::warn!(
               "Source file disappeared; dropping stale source-cache record: {}",
               cached_path.display()
             );
@@ -105,7 +105,7 @@ pub(super) fn update_selected_resources(
       continue;
     }
     changed = true;
-    log::info!("Updating source resource {id}");
+    tracing::info!("Updating source resource {id}");
     let mut inventory = source_inventory(
       source_dir,
       std::slice::from_ref(resource),

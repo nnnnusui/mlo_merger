@@ -12,7 +12,7 @@ use super::{
   hash_index::write_hash_index,
   io::write_json,
   manifest::VanillaCacheManifest,
-  publication::{Staging, preserve_failed_logs, publish_cache, reset_output_directory},
+  publication::{Staging, publish_cache, reset_output_directory},
   stage::stage,
 };
 use crate::core::codewalker::CodeWalker;
@@ -29,7 +29,7 @@ pub struct BuildVanillaArchive {
 }
 
 impl BuildVanillaArchive {
-  /// Reads installed root RPFs and ordered DLCs, saving changed raw files and version logs.
+  /// Reads installed root RPFs and ordered DLCs, saving changed raw files by version.
   pub fn run(
     &self,
     codewalker: &CodeWalker,
@@ -44,14 +44,7 @@ impl BuildVanillaArchive {
     let staging = Staging(staging_path);
     let build = staging.0.join("cache");
     fs::create_dir(&build)?;
-    let result = self.build(codewalker, &game_dir, roots, &staging.0, &build, &output_dir);
-    if result.is_err() {
-      match preserve_failed_logs(&build, &output_dir) {
-        Ok(path) => log::error!("Preserved failed cache logs at {}", path.display()),
-        Err(error) => log::error!("Could not preserve failed cache logs: {error}"),
-      }
-    }
-    result
+    self.build(codewalker, &game_dir, roots, &staging.0, &build, &output_dir)
   }
 
   fn build(
@@ -193,7 +186,7 @@ impl BuildVanillaArchive {
     write_json(&build.join("cache_info.json"), &manifest)?;
     write_hash_index(build, manifest, rpf_names)?;
     publish_cache(build, output_dir, manifest)?;
-    log::info!("Saved {} vanilla stages to {}", manifest.versions.len(), output_dir.display());
+    tracing::info!("Saved {} vanilla stages to {}", manifest.versions.len(), output_dir.display());
     Ok(())
   }
 }

@@ -43,7 +43,10 @@ impl MergeYmap {
           if clone_path.exists() {
             fs::remove_file(&clone_path)?;
           }
-          log::info!("  [Success] Wrote merged/relinked YMAP binary to: {}", binary_path.display());
+          tracing::info!(
+            "  [Success] Wrote merged/relinked YMAP binary to: {}",
+            binary_path.display()
+          );
           continue;
         }
         let xml_string = if let Some(entities) = &output.clone_entities {
@@ -72,7 +75,7 @@ impl MergeYmap {
         if clone_path.exists() {
           fs::remove_file(&clone_path)?;
         }
-        log::info!("  [Success] Wrote merged/relinked YMAP to: {}", xml_path.display());
+        tracing::info!("  [Success] Wrote merged/relinked YMAP to: {}", xml_path.display());
       } else if let Some(target) = output.copy_target {
         let ymap_xml_name = target.mod_ymap_path.file_name().unwrap().to_string_lossy();
         let extracted_ymap_name = ymap_xml_name.trim_end_matches(".xml");
@@ -82,7 +85,7 @@ impl MergeYmap {
         if xml_path.exists() {
           fs::remove_file(&xml_path)?;
         }
-        log::info!(
+        tracing::info!(
           "Copied single-mod YMAP to clone output (vanilla diff merge skipped): {binary_name}"
         );
       } else {

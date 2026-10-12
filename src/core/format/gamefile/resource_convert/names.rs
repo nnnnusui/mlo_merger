@@ -11,7 +11,7 @@ pub(crate) fn load_vanilla_hash_names() -> HashMap<u32, String> {
     Ok(names) => names,
     Err(error) if error.kind() == io::ErrorKind::NotFound => HashMap::new(),
     Err(error) => {
-      log::warn!("Failed to load vanilla hash names from {}: {error}", path.display());
+      tracing::warn!("Failed to load vanilla hash names from {}: {error}", path.display());
       HashMap::new()
     }
   }

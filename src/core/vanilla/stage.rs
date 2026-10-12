@@ -8,7 +8,6 @@ use super::{
   Result,
   archives::ExtractedFile,
   io::write_json,
-  logging::VersionLog,
   manifest::{CacheVersion, CachedFile, FileChange, VanillaCacheManifest},
 };
 
@@ -24,11 +23,12 @@ pub(super) fn stage(
   fs::create_dir(&directory)?;
   fs::create_dir(directory.join("ymap"))?;
   fs::create_dir(directory.join("ybn"))?;
-  let version_log = VersionLog::start(&directory)?;
+  let span = tracing::info_span!("vanilla_cache_stage", stage = %id);
+  let _entered = span.enter();
   let result = (|| -> Result<()> {
-    log::info!("Creating cache {id}");
+    tracing::info!("Creating cache {id}");
     let (archives, files) = files()?;
-    log::info!("Processing archives: {}", archives.join(", "));
+    tracing::info!("Processing archives: {}", archives.join(", "));
     let mut winners = BTreeMap::new();
     for (file, directory) in files {
       if file.name.ends_with(".ymap") || file.name.ends_with(".ybn") {
@@ -38,7 +38,7 @@ pub(super) fn stage(
         if let Some((previous, _)) = winners.get(&file.name) {
           let previous: &ExtractedFile = previous;
           if previous.sha256 != file.sha256 {
-            log::warn!(
+            tracing::warn!(
               "Within-stage override {}: {} -> {}",
               file.name,
               previous.source,
@@ -55,7 +55,7 @@ pub(super) fn stage(
       let previous = current.get(&name);
       if previous.is_some_and(|previous| previous.sha256 == file.sha256) {
         unchanged += 1;
-        log::debug!("Unchanged {name}: {}", file.source);
+        tracing::debug!("Unchanged {name}: {}", file.source);
         continue;
       }
       let input = directory.join(&file.stored);
@@ -63,9 +63,9 @@ pub(super) fn stage(
       let object = format!("{id}/{family}/{name}");
       let destination = output.join(&object);
       if let Some(previous) = previous {
-        log::info!("Modified {name}: {} -> {}", previous.source, file.source);
+        tracing::info!("Modified {name}: {} -> {}", previous.source, file.source);
       } else {
-        log::info!("Added {name}: {}", file.source);
+        tracing::info!("Added {name}: {}", file.source);
       }
       fs::copy(&input, &destination)?;
       let cached = CachedFile {
@@ -82,7 +82,7 @@ pub(super) fn stage(
       );
       current.insert(name, cached);
     }
-    log::info!(
+    tracing::info!(
       "{id}: {} additions/replacements, {unchanged} unchanged, {} effective native files",
       changes.len(),
       current.len()
@@ -99,8 +99,7 @@ pub(super) fn stage(
     Ok(())
   })();
   if let Err(error) = &result {
-    log::error!("Cache creation failed: {error}");
+    tracing::error!("Cache creation failed: {error}");
   }
-  version_log.finish()?;
   result
 }

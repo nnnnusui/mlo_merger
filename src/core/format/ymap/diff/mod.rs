@@ -74,6 +74,7 @@ impl YmapDiff {
       check_diffs(vanilla, modded);
     }
 
+    let _span = tracing::info_span!("ymap_diff", map = %vanilla.name).entered();
     let entity_diffs = YmapEntityDiff::extract_from(vanilla, modded);
     YmapEntityDiff::print_diffs(&entity_diffs);
     let box_occluder_diffs = YmapBoxOccluderDiff::extract_from(vanilla, modded);
@@ -194,7 +195,7 @@ impl YmapDiff {
       if diffs.len() > 1 {
         let tails =
           diffs.iter().filter(|candidate| !std::ptr::eq(*candidate, diff)).collect::<Vec<_>>();
-        log::warn!(
+        tracing::warn!(
           "    Multiple diffs for entity GUID {}. applied: {:?} ignored: {:?}",
           guid,
           diff,
@@ -239,7 +240,7 @@ impl YmapDiff {
           if let Some(index) = vanilla.box_occluders.iter().position(|vanilla| vanilla.is_same(&it))
             && box_occluder_removed_vanilla_indices.contains(&index)
           {
-            log::warn!(
+            tracing::warn!(
               "    skipped _ Attempting to modify a box occluder that was removed: {:?}",
               it
             );
@@ -272,7 +273,11 @@ impl YmapDiff {
           if let Some(blacklist_config) = blacklist
             && blacklist_config.is_occlude_model_blacklisted(&it.bmin, &it.bmax)
           {
-            log::info!("      [Blacklisted] Occlude Model: bmin={:?}, bmax={:?}", it.bmin, it.bmax);
+            tracing::info!(
+              "      [Blacklisted] Occlude Model: bmin={:?}, bmax={:?}",
+              it.bmin,
+              it.bmax
+            );
             continue;
           }
           modded.occlude_models.push(it.clone());
@@ -286,7 +291,7 @@ impl YmapDiff {
             vanilla.occlude_models.iter().position(|vanilla| vanilla.is_same(&it))
             && occlude_model_removed_vanilla_indices.contains(&index)
           {
-            log::warn!(
+            tracing::warn!(
               "    skipped _ Attempting to modify a occlude model that was removed: {:?}",
               it
             );
@@ -501,29 +506,29 @@ fn check_diffs_without_full_model_diff(
   modded: &Ymap,
 ) {
   if vanilla.name != modded.name {
-    log::info!("    skip changes: <name /> _ {} -> {}", vanilla.name, modded.name);
+    tracing::info!("    skip changes: <name /> _ {} -> {}", vanilla.name, modded.name);
   }
   if vanilla.flags != modded.flags {
-    log::info!(
+    tracing::info!(
       "    skip changes: <contentFlags /> _ {:?} -> {:?}",
       vanilla.content_flags,
       modded.content_flags
     );
   }
   if vanilla.streaming_extents_max != modded.streaming_extents_max {
-    log::info!("    skip changes: <streamingExtentsMax />");
+    tracing::info!("    skip changes: <streamingExtentsMax />");
   }
   if vanilla.streaming_extents_min != modded.streaming_extents_min {
-    log::info!("    skip changes: <streamingExtentsMin />");
+    tracing::info!("    skip changes: <streamingExtentsMin />");
   }
   if vanilla.entities_extents_max != modded.entities_extents_max {
-    log::info!("    skip changes: <entitiesExtentsMax />");
+    tracing::info!("    skip changes: <entitiesExtentsMax />");
   }
   if vanilla.entities_extents_min != modded.entities_extents_min {
-    log::info!("    skip changes: <entitiesExtentsMin />");
+    tracing::info!("    skip changes: <entitiesExtentsMin />");
   }
   if vanilla.block != modded.block {
-    log::info!("    skip changes: <block/>");
+    tracing::info!("    skip changes: <block/>");
   }
 }
 
@@ -696,13 +701,13 @@ fn check_diffs(
   let diffs = vanilla.diff(modded);
   for diff in &diffs {
     match diff {
-      YmapStructDiffEnum::name(_) => log::info!("    skip changes: <name /> _ {} -> {}", vanilla.name, modded.name),
-      YmapStructDiffEnum::flags(_) => log::info!("    skip changes: <contentFlags /> _ {:?} -> {:?}", vanilla.content_flags, modded.content_flags),
+      YmapStructDiffEnum::name(_) => tracing::info!("    skip changes: <name /> _ {} -> {}", vanilla.name, modded.name),
+      YmapStructDiffEnum::flags(_) => tracing::info!("    skip changes: <contentFlags /> _ {:?} -> {:?}", vanilla.content_flags, modded.content_flags),
       YmapStructDiffEnum::content_flags(_) => {}
-      YmapStructDiffEnum::streaming_extents_max(_) => log::info!("    skip changes: <streamingExtentsMax />"),
-      YmapStructDiffEnum::streaming_extents_min(_) => log::info!("    skip changes: <streamingExtentsMin />"),
-      YmapStructDiffEnum::entities_extents_max(_) => log::info!("    skip changes: <entitiesExtentsMax />"),
-      YmapStructDiffEnum::entities_extents_min(_) => log::info!("    skip changes: <entitiesExtentsMin />"),
+      YmapStructDiffEnum::streaming_extents_max(_) => tracing::info!("    skip changes: <streamingExtentsMax />"),
+      YmapStructDiffEnum::streaming_extents_min(_) => tracing::info!("    skip changes: <streamingExtentsMin />"),
+      YmapStructDiffEnum::entities_extents_max(_) => tracing::info!("    skip changes: <entitiesExtentsMax />"),
+      YmapStructDiffEnum::entities_extents_min(_) => tracing::info!("    skip changes: <entitiesExtentsMin />"),
       YmapStructDiffEnum::entity_map(_) => {}
       YmapStructDiffEnum::box_occluders(_) => {}
       YmapStructDiffEnum::occlude_models(_) => {}
@@ -710,10 +715,10 @@ fn check_diffs(
       YmapStructDiffEnum::car_generators(_) => {}
       YmapStructDiffEnum::lod_lights(_) => {}
       YmapStructDiffEnum::distant_lod_lights(_) => {}
-      YmapStructDiffEnum::block(_) => log::info!("    skip changes: <block/>"),
+      YmapStructDiffEnum::block(_) => tracing::info!("    skip changes: <block/>"),
       YmapStructDiffEnum::parent(_) | YmapStructDiffEnum::physics_dictionaries(_) => {}
       YmapStructDiffEnum::instanced_data(_) => {}
-      it => log::warn!("    skip unsupported changes: {:?}", it),
+      it => tracing::warn!("    skip unsupported changes: {:?}", it),
     }
   }
 }

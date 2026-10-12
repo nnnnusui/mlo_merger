@@ -56,8 +56,8 @@ pub(super) fn source_fingerprints(
       }
     }
     if resource_fingerprints_changed(&id, &files, cached) {
-      log::info!("Fingerprinting source resource {}/{}: {id}", index + 1, total);
-      log::info!("Fingerprint complete for {id}: {} files", files.len() - before);
+      tracing::info!("Fingerprinting source resource {}/{}: {id}", index + 1, total);
+      tracing::info!("Fingerprint complete for {id}: {} files", files.len() - before);
     }
   }
   Ok(files)
@@ -85,7 +85,7 @@ pub(super) fn source_inventory(
   let total = resources.len();
   for (index, resource) in resources.iter().enumerate() {
     let id = resource_id(source_dir, resource)?;
-    log::info!("Inventorying source resource {}/{}: {id}", index + 1, total);
+    tracing::info!("Inventorying source resource {}/{}: {id}", index + 1, total);
     let mut files_by_format: BTreeMap<String, Vec<SourceFile>> = BTreeMap::new();
     for stream_name in ["stream", "streams"] {
       let stream = resource.join(stream_name);
@@ -134,7 +134,7 @@ pub(super) fn source_inventory(
           match ymap_parent_hash(path) {
             Ok(hash) => (Some(format!("{hash:08X}")), None),
             Err(error) => {
-              log::warn!("Could not read YMAP parent reference {}: {error}", path.display());
+              tracing::warn!("Could not read YMAP parent reference {}: {error}", path.display());
               (None, Some(error.to_string()))
             }
           }
@@ -166,7 +166,7 @@ pub(super) fn source_inventory(
         files_by_format,
       },
     );
-    log::info!("Inventory complete for {id}: {file_count} stream files");
+    tracing::info!("Inventory complete for {id}: {file_count} stream files");
   }
   Ok(inventories)
 }

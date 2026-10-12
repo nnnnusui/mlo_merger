@@ -52,7 +52,7 @@ pub(super) fn write_hash_index(
     let path = checked_artifact_path(vanilla_dir, &file.object)?;
     let bytes = fs::read(&path)?;
     if !bytes.starts_with(b"RSC7") {
-      log::debug!("Skipping non-RSC7 YMAP hash extraction: {}", path.display());
+      tracing::debug!("Skipping non-RSC7 YMAP hash extraction: {}", path.display());
       continue;
     }
     let parsed = Rsc7Resource::decode(&bytes).and_then(|resource| {
@@ -62,7 +62,7 @@ pub(super) fn write_hash_index(
     let parsed = match parsed {
       Ok(parsed) => parsed,
       Err(error) => {
-        log::warn!("Could not extract YMAP names from {}: {error}", path.display());
+        tracing::warn!("Could not extract YMAP names from {}: {error}", path.display());
         continue;
       }
     };

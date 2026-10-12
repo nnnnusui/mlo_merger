@@ -1,4 +1,4 @@
-//! GTAV archive, stage, logging and publication regression tests.
+//! GTAV archive, stage and publication regression tests.
 
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
@@ -10,7 +10,7 @@ use super::{
   archives::{
     DlcList, ExtractedFile, base_archives, dlc_archive, patch_dlc, platform_virtual_path,
   },
-  publication::{Staging, preserve_failed_logs, publish_cache, reset_output_directory},
+  publication::{Staging, publish_cache, reset_output_directory},
   stage::stage,
 };
 
@@ -149,7 +149,6 @@ fn cache_manifest_requires_schema_one_and_root_metadata() {
 
 #[test]
 fn stages_store_only_changed_raw_files_and_resolve_prior_versions() {
-  init_test_version_logger();
   let root = std::env::temp_dir().join(format!("vanilla_cache_test_{}", std::process::id()));
   fs::create_dir_all(&root).unwrap();
   let _cleanup = Staging(root.clone());
@@ -207,19 +206,10 @@ fn stages_store_only_changed_raw_files_and_resolve_prior_versions() {
   assert_eq!(fs::read(root.join("0001-dlc/ymap/c.ymap")).unwrap(), b"second map version");
   for version in &manifest.versions {
     assert!(root.join(&version.id).join("version_info.json").is_file());
-    assert!(root.join(&version.id).join("create_cache.log").is_file());
+    assert!(!root.join(&version.id).join("create_cache.log").exists());
     assert!(root.join(&version.id).join("ymap").is_dir());
     assert!(!root.join(&version.id).join("native").exists());
   }
-  let log = fs::read_to_string(root.join("0001-dlc/create_cache.log")).unwrap();
-  assert!(log.contains("Modified a.ymap"));
-  assert!(log.contains("Added c.ymap"));
-  assert!(log.contains("Unchanged b.ymap"));
-  assert!(
-    !fs::read_to_string(root.join("0002-empty/create_cache.log"))
-      .unwrap()
-      .contains("Modified a.ymap")
-  );
   stage(&mut manifest, &mut current, &root, "next", || {
     Ok((vec![], vec![file("a.ymap", "333", "third")]))
   })
@@ -229,13 +219,7 @@ fn stages_store_only_changed_raw_files_and_resolve_prior_versions() {
   let failed =
     stage(&mut manifest, &mut current, &root, "failed", || Err("test extraction failure".into()));
   assert!(failed.is_err());
-  assert!(
-    fs::read_to_string(root.join("0004-failed/create_cache.log"))
-      .unwrap()
-      .contains("test extraction failure")
-  );
-  let failures = preserve_failed_logs(&root, &root).unwrap();
-  assert!(failures.join("0004-failed/create_cache.log").is_file());
+  assert!(!root.join("0004-failed/create_cache.log").exists());
 }
 
 #[test]

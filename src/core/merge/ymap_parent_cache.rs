@@ -50,7 +50,7 @@ impl VanillaParentCache {
         Ok(cache) if cache.version == CACHE_VERSION => cache.entries,
         Ok(_) => BTreeMap::new(),
         Err(error) => {
-          log::warn!("Ignoring invalid YMAP parent cache {}: {error}", cache_path.display());
+          tracing::warn!("Ignoring invalid YMAP parent cache {}: {error}", cache_path.display());
           BTreeMap::new()
         }
       },
@@ -103,7 +103,7 @@ impl VanillaParentCache {
       entries: entries.clone(),
     };
     fs::write(cache_path, serde_json::to_vec(&cache).map_err(io::Error::other)?)?;
-    log::info!(
+    tracing::info!(
       "Vanilla YMAP parent cache: parsed {}, reused {}, removed {}",
       stats.parsed,
       stats.reused,

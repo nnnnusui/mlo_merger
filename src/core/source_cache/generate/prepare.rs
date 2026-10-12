@@ -136,7 +136,7 @@ pub(super) fn prepare(build: &BuildSourceCache) -> Result<Prepared> {
       checks.insert(id.clone(), check);
     }
     relocated = true;
-    log::info!("Relocated source resource {old_id} -> {id}");
+    tracing::info!("Relocated source resource {old_id} -> {id}");
   }
   let (_, manifest_sha256) = load_manifest_with_revision(&vanilla_dir)?;
   let derived = load_cache(&vanilla_cache_dir, &manifest_sha256)?;

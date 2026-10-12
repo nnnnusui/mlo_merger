@@ -24,20 +24,21 @@ impl YmapEntityDiff {
   }
 
   pub fn print_diffs(diffs: &Vec<YmapEntityDiff>) {
-    log::info!("    Found {} entity differences", diffs.len());
+    let _span = tracing::info_span!("entities").entered();
+    tracing::info!("Found {} differences", diffs.len());
     for diff in diffs {
       match diff {
         Self::Added(e) => {
-          log::info!("      [Added] Entity: {} {}", e.guid, e.archetype_name);
+          tracing::info!("[Added] Entity: {} {}", e.guid, e.archetype_name);
         }
         Self::Removed(e) => {
-          log::info!("      [Removed] Entity: {} {}", e.guid, e.archetype_name);
+          tracing::info!("[Removed] Entity: {} {}", e.guid, e.archetype_name);
         }
         Self::Modified {
           vanilla: _,
           diffs,
         } => {
-          log::info!("      [Modified] Diffs: {:?}", diffs);
+          tracing::info!("[Modified] Diffs: {:?}", diffs);
         }
       }
     }

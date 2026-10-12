@@ -27,7 +27,7 @@ impl From<XmlYmapDistantLodLightsSoa> for YmapDistantLodLights {
   fn from(v: XmlYmapDistantLodLightsSoa) -> Self {
     // If there's an error, log it and return empty data
     if let Some(error) = v.error.filter(|error| !error.trim().is_empty()) {
-      log::warn!("DistantLODLightsSOA error: {}", error);
+      tracing::warn!("DistantLODLightsSOA error: {}", error);
       return Self::default();
     }
 

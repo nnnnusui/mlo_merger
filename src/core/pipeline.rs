@@ -61,7 +61,7 @@ impl Pipeline {
     }
     self.validate_paths()?;
 
-    log::info!("Pipeline: generate-vanilla");
+    tracing::info!("Pipeline: generate-vanilla");
     GenerateVanilla {
       game_dir: self.game_dir.clone(),
       output_dir: self.vanilla_dir.clone(),
@@ -70,7 +70,7 @@ impl Pipeline {
     }
     .run()?;
 
-    log::info!("Pipeline: generate-vanilla-cache");
+    tracing::info!("Pipeline: generate-vanilla-cache");
     let vanilla_cache = BuildVanillaCache {
       vanilla_dir: self.vanilla_dir.clone(),
       output_dir: self.vanilla_cache_dir.clone(),
@@ -78,9 +78,9 @@ impl Pipeline {
       force: self.force,
     }
     .run()?;
-    log::info!("{}", vanilla_cache.summary());
+    tracing::info!("{}", vanilla_cache.summary());
 
-    log::info!("Pipeline: generate-source-cache");
+    tracing::info!("Pipeline: generate-source-cache");
     BuildSourceCache {
       source_dir: self.source_dir.clone(),
       output_dir: self.source_cache_dir.clone(),
@@ -92,7 +92,7 @@ impl Pipeline {
     }
     .run()?;
 
-    log::info!("Pipeline: merge");
+    tracing::info!("Pipeline: merge");
     Merge {
       source_dir: self.source_dir.clone(),
       vanilla_dir: self.vanilla_dir.clone(),
@@ -105,7 +105,7 @@ impl Pipeline {
     }
     .run()?;
 
-    log::info!("Pipeline: deploy");
+    tracing::info!("Pipeline: deploy");
     Deploy {
       merged_dir: self.merged_dir.clone(),
       source_cache_dir: self.source_cache_dir.clone(),

@@ -70,7 +70,7 @@ pub(super) fn merge_reference(
   if let Some(incoming) = incoming {
     match current {
       Some(current) if reference_hash(current) != reference_hash(&incoming) => {
-        log::warn!("    Conflicting {field}: keeping {current}, ignoring {incoming}");
+        tracing::warn!("    Conflicting {field}: keeping {current}, ignoring {incoming}");
       }
       Some(_) => {}
       None => *current = Some(incoming),

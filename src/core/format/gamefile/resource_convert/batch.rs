@@ -44,7 +44,7 @@ pub fn convert_files_to_xml(
         converted += 1;
       }
       Err(error) => {
-        log::error!("Failed to convert {} to XML: {error}", source.display());
+        tracing::error!("Failed to convert {} to XML: {error}", source.display());
         failed += 1;
       }
     }
@@ -138,7 +138,7 @@ pub fn convert_files_from_xml(
         converted += 1;
       }
       Err(error) => {
-        log::error!("Failed to convert {} to binary: {error}", source.display());
+        tracing::error!("Failed to convert {} to binary: {error}", source.display());
         failed += 1;
       }
     }

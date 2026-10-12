@@ -139,10 +139,10 @@ impl IncrementalMerge<'_> {
             });
           }
         }
-        log::debug!("Reusing {} merge group ({} files)", group.extension, group.names.len());
+        tracing::debug!("Reusing {} merge group ({} files)", group.extension, group.names.len());
       } else {
         rebuilt += 1;
-        log::info!("Updating {} merge group ({} files)", group.extension, group.names.len());
+        tracing::info!("Updating {} merge group ({} files)", group.extension, group.names.len());
         let duplicates = self.merge_group(&group, &sources, &baselines)?;
         if group.extension == "ymap" {
           edits.patch(&group.names, &self.staging.join("ymap"), &baselines)?;
@@ -230,7 +230,7 @@ impl IncrementalMerge<'_> {
       && light_report_current
       && fs::read_to_string(self.output.join("_omit.txt")).ok().as_deref() == Some(&omit_text)
     {
-      log::info!("Merge output is current; nothing to do");
+      tracing::info!("Merge output is current; nothing to do");
       return Ok(false);
     }
     for (from, to) in retained_files {
@@ -251,7 +251,7 @@ impl IncrementalMerge<'_> {
         files,
       },
     )?;
-    log::info!("Incremental merge: {rebuilt} groups rebuilt, {reused} groups reused");
+    tracing::info!("Incremental merge: {rebuilt} groups rebuilt, {reused} groups reused");
     Ok(true)
   }
 }

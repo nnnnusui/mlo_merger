@@ -20,20 +20,21 @@ impl YmapDistantLodLightDiff {
   }
 
   pub fn print_diffs(diffs: &Vec<YmapDistantLodLightDiff>) {
-    log::info!("    Found {} distant LOD light differences", diffs.len());
+    let _span = tracing::info_span!("distant_lod_lights").entered();
+    tracing::info!("Found {} differences", diffs.len());
     for diff in diffs {
       match diff {
         Self::Added(light) => {
-          log::info!("      [Added] Distant LOD Light at: {}", light.position);
+          tracing::info!("[Added] Distant LOD Light at: {}", light.position);
         }
         Self::Removed(light) => {
-          log::info!("      [Removed] Distant LOD Light at: {}", light.position);
+          tracing::info!("[Removed] Distant LOD Light at: {}", light.position);
         }
         Self::Modified {
           vanilla,
           modded: _,
         } => {
-          log::info!("      [Modified] Distant LOD Light at: {}", vanilla.position);
+          tracing::info!("[Modified] Distant LOD Light at: {}", vanilla.position);
         }
       }
     }

@@ -145,7 +145,7 @@ impl MergeYbnConflicts {
       if has_vanilla {
         conflicts.push((name, paths));
       } else {
-        log::warn!("Skipping YBN source group {name}: latest vanilla file is missing");
+        tracing::warn!("Skipping YBN source group {name}: latest vanilla file is missing");
       }
     }
     if conflicts.is_empty() {
@@ -157,7 +157,7 @@ impl MergeYbnConflicts {
         }
       }
       fs::write(&self.omitted_files_path, "")?;
-      log::info!("No vanilla-matched source YBNs found");
+      tracing::info!("No vanilla-matched source YBNs found");
       return Ok(());
     }
     fs::create_dir_all(&self.output_dir)?;
@@ -190,12 +190,12 @@ impl MergeYbnConflicts {
             let source_bytes = fs::read(path)?;
             let source_model = read_ybn(&source_bytes)?;
             let (difference_count, version, diff) = best_ybn_diff(history, name, &source_model)?;
-            log::info!("Best YBN baseline for {}: {version} ({difference_count} changes)", path.display());
+            tracing::info!("Best YBN baseline for {}: {version} ({difference_count} changes)", path.display());
             let latest = history.latest_file(name)?;
             match diff.apply_rebased_to(&history.ybn_model(latest)?) {
               Ok(rebased) => Ok(write_ybn(&rebased)?),
               Err(error) => {
-                log::warn!("Cannot semantically rebase YBN changes for {}; using the source file directly with the native geometry merger: {error}", path.display());
+                tracing::warn!("Cannot semantically rebase YBN changes for {}; using the source file directly with the native geometry merger: {error}", path.display());
                 Ok(source_bytes)
               }
             }
@@ -218,13 +218,13 @@ impl MergeYbnConflicts {
       for path in paths {
         omitted.push(path.strip_prefix(&self.source_dir)?.to_string_lossy().replace('\\', "/"));
       }
-      log::info!("    Merged YBN conflict {} from {} source files", name, paths.len());
+      tracing::info!("    Merged YBN conflict {} from {} source files", name, paths.len());
     }
     let _ = fs::remove_dir_all(temporary);
     omitted.sort();
     omitted.dedup();
     fs::write(&self.omitted_files_path, omitted.join("\n"))?;
-    log::info!("Merged {} vanilla-backed YBN source groups", conflicts.len());
+    tracing::info!("Merged {} vanilla-backed YBN source groups", conflicts.len());
     Ok(())
   }
 }

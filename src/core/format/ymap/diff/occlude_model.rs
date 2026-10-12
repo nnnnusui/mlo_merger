@@ -36,21 +36,22 @@ impl YmapOccludeModelDiff {
   }
 
   pub fn print_diffs(diffs: &Vec<YmapOccludeModelDiff>) {
-    log::info!("    Found {} occlude model  differences", diffs.len());
+    let _span = tracing::info_span!("occlude_models").entered();
+    tracing::info!("Found {} differences", diffs.len());
     for diff in diffs {
       match diff {
         Self::Added(m) => {
-          log::info!("      [Added] Occlude Model: bmin={:?}, bmax={:?}", m.bmin, m.bmax);
+          tracing::info!("[Added] Occlude Model: bmin={:?}, bmax={:?}", m.bmin, m.bmax);
         }
         Self::Removed(m) => {
-          log::info!("      [Removed] Occlude Model: bmin={:?}, bmax={:?}", m.bmin, m.bmax);
+          tracing::info!("[Removed] Occlude Model: bmin={:?}, bmax={:?}", m.bmin, m.bmax);
         }
         Self::Modified {
           vanilla: _,
           diffs,
           triangle_diffs,
         } => {
-          log::info!("      [Modified] Diffs: {:?}", diffs);
+          tracing::info!("[Modified] Diffs: {:?}", diffs);
           continue_early!(if (triangle_diffs.is_empty()) continue);
 
           let added_count = triangle_diffs
@@ -61,7 +62,8 @@ impl YmapOccludeModelDiff {
             .iter()
             .filter(|d| matches!(d, YmapOccludeModelTriangleDiff::Removed(_)))
             .count();
-          log::info!("        Triangle Diffs: {} Added, {} Removed", added_count, removed_count);
+          let _triangle_span = tracing::info_span!("triangle_diffs").entered();
+          tracing::info!("{} Added, {} Removed", added_count, removed_count);
         }
       }
     }

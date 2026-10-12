@@ -183,14 +183,14 @@ impl SourceMaps {
       {
         Ok(Some(handle)) => handle,
         Ok(None) => {
-          log::warn!(
+          tracing::warn!(
             "    Parent map {owner:08X} unavailable for entity {} index {index}; preserving only if parent remains unavailable",
             entity.guid
           );
           references.capture_unresolved(namespace, owner, None, index)?
         }
         Err(error) => {
-          log::warn!(
+          tracing::warn!(
             "    Unresolved parent for entity {}: {error}; changes to its parent layout will be rejected",
             entity.guid
           );
@@ -210,7 +210,7 @@ fn warn_duplicate_map(
   path: &Path,
 ) {
   let resource = namespace.unwrap_or("vanilla");
-  log::warn!(
+  tracing::warn!(
     "Duplicate original map {name} within resource {resource}; keeping the first registered file and skipping {}",
     path.display()
   );
@@ -221,7 +221,7 @@ fn warn_missing_map(
   name: &str,
   path: &Path,
 ) {
-  log::warn!(
+  tracing::warn!(
     "Original map {name} is missing for resource {}; skipping {}",
     namespace.unwrap_or("vanilla"),
     path.display()

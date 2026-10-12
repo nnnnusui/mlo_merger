@@ -23,20 +23,21 @@ impl YmapCarGeneratorDiff {
   }
 
   pub fn print_diffs(diffs: &Vec<YmapCarGeneratorDiff>) {
-    log::info!("    Found {} car generator differences", diffs.len());
+    let _span = tracing::info_span!("car_generators").entered();
+    tracing::info!("Found {} differences", diffs.len());
     for diff in diffs {
       match diff {
         Self::Added(generator) => {
-          log::info!("      [Added] Car Generator at: {:?}", generator.position);
+          tracing::info!("[Added] Car Generator at: {:?}", generator.position);
         }
         Self::Removed(generator) => {
-          log::info!("      [Removed] Car Generator at: {:?}", generator.position);
+          tracing::info!("[Removed] Car Generator at: {:?}", generator.position);
         }
         Self::Modified {
           vanilla,
           modded: _,
         } => {
-          log::info!("      [Modified] Car Generator at: {:?}", vanilla.position);
+          tracing::info!("[Modified] Car Generator at: {:?}", vanilla.position);
         }
       }
     }

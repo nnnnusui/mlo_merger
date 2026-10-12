@@ -18,7 +18,7 @@ impl MergeYmap {
     latest_files: Option<&[PathBuf]>,
     raw_sources: Option<&[(String, PathBuf)]>,
   ) -> Result<(), Box<dyn std::error::Error>> {
-    log::info!(
+    tracing::info!(
       "Merging YMAP files from {} and {} into {}",
       self.vanilla_dir.display(),
       self.mod_dir.display(),
@@ -27,10 +27,10 @@ impl MergeYmap {
 
     // Load blacklist configuration if provided
     let blacklist = if let Some(blacklist_path) = &self.blacklist_config {
-      log::info!("Loading blacklist configuration from {}", blacklist_path.display());
+      tracing::info!("Loading blacklist configuration from {}", blacklist_path.display());
       let blacklist_content = fs::read_to_string(blacklist_path)?;
       let config: BlacklistConfig = toml::from_str(&blacklist_content)?;
-      log::info!("Loaded {} occlude model blacklist entries", config.occlude_models.len());
+      tracing::info!("Loaded {} occlude model blacklist entries", config.occlude_models.len());
       Some(config)
     } else {
       None
@@ -82,7 +82,7 @@ impl MergeYmap {
     modded_ymaps_map.retain(|_, references| {
       references.retain(|reference| {
         if !reference.mod_ymap_path.is_file() {
-          log::warn!(
+          tracing::warn!(
             "Source YMAP is missing for resource {}; skipping {}",
             reference.mod_name,
             reference.mod_ymap_path.display()
@@ -91,12 +91,15 @@ impl MergeYmap {
         }
         let name = Path::new(&reference.ymap_name).file_stem().and_then(|name| name.to_str());
         let Some(name) = name else {
-          log::warn!("Source YMAP has an invalid filename: {}", reference.mod_ymap_path.display());
+          tracing::warn!(
+            "Source YMAP has an invalid filename: {}",
+            reference.mod_ymap_path.display()
+          );
           return false;
         };
         let hash = reference_hash(name);
         if vanilla_map_paths.as_ref().is_some_and(|paths| !paths.contains_key(&hash)) {
-          log::warn!(
+          tracing::warn!(
             "Latest vanilla YMAP {name}.ymap is missing for resource {}; skipping {}",
             reference.mod_name,
             reference.mod_ymap_path.display()
@@ -104,7 +107,7 @@ impl MergeYmap {
           return false;
         }
         if !registered_maps.insert((reference.mod_name.clone(), hash)) {
-          log::warn!(
+          tracing::warn!(
             "Duplicate original map {name} within resource {}; keeping the first and skipping {}",
             reference.mod_name,
             reference.mod_ymap_path.display()
@@ -115,7 +118,7 @@ impl MergeYmap {
       });
       !references.is_empty()
     });
-    log::info!("Found {} unique YMAP files across mods", modded_ymaps_map.len());
+    tracing::info!("Found {} unique YMAP files across mods", modded_ymaps_map.len());
 
     let mut sources = SourceMaps::default();
     let vanilla_count = if let Some(history) = history {
@@ -143,7 +146,7 @@ impl MergeYmap {
       }
       files.len()
     };
-    log::info!("Registered {vanilla_count} vanilla YMAP files for merge");
+    tracing::info!("Registered {vanilla_count} vanilla YMAP files for merge");
     for references in modded_ymaps_map.values() {
       for reference in references {
         if raw_sources.is_some() {
@@ -184,10 +187,10 @@ impl MergeYmap {
         .unwrap_or_else(|| self.vanilla_dir.join(ymap_name));
       if history.is_none() && !self.rebuild_all && mod_refs.len() <= 1 {
         let mod_ref = mod_refs.first().unwrap();
-        log::info!("Processing YMAP: {}", vanilla_ymap_path.display());
-        log::info!("  Mod: {} ({})", mod_ref.mod_name, mod_ref.mod_ymap_path.display());
+        tracing::info!("Processing YMAP: {}", vanilla_ymap_path.display());
+        tracing::info!("  Mod: {} ({})", mod_ref.mod_name, mod_ref.mod_ymap_path.display());
         let Some(original) = sources.get(Some(&mod_ref.mod_name), hash)? else {
-          log::warn!(
+          tracing::warn!(
             "Source YMAP is unavailable for resource {}; skipping {}",
             mod_ref.mod_name,
             mod_ref.mod_ymap_path.display()
@@ -209,10 +212,10 @@ impl MergeYmap {
         );
         continue;
       }
-      log::info!("Processing YMAP: {}", vanilla_ymap_path.display());
+      tracing::info!("Processing YMAP: {}", vanilla_ymap_path.display());
 
       let Some(original) = sources.get(None, hash)? else {
-        log::warn!("Vanilla YMAP is unavailable; skipping {}", vanilla_ymap_path.display());
+        tracing::warn!("Vanilla YMAP is unavailable; skipping {}", vanilla_ymap_path.display());
         continue;
       };
       let (vanilla_ymap, vanilla_entities) =
@@ -229,10 +232,10 @@ impl MergeYmap {
         .map(|(normalized, original)| (normalized.guid, original))
         .collect::<HashMap<_, _>>();
       for mod_info in mod_refs {
-        log::info!("  Mod: {} ({})", mod_info.mod_name, mod_info.mod_ymap_path.display());
+        tracing::info!("  Mod: {} ({})", mod_info.mod_name, mod_info.mod_ymap_path.display());
 
         let Some(source) = sources.get(Some(&mod_info.mod_name), hash)? else {
-          log::warn!(
+          tracing::warn!(
             "Source YMAP is unavailable for resource {}; skipping {}",
             mod_info.mod_name,
             mod_info.mod_ymap_path.display()
@@ -382,7 +385,7 @@ impl MergeYmap {
         }
         let owner = references.map_for(handle).ok_or("missing normalized parent handle")?;
         if owner != *hash && owner != parent_hash {
-          log::warn!(
+          tracing::warn!(
             "Entity {} in {} references parent YMAP {owner:08X}, but the merged map declares {parent_hash:08X} ({}); detaching the external parent link",
             entity.guid,
             map_name,
@@ -421,7 +424,7 @@ impl MergeYmap {
             }
             resolved_links.push((*hash, child_index, target));
           } else {
-            log::warn!(
+            tracing::warn!(
               "    Parent {} in map {:08X} removed; detaching entity {}",
               target.guid,
               target.map,
@@ -482,7 +485,7 @@ impl MergeYmap {
         output.rebuild = output.differs_from_original();
       }
     }
-    log::info!(
+    tracing::info!(
       "Repaired parent references; promoted {repaired} clone/vanilla child YMAPs for rebuild"
     );
     self.write_outputs(planned, binary_catalog.as_ref())?;

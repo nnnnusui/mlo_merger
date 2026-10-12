@@ -2,9 +2,8 @@ use super::*;
 
 #[test]
 #[ignore = "requires a successfully generated asset/vanilla-cache schema 2 or 3 cache"]
-fn gtav_generated_version_cache_has_complete_artifacts_and_diff_logs() {
+fn gtav_generated_version_cache_has_complete_artifacts_without_log_files() {
   use mlo_merger::core::{merge::YmapDiff, vanilla_cache::VanillaCacheManifest};
-  use std::io::BufRead;
 
   fn read_json<T: serde::de::DeserializeOwned>(path: &Path) -> T {
     serde_json::from_reader(std::io::BufReader::new(std::fs::File::open(path).unwrap())).unwrap()
@@ -23,11 +22,7 @@ fn gtav_generated_version_cache_has_complete_artifacts_and_diff_logs() {
     let metadata: serde_json::Value = read_json(&directory.join("version_info.json"));
     assert_eq!(metadata["id"], version.id);
     assert_eq!(metadata["changes"].as_object().unwrap().len(), version.changes.len());
-    let log = directory.join("create_cache.log");
-    assert!(std::fs::metadata(&log).unwrap().len() > 0);
-    let has_diff = std::io::BufReader::new(std::fs::File::open(log).unwrap())
-      .lines()
-      .any(|line| line.unwrap().contains("Diff "));
+    assert!(!directory.join("create_cache.log").exists());
     for (name, change) in &version.changes {
       let artifact = root.join(&change.file.object);
       assert_eq!(change.file.sha256.len(), 64);
@@ -35,7 +30,6 @@ fn gtav_generated_version_cache_has_complete_artifacts_and_diff_logs() {
       assert!(change.file.object.starts_with(&format!("{}/{family}/", version.id)));
       if change.previous_sha256.is_some() {
         modified += 1;
-        assert!(has_diff, "missing diff log in {}", version.id);
         assert_eq!(artifact.file_name().unwrap().to_string_lossy(), format!("{name}.diff.json"));
         if manifest.format_version == 3 {
           let delta: serde_json::Value = read_json(&artifact);

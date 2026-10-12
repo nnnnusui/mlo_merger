@@ -83,7 +83,7 @@ impl PreparedEdits {
           })
       });
     let mut prepared = if reusable {
-      log::debug!("Reusing overwrite preparation cache");
+      tracing::debug!("Reusing overwrite preparation cache");
       previous.ok_or("Missing overwrite cache")?.prepared
     } else {
       PreparedEdits::load_inventory(&inventory, &overwrite)?
@@ -118,7 +118,7 @@ impl OverwriteCache {
     &self,
     cache: &Path,
   ) -> Result<()> {
-    log::debug!("Overwrite preparation cache reused: {}", self.reused);
+    tracing::debug!("Overwrite preparation cache reused: {}", self.reused);
     if read_cache_entry::<Self>(cache, "overwrite_cache_info.json")?.is_some_and(|old| {
       old.version == self.version
         && old.source == self.source

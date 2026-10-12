@@ -7,7 +7,7 @@
 - [x] Split large conversion, merge and cache modules into same-named directories by responsibility; keep small unit tests beside their implementation and module/integration tests in separate files.
 - [x] Dispatch stream files to separate format-specific workflows by extension; initially support YMAP and YBN without forcing them through one diff implementation.
 - [x] Run the full pipeline by default without an operation flag: generate missing vanilla, update vanilla-cache/source-cache, merge and deploy; connect `-i` to source resources and `-o` to deployment.
-- [x] Share one pipeline logger, reuse valid raw vanilla, validate artifact path separation before processing, and retain derived-stage freshness checks.
+- [x] Share one pipeline tracing subscriber, reuse valid raw vanilla, validate artifact path separation before processing, and retain derived-stage freshness checks.
 - [x] Delegate raw vanilla generation/reuse to GenerateVanilla, keep pipeline steps visually separated, and unify overwrite/artifact overlap validation while allowing source nesting.
 - [x] Define stable internal step names matching the artifact stages: `vanilla`, `vanilla-cache`, `source-cache`, and `merge`.
 - [x] Let every command run its required prerequisite steps, skipping valid outputs; support selecting individual stages with `--step-name` and define whether multiple names are accepted.
@@ -22,7 +22,7 @@
 
 - [ ] Add `--generate-vanilla`; also run this stage automatically when `asset/vanilla` does not exist.
 - [ ] Generate the current vanilla archive overlay as versioned raw stream files grouped by version and extension, replacing the current `vanilla-cache` output role.
-- [ ] Record generation/read timestamps, source `.rpf` modification times and other provenance needed to detect changed game inputs; retain per-run logs.
+- [ ] Record generation/read timestamps and source `.rpf` modification times needed to detect changed game inputs.
 - [x] Generate one global `hash -> text` names map containing embedded YMAP strings and entity archetype names during `--generate-vanilla`.
 - [x] Collect extensionless RPF entry-name candidates during vanilla extraction so entity archetype hashes can resolve to prop names.
 - [ ] On normal runs, reuse an existing `asset/vanilla`; only regenerate it when absent, stale by the defined source checks, or explicitly forced.
@@ -33,7 +33,6 @@
 - [x] Read versioned stream files from `asset/vanilla` and build derived data needed by later steps, including latest YMAP/YBN files and the YMAP parent/child index.
 - [ ] Store the latest vanilla stream file for each supported format under `latest/`, subject to `--gamebuild`'s version ceiling.
 - [x] Record the raw manifest revision and timestamps of referenced `asset/vanilla` inputs so cache freshness can be checked incrementally.
-- [ ] Retain processing logs for vanilla-cache generation.
 - [x] Precompute the YMAP parent/child relationships for the selected latest vanilla snapshot; parse only its effective YMAP files.
 - [x] Support PSO YMAPs in shared model decoding and vanilla parent/child indexing alongside RSC7 YMAPs.
 - [x] Use current latest vanilla fixtures for META XML tests and a synthetic YTYP resource for shared-writer coverage.

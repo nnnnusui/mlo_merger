@@ -27,12 +27,13 @@ impl YmapBoxOccluderDiff {
   }
 
   pub fn print_diffs(diffs: &Vec<YmapBoxOccluderDiff>) {
-    log::info!("    Found {} box occluder differences", diffs.len());
+    let _span = tracing::info_span!("box_occluders").entered();
+    tracing::info!("Found {} differences", diffs.len());
     for diff in diffs {
       match diff {
         Self::Added(b) => {
-          log::info!(
-            "      [Added] Box Occluder: {:?}",
+          tracing::info!(
+            "[Added] Box Occluder: {:?}",
             Position {
               x: b.i_center_x as f32,
               y: b.i_center_y as f32,
@@ -41,8 +42,8 @@ impl YmapBoxOccluderDiff {
           );
         }
         Self::Removed(b) => {
-          log::info!(
-            "      [Removed] Box Occluder: {:?}",
+          tracing::info!(
+            "[Removed] Box Occluder: {:?}",
             Position {
               x: b.i_center_x as f32,
               y: b.i_center_y as f32,
@@ -54,7 +55,7 @@ impl YmapBoxOccluderDiff {
           vanilla: _,
           diffs,
         } => {
-          log::info!("      [Modified] Diffs: {:?}", diffs);
+          tracing::info!("[Modified] Diffs: {:?}", diffs);
         }
       }
     }

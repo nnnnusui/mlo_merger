@@ -23,7 +23,7 @@ impl From<XmlYmapInstancedData> for YmapInstancedData {
   fn from(v: XmlYmapInstancedData) -> Self {
     // If there's an error, log it and return empty data
     if let Some(error) = v.error {
-      log::warn!("InstancedData error: {}", error);
+      tracing::warn!("InstancedData error: {}", error);
       return Self::default();
     }
 

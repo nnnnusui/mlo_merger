@@ -104,7 +104,7 @@ impl YmapInstancedDataDiff {
         });
       }
     }
-    log::info!(
+    tracing::info!(
       "    Found {} grass batch changes and {} removed batches",
       batches.len(),
       removed_batches.len()
@@ -186,7 +186,7 @@ impl YmapInstancedDataDiff {
         }
         if !applied.insert(key.clone()) {
           if batch.instances[positions[&key]] != instance {
-            log::warn!(
+            tracing::warn!(
               "    Conflicting grass instance at {:?}: keeping first change",
               instance.position
             );

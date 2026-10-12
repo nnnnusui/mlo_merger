@@ -25,20 +25,21 @@ impl YmapTimeCycleModifierDiff {
   }
 
   pub fn print_diffs(diffs: &Vec<YmapTimeCycleModifierDiff>) {
-    log::info!("    Found {} time cycle modifier differences", diffs.len());
+    let _span = tracing::info_span!("time_cycle_modifiers").entered();
+    tracing::info!("Found {} differences", diffs.len());
     for diff in diffs {
       match diff {
         Self::Added(modifier) => {
-          log::info!(
-            "      [Added] Time Cycle Modifier: name={}, min={:?}, max={:?}",
+          tracing::info!(
+            "[Added] Time Cycle Modifier: name={}, min={:?}, max={:?}",
             modifier.name,
             modifier.min_extents,
             modifier.max_extents
           );
         }
         Self::Removed(modifier) => {
-          log::info!(
-            "      [Removed] Time Cycle Modifier: name={}, min={:?}, max={:?}",
+          tracing::info!(
+            "[Removed] Time Cycle Modifier: name={}, min={:?}, max={:?}",
             modifier.name,
             modifier.min_extents,
             modifier.max_extents
@@ -48,13 +49,13 @@ impl YmapTimeCycleModifierDiff {
           vanilla,
           diffs,
         } => {
-          log::info!(
-            "      [Modified] Time Cycle Modifier: name={}, min={:?}, max={:?}",
+          tracing::info!(
+            "[Modified] Time Cycle Modifier: name={}, min={:?}, max={:?}",
             vanilla.name,
             vanilla.min_extents,
             vanilla.max_extents
           );
-          log::info!("        Diffs: {:?}", diffs);
+          tracing::info!("Diffs: {:?}", diffs);
         }
       }
     }

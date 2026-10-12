@@ -28,7 +28,7 @@ pub(super) fn best_cached_ymap_diff(
     candidates.push((version, candidate));
   }
   let (score, version, diff) = best_ymap_diff(candidates, modded)?;
-  log::info!("Best YMAP baseline {name}: {version} ({score} changes)");
+  tracing::info!("Best YMAP baseline {name}: {version} ({score} changes)");
   Ok(diff)
 }
 
@@ -39,7 +39,7 @@ pub(super) fn best_ymap_diff(
   let mut best: Option<(usize, String, YmapDiff)> = None;
   for (version, candidate) in candidates {
     let score = ymap_distance(&candidate, modded)?;
-    log::info!("Candidate YMAP baseline {version}: {score} changes");
+    tracing::info!("Candidate YMAP baseline {version}: {score} changes");
     if best.as_ref().is_none_or(|(best_score, _, _)| score < *best_score) {
       best = Some((score, version, YmapDiff::extract_for_merge(&candidate, modded)));
     }
@@ -75,7 +75,7 @@ pub(super) fn collect_modded_ymaps_map(
 
       map.entry(ymap_xml_name.to_string()).or_default().push(info);
     } else {
-      log::warn!(
+      tracing::warn!(
         "Warning: Invalid file name format (expected 'mod___ymap.ymap.xml'): {}",
         file_name
       );

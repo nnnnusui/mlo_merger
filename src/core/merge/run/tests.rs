@@ -288,12 +288,11 @@ fn merge_logged_unsupported_ymaps() {
   let output_dir = base.join("asset/merge_validation/unsupported_fields/merged.xml");
   let report_dir = output_dir.parent().unwrap();
   fs::create_dir_all(report_dir).unwrap();
-  simplelog::WriteLogger::init(
-    log::LevelFilter::Info,
-    simplelog::Config::default(),
-    fs::File::create(report_dir.join("merge.log")).unwrap(),
-  )
-  .unwrap();
+  tracing_subscriber::fmt()
+    .with_max_level(tracing::Level::INFO)
+    .with_writer(fs::File::create(report_dir.join("merge.log")).unwrap())
+    .try_init()
+    .unwrap();
   for name in &targets {
     fs::copy(base.join("asset/vanilla/ymap.xml").join(name), vanilla_dir.join(name))
       .unwrap_or_else(|error| panic!("Native vanilla XML missing for {name}: {error}"));

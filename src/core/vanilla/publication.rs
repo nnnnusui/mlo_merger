@@ -155,25 +155,7 @@ pub(super) fn publish_cache(
     }
   }
   if let Err(error) = fs::remove_dir_all(&backup) {
-    log::warn!("Could not clean cache backup {}: {error}", backup.display());
+    tracing::warn!("Could not clean cache backup {}: {error}", backup.display());
   }
   result
-}
-
-pub(super) fn preserve_failed_logs(
-  build: &Path,
-  output: &Path,
-) -> Result<PathBuf> {
-  let failure = output.join(format!("failed-{}", chrono::Local::now().format("%Y%m%d-%H%M%S-%f")));
-  fs::create_dir(&failure)?;
-  for entry in fs::read_dir(build)? {
-    let entry = entry?;
-    let log = entry.path().join("create_cache.log");
-    if log.is_file() {
-      let directory = failure.join(entry.file_name());
-      fs::create_dir(&directory)?;
-      fs::copy(log, directory.join("create_cache.log"))?;
-    }
-  }
-  Ok(failure)
 }

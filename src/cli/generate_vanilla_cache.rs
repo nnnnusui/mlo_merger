@@ -31,6 +31,6 @@ pub fn run(command: GenerateVanillaCache) -> Result<(), Box<dyn std::error::Erro
     force: command.common.force,
   }
   .run()?;
-  log::info!("{}", result.summary());
+  tracing::info!("{}", result.summary());
   Ok(())
 }
