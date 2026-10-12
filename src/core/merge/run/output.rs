@@ -4,7 +4,7 @@ impl MergeYmap {
   pub(super) fn write_outputs(
     &self,
     planned: BTreeMap<u32, PlannedMap>,
-    binary_catalog: Option<&crate::core::format::gamefile::meta_resource::MetaSchemaCatalog>,
+    binary_catalog: Option<&crate::core::format::gamefile::meta::MetaSchemaCatalog>,
   ) -> Result<(), Box<dyn std::error::Error>> {
     let copy_targets_txt = self.output_dir.join("_copy_targets.txt");
     fs::create_dir_all(copy_targets_txt.parent().unwrap())?;

@@ -2,7 +2,7 @@
 
 use super::super::model::{Ymap, YmapEntity};
 use super::{meta::Writer, model::prepare};
-use crate::core::format::gamefile::meta_resource::{
+use crate::core::format::gamefile::meta::{
   MetaDataBlock, MetaResource, MetaSchemaCatalog, jenk_hash,
 };
 use std::io;
@@ -12,7 +12,7 @@ use std::io;
 /// Schema layouts must come from compatible vanilla YMAP resources.
 ///
 /// ```no_run
-/// # use mlo_merger::core::format::{ymap::{binary::to_meta, model::Ymap}, gamefile::meta_resource::MetaSchemaCatalog};
+/// # use mlo_merger::core::format::{ymap::{binary::to_meta, model::Ymap}, gamefile::meta::MetaSchemaCatalog};
 /// # fn build(model: &Ymap, catalog: &MetaSchemaCatalog) -> std::io::Result<()> {
 /// let entities = model.entity_map.values().cloned().collect::<Vec<_>>();
 /// let meta = to_meta(model, &entities, catalog)?;
@@ -49,7 +49,7 @@ pub fn to_meta(
 /// Encodes a typed YMAP and ordered entities directly into a compressed RSC7 binary.
 ///
 /// ```no_run
-/// # use mlo_merger::core::format::{ymap::{binary::write_ymap, model::Ymap}, gamefile::meta_resource::MetaSchemaCatalog};
+/// # use mlo_merger::core::format::{ymap::{binary::write_ymap, model::Ymap}, gamefile::meta::MetaSchemaCatalog};
 /// # fn save(model: &Ymap, catalog: &MetaSchemaCatalog) -> std::io::Result<()> {
 /// let entities = model.entity_map.values().cloned().collect::<Vec<_>>();
 /// std::fs::write("map.ymap", write_ymap(model, &entities, catalog)?)?;

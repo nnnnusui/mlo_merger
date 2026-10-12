@@ -5,9 +5,9 @@ use super::{
   resource_to_xml, xml_to_resource,
 };
 use crate::core::format::gamefile::{
-  meta_resource::{MetaResource, MetaSchemaCatalog},
-  meta_xml::meta_to_xml,
-  resource_file::Rsc7Resource,
+  meta::xml::meta_to_xml,
+  meta::{MetaResource, MetaSchemaCatalog},
+  rsc7::Rsc7Resource,
 };
 
 #[test]
@@ -154,7 +154,7 @@ fn pso_batch_commands_preserve_suffix_and_template_format() {
   let xml_dir = temp.join("xml");
   let rebuilt_dir = temp.join("rebuilt");
   std::fs::create_dir_all(input.join("nested")).unwrap();
-  let source = base.join("asset/vanilla/ymap/cs1_railwyc.ymap");
+  let source = base.join("asset/vanilla/0000-base/ymap/cs1_railwyc.ymap");
   std::fs::copy(&source, input.join("nested/cs1_railwyc.ymap")).unwrap();
   assert_eq!(convert_files_to_xml(&input, &xml_dir).unwrap(), (1, 0));
   assert!(xml_dir.join("nested/cs1_railwyc.ymap.pso.xml").is_file());

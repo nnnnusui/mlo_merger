@@ -1,4 +1,4 @@
-use crate::core::format::gamefile::meta_resource::{
+use crate::core::format::gamefile::meta::{
   MetaSchemaCatalog, MetaStructureEntry, MetaStructureInfo, jenk_hash,
 };
 use crate::core::format::ymap::{

@@ -1,5 +1,5 @@
 use crate::core::format::gamefile::{
-  resource_file::Rsc7Resource,
+  rsc7::Rsc7Resource,
   test_support::{sample_ymap_binary, sample_ymap_xml},
 };
 

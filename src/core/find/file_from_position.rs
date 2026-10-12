@@ -1,11 +1,11 @@
 use super::{
   FindEntity, Input, MergeCache, Result, aabb_intersects_radius, read_input, search_inputs,
 };
+use crate::core::format::ymap::binary::ymap_to_model_with_entities_from_meta;
 use crate::core::format::{
   gamefile::{
-    meta_resource::{MetaResource, MetaStructureEntry, jenk_hash},
-    meta_xml::ymap_to_model_with_entities_from_meta,
-    resource_file::Rsc7Resource,
+    meta::{MetaResource, MetaStructureEntry, jenk_hash},
+    rsc7::Rsc7Resource,
   },
   ybn::read_ybn,
 };

@@ -3,12 +3,10 @@ use super::{
   resource::{ResourceFile, file_hash},
   *,
 };
-use crate::core::format::{
-  gamefile::meta_xml::ymap_to_light_model_with_entities,
-  ymap::{
-    diff::reference_hash,
-    model::{Ymap, YmapEntity, YmapLodLight},
-  },
+use crate::core::format::ymap::binary::ymap_to_light_model_with_entities;
+use crate::core::format::ymap::{
+  diff::reference_hash,
+  model::{Ymap, YmapEntity, YmapLodLight},
 };
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 

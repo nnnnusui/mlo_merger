@@ -1,6 +1,8 @@
+//! META schemas and data blocks stored in RSC7 page regions.
+
 use std::io;
 
-use super::resource_file::Rsc7Resource;
+use super::rsc7::Rsc7Resource;
 
 const META_ROOT_ADDRESS: u64 = 0x5000_0000;
 const META_ROOT_SIZE: usize = 0x80;
@@ -11,6 +13,8 @@ mod helpers;
 mod model;
 mod read;
 mod write;
+
+pub mod xml;
 
 use helpers::invalid_data;
 pub(crate) use helpers::jenk_hash;

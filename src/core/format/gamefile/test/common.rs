@@ -9,9 +9,9 @@ use std::{
 use mlo_merger::core::{
   codewalker::CodeWalker,
   format::gamefile::{
-    meta_resource::{MetaResource, MetaSchemaCatalog},
+    meta::{MetaResource, MetaSchemaCatalog},
     resource_convert::{NativeResourceFormat, resource_to_xml, xml_to_resource},
-    resource_file::Rsc7Resource,
+    rsc7::Rsc7Resource,
   },
 };
 use serde::Serialize;

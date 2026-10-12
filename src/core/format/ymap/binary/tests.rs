@@ -1,7 +1,7 @@
 use super::super::model::Ymap;
 use super::{meta::Writer, values::primitive, write_ymap};
-use crate::core::format::gamefile::meta_resource::{MetaResource, MetaSchemaCatalog, jenk_hash};
-use crate::core::format::gamefile::meta_resource::{MetaStructureEntry, MetaStructureInfo};
+use crate::core::format::gamefile::meta::{MetaResource, MetaSchemaCatalog, jenk_hash};
+use crate::core::format::gamefile::meta::{MetaStructureEntry, MetaStructureInfo};
 #[test]
 fn typed_structure_writes_numeric_fields_without_xml() {
   let hash = jenk_hash("CMapData");
@@ -57,7 +57,7 @@ fn typed_structure_writes_numeric_fields_without_xml() {
 
 #[test]
 fn direct_ymap_binary_preserves_order_and_duplicate_entity_guids() {
-  use crate::core::format::gamefile::resource_file::Rsc7Resource;
+  use crate::core::format::gamefile::rsc7::Rsc7Resource;
   let xml: super::super::xml::XmlYmap = quick_xml::de::from_str(include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/docs/sample/parent_refs/vanilla_parent.ymap.xml"
@@ -124,9 +124,8 @@ fn direct_ymap_binary_preserves_order_and_duplicate_entity_guids() {
 #[test]
 #[ignore = "requires local vanilla YMAP schemas"]
 fn direct_ymap_writer_roundtrips_local_vanilla() {
-  use crate::core::format::gamefile::{
-    meta_xml::ymap_to_model_with_entities, resource_file::Rsc7Resource,
-  };
+  use crate::core::format::gamefile::rsc7::Rsc7Resource;
+  use crate::core::format::ymap::binary::ymap_to_model_with_entities;
   let root =
     std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("asset/vanilla-cache/latest/ymap");
   let mut paths =

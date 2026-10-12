@@ -1,8 +1,8 @@
 use std::{collections::HashMap, io};
 
 use super::{
-  meta_resource::jenk_hash,
-  meta_xml::known_hash_names,
+  meta::jenk_hash,
+  meta::xml::known_hash_names,
   xml_tree::{XmlElement, parse_xml},
 };
 

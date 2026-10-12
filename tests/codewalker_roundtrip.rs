@@ -15,13 +15,13 @@ use compare::{
 
 use mlo_merger::core::codewalker::CodeWalker;
 use mlo_merger::core::format::gamefile::{
-  meta_resource::{MetaResource, MetaSchemaCatalog},
-  meta_xml::ymap_to_xml,
+  meta::{MetaResource, MetaSchemaCatalog},
   resource_convert::{
     NativeResourceFormat, convert_files_from_xml, resource_to_xml, xml_to_resource,
   },
-  resource_file::Rsc7Resource,
+  rsc7::Rsc7Resource,
 };
+use mlo_merger::core::format::ymap::binary::ymap_to_xml;
 use mlo_merger::core::format::ymap::xml::XmlYmap;
 use mlo_merger::core::merge::{run::MergeYmap, ybn_conflicts::MergeYbnConflicts};
 

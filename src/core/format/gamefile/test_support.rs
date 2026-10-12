@@ -1,9 +1,9 @@
 use std::{path::Path, sync::OnceLock};
 
 use super::{
-  meta_resource::{MetaResource, MetaSchemaCatalog},
+  meta::{MetaResource, MetaSchemaCatalog},
   resource_convert::{NativeResourceFormat, xml_to_resource},
-  resource_file::Rsc7Resource,
+  rsc7::Rsc7Resource,
 };
 
 pub(crate) fn sample_ymap_xml(relative_path: &str) -> String {

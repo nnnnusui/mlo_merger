@@ -1,7 +1,7 @@
 //! Checked primitive values and native META field-name mappings.
 
 pub(super) use crate::core::format::gamefile::binary_io::write as put;
-use crate::core::format::gamefile::meta_resource::jenk_hash;
+use crate::core::format::gamefile::meta::jenk_hash;
 use serde_json::Value;
 use std::io;
 

@@ -72,9 +72,7 @@ pub(crate) fn ymap_parent_hash(path: &Path) -> Result<u32> {
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::core::format::gamefile::meta_resource::{
-    MetaDataBlock, MetaStructureEntry, MetaStructureInfo,
-  };
+  use crate::core::format::gamefile::meta::{MetaDataBlock, MetaStructureEntry, MetaStructureInfo};
 
   #[test]
   fn relationship_index_groups_children_by_parent_and_omits_root_maps() {

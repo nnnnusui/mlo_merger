@@ -1,4 +1,4 @@
-use crate::core::format::{gamefile::meta_resource::jenk_hash, ymap::model::Ymap};
+use crate::core::format::{gamefile::meta::jenk_hash, ymap::model::Ymap};
 use serde_json::Value;
 use std::collections::BTreeSet;
 

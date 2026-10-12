@@ -1,4 +1,6 @@
-use super::{invalid_data, io};
+use std::io;
+
+use super::read::invalid_data;
 use crate::core::format::ymap::xml::XmlYmap;
 
 pub(super) fn validate(parsed: &XmlYmap) -> io::Result<()> {

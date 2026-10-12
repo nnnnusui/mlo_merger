@@ -5,10 +5,10 @@ use std::{
 };
 
 use super::{
-  meta_resource::{MetaResource, MetaSchemaCatalog},
-  meta_xml::{meta_to_xml, ymap_to_xml},
-  resource_file::Rsc7Resource,
-  xml_meta_builder::meta_from_xml,
+  meta::xml::meta_from_xml,
+  meta::xml::meta_to_xml,
+  meta::{MetaResource, MetaSchemaCatalog},
+  rsc7::Rsc7Resource,
   xml_tree::parse_xml,
   ynd::{xml_to_ynd, ynd_to_xml},
 };

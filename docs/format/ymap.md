@@ -243,7 +243,7 @@ flowchart TD
 RSC7 内の resource 仮想アドレスは、system が `0x50000000` 系、graphics が `0x60000000` 系です。
 これを圧縮済みファイルの offset として直接使用してはいけません。
 
-根拠: [Rsc7Resource](../../src/core/format/gamefile/resource_file.rs)、
+根拠: [Rsc7Resource](../../src/core/format/gamefile/rsc7/mod.rs)、
 [native YMAP writer](../../src/core/format/ymap/binary/write.rs)。
 
 ### 2. META の schema とデータブロックを読む
@@ -277,9 +277,10 @@ flowchart LR
     Schemas -.-> Interior
 ```
 
-根拠: [META の読込](../../src/core/format/gamefile/meta_resource/read.rs)、
-[META の型](../../src/core/format/gamefile/meta_resource/model.rs)、
-[schema による YMAP 解釈](../../src/core/format/gamefile/meta_xml/model.rs)。
+根拠: [META の読込](../../src/core/format/gamefile/meta/read.rs)、
+[META の型](../../src/core/format/gamefile/meta/model.rs)、
+[schema による META 値の解釈](../../src/core/format/gamefile/meta/xml/value.rs)、
+[YMAP モデルへの変換](../../src/core/format/ymap/binary/read.rs)。
 
 ### 3. CMapData はルートの構造であり、ファイル全体ではない
 
@@ -323,7 +324,7 @@ descriptor が指す配列には、値・構造体・構造体への参照など
 「pointer があるから file offset を seek すればよい」「entities は全部同じ固定長構造」とは解釈しません。
 schema の配列要素型を確認してから、必要なブロックを辿ります。
 
-根拠: [META 配列 descriptor の解釈](../../src/core/format/gamefile/meta_xml/model.rs#L203)、
+根拠: [META 配列 descriptor の解釈](../../src/core/format/gamefile/meta/xml/value.rs)、
 [CodeWalker の CMapData layout](https://github.com/dexyfex/CodeWalker/blob/master/CodeWalker.Core/GameFiles/MetaTypes/MetaTypes.cs#L2723)。
 
 ## もう一つのバイナリ表現: PSO
@@ -331,7 +332,7 @@ schema の配列要素型を確認してから、必要なブロックを辿り�
 ### 1. 同じ YMAP の内容を別の layout で表す
 
 `.ymap` という拡張子だけでは、RSC7/META か PSO かを判定できません。
-このリポジトリの reader は先頭が `PSIN` なら PSO として読み、それ以外は RSC7 として読みます。
+このリポジトリの読込入口は先頭の `PSIN` / `RSC7` で形式を判定し、それ以外のバイナリ形式を拒否します。
 `PSIN` の YMAP に対する `invalid RSC7 magic` は、必ずしも破損を意味しません。
 
 PSO は META とは異なる schema・参照・section 形式を持ちます。
@@ -378,7 +379,7 @@ PSO の配列を増減できないことは、**このツールの template-base
 PSO という表現そのものの原理的な制限ではありません。
 また、現実装は `CHKS` を含む PSO のデータ変更を拒否します。section を残すだけでは checksum の更新にはなりません。
 
-根拠: [形式の dispatch](../../src/core/format/gamefile/meta_xml/model.rs#L4)、
+根拠: [形式の dispatch](../../src/core/format/gamefile/resource.rs)、
 [PSO の読込](../../src/core/format/gamefile/pso/read.rs)、
 [PSO の参照と big-endian 解釈](../../src/core/format/gamefile/pso/helpers.rs)、
 [PSO の template 更新](../../src/core/format/gamefile/pso/patch.rs)。
@@ -399,6 +400,6 @@ PSO という表現そのものの原理的な制限ではありません。
 - [CodeWalker YmapFile.cs](https://github.com/dexyfex/CodeWalker/blob/master/CodeWalker.Core/GameFiles/FileTypes/YmapFile.cs): 配置・LOD・光源の読込と関連付け。
 - [CodeWalker MetaTypes.cs](https://github.com/dexyfex/CodeWalker/blob/master/CodeWalker.Core/GameFiles/MetaTypes/MetaTypes.cs): CMapData と関連構造・enum の定義。
 - [本リポジトリの YMAP model](../../src/core/format/ymap/model/ymap.rs): ツール内で扱う YMAP の主要データ。
-- [本リポジトリの RSC7 reader](../../src/core/format/gamefile/resource_file.rs)、[META reader](../../src/core/format/gamefile/meta_resource/read.rs)、[PSO reader](../../src/core/format/gamefile/pso/read.rs): 本資料のバイナリ表現の実装根拠。
+- [本リポジトリの RSC7 reader](../../src/core/format/gamefile/rsc7/mod.rs)、[META reader](../../src/core/format/gamefile/meta/read.rs)、[PSO reader](../../src/core/format/gamefile/pso/read.rs): 本資料のバイナリ表現の実装根拠。
 
 CodeWalker のリンクは公開リポジトリの `master` を指しています。更新により行番号や実装が変わる場合があります。

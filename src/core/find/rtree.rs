@@ -208,7 +208,7 @@ mod tests {
 
   #[test]
   fn file_bounds_do_not_require_lod_decoding_or_resource_inventory() {
-    use crate::core::format::gamefile::meta_resource::{
+    use crate::core::format::gamefile::meta::{
       MetaDataBlock, MetaResource, MetaStructureEntry, MetaStructureInfo, jenk_hash,
     };
     let root_hash = jenk_hash("CMapData");

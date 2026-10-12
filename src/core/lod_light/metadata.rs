@@ -1,8 +1,8 @@
 use super::{Result, read_map, resource::ResourceFile};
 use crate::core::format::{
   gamefile::{
-    meta_resource::{MetaResource, jenk_hash},
-    resource_file::Rsc7Resource,
+    meta::{MetaResource, jenk_hash},
+    rsc7::Rsc7Resource,
   },
   ymap::diff::reference_hash,
 };

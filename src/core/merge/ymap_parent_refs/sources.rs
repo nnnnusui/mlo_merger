@@ -15,7 +15,7 @@ impl OriginalMap {
   }
 
   pub(in crate::core::merge) fn load_raw(path: &Path) -> io::Result<Self> {
-    let (model, entities) = crate::core::format::gamefile::meta_xml::ymap_to_model_with_entities(
+    let (model, entities) = crate::core::format::ymap::binary::ymap_to_model_with_entities(
       &std::fs::read(path).map_err(|error| invalid(&format!("{}: {error}", path.display())))?,
       &HashMap::new(),
     )

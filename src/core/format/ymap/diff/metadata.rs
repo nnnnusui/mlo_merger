@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use crate::core::format::{gamefile::meta_resource::jenk_hash, ymap::model::Ymap};
+use crate::core::format::{gamefile::meta::jenk_hash, ymap::model::Ymap};
 
 #[derive(Default)]
 /// Vanilla-relative parent and physics-dictionary changes.

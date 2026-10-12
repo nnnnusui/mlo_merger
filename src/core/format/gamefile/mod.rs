@@ -1,10 +1,9 @@
 pub(crate) mod binary_io;
-pub mod meta_resource;
-pub mod meta_xml;
+pub mod meta;
 pub mod pso;
+pub mod resource;
 pub mod resource_convert;
-pub mod resource_file;
-pub mod xml_meta_builder;
+pub mod rsc7;
 pub mod xml_tree;
 pub mod ynd;
 

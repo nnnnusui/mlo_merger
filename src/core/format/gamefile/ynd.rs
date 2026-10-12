@@ -1,7 +1,7 @@
 use std::{collections::HashMap, io};
 
 use super::{
-  resource_file::Rsc7Resource,
+  rsc7::Rsc7Resource,
   xml_tree::{XmlElement, parse_xml},
 };
 

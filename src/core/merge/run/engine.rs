@@ -43,8 +43,8 @@ impl MergeYmap {
     };
     let binary_catalog = if let Some(files) = latest_files {
       use crate::core::format::gamefile::{
-        meta_resource::{MetaResource, MetaSchemaCatalog},
-        resource_file::Rsc7Resource,
+        meta::{MetaResource, MetaSchemaCatalog},
+        rsc7::Rsc7Resource,
       };
       let mut catalog = MetaSchemaCatalog::default();
       for path in files.iter().chain(raw_sources.into_iter().flatten().map(|(_, path)| path)) {

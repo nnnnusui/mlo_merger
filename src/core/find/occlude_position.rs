@@ -1,9 +1,7 @@
 use super::{FindEntity, Result, aabb_intersects_radius, file_from_position, read_input};
+use crate::core::format::ymap::binary::ymap_to_model_with_entities_from_meta;
 use crate::core::format::{
-  gamefile::{
-    meta_resource::MetaResource, meta_xml::ymap_to_model_with_entities_from_meta,
-    resource_file::Rsc7Resource,
-  },
+  gamefile::{meta::MetaResource, rsc7::Rsc7Resource},
   ymap::model::{YmapBoxOccluder, YmapOccludeModel},
 };
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};

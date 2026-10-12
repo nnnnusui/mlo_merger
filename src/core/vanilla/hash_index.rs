@@ -11,8 +11,8 @@ use sha2::{Digest, Sha256};
 
 use super::{Result, manifest::VanillaCacheManifest, write_json};
 use crate::core::format::gamefile::{
-  meta_resource::{MetaResource, jenk_hash},
-  resource_file::Rsc7Resource,
+  meta::{MetaResource, jenk_hash},
+  rsc7::Rsc7Resource,
 };
 
 const ARRAY_INFO_HASH: u32 = 0x100;
@@ -304,9 +304,7 @@ fn entity_archetype_names(
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::core::format::gamefile::meta_resource::{
-    MetaDataBlock, MetaStructureEntry, MetaStructureInfo,
-  };
+  use crate::core::format::gamefile::meta::{MetaDataBlock, MetaStructureEntry, MetaStructureInfo};
 
   #[test]
   fn extracts_entity_archetype_hashes_without_guids() {

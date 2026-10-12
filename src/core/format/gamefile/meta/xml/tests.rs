@@ -1,11 +1,12 @@
 use std::collections::HashMap;
 
-use super::{meta_to_xml, ymap_to_xml};
+use super::meta_to_xml;
 use crate::core::format::gamefile::{
-  meta_resource::{MetaDataBlock, MetaResource, MetaStructureEntry, MetaStructureInfo},
-  resource_file::Rsc7Resource,
+  meta::{MetaDataBlock, MetaResource, MetaStructureEntry, MetaStructureInfo},
+  rsc7::Rsc7Resource,
   test_support::{sample_ymap_binary, sample_ymap_xml},
 };
+use crate::core::format::ymap::binary::ymap_to_xml;
 
 #[test]
 fn decodes_ymap_binary_directly_into_the_typed_model() {
@@ -80,13 +81,13 @@ fn decodes_ymap_binary_directly_into_the_typed_model() {
   };
   let bytes = meta.to_rsc7(2).unwrap().encode().unwrap();
 
-  let model = super::ymap_to_model(&bytes, &HashMap::new()).unwrap();
+  let model = crate::core::format::ymap::binary::ymap_to_model(&bytes, &HashMap::new()).unwrap();
   assert_eq!(model.name, "");
   assert_eq!(model.flags, 7);
   assert_eq!(model.content_flags, 11);
   assert!(model.entity_map.is_empty());
   assert_eq!(model.block.name, "");
-  let xml = super::ymap_to_xml(&bytes, &HashMap::new()).unwrap();
+  let xml = ymap_to_xml(&bytes, &HashMap::new()).unwrap();
   let xml_model: crate::core::format::ymap::model::Ymap =
     quick_xml::de::from_str::<crate::core::format::ymap::xml::XmlYmap>(&xml).unwrap().into();
   assert_eq!(model, xml_model);

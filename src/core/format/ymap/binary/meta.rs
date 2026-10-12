@@ -1,7 +1,7 @@
 //! Allocates META structures, arrays, strings and enum fields from schema layouts.
 
 use super::values::{field_name, float, hash_value, invalid, primitive, put, unsigned, vector};
-use crate::core::format::gamefile::meta_resource::{
+use crate::core::format::gamefile::meta::{
   MetaDataBlock, MetaSchemaCatalog, MetaStructureEntry, jenk_hash,
 };
 use serde_json::Value;

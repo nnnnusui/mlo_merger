@@ -10,8 +10,8 @@ use std::{
 pub use crate::core::vanilla::VanillaCacheManifest;
 use crate::core::{
   format::gamefile::{
-    meta_resource::{MetaResource, jenk_hash},
-    resource_file::Rsc7Resource,
+    meta::{MetaResource, jenk_hash},
+    rsc7::Rsc7Resource,
   },
   format::ymap::diff::reference_hash,
   vanilla::{CachedFile, read_ymap},

@@ -511,7 +511,7 @@ fn cached_baseline_inputs_accept_combined_removals_and_keep_unchanged_provider()
 
 #[test]
 fn light_snapshots_reject_malformed_native_soa_without_changing_general_reader() {
-  use crate::core::format::gamefile::{meta_resource::MetaResource, resource_file::Rsc7Resource};
+  use crate::core::format::gamefile::{meta::MetaResource, rsc7::Rsc7Resource};
   use std::fs;
   let root = std::env::temp_dir().join(format!("light_malformed_{}", std::process::id()));
   let _ = fs::remove_dir_all(&root);

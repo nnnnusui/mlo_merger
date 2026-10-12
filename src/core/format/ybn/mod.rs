@@ -1,7 +1,7 @@
 //! Structured YBN collision models, codecs and polygon differences.
 
 use crate::core::format::gamefile::{
-  resource_file::Rsc7Resource,
+  rsc7::Rsc7Resource,
   xml_tree::{XmlElement, parse_xml, write_text_content},
 };
 use std::{

@@ -1,4 +1,4 @@
-use mlo_merger::core::format::gamefile::resource_file::Rsc7Resource;
+use mlo_merger::core::format::gamefile::rsc7::Rsc7Resource;
 use quick_xml::{Reader, events::Event};
 use std::collections::BTreeMap;
 

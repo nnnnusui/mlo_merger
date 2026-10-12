@@ -1,5 +1,5 @@
 use super::*;
-use crate::core::format::gamefile::meta_resource::jenk_hash;
+use crate::core::format::gamefile::meta::jenk_hash;
 
 #[test]
 fn parses_four_vanilla_pso_ymaps() {
@@ -14,13 +14,12 @@ fn parses_four_vanilla_pso_ymaps() {
     assert!(xml.contains("<CMapData>"));
     assert!(xml.contains(&format!("<name>{name}</name>")));
     assert!(!xml.contains("<error"));
-    let model =
-      crate::core::format::gamefile::meta_xml::ymap_to_model(&bytes, &HashMap::new()).unwrap();
+    let model = crate::core::format::ymap::binary::ymap_to_model(&bytes, &HashMap::new()).unwrap();
     let expected: crate::core::format::ymap::model::Ymap =
       quick_xml::de::from_str::<crate::core::format::ymap::xml::XmlYmap>(&xml).unwrap().into();
     assert_eq!(model, expected);
     let (_, ordered_entities) =
-      crate::core::format::gamefile::meta_xml::ymap_to_model_with_entities(&bytes, &HashMap::new())
+      crate::core::format::ymap::binary::ymap_to_model_with_entities(&bytes, &HashMap::new())
         .unwrap();
     let parsed: crate::core::format::ymap::xml::XmlYmap = quick_xml::de::from_str(&xml).unwrap();
     let expected_entities: Vec<crate::core::format::ymap::model::YmapEntity> =
@@ -32,7 +31,7 @@ fn parses_four_vanilla_pso_ymaps() {
       crate::core::format::ymap::diff::reference_hash(&expected.parent),
     );
     assert_eq!(
-      crate::core::format::gamefile::meta_xml::ymap_to_xml(&bytes, &HashMap::new()).unwrap(),
+      crate::core::format::ymap::binary::ymap_to_xml(&bytes, &HashMap::new()).unwrap(),
       xml,
     );
     let rebuilt = resource.rebuild_xml(&xml).unwrap();

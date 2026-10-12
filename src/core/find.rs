@@ -12,7 +12,7 @@ fn bounds_filter_uses_inclusive_sphere_aabb_intersection() {
 }
 
 use crate::core::format::{
-  gamefile::{meta_resource::MetaResource, resource_file::Rsc7Resource},
+  gamefile::{meta::MetaResource, rsc7::Rsc7Resource},
   ymap::{model::YmapEntity, xml::XmlYmapEntity},
 };
 use globset::{GlobBuilder, GlobMatcher};
@@ -483,7 +483,7 @@ fn read_entities(
   }
   let names: HashMap<_, _> = meta.hash_names();
   let (model, entities) =
-    crate::core::format::gamefile::meta_xml::ymap_to_model_with_entities_from_meta(&meta, &names)?;
+    crate::core::format::ymap::binary::ymap_to_model_with_entities_from_meta(&meta, &names)?;
   if let EntityQuery::Position {
     radius,
     position,
@@ -722,8 +722,8 @@ mod tests {
   #[test]
   #[ignore = "requires local vanilla YMAP schemas"]
   fn find_searches_native_merged_and_recorded_before_entities_without_writes() {
-    use crate::core::format::gamefile::meta_resource::MetaSchemaCatalog;
-    use crate::core::format::gamefile::meta_xml::ymap_to_model_with_entities;
+    use crate::core::format::gamefile::meta::MetaSchemaCatalog;
+    use crate::core::format::ymap::binary::ymap_to_model_with_entities;
     let base = Path::new(env!("CARGO_MANIFEST_DIR")).join("asset/vanilla-cache/latest/ymap");
     let mut paths =
       fs::read_dir(base).unwrap().map(|entry| entry.unwrap().path()).collect::<Vec<_>>();

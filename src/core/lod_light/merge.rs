@@ -7,8 +7,8 @@ use super::{
 use crate::core::{
   format::{
     gamefile::{
-      meta_resource::{MetaResource, MetaSchemaCatalog},
-      resource_file::Rsc7Resource,
+      meta::{MetaResource, MetaSchemaCatalog},
+      rsc7::Rsc7Resource,
     },
     ymap::{
       binary::write_ymap,

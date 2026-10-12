@@ -9,10 +9,10 @@ use std::collections::{BTreeSet, HashMap, HashSet};
 #[ignore = "requires local vanilla YMAP schemas"]
 fn latest_ymap_merge_writes_binary_without_xml() {
   use crate::core::format::gamefile::{
-    meta_resource::{MetaResource, MetaSchemaCatalog},
-    meta_xml::ymap_to_model_with_entities,
-    resource_file::Rsc7Resource,
+    meta::{MetaResource, MetaSchemaCatalog},
+    rsc7::Rsc7Resource,
   };
+  use crate::core::format::ymap::binary::ymap_to_model_with_entities;
   let base = Path::new(env!("CARGO_MANIFEST_DIR")).join("asset/vanilla-cache/latest/ymap");
   let mut files =
     fs::read_dir(base).unwrap().map(|entry| entry.unwrap().path()).collect::<Vec<_>>();
@@ -82,10 +82,10 @@ fn latest_ymap_merge_writes_binary_without_xml() {
 #[ignore = "requires local vanilla YMAP schemas"]
 fn native_ymap_merge_deletion_wins_over_retained_entities_in_both_orders() {
   use crate::core::format::gamefile::{
-    meta_resource::{MetaResource, MetaSchemaCatalog},
-    meta_xml::ymap_to_model_with_entities,
-    resource_file::Rsc7Resource,
+    meta::{MetaResource, MetaSchemaCatalog},
+    rsc7::Rsc7Resource,
   };
+  use crate::core::format::ymap::binary::ymap_to_model_with_entities;
   let base = Path::new(env!("CARGO_MANIFEST_DIR")).join("asset/vanilla-cache/latest/ymap");
   let mut files =
     fs::read_dir(base).unwrap().map(|entry| entry.unwrap().path()).collect::<Vec<_>>();

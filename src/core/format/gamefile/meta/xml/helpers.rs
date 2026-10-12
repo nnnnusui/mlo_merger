@@ -19,7 +19,7 @@ pub(super) fn read_string_pointer(
 }
 
 pub(super) fn array_of_chars(
-  block: &crate::core::format::gamefile::meta_resource::MetaDataBlock,
+  block: &crate::core::format::gamefile::meta::MetaDataBlock,
   offset: usize,
   count: usize,
 ) -> io::Result<String> {
