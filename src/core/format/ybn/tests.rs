@@ -485,6 +485,113 @@ fn merges_independent_additions_from_multiple_mods() {
 }
 
 #[test]
+fn ybn_deletion_wins_over_polygon_attribute_changes() {
+  let vanilla =
+    triangle_root(&[[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]], &[([0, 1, 2], [true; 3])]);
+  let baseline = read_ybn_root(&vanilla).unwrap();
+  let mut changed = baseline.clone();
+  let geometry = changed.children[0].geometry.as_mut().unwrap();
+  geometry.materials[0].colour_index = 23;
+  if let Polygon::Triangle(triangle) = &mut geometry.polygons[0] {
+    triangle.vertex_flags = [false; 3];
+  }
+  let changed = encode_ybn_bound(&changed).unwrap();
+  let retained = read_ybn_root(&merge_ybn_deltas(&vanilla, &[&changed]).unwrap()).unwrap();
+  assert_eq!(retained.children[0].geometry.as_ref().unwrap().materials[0].colour_index, 23);
+  let mut deleted = baseline.clone();
+  deleted.children.clear();
+  deleted.transforms.clear();
+  deleted.flags.clear();
+  let deleted = encode_ybn_bound(&deleted).unwrap();
+  for mods in [[deleted.as_slice(), changed.as_slice()], [changed.as_slice(), deleted.as_slice()]] {
+    let result = read_ybn_root(&merge_ybn_deltas(&vanilla, &mods).unwrap()).unwrap();
+    assert!(result.children.is_empty(), "an attribute change must not resurrect a deleted face");
+  }
+}
+
+#[test]
+fn ybn_deletion_matches_box_volume_across_reference_vertex_changes() {
+  let mut baseline = read_ybn_root(&triangle_root(
+    &[[-1.0, -1.0, -1.0], [1.0, 1.0, -1.0], [-1.0, 1.0, 1.0], [1.0, -1.0, 1.0]],
+    &[],
+  ))
+  .unwrap();
+  baseline.children[0].geometry.as_mut().unwrap().polygons = vec![Polygon::Box {
+    material: 0,
+    vertices: [0, 1, 2, 3],
+  }];
+  let vanilla = encode_ybn_bound(&baseline).unwrap();
+  let mut changed = read_ybn_root(&vanilla).unwrap();
+  let geometry = changed.children[0].geometry.as_mut().unwrap();
+  for vertex in &mut geometry.vertices {
+    for coordinate in vertex {
+      *coordinate = -*coordinate;
+    }
+  }
+  geometry.materials[0].colour_index = 23;
+  let changed = encode_ybn_bound(&changed).unwrap();
+  let mut distinct = read_ybn_root(&changed).unwrap();
+  for vertex in &mut distinct.children[0].geometry.as_mut().unwrap().vertices {
+    vertex[0] += 10.0;
+  }
+  let distinct = encode_ybn_bound(&distinct).unwrap();
+  let mut deleted = baseline;
+  deleted.children.clear();
+  deleted.transforms.clear();
+  deleted.flags.clear();
+  let deleted = encode_ybn_bound(&deleted).unwrap();
+  for mods in [[deleted.as_slice(), changed.as_slice()], [changed.as_slice(), deleted.as_slice()]] {
+    let result = read_ybn_root(&merge_ybn_deltas(&vanilla, &mods).unwrap()).unwrap();
+    assert!(result.children.is_empty(), "a re-encoded box must not resurrect a deleted volume");
+  }
+  let result = read_ybn_root(&merge_ybn_deltas(&vanilla, &[&deleted, &distinct]).unwrap()).unwrap();
+  assert_eq!(result.children.len(), 1, "an independent new box must survive");
+}
+
+#[test]
+#[ignore = "requires local sc1 vanilla, RFC and laundromat cached source YBNs"]
+fn sc1_laundromat_deletion_wins_over_rfc_reencoded_collision() {
+  let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+  let vanilla = std::fs::read(root.join("asset/vanilla-cache/latest/ybn/sc1_18_0.ybn")).unwrap();
+  let rfc =
+    std::fs::read(root.join("asset/source-cache/resources/rfc_taco_farmer/sc1_18_0.ybn")).unwrap();
+  let laundry = std::fs::read(
+    root.join("asset/source-cache/resources/tstudio_laundromat/dollar_pills_exterior/sc1_18_0.ybn"),
+  )
+  .unwrap();
+  let baseline = read_ybn_root(&vanilla).unwrap();
+  let source = read_ybn_root(&rfc).unwrap();
+  let baseline_records = geometry_polygon_records(&baseline).unwrap();
+  let source_geometry = source.children[1].geometry.as_ref().unwrap();
+  let source_identity = |index| {
+    super::diff::legacy::polygon_identity(
+      &source.children[1],
+      source_geometry,
+      &source_geometry.polygons[index],
+    )
+    .unwrap()
+  };
+  let wall = source_identity(138);
+  let mut baseline_lookup = PolygonLookup::default();
+  for record in &baseline_records {
+    baseline_lookup.insert(record.identity.clone());
+  }
+  assert!(baseline_lookup.contains(&wall), "box volume must match vanilla");
+  for mods in [[rfc.as_slice(), laundry.as_slice()], [laundry.as_slice(), rfc.as_slice()]] {
+    let result = read_ybn_root(&merge_ybn_deltas(&vanilla, &mods).unwrap()).unwrap();
+    let records = geometry_polygon_records(&result).unwrap();
+    let mut retained = PolygonLookup::default();
+    for record in &records {
+      retained.insert(record.identity.clone());
+    }
+    for index in [109, 110, 111, 138, 104, 139] {
+      assert!(!retained.contains(&source_identity(index)), "RFC polygon {index} must not return");
+    }
+    assert!(!records.is_empty(), "unrelated collision must remain");
+  }
+}
+
+#[test]
 #[ignore = "requires local Mirror Park vanilla and cached source YBNs"]
 fn configured_ybn_tolerance_removes_reported_mirrorpark_box() {
   use crate::core::config::matching::{MatchTolerances, with_tolerances};

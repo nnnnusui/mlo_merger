@@ -165,9 +165,11 @@ baseline inference is not part of the default merge workflow. YMAP and YBN use
 independent format-specific policies rather than a shared generic diff.
 
 For YBNs, baseline-matched shapes missing from any source are removed and new
-shapes are combined. Matching uses shape, material and coordinate tolerance, not
-polygon or vertex indices. A geometrically different shape from another resource
-can therefore remain as an addition even where a baseline shape was deleted.
+shapes are combined. Deletion takes precedence over material or triangle-corner
+flag changes to the same geometry, regardless of resource order. Boxes are matched
+by their eight corners so alternate native reference vertices do not resurrect
+deleted volumes. Matching uses configured coordinate tolerance, not polygon or
+vertex indices; geometrically distinct additions remain independent.
 Source groups without a vanilla baseline are skipped or rejected when conflicting.
 
 Matching tolerances are validated from configuration before each operation and

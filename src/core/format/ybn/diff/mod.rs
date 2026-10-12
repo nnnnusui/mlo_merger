@@ -3,6 +3,7 @@
 pub(super) mod legacy;
 pub use legacy::merge_ybn_deltas;
 mod compare;
+mod merge_geometry;
 mod polygon;
 mod resolve;
 mod semantic;

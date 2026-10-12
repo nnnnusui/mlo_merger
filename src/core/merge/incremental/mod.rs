@@ -19,7 +19,7 @@ use sha2::{Digest, Sha256};
 /// Bump when YMAP merge policy, encoding or cached reports change.
 const YMAP_ALGORITHM_VERSION: u32 = 7;
 /// Bump when YBN merge policy, encoding or cached reports change.
-const YBN_ALGORITHM_VERSION: u32 = 7;
+const YBN_ALGORITHM_VERSION: u32 = 8;
 
 fn algorithm_versions() -> BTreeMap<String, u32> {
   BTreeMap::from([("ymap".into(), YMAP_ALGORITHM_VERSION), ("ybn".into(), YBN_ALGORITHM_VERSION)])

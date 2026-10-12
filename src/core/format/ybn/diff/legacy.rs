@@ -3,6 +3,7 @@
 use super::super::*;
 
 /// Applies composite-child additions and removals relative to a vanilla YBN baseline.
+/// Deletion of a polygon's geometry wins over material and corner-flag changes.
 pub fn merge_ybn_deltas(
   vanilla: &[u8],
   mods: &[&[u8]],
@@ -33,6 +34,20 @@ fn merge_ybn_deltas_inner(
   for record in &baseline_polygons {
     baseline_polygon_lookup.insert(record.identity.clone());
   }
+  let mod_roots = mods.iter().map(|bytes| read_ybn_root(bytes)).collect::<io::Result<Vec<_>>>()?;
+  let mut deleted_geometry = PolygonLookup::default();
+  for root in &mod_roots {
+    let mut present = PolygonLookup::default();
+    for record in geometry_polygon_records(root)? {
+      present.insert(record.identity.geometry_identity());
+    }
+    for record in &baseline_polygons {
+      let identity = record.identity.geometry_identity();
+      if !present.contains(&identity) {
+        deleted_geometry.insert(identity);
+      }
+    }
+  }
   let mut removed = HashSet::new();
   let mut added = HashMap::<Vec<u8>, (Bound, [f32; 16], [u32; 2])>::new();
   let mut removed_polygons = HashSet::<(usize, usize)>::new();
@@ -42,9 +57,7 @@ fn merge_ybn_deltas_inner(
   let mut maximum = [f32::NEG_INFINITY; 3];
   let mut spheres = Vec::<([f32; 3], f32)>::new();
 
-  for root in std::iter::once(read_ybn_root(vanilla)?)
-    .chain(mods.iter().map(|bytes| read_ybn_root(bytes)).collect::<io::Result<Vec<_>>>()?)
-  {
+  for root in std::iter::once(read_ybn_root(vanilla)?).chain(mod_roots) {
     if root.kind != "Composite" {
       return Err(invalid("YBN delta merge requires Composite roots"));
     }
@@ -81,6 +94,7 @@ fn merge_ybn_deltas_inner(
       for record in &mod_polygons {
         if !baseline_polygon_lookup.contains(&record.identity)
           && !added_polygon_lookup.contains(&record.identity)
+          && !deleted_geometry.contains(&record.identity.geometry_identity())
         {
           added_polygon_lookup.insert(record.identity.clone());
           additions_by_child.entry(record.child_index).or_default().insert(record.polygon_index);
@@ -213,6 +227,14 @@ pub(in crate::core::format::ybn) struct PolygonIdentity {
 }
 
 impl PolygonIdentity {
+  /// Separates a missing shape from an attribute-only replacement of that shape.
+  fn geometry_identity(&self) -> Self {
+    let mut identity = self.clone();
+    identity.material = Material::default();
+    identity.vertex_flags.fill(false);
+    identity
+  }
+
   fn signature(&self) -> Vec<u8> {
     let mut signature = vec![self.kind];
     signature.extend_from_slice(&[
@@ -258,6 +280,10 @@ impl PolygonIdentity {
               == other.vertex_flags[(index + shift) % self.vertex_flags.len()]
         })
       });
+    }
+
+    if self.kind == 1 {
+      return super::merge_geometry::corners_match(&self.vertices, &other.vertices);
     }
 
     self.vertices.iter().zip(&other.vertices).all(|(first, second)| points_match(*first, *second))
@@ -390,6 +416,7 @@ pub(in crate::core::format::ybn) fn polygon_identity(
       for vertex in vertices {
         add_vertex(*vertex)?;
       }
+      super::merge_geometry::complete_box_corners(&mut identity.vertices);
       sort_polygon_vertices(&mut identity.vertices);
     }
     Polygon::Sphere {
