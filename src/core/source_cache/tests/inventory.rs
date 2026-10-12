@@ -41,16 +41,13 @@ fn builds_source_inventory_and_skips_unchanged_inputs_without_diffing() {
     exclusions: None,
     force: false,
   };
-  assert!(
-    BuildSourceCache {
-      exclusions: Some(vec!["resource_b".into()]),
-      ..build()
-    }
-    .run()
-    .unwrap()
-  );
+  let excluded = || BuildSourceCache {
+    exclusions: Some(vec!["resource_b".into()]),
+    ..build()
+  };
+  assert!(excluded().run().unwrap());
   assert!(second_resource.join("stream/unmatched.ymap").is_file());
-  assert!(!build().run().unwrap());
+  assert!(!excluded().run().unwrap());
   let excluded_info: SourceCacheMetadata =
     serde_json::from_reader(fs::File::open(output.join("source_cache_info.json")).unwrap())
       .unwrap();
@@ -63,32 +60,24 @@ fn builds_source_inventory_and_skips_unchanged_inputs_without_diffing() {
   assert!(
     BuildSourceCache {
       resource: Some("resource_b".into()),
-      ..build()
+      ..excluded()
     }
     .run()
     .is_err()
   );
-  assert!(
-    BuildSourceCache {
-      exclusions: Some(vec!["resource_".into()]),
-      ..build()
-    }
-    .run()
-    .unwrap()
-  );
+  let exclude_all = || BuildSourceCache {
+    exclusions: Some(vec!["resource_".into()]),
+    ..build()
+  };
+  assert!(exclude_all().run().unwrap());
   let empty_info: SourceCacheMetadata =
     serde_json::from_reader(fs::File::open(output.join("source_cache_info.json")).unwrap())
       .unwrap();
   assert!(empty_info.resources.is_empty());
-  assert!(!build().run().unwrap());
-  assert!(
-    BuildSourceCache {
-      exclusions: Some(Vec::new()),
-      ..build()
-    }
-    .run()
-    .unwrap()
-  );
+  assert!(!exclude_all().run().unwrap());
+  fs::write(output.join("source_exclusions.json"), b"not valid JSON").unwrap();
+  assert!(build().run().unwrap());
+  assert!(!output.join("source_exclusions.json").exists());
   assert!(output.join("source_cache_info.json").is_file());
   assert!(output.join("stream_conflicts.json").is_file());
   assert!(output.join("vanilla_ymaps_to_read.json").is_file());

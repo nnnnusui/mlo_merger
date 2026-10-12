@@ -15,6 +15,7 @@ pub use export::{ExportLightResult, ExportLights};
 pub use types::*;
 
 pub(crate) use merge::PreparedEdits;
+#[cfg(test)]
 pub(crate) use resource::inventory;
 pub(crate) use snapshot::{LoadedMap, read_map};
 

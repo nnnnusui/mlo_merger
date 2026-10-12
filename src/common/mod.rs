@@ -1,0 +1,103 @@
+//! Shared filesystem, path, JSON and fingerprint primitives.
+
+pub(crate) mod filesystem;
+pub(crate) mod fingerprint;
+pub(crate) mod json;
+pub(crate) mod path;
+
+pub(crate) type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+  use std::{fs, path::PathBuf};
+
+  struct TemporaryDirectory(PathBuf);
+
+  impl Drop for TemporaryDirectory {
+    fn drop(&mut self) {
+      let _ = fs::remove_dir_all(&self.0);
+    }
+  }
+
+  #[test]
+  fn json_fingerprints_and_file_moves_preserve_content_and_timestamps() {
+    let root = std::env::temp_dir().join(format!("common_io_{}", std::process::id()));
+    fs::create_dir_all(&root).unwrap();
+    let _cleanup = TemporaryDirectory(root.clone());
+    let source = root.join("input.json");
+    assert!(json::read_optional::<serde_json::Value>(&source).unwrap().is_none());
+    let value = serde_json::json!({"resource": "maps", "files": ["map.ymap"]});
+    json::atomic_json(&source, &value).unwrap();
+    assert_eq!(json::read_optional::<serde_json::Value>(&source).unwrap(), Some(value.clone()));
+    let before = fingerprint::Fingerprint::read(&source, None, false).unwrap();
+    assert_eq!(fingerprint::Fingerprint::read(&source, Some(&before), false).unwrap(), before);
+    assert_eq!(
+      fingerprint::Fingerprint::read(&source, Some(&before), true).unwrap().sha256,
+      before.sha256
+    );
+    let changed_time =
+      fs::metadata(&source).unwrap().modified().unwrap() + std::time::Duration::from_secs(5);
+    fs::OpenOptions::new()
+      .write(true)
+      .open(&source)
+      .unwrap()
+      .set_times(fs::FileTimes::new().set_modified(changed_time))
+      .unwrap();
+    let touched = fingerprint::Fingerprint::read(&source, Some(&before), false).unwrap();
+    assert_eq!(touched.sha256, before.sha256);
+    assert_ne!(touched.modified_seconds, before.modified_seconds);
+    let destination = root.join("moved.json");
+    filesystem::move_file(&source, &destination).unwrap();
+    assert!(!source.exists());
+    assert_eq!(fs::metadata(&destination).unwrap().modified().unwrap(), changed_time);
+    assert_eq!(json::read_optional::<serde_json::Value>(&destination).unwrap(), Some(value));
+    fs::write(&destination, b"changed and malformed JSON").unwrap();
+    assert_ne!(
+      fingerprint::Fingerprint::read(&destination, Some(&touched), false).unwrap().sha256,
+      touched.sha256
+    );
+    assert!(json::read_optional::<serde_json::Value>(&destination).unwrap().is_none());
+  }
+
+  #[test]
+  fn path_validation_rejects_traversal_and_symlinks() {
+    for relative in ["maps/map.ymap", "[group]/maps", "cache_info.json"] {
+      path::safe_relative(relative).unwrap();
+    }
+    for relative in [
+      "",
+      "../escape",
+      "/absolute",
+      "maps/./file",
+      "maps//file",
+      "maps\\file",
+      "C:/file",
+      "maps\nfile",
+    ] {
+      assert!(path::safe_relative(relative).is_err(), "{relative:?}");
+    }
+    let root = std::env::temp_dir().join(format!("common_paths_{}", std::process::id()));
+    fs::create_dir_all(&root).unwrap();
+    let _cleanup = TemporaryDirectory(root.clone());
+    let file = root.join("file");
+    fs::write(&file, b"data").unwrap();
+    path::ensure_safe_path(&root, &file).unwrap();
+    assert!(path::ensure_safe_path(&root, &root.join("../escape")).is_err());
+    assert_eq!(
+      path::absolute_path(&root.join("missing/../new/file")).unwrap(),
+      root.canonicalize().unwrap().join("new/file")
+    );
+    #[cfg(unix)]
+    {
+      let link = root.join("link");
+      std::os::unix::fs::symlink(&file, &link).unwrap();
+      assert!(path::reject_symlinks(&link).is_err());
+      assert!(path::ensure_safe_path(&root, &link).is_err());
+      assert!(filesystem::read_bytes(&link).is_err());
+      assert!(fingerprint::Fingerprint::read(&link, None, false).is_err());
+      assert!(json::atomic_json(&link, &serde_json::json!({})).is_err());
+      assert_eq!(fs::read(&file).unwrap(), b"data");
+    }
+  }
+}

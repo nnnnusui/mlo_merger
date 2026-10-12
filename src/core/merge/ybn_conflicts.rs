@@ -400,10 +400,7 @@ mod tests {
     let add_polygon = |xml: &str, vertices: [u8; 3]| {
       xml.replacen(
         "    </Polygons>",
-        &format!(
-          "     <Triangle m=\"0\" v1=\"{}\" v2=\"{}\" v3=\"{}\" f1=\"0\" f2=\"0\" f3=\"0\" />\n    </Polygons>",
-          vertices[0], vertices[1], vertices[2]
-        ),
+        &format!("     <Triangle m=\"0\" v1=\"{}\" v2=\"{}\" v3=\"{}\" f1=\"0\" f2=\"0\" f3=\"0\" />\n    </Polygons>", vertices[0], vertices[1], vertices[2]),
         1,
       )
     };

@@ -81,9 +81,9 @@ fn generator_owns_missing_archive_generation_and_existing_archive_reuse() {
 
 #[test]
 fn dlclist_keeps_order_and_normalizes_mounts() {
-  let list: DlcList = quick_xml::de::from_str(
-    "<SMandatoryPacksData><Paths><Item>dlcpacks:\\MPBeach\\</Item><Unused/><Item>platform:/dlcpacks/mpbusiness/</Item></Paths></SMandatoryPacksData>",
-  ).unwrap();
+  let list: DlcList =
+    quick_xml::de::from_str("<SMandatoryPacksData><Paths><Item>dlcpacks:\\MPBeach\\</Item><Unused/><Item>platform:/dlcpacks/mpbusiness/</Item></Paths></SMandatoryPacksData>")
+      .unwrap();
   assert_eq!(
     dlc_archive(&list.paths.items[0]).unwrap(),
     PathBuf::from("update/x64/dlcpacks/mpbeach/dlc.rpf")

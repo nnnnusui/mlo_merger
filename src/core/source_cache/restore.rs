@@ -1,10 +1,7 @@
 use std::{collections::BTreeSet, fs, io::BufReader, path::Path};
 
-use super::{
-  Result,
-  filesystem::{ensure_safe_path, move_file},
-  types::SourceCacheMetadata,
-};
+use super::{Result, types::SourceCacheMetadata};
+use crate::common::{filesystem::move_file, path::ensure_safe_path};
 
 /// Moves recorded active cache files back to their original resource-relative paths.
 ///

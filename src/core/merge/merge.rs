@@ -38,6 +38,8 @@ pub struct Merge {
   pub output_dir: PathBuf,
   /// Resource-local edit documents.
   pub overwrite_dir: PathBuf,
+  /// Resource exclusions for this run, also applied to prerequisite source indexing.
+  pub exclusions: Option<Vec<String>>,
   /// Rebuilds merge groups and overwrite preparation regardless of freshness.
   pub force: bool,
 }
@@ -49,16 +51,16 @@ impl Merge {
   /// mlo_merger::core::merge::Merge {
   ///   source_dir: "asset/source".into(), vanilla_dir: "asset/vanilla".into(),
   ///   vanilla_cache_dir: "asset/vanilla-cache".into(), source_cache_dir: "asset/source-cache".into(),
-  ///   output_dir: "asset/merged".into(), overwrite_dir: "asset/overwrite".into(), force: false,
+  ///   output_dir: "asset/merged".into(), overwrite_dir: "asset/overwrite".into(), exclusions: None, force: false,
   /// }.run()?;
   /// # Ok::<(), Box<dyn std::error::Error>>(())
   /// ```
   pub fn run(&self) -> Result<()> {
-    let overwrite = crate::core::pipeline::absolute_path(&self.overwrite_dir)?;
+    let overwrite = crate::common::path::absolute_path(&self.overwrite_dir)?;
     for path in
       [&self.vanilla_dir, &self.vanilla_cache_dir, &self.source_cache_dir, &self.output_dir]
     {
-      let path = crate::core::pipeline::absolute_path(path)?;
+      let path = crate::common::path::absolute_path(path)?;
       if overwrite.starts_with(&path) || path.starts_with(&overwrite) {
         return Err("Overwrite directory overlaps a merge artifact directory".into());
       }
@@ -75,7 +77,7 @@ impl Merge {
       vanilla_dir: vanilla_dir.clone(),
       vanilla_cache_dir: self.vanilla_cache_dir.clone(),
       resource: None,
-      exclusions: None,
+      exclusions: self.exclusions.clone(),
       force: false,
     }
     .run()?;
@@ -299,6 +301,7 @@ mod tests {
         source_cache_dir: source_cache.clone(),
         output_dir: output.clone(),
         overwrite_dir: root.join("overwrite"),
+        exclusions: None,
         force: false,
       }
       .run()
@@ -419,6 +422,7 @@ mod tests {
       source_cache_dir: source_cache.clone(),
       output_dir: output.clone(),
       overwrite_dir: root.join("overwrite"),
+      exclusions: None,
       force: false,
     }
     .run()
@@ -433,6 +437,7 @@ mod tests {
       source_cache_dir: source_cache.clone(),
       output_dir: output.clone(),
       overwrite_dir: root.join("overwrite"),
+      exclusions: None,
       force: false,
     }
     .run()
@@ -450,6 +455,7 @@ mod tests {
       source_cache_dir: source_cache.clone(),
       output_dir: output.clone(),
       overwrite_dir: root.join("overwrite"),
+      exclusions: None,
       force: false,
     }
     .run()
@@ -469,6 +475,7 @@ mod tests {
       source_cache_dir: source_cache.clone(),
       output_dir: output.clone(),
       overwrite_dir: root.join("overwrite"),
+      exclusions: None,
       force: false,
     }
     .run()
@@ -482,6 +489,7 @@ mod tests {
       source_cache_dir: source_cache.clone(),
       output_dir: output.clone(),
       overwrite_dir: root.join("overwrite"),
+      exclusions: None,
       force: false,
     }
     .run()
@@ -576,6 +584,7 @@ mod tests {
       source_cache_dir: source_cache_dir.clone(),
       output_dir: output_dir.clone(),
       overwrite_dir: root.join("overwrite"),
+      exclusions: None,
       force: false,
     }
     .run()
@@ -633,6 +642,7 @@ mod tests {
       source_cache_dir: source_cache_dir.clone(),
       output_dir: output_dir.clone(),
       overwrite_dir: root.join("overwrite"),
+      exclusions: None,
       force: false,
     }
     .run()
@@ -657,6 +667,7 @@ mod tests {
       source_cache_dir: source_cache_dir.clone(),
       output_dir: output_dir.clone(),
       overwrite_dir: root.join("overwrite"),
+      exclusions: None,
       force: false,
     }
     .run()
@@ -678,6 +689,7 @@ mod tests {
       source_cache_dir: source_cache_dir.clone(),
       output_dir: output_dir.clone(),
       overwrite_dir: root.join("overwrite"),
+      exclusions: None,
       force: false,
     }
     .run()
@@ -697,6 +709,7 @@ mod tests {
       source_cache_dir: source_cache_dir.clone(),
       output_dir: output_dir.clone(),
       overwrite_dir: root.join("overwrite"),
+      exclusions: None,
       force: false,
     }
     .run()
@@ -721,6 +734,7 @@ mod tests {
       source_cache_dir: source_cache_dir.clone(),
       output_dir: output_dir.clone(),
       overwrite_dir: root.join("overwrite"),
+      exclusions: None,
       force: false,
     }
     .run()
@@ -742,6 +756,7 @@ mod tests {
       source_cache_dir: source_cache_dir.clone(),
       output_dir: output_dir.clone(),
       overwrite_dir: root.join("overwrite"),
+      exclusions: None,
       force: false,
     }
     .run()
@@ -755,6 +770,7 @@ mod tests {
       source_cache_dir: source_cache_dir.clone(),
       output_dir: output_dir.clone(),
       overwrite_dir: root.join("overwrite"),
+      exclusions: None,
       force: true,
     }
     .run()
@@ -777,6 +793,7 @@ mod tests {
         source_cache_dir: source_cache_dir.clone(),
         output_dir: output_dir.clone(),
         overwrite_dir: root.join("overwrite"),
+        exclusions: None,
         force: false
       }
       .run()
@@ -793,6 +810,7 @@ mod tests {
       source_cache_dir: source_cache_dir.clone(),
       output_dir: output_dir.clone(),
       overwrite_dir: root.join("overwrite"),
+      exclusions: None,
       force: false,
     }
     .run()

@@ -623,9 +623,7 @@ mod tests {
         .iter()
         .all(|polygon| { matches!(polygon, Polygon::Triangle(triangle) if triangle.area > 0.0) })
     );
-    assert!(geometry.polygons.iter().any(|polygon| {
-      matches!(polygon, Polygon::Triangle(triangle) if triangle.edge_indices.iter().any(|edge| *edge != u16::MAX))
-    }));
+    assert!(geometry.polygons.iter().any(|polygon| { matches!(polygon, Polygon::Triangle(triangle) if triangle.edge_indices.iter().any(|edge| *edge != u16::MAX)) }));
   }
 
   #[test]

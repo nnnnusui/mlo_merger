@@ -2,9 +2,9 @@
 
 use super::{
   Result,
-  filesystem::ensure_safe_path,
   types::{ResourceInventory, SourceCacheConflictReport},
 };
+use crate::common::path::ensure_safe_path;
 use crate::core::stream_conflicts::{StreamConflictReport, StreamFileConflict};
 use std::{
   collections::{BTreeMap, BTreeSet},

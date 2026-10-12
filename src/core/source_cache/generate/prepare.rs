@@ -4,14 +4,14 @@ use super::{
   BuildSourceCache, CacheState, Prepared, Publication, Result, SourceCacheMetadata,
   SourceResources, Staging, VanillaInputs,
 };
+use crate::common::{json::write_json, path::ensure_safe_path};
 use crate::core::source_cache::{
-  exclusions::{FILE_NAME as EXCLUSIONS_FILE, is_excluded, parse_exclusions},
-  filesystem::ensure_safe_path,
+  exclusions::{is_excluded, parse_exclusions},
   inventory::{discover_resources, resource_id, source_fingerprints},
   publication::{create_staging_directory, prepare_output_path},
 };
 use crate::core::{
-  vanilla::{load_manifest_with_revision, write_json},
+  vanilla::load_manifest_with_revision,
   vanilla_cache::{BuildVanillaCache, load_cache},
 };
 use std::{
@@ -25,17 +25,7 @@ pub(super) fn prepare(build: &BuildSourceCache) -> Result<Prepared> {
   let selection = build.resource.as_deref();
   let source_dir = build.source_dir.canonicalize()?;
   let output = prepare_output_path(&build.output_dir)?;
-  let exclusions_path = output.join(EXCLUSIONS_FILE);
-  ensure_safe_path(&output, &exclusions_path)?;
-  let saved_exclusions: Vec<String> = if exclusions_path.is_file() {
-    serde_json::from_reader(BufReader::new(fs::File::open(&exclusions_path)?))?
-  } else {
-    Vec::new()
-  };
-  let exclusions = match build.exclusions.as_deref() {
-    Some(patterns) => parse_exclusions(&patterns.join(","))?,
-    None => parse_exclusions(&saved_exclusions.join(","))?,
-  };
+  let exclusions = parse_exclusions(&build.exclusions.as_deref().unwrap_or_default().join(","))?;
   let resources = discover_resources(&source_dir)?
     .into_iter()
     .map(|resource| Ok((resource_id(&source_dir, &resource)?, resource)))
@@ -169,8 +159,7 @@ pub(super) fn prepare(build: &BuildSourceCache) -> Result<Prepared> {
   let generated_at = chrono::Utc::now().to_rfc3339();
   let history =
     output.join("_old").join(chrono::Utc::now().format("%Y%m%dT%H%M%S%.9fZ").to_string());
-  let changed = saved_exclusions != exclusions
-    || exclusions_changed
+  let changed = exclusions_changed
     || relocated
     || upstream_changed
     || previous
@@ -186,7 +175,6 @@ pub(super) fn prepare(build: &BuildSourceCache) -> Result<Prepared> {
       selected,
       names,
       discovered,
-      exclusions,
       selected_only: selection.is_some(),
     },
     vanilla: VanillaInputs {

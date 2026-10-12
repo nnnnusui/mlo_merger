@@ -11,7 +11,7 @@ pub struct GenerateSourceCache {
   pub source_dir: PathBuf,
   /// Restricts updates to one resource name or relative resource path.
   pub resource: Option<String>,
-  /// Explicit comma-separated exclusions, or saved cache settings when absent.
+  /// Resource exclusions for this execution only.
   pub exclusions: Option<Vec<String>>,
   /// Shared execution options.
   pub common: CommonOptions,
@@ -42,7 +42,7 @@ pub fn parser() -> impl Parser<GenerateSourceCache> {
 
 pub(crate) fn exclusions_parser() -> impl Parser<Option<Vec<String>>> {
   long("exclude")
-    .help("Comma-separated resource names or partial source-relative paths; empty clears saved exclusions")
+    .help("Comma-separated resource names or partial source-relative paths for this run")
     .argument::<String>("PATTERNS")
     .parse(|value| crate::core::source_cache::exclusions::parse_exclusions(&value))
     .optional()

@@ -569,6 +569,13 @@ fn moves_vanilla_files_retains_history_and_updates_only_selected_resources() {
   .run()
   .unwrap();
   assert!(!deployed.join("stream/ybn/clone/resource_a").exists());
-  assert!(!build.run().unwrap());
+  assert!(
+    !BuildSourceCache {
+      exclusions: Some(vec!["resource_a".into()]),
+      ..build.clone()
+    }
+    .run()
+    .unwrap()
+  );
   fs::remove_dir_all(root).unwrap();
 }

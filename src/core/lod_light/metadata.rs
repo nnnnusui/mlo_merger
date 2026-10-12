@@ -7,7 +7,6 @@ use crate::core::format::{
   ymap::diff::reference_hash,
 };
 use serde::{Deserialize, Serialize};
-use std::fs;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "typescript", derive(specta::Type))]
@@ -19,7 +18,7 @@ pub(super) struct LightMetadata {
 }
 
 pub(super) fn read(input: &ResourceFile) -> Result<LightMetadata> {
-  let bytes = fs::read(&input.path)?;
+  let bytes = input.read()?;
   if !bytes.starts_with(b"RSC7") {
     let model = read_map(input)?.model;
     return Ok(LightMetadata {

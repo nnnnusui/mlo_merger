@@ -158,6 +158,12 @@ fn native_export_reuses_repairs_and_rejects_stale_parent_snapshot() {
   fs::create_dir_all(overwrite.join("resource/nested")).unwrap();
   crate::core::vanilla::write_json(&overwrite.join("resource/nested/child.ymap.diff.json"), &edit)
     .unwrap();
+  crate::core::source_cache::record_test_inventory(
+    &command.source_dir,
+    &command.source_cache_dir,
+    &[],
+  )
+  .unwrap();
   assert!(PreparedEdits::load(&command.source_dir, &command.source_cache_dir, &overwrite).is_ok());
   let input = resource::ResourceFile {
     path: parent.clone(),
@@ -258,6 +264,7 @@ fn native_custom_light_edits_merge_deploy_reuse_and_retract() {
       source_cache_dir: source_cache.clone(),
       output_dir: output.clone(),
       overwrite_dir: overwrite.clone(),
+      exclusions: None,
       force: false,
     }
     .run()
@@ -423,6 +430,7 @@ fn cached_baseline_inputs_accept_combined_removals_and_keep_unchanged_provider()
       source_cache_dir: source_cache.clone(),
       output_dir: output.clone(),
       overwrite_dir: overwrite.clone(),
+      exclusions: None,
       force: false,
     }
     .run()

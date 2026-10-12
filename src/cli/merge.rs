@@ -11,6 +11,8 @@ pub struct Merge {
   pub source_dir: PathBuf,
   /// Resource-local light edit directory.
   pub overwrite_dir: PathBuf,
+  /// Resource exclusions applied only to this execution.
+  pub exclusions: Option<Vec<String>>,
   /// Shared execution options.
   pub common: CommonOptions,
 }
@@ -26,11 +28,13 @@ pub fn parser() -> impl Parser<Merge> {
   let common = common::parser(PathBuf::from("asset/merged"));
   let overwrite_dir =
     long("overwrite-dir").argument::<PathBuf>("DIR").fallback("asset/overwrite".into());
-  construct!(command, source_dir, common, overwrite_dir).map(
-    |(_, source_dir, common, overwrite_dir)| Merge {
+  let exclusions = super::generate_source_cache::exclusions_parser();
+  construct!(command, source_dir, common, overwrite_dir, exclusions).map(
+    |(_, source_dir, common, overwrite_dir, exclusions)| Merge {
       source_dir,
       common,
       overwrite_dir,
+      exclusions,
     },
   )
 }
@@ -44,6 +48,7 @@ pub fn run(command: Merge) -> Result<(), Box<dyn std::error::Error>> {
     source_cache_dir: command.common.source_cache,
     output_dir: command.common.output,
     overwrite_dir: command.overwrite_dir,
+    exclusions: command.exclusions,
     force: command.common.force,
   }
   .run()

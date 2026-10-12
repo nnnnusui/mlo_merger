@@ -58,17 +58,20 @@ retained under `_old/`. Files are cached at
 `resources/{resourceName}/{stream-relative-path}`, without the leading
 `stream/` or `streams/` component.
 
-Source-cache generation and the default pipeline accept `--exclude 'name,partial/path'`.
+Source-cache generation, merge and the default pipeline accept `--exclude 'name,partial/path'`.
 Each trimmed entry matches a case-insensitive substring of the resource path
 relative to `-i`; resource names and group paths can both be used. Backslashes
 are normalized to `/`; entries are literal text, not globs. Excluded resources
 are not inventoried, fingerprinted, moved, or included in source conflict reports.
-The setting is saved in `source_exclusions.json` inside the source cache and
-reused when `--exclude` is omitted, including merge prerequisite updates.
-Use `--exclude ''` to clear it. Previously cached excluded resources are removed
+Exclusions apply only to the current execution and are not saved or inherited.
+Omitting `--exclude` or passing `--exclude ''` means no exclusions. Pipeline and
+merge pass the current exclusions to their source-cache prerequisite updates;
+additional light edits use only resources recorded by that source cache. Legacy
+`source_exclusions.json` files are ignored and removed after successful source-cache
+updates. Previously cached excluded resources are removed
 from the active JSON indexes and their cache directories are archived under
 `_old/`, keeping those files out of merge and clone deployment. Files remaining
-in source are untouched. Clearing exclusions does not automatically restore
+in source are untouched. Omitting exclusions does not automatically restore
 archived files to source.
 
 `--restore-source-cache` moves recorded active cache files back to their original
@@ -143,14 +146,21 @@ fail before merged output publication. Removing a diff withdraws the edit on the
 next merge/deploy. Applying native light edits currently requires RSC7 YMAPs;
 PSO inputs can be inspected but are not edited.
 
+Overwrite resolves resource and file identities exclusively from the active
+source-cache inventory. Recorded custom YMAPs are read from their original
+source paths; moved YMAPs are read from their recorded cached paths. Unrecorded
+resources and files are not rediscovered, and diffs for inactive resources are
+ignored. Rebuild source-cache to add or relocate inputs before applying edits.
+
 Merge saves validated overwrite preparation in
 `<source-cache>/overwrite_cache_info.json`. Unchanged mtime/size reuse stored
 SHA-256 values; unchanged diff contents, source contents and resource membership
 reuse prepared edits without parsing diffs or decoding related YMAPs again.
 Timestamp-only changes refresh fingerprints without rebuilding. Diff additions,
-removals, changed inputs or resource topology invalidate preparation; `-f`
+removals, changed recorded inputs or cache resource/file membership invalidate preparation; `-f`
 bypasses reuse. The cache is updated only after a successful merge, and a missing
-or unreadable cache is rebuilt. File enumeration and stat checks still run.
+or unreadable preparation cache is rebuilt. Diff enumeration and recorded-input
+stat checks still run; overwrite does not scan source stream directories.
 
 ### Matching Configuration
 

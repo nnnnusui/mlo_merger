@@ -1,10 +1,7 @@
 //! Migrates cached stream paths while preserving original resource paths.
 
-use super::{
-  Result,
-  filesystem::{ensure_safe_path, move_file},
-  types::ResourceInventory,
-};
+use super::{Result, types::ResourceInventory};
+use crate::common::{filesystem::move_file, path::ensure_safe_path};
 use std::{collections::BTreeSet, fs, path::Path};
 
 pub(super) fn stream_relative_path(path: &str) -> Result<&str> {

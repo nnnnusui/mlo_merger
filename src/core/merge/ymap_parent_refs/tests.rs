@@ -32,12 +32,15 @@ pub(super) fn entity(
 }
 
 pub(super) fn original_map(entities: Vec<YmapEntity>) -> OriginalMap {
-  let mut parsed: XmlYmap = quick_xml::de::from_str(r#"<CMapData>
+  let mut parsed: XmlYmap = quick_xml::de::from_str(
+    r#"<CMapData>
     <name>map</name><parent>external</parent><flags value="0"/><contentFlags value="0"/>
     <streamingExtentsMin x="0" y="0" z="0"/><streamingExtentsMax x="0" y="0" z="0"/>
     <entitiesExtentsMin x="0" y="0" z="0"/><entitiesExtentsMax x="0" y="0" z="0"/>
     <block><version value="0"/><flags value="0"/><name>map</name><exportedBy>test</exportedBy><owner/><time/></block>
-  </CMapData>"#).unwrap();
+  </CMapData>"#,
+  )
+  .unwrap();
   parsed.entities.items = entities.iter().cloned().map(Into::into).collect();
   let xml = quick_xml::se::to_string(&parsed).unwrap();
   OriginalMap {

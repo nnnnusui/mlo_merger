@@ -10,10 +10,7 @@ use crate::core::format::{
     model::{Ymap, YmapEntity, YmapLodLight},
   },
 };
-use std::{
-  collections::{BTreeMap, BTreeSet, HashMap},
-  fs,
-};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub(crate) struct LoadedMap {
@@ -22,7 +19,7 @@ pub(crate) struct LoadedMap {
 }
 
 pub(crate) fn read_map(input: &ResourceFile) -> Result<LoadedMap> {
-  let bytes = fs::read(&input.path)?;
+  let bytes = input.read()?;
   let (model, entities) = ymap_to_light_model_with_entities(&bytes, &HashMap::new())?;
   Ok(LoadedMap {
     model,

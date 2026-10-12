@@ -371,7 +371,7 @@ mod tests {
   }
 
   #[test]
-  fn source_exclusions_parse_in_generation_and_default_pipeline() {
+  fn source_exclusions_parse_for_each_execution() {
     let Command::GenerateSourceCache(command) = parser()
       .to_options()
       .run_inner(&[
@@ -395,6 +395,29 @@ mod tests {
       panic!("Expected pipeline command")
     };
     assert_eq!(command.exclusions, Some(vec!["resource_a".into(), "[group]/partial".into()]));
+    let Command::Merge(command) = parser()
+      .to_options()
+      .run_inner(&["--merge", "-i", "resources", "--exclude", " Resource_A, [GABZ]\\shops "])
+      .unwrap()
+    else {
+      panic!("Expected merge command")
+    };
+    assert_eq!(command.exclusions, Some(vec!["resource_a".into(), "[gabz]/shops".into()]));
+    let Command::Merge(command) = parser().to_options().run_inner(&["--merge"]).unwrap() else {
+      panic!("Expected merge command")
+    };
+    assert_eq!(command.exclusions, None);
+    let Command::Merge(command) =
+      parser().to_options().run_inner(&["--merge", "--exclude", ""]).unwrap()
+    else {
+      panic!("Expected merge command")
+    };
+    assert_eq!(command.exclusions, Some(Vec::new()));
+    let Command::Pipeline(command) = parser().to_options().run_inner(&["-i", "resources"]).unwrap()
+    else {
+      panic!("Expected pipeline command")
+    };
+    assert_eq!(command.exclusions, None);
     let Command::GenerateSourceCache(command) = parser()
       .to_options()
       .run_inner(&["--generate-source-cache", "resource_a", "--exclude", ""])
@@ -409,6 +432,9 @@ mod tests {
         .to_options()
         .run_inner(&["--generate-source-cache", "--exclude", "resource_a,,resource_b",])
         .is_err()
+    );
+    assert!(
+      parser().to_options().run_inner(&["--merge", "--exclude", "resource_a,,resource_b"]).is_err()
     );
   }
 

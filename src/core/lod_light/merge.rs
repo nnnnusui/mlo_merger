@@ -16,7 +16,7 @@ use crate::core::{
       model::{YmapDistantLodLight, YmapDistantLodLights, YmapLodLight},
     },
   },
-  source_cache::MergeSourceFile,
+  source_cache::{MergeSourceFile, StreamInventory, read_stream_bytes},
 };
 use std::{
   collections::{BTreeMap, BTreeSet},
@@ -54,9 +54,18 @@ struct Pair {
 }
 
 impl PreparedEdits {
+  #[cfg(test)]
   pub fn load(
     source: &Path,
     cache: &Path,
+    overwrite: &Path,
+  ) -> Result<Self> {
+    let inventory = crate::core::source_cache::load_stream_inventory(source, cache)?;
+    Self::load_inventory(&inventory, overwrite)
+  }
+
+  pub(super) fn load_inventory(
+    inventory: &StreamInventory,
     overwrite: &Path,
   ) -> Result<Self> {
     let mut prepared = Self::default();
@@ -78,6 +87,9 @@ impl PreparedEdits {
       let before = Fingerprint::read(entry.path(), None, true)?;
       let edit: YmapLightEditDocument =
         serde_json::from_reader(BufReader::new(fs::File::open(entry.path())?))?;
+      if !inventory.contains_key(&edit.resource) {
+        continue;
+      }
       if before != Fingerprint::read(entry.path(), None, true)? {
         return Err("Light diff changed while reading".into());
       }
@@ -100,7 +112,6 @@ impl PreparedEdits {
     if documents.is_empty() {
       return Ok(prepared);
     }
-    let inventory = inventory(source, cache)?;
     let mut originals = BTreeMap::<String, BTreeMap<String, LoadedMap>>::new();
     let mut masks = BTreeMap::<(String, String, bool), BTreeSet<usize>>::new();
     for edit in documents {
@@ -142,7 +153,7 @@ impl PreparedEdits {
     }
     loop {
       let before = prepared.names.len();
-      for (resource, files) in &inventory {
+      for (resource, files) in inventory {
         for target in files
           .keys()
           .filter(|path| prepared.names.contains(&basename(path).unwrap_or_default()))
@@ -391,7 +402,7 @@ impl PreparedEdits {
     }
     let mut catalog = MetaSchemaCatalog::default();
     for source in &self.sources {
-      let bytes = fs::read(&source.path)?;
+      let bytes = read_stream_bytes(&source.path)?;
       let resource = Rsc7Resource::decode(&bytes)
         .map_err(|_| "Light editing currently requires RSC7, not PSO")?;
       catalog.add_resource(&MetaResource::parse(&resource)?);
@@ -422,11 +433,7 @@ impl PreparedEdits {
         }
       }
       let mut map = if let Some(existing) = existing {
-        read_map(&ResourceFile {
-          path: existing.clone(),
-          original: existing.clone(),
-          parent_hint: None,
-        })?
+        read_map(&crate::core::source_cache::resolve_template_file(existing)?)?
       } else {
         output.template.clone()
       };

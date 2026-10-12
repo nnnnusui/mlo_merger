@@ -3,12 +3,12 @@
 use super::{
   CacheState, FileFingerprint, Publication, ResourceCheck, Result, SourceResources, VanillaInputs,
 };
+use crate::common::json::write_json;
+use crate::common::{filesystem::move_file, path::ensure_safe_path};
 use crate::core::source_cache::{
-  filesystem::{ensure_safe_path, move_file},
   inventory::{fingerprint, resource_id, source_fingerprints, source_inventory},
   layout::{normalize_cached_layout, stream_relative_path},
 };
-use crate::core::vanilla::write_json;
 use std::{collections::BTreeMap, fs};
 
 pub(super) fn update_selected_resources(

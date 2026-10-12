@@ -21,7 +21,6 @@ struct SourceResources {
   selected: Vec<PathBuf>,
   names: BTreeSet<String>,
   discovered: BTreeSet<String>,
-  exclusions: Vec<String>,
   selected_only: bool,
 }
 
@@ -70,7 +69,8 @@ pub(super) fn run(build: &BuildSourceCache) -> Result<bool> {
   } = prepare::prepare(build)?;
 
   prepare::archive_excluded_resources(&publication, &excluded_cache_paths)?;
-  changed |= resources::update_selected_resources(&source, &vanilla, &publication, &mut state, build.force)?;
+  changed |=
+    resources::update_selected_resources(&source, &vanilla, &publication, &mut state, build.force)?;
   changed |= resources::remove_missing_resources(&source, &publication, &mut state)?;
   publish::publish_if_changed(source, vanilla, publication, state, changed)
 }

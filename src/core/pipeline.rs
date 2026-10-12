@@ -5,7 +5,8 @@ use super::{
   vanilla::GenerateVanilla,
   vanilla_cache::BuildVanillaCache,
 };
-use std::path::{Component, Path, PathBuf};
+use crate::common::path::absolute_path;
+use std::path::PathBuf;
 
 /// Executes the cached vanilla, source, merge and deployment stages in order.
 #[derive(Debug, Clone)]
@@ -22,7 +23,7 @@ pub struct Pipeline {
   pub source_cache_dir: PathBuf,
   /// Resource-local edit documents consumed by merge.
   pub overwrite_dir: PathBuf,
-  /// Explicit exclusions; `None` inherits saved settings and an empty list clears them.
+  /// Resource exclusions for this run; absent or empty means no exclusions.
   pub exclusions: Option<Vec<String>>,
   /// Intermediate merged artifact directory.
   pub merged_dir: PathBuf,
@@ -99,6 +100,7 @@ impl Pipeline {
       source_cache_dir: self.source_cache_dir.clone(),
       output_dir: self.merged_dir.clone(),
       overwrite_dir: self.overwrite_dir.clone(),
+      exclusions: self.exclusions.clone(),
       force: self.force,
     }
     .run()?;
@@ -141,45 +143,6 @@ impl Pipeline {
     }
     Ok(())
   }
-}
-
-pub(crate) fn absolute_path(path: &Path) -> std::io::Result<PathBuf> {
-  let absolute =
-    if path.is_absolute() { path.to_path_buf() } else { std::env::current_dir()?.join(path) };
-  let mut normalized = PathBuf::new();
-  for component in absolute.components() {
-    match component {
-      Component::CurDir => {}
-      Component::ParentDir => {
-        if normalized.exists() {
-          normalized = normalized.canonicalize()?;
-        }
-        normalized.pop();
-      }
-      component => normalized.push(component.as_os_str()),
-    }
-  }
-  let mut ancestor = normalized;
-  let mut missing = Vec::new();
-  while !ancestor.exists() {
-    missing.push(
-      ancestor
-        .file_name()
-        .ok_or_else(|| {
-          std::io::Error::new(
-            std::io::ErrorKind::InvalidInput,
-            "Pipeline path has no existing ancestor",
-          )
-        })?
-        .to_os_string(),
-    );
-    ancestor.pop();
-  }
-  let mut path = ancestor.canonicalize()?;
-  for component in missing.into_iter().rev() {
-    path.push(component);
-  }
-  Ok(path)
 }
 
 #[cfg(test)]
@@ -285,7 +248,7 @@ mod tests {
   }
 
   #[test]
-  fn pipeline_reuses_vanilla_and_persists_exclusions() {
+  fn pipeline_reuses_vanilla_and_applies_exclusions_only_for_this_run() {
     let root = std::env::temp_dir().join(format!("pipeline_generation_{}", std::process::id()));
     let _ = fs::remove_dir_all(&root);
     let pipeline = Pipeline {
@@ -303,6 +266,9 @@ mod tests {
     fs::create_dir_all(pipeline.source_dir.join("resource")).unwrap();
     fs::write(pipeline.source_dir.join("resource/fxmanifest.lua"), []).unwrap();
     fs::create_dir_all(&pipeline.game_dir).unwrap();
+    let excluded_resource = pipeline.source_dir.join("unused-resource");
+    fs::create_dir_all(&excluded_resource).unwrap();
+    fs::write(excluded_resource.join("fxmanifest.lua"), []).unwrap();
     fs::create_dir_all(&pipeline.vanilla_dir).unwrap();
     write_json(
       &pipeline.vanilla_dir.join("cache_info.json"),
@@ -326,17 +292,24 @@ mod tests {
     assert!(overlapping.run().unwrap_err().to_string().contains("Pipeline paths overlap"));
     pipeline.run().unwrap();
     let exclusions_path = pipeline.source_cache_dir.join("source_exclusions.json");
-    let saved = || {
-      serde_json::from_reader::<_, Vec<String>>(fs::File::open(&exclusions_path).unwrap()).unwrap()
+    assert!(!exclusions_path.exists());
+    let contains_excluded = || {
+      let metadata: serde_json::Value = serde_json::from_reader(
+        fs::File::open(pipeline.source_cache_dir.join("source_cache_info.json")).unwrap(),
+      )
+      .unwrap();
+      metadata["resources"].get("unused-resource").is_some()
     };
-    assert_eq!(saved(), ["unused-resource"]);
-    let mut inherited = pipeline.clone();
-    inherited.exclusions = None;
-    inherited.run().unwrap();
-    assert_eq!(saved(), ["unused-resource"]);
-    inherited.exclusions = Some(Vec::new());
-    inherited.run().unwrap();
-    assert!(saved().is_empty());
+    assert!(!contains_excluded());
+    let mut unfiltered = pipeline.clone();
+    unfiltered.exclusions = None;
+    unfiltered.run().unwrap();
+    assert!(contains_excluded());
+    pipeline.run().unwrap();
+    assert!(!contains_excluded());
+    unfiltered.exclusions = Some(Vec::new());
+    unfiltered.run().unwrap();
+    assert!(contains_excluded());
     fs::remove_dir_all(root).unwrap();
   }
 

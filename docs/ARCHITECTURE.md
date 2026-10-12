@@ -73,7 +73,11 @@ The stream R-tree uses the original file bounds independently of light editing.
 Light influence bounds are computed only for on-demand light exports and edits.
 
 Typed removal documents under the overwrite directory are validated against the
-exported source snapshot. Editing withdraws occurrences from a resource's light
+exported source snapshot. The active source-cache inventory determines resource
+and file membership; overwrite does not discover live stream directories or
+reinterpret exclusions. Source-cache APIs own recorded source/cached path
+resolution, stream-byte reads, fingerprints and preparation-cache I/O. Native
+light decoding and edit composition remain in the light module. Editing withdraws occurrences from a resource's light
 contribution, not from every resource sharing a basename. Edited groups compose
 linked light pairs while the normal merge continues to own non-light data.
 Resource providers retain exact duplicate multiplicity, and parent/child arrays
@@ -136,13 +140,16 @@ or deployment output. The next source-cache generation inventories the restored
 resources and applies normal extraction again. Cache generation and restoration
 must not run concurrently.
 
-Source-cache exclusion settings are persisted separately from its inventory so
-implicit prerequisite updates and restoration do not silently clear them.
+Source-cache exclusions are explicit per-execution inputs, not saved settings.
+Absent or empty exclusions mean no filtering. Pipeline and merge forward the
+current exclusions to prerequisite source-cache construction; additional light
+edits use its recorded resource/file membership and invalidate preparation when that changes.
+Legacy exclusions files are ignored and removed after successful cache updates.
 Excluded resources remain in source and are omitted from indexing and conflict
 scans. Existing excluded resources are removed from active indexes and their cache
 directories are moved to history with the previous inventory retained for provenance.
 They no longer contribute merge inputs or deployed clone files. Source files are
-untouched; clearing exclusions does not automatically restore archived files.
+untouched; running without exclusions does not automatically restore archived files.
 
 ## Merge Policy
 

@@ -1,17 +1,16 @@
 use super::{
-  PreparedEdits, Result, inventory,
-  io::{Fingerprint, atomic_json, reject_symlinks},
+  PreparedEdits, Result,
+  io::{Fingerprint, reject_symlinks},
 };
+use crate::core::source_cache::{load_stream_inventory, read_cache_entry, write_cache_entry};
 use serde::{Deserialize, Serialize};
 use std::{
   collections::BTreeMap,
-  fs,
-  io::BufReader,
   path::{Path, PathBuf},
 };
 use walkdir::WalkDir;
 
-const VERSION: u32 = 1;
+const VERSION: u32 = 3;
 
 #[derive(Serialize, Deserialize)]
 pub(crate) struct OverwriteCache {
@@ -34,14 +33,11 @@ impl PreparedEdits {
     force: bool,
   ) -> Result<(Self, OverwriteCache)> {
     let source = source.canonicalize()?;
-    let overwrite = crate::core::pipeline::absolute_path(overwrite)?;
+    let overwrite = crate::common::path::absolute_path(overwrite)?;
     reject_symlinks(&overwrite)?;
-    let cache_path = cache.join("overwrite_cache_info.json");
-    reject_symlinks(&cache_path)?;
-    let previous = fs::File::open(&cache_path)
-      .ok()
-      .and_then(|file| serde_json::from_reader::<_, OverwriteCache>(BufReader::new(file)).ok())
+    let previous = read_cache_entry::<OverwriteCache>(cache, "overwrite_cache_info.json")?
       .filter(|old| old.version == VERSION && old.source == source && old.overwrite == overwrite);
+    let inventory = load_stream_inventory(&source, cache)?;
     let mut paths = Vec::new();
     if overwrite.exists() {
       for entry in WalkDir::new(&overwrite).follow_links(false) {
@@ -58,13 +54,13 @@ impl PreparedEdits {
     }
     let mut topology = BTreeMap::new();
     if !paths.is_empty() {
-      for (resource, files) in inventory(&source, cache)? {
+      for (resource, files) in &inventory {
         let mut entries = BTreeMap::new();
         for (relative, file) in files {
           paths.push(file.path.clone());
-          entries.insert(relative, (file.path, file.original));
+          entries.insert(relative.clone(), (file.path.clone(), file.original.clone()));
         }
-        topology.insert(resource, entries);
+        topology.insert(resource.clone(), entries);
       }
     }
     let inputs = paths
@@ -90,7 +86,7 @@ impl PreparedEdits {
       log::debug!("Reusing overwrite preparation cache");
       previous.ok_or("Missing overwrite cache")?.prepared
     } else {
-      PreparedEdits::load(&source, cache, &overwrite)?
+      PreparedEdits::load_inventory(&inventory, &overwrite)?
     };
     prepared.fingerprints = inputs.clone();
     prepared.verify()?;
@@ -123,21 +119,15 @@ impl OverwriteCache {
     cache: &Path,
   ) -> Result<()> {
     log::debug!("Overwrite preparation cache reused: {}", self.reused);
-    let path = cache.join("overwrite_cache_info.json");
-    reject_symlinks(&path)?;
-    if fs::File::open(&path)
-      .ok()
-      .and_then(|file| serde_json::from_reader::<_, Self>(BufReader::new(file)).ok())
-      .is_some_and(|old| {
-        old.version == self.version
-          && old.source == self.source
-          && old.overwrite == self.overwrite
-          && old.inputs == self.inputs
-          && old.inventory == self.inventory
-      })
-    {
+    if read_cache_entry::<Self>(cache, "overwrite_cache_info.json")?.is_some_and(|old| {
+      old.version == self.version
+        && old.source == self.source
+        && old.overwrite == self.overwrite
+        && old.inputs == self.inputs
+        && old.inventory == self.inventory
+    }) {
       return Ok(());
     }
-    atomic_json(&path, self)
+    write_cache_entry(cache, "overwrite_cache_info.json", self)
   }
 }

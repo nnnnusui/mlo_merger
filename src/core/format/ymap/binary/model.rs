@@ -54,12 +54,15 @@ pub(super) fn prepare(
       Ok(serde_json::json!({"x": coordinates[0], "y": coordinates[1], "z": coordinates[2]}))
     })
     .collect::<io::Result<Vec<_>>>()?;
-  object.insert("DistantLODLightsSOA".into(), serde_json::json!({
-    "position": positions,
-    "RGBI": model.distant_lod_lights.items.iter().map(|item| item.rgbi.clone()).collect::<Vec<_>>(),
-    "num_street_lights": model.distant_lod_lights.num_street_lights,
-    "category": model.distant_lod_lights.category,
-  }));
+  object.insert(
+    "DistantLODLightsSOA".into(),
+    serde_json::json!({
+      "position": positions,
+      "RGBI": model.distant_lod_lights.items.iter().map(|item| item.rgbi.clone()).collect::<Vec<_>>(),
+      "num_street_lights": model.distant_lod_lights.num_street_lights,
+      "category": model.distant_lod_lights.category,
+    }),
+  );
   let occluders = model
     .occlude_models
     .iter()

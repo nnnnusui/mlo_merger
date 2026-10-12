@@ -13,7 +13,7 @@ pub struct Pipeline {
   pub merged_dir: PathBuf,
   /// Resource-local light edit directory.
   pub overwrite_dir: PathBuf,
-  /// Explicit source resource exclusions, or saved cache settings when absent.
+  /// Source resource exclusions for this execution only.
   pub exclusions: Option<Vec<String>>,
   /// Shared artifact paths and deployment output options.
   pub common: CommonOptions,

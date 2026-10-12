@@ -59,7 +59,7 @@
 - [x] Retain a source-cache generation summary log.
 - [x] Emit source fingerprint progress at INFO only when that resource's fingerprints differ from cached entries.
 - [x] Restore recorded active source-cache files to original source paths, rejecting conflicting destinations and invalidating source indexes after success.
-- [x] Accept comma-separated resource/path exclusions for source-cache generation and the default pipeline, retaining settings for prerequisite updates.
+- [x] Accept per-execution comma-separated resource/path exclusions for source-cache generation, merge and the default pipeline, forwarding current settings to prerequisite updates without saving an exclusions file.
 - [x] Remove already cached excluded resources from active JSON indexes and archive their files so merge and deployment omit them.
 
 ## Merged Output
@@ -137,8 +137,9 @@
 - [x] Track edits in incremental merge freshness and include replaced custom source paths in deployment omission provenance.
 - [x] Cache validated overwrite preparation with mtime/size/SHA-256 checks, invalidate on diff/source/topology changes, and commit only after successful merge.
 - [x] Keep overwrite configuration in the core Pipeline alongside other input paths, without a separate compatibility execution API.
-- [x] Store optional exclusions in Pipeline configuration and use a single execution API, preserving saved-setting inheritance and explicit clearing.
+- [x] Store optional per-execution exclusions in Pipeline configuration and use a single execution API; absent or empty exclusions select all resources.
 - [x] Unify source-cache execution with resource selection and exclusions in BuildSourceCache configuration.
+- [x] Resolve overwrite inputs from recorded source-cache resource/file membership, with stream resolution, reads, fingerprints and preparation-cache storage encapsulated in source-cache APIs.
 - [ ] Implement the separate FiveM resource and validate in-game selection/rendering.
 - [ ] Extend the editor contract beyond light removals; generic post-merge overwrite application remains separate.
 

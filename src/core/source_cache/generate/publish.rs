@@ -1,13 +1,13 @@
 //! Refreshes conflict and load-plan metadata and publishes changed cache reports.
 
 use super::{CacheState, Publication, Result, SourceCacheMetadata, SourceResources, VanillaInputs};
+use crate::common::json::write_json;
+use crate::common::path::ensure_safe_path;
 use crate::core::source_cache::{
   conflicts::conflicts,
-  exclusions::FILE_NAME as EXCLUSIONS_FILE,
   types::{SourceCacheConflictReport, VanillaMatch},
   ymap_plan,
 };
-use crate::core::vanilla::write_json;
 use std::{collections::BTreeSet, fs, io::BufReader};
 
 pub(super) fn publish_if_changed(
@@ -20,7 +20,6 @@ pub(super) fn publish_if_changed(
   let SourceResources {
     source_dir,
     resources,
-    exclusions,
     ..
   } = source;
   let VanillaInputs {
@@ -49,6 +48,7 @@ pub(super) fn publish_if_changed(
     });
   changed |= previous_conflicts.as_ref() != Some(&conflicts);
   if !changed {
+    remove_legacy_exclusions(&output)?;
     return Ok(false);
   }
   for inventory in inventories.values_mut() {
@@ -67,7 +67,6 @@ pub(super) fn publish_if_changed(
     &derived.files,
   );
   let outputs = BTreeSet::from([
-    EXCLUSIONS_FILE.into(),
     "source_cache.log".into(),
     "stream_conflicts.json".into(),
     "vanilla_ymaps_to_read.json".into(),
@@ -102,9 +101,19 @@ pub(super) fn publish_if_changed(
     ),
   )?;
   write_json(&staging.0.join("source_cache_info.json"), &metadata)?;
-  write_json(&staging.0.join(EXCLUSIONS_FILE), &exclusions)?;
   for name in metadata.outputs.iter().map(String::as_str).chain(["source_cache_info.json"]) {
     fs::rename(staging.0.join(name), output.join(name))?;
   }
+  remove_legacy_exclusions(&output)?;
   Ok(true)
+}
+
+fn remove_legacy_exclusions(output: &std::path::Path) -> Result<()> {
+  let path = output.join("source_exclusions.json");
+  ensure_safe_path(output, &path)?;
+  match fs::remove_file(path) {
+    Ok(()) => Ok(()),
+    Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+    Err(error) => Err(error.into()),
+  }
 }

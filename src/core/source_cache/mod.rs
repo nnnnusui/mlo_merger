@@ -2,12 +2,14 @@
 
 mod conflicts;
 pub(crate) mod exclusions;
-mod filesystem;
 mod generate;
 mod inventory;
 mod layout;
 mod publication;
 mod restore;
+mod stream_discovery;
+mod stream_io;
+mod streams;
 mod types;
 mod ymap_plan;
 
@@ -22,6 +24,15 @@ use self::types::{SourceCacheConflictReport, SourceCacheMetadata};
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
 pub use restore::restore_source_cache;
+#[cfg(test)]
+pub(crate) use stream_discovery::discover_inventory as discover_stream_inventory;
+pub(crate) use stream_discovery::inventory_for as stream_inventory_for;
+pub(crate) use stream_io::{read_cache_entry, write_cache_entry};
+#[cfg(test)]
+pub(crate) use streams::record_test_inventory;
+pub(crate) use streams::{
+  StreamFile, StreamInventory, load_stream_inventory, read_stream_bytes, resolve_template_file,
+};
 
 /// One source stream file selected for merge from the current source cache.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -212,7 +223,7 @@ pub struct BuildSourceCache {
   pub vanilla_cache_dir: PathBuf,
   /// One resource name or source-relative path; `None` updates all resources.
   pub resource: Option<String>,
-  /// Explicit exclusions; `None` inherits saved settings and an empty list clears them.
+  /// Resource exclusions for this run; absent or empty means no exclusions.
   pub exclusions: Option<Vec<String>>,
   /// Rebuilds even when all inputs and upstream revisions are current.
   pub force: bool,
@@ -222,7 +233,7 @@ impl BuildSourceCache {
   /// Updates configured resources and exclusions, skipping unchanged inputs.
   ///
   /// Exclusions match case-insensitive substrings of source-relative resource paths.
-  /// An empty list clears saved exclusions; `None` inherits them. Excluded active
+  /// Exclusions are not persisted; absent or empty means no exclusions. Excluded active
   /// cache files are retained under `_old/`.
   ///
   /// ```no_run

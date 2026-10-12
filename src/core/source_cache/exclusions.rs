@@ -1,7 +1,5 @@
 use super::Result;
 
-pub(super) const FILE_NAME: &str = "source_exclusions.json";
-
 pub(crate) fn parse_exclusions(value: &str) -> Result<Vec<String>> {
   if value.trim().is_empty() {
     return Ok(Vec::new());
@@ -21,7 +19,7 @@ pub(crate) fn parse_exclusions(value: &str) -> Result<Vec<String>> {
   Ok(patterns)
 }
 
-pub(super) fn is_excluded(
+pub(crate) fn is_excluded(
   id: &str,
   patterns: &[String],
 ) -> bool {

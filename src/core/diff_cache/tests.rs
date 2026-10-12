@@ -315,27 +315,26 @@ fn diff_cache_selects_per_resource_latest_and_compares_its_cumulative_baseline()
   let b0 = snapshot("0000-base", "b.ymap", &old);
   let a1 = snapshot("0001-patch", "a.ymap", &new);
   let b2 = snapshot("0002-patch", "b.ymap", &new);
-  let version =
-    |id: &str, parent: Option<&str>, changes: Vec<(&str, Option<String>, CachedFile)>| {
-      CacheVersion {
-        id: id.into(),
-        parent: parent.map(str::to_string),
-        archives: vec![],
-        unchanged: 0,
-        changes: changes
-          .into_iter()
-          .map(|(name, previous_sha256, file)| {
-            (
-              name.into(),
-              FileChange {
-                previous_sha256,
-                file,
-              },
-            )
-          })
-          .collect(),
-      }
-    };
+  let version = |id: &str,
+                 parent: Option<&str>,
+                 changes: Vec<(&str, Option<String>, CachedFile)>| CacheVersion {
+    id: id.into(),
+    parent: parent.map(str::to_string),
+    archives: vec![],
+    unchanged: 0,
+    changes: changes
+      .into_iter()
+      .map(|(name, previous_sha256, file)| {
+        (
+          name.into(),
+          FileChange {
+            previous_sha256,
+            file,
+          },
+        )
+      })
+      .collect(),
+  };
   let manifest = VanillaCacheManifest {
     format_version: 1,
     game_dir: root.join("missing-game"),
