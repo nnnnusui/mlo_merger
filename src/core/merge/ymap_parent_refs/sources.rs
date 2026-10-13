@@ -40,7 +40,7 @@ impl OriginalMap {
       .map(YmapEntity::from)
       .collect::<Vec<_>>();
     let mut model: Ymap = parsed.into();
-    model.entity_map = entities.iter().map(|entity| (entity.guid, entity.clone())).collect();
+    model.entities = entities.clone();
     Ok(Self {
       model,
       entities,
@@ -199,7 +199,7 @@ impl SourceMaps {
       };
     }
     let mut model = original.model.clone();
-    model.entity_map = entities.iter().map(|entity| (entity.guid, entity.clone())).collect();
+    model.entities = entities.clone();
     Ok((model, entities))
   }
 }

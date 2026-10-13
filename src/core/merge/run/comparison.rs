@@ -67,9 +67,8 @@ mod tests {
 
   #[test]
   fn distance_is_symmetric_and_counts_model_changes() {
-    let before = serde_json::json!({"entity_map": {"1": {"x": 1, "y": 2}}, "parent": "map"});
-    let after =
-      serde_json::json!({"entity_map": {"1": {"x": 3, "y": 4}, "2": {"x": 7}}, "parent": "map"});
+    let before = serde_json::json!({"entities": [{"guid": 1, "x": 1, "y": 2}], "parent": "map"});
+    let after = serde_json::json!({"entities": [{"guid": 1, "x": 3, "y": 4}, {"guid": 2, "x": 7}], "parent": "map"});
     assert_eq!(distance(&before, &after), 3);
     assert_eq!(distance(&after, &before), 3);
     assert_eq!(distance(&before, &before), 0);

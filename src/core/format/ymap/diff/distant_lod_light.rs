@@ -123,7 +123,6 @@ mod tests {
     common::position::Position,
     format::ymap::model::{YmapBlock, YmapDistantLodLights, YmapInstancedData},
   };
-  use indexmap::IndexMap;
 
   fn create_test_ymap() -> Ymap {
     Ymap {
@@ -135,7 +134,7 @@ mod tests {
       streaming_extents_max: Position::default(),
       entities_extents_min: Position::default(),
       entities_extents_max: Position::default(),
-      entity_map: IndexMap::new(),
+      entities: Vec::new(),
       box_occluders: Vec::new(),
       occlude_models: Vec::new(),
       lod_lights: Vec::new(),

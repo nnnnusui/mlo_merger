@@ -22,7 +22,7 @@ pub(super) fn best_cached_ymap_diff(
   for (version, file) in history.candidate_files(name)? {
     let original = OriginalMap::load_raw(&history.raw_path(&file)?)?;
     let (candidate, entities) = sources.normalize(&original, None, hash, references)?;
-    if candidate.entity_map.len() != entities.len() {
+    if candidate.entities.len() != entities.len() {
       continue;
     }
     candidates.push((version, candidate));
@@ -97,9 +97,9 @@ mod tests {
     )))
     .unwrap();
     let baseline: Ymap = xml.into();
-    let entity_id = *baseline.entity_map.keys().next().unwrap();
+    let entity_id = baseline.entities[0].guid;
     let mut modded = baseline.clone();
-    modded.entity_map.get_mut(&entity_id).unwrap().position.x += 1.0;
+    modded.entities[0].position.x += 1.0;
     let mut latest = baseline.clone();
     latest.flags ^= 1;
 
@@ -110,7 +110,9 @@ mod tests {
     assert_eq!(version, "base");
     assert_eq!(score, 1);
     let merged = diff.apply_to(&latest, None);
-    assert_eq!(merged.entity_map[&entity_id].position.x, modded.entity_map[&entity_id].position.x);
+    let merged_entity = merged.entities.iter().find(|entity| entity.guid == entity_id).unwrap();
+    let modded_entity = modded.entities.iter().find(|entity| entity.guid == entity_id).unwrap();
+    assert_eq!(merged_entity.position.x, modded_entity.position.x);
     assert_eq!(merged.flags, latest.flags);
   }
 

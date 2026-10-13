@@ -1,7 +1,5 @@
-use crate::{
-  core::format::ymap::model::{Ymap, YmapEntity, ymap_entity::YmapEntityStructDiffEnum},
-  return_early,
-};
+use crate::core::format::ymap::model::{Ymap, YmapEntity, ymap_entity::YmapEntityStructDiffEnum};
+use std::collections::{HashMap, HashSet};
 use structdiff::StructDiff;
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
@@ -49,35 +47,46 @@ pub fn check_entity_diff(
   vanilla_ymap: &Ymap,
   mod_ymap: &Ymap,
 ) -> Vec<YmapEntityDiff> {
-  let vanilla_entities_map = &vanilla_ymap.entity_map;
-  let mod_entities_map = &mod_ymap.entity_map;
-  let keys = vanilla_entities_map
-    .keys()
-    .chain(mod_entities_map.keys())
-    .collect::<std::collections::HashSet<_>>();
+  let mut vanilla_by_guid = HashMap::<u32, Vec<&YmapEntity>>::new();
+  for entity in &vanilla_ymap.entities {
+    vanilla_by_guid.entry(entity.guid).or_default().push(entity);
+  }
+  let mut modded_by_guid = HashMap::<u32, Vec<&YmapEntity>>::new();
+  for entity in &mod_ymap.entities {
+    modded_by_guid.entry(entity.guid).or_default().push(entity);
+  }
 
-  keys
-    .into_iter()
-    .filter_map(|key| {
-      let vanilla_entity = vanilla_entities_map.get(key);
-      let mod_entity = mod_entities_map.get(key);
+  let mut guids = Vec::new();
+  let mut seen = HashSet::new();
+  for entity in vanilla_ymap.entities.iter().chain(&mod_ymap.entities) {
+    if seen.insert(entity.guid) {
+      guids.push(entity.guid);
+    }
+  }
 
-      match (vanilla_entity, mod_entity) {
-        (Some(vanilla), Some(modded)) => {
-          let diffs = vanilla.diff(modded);
-          return_early!(if (diffs.is_empty()) return None);
+  let mut entity_diffs = Vec::new();
+  for guid in guids {
+    let vanilla = vanilla_by_guid.get(&guid).map(Vec::as_slice).unwrap_or_default();
+    let modded = modded_by_guid.get(&guid).map(Vec::as_slice).unwrap_or_default();
+    let paired_count = vanilla.len().min(modded.len());
 
-          Some(YmapEntityDiff::Modified {
-            vanilla: vanilla.clone(),
-            diffs,
-          })
-        }
-        (Some(vanilla), None) => Some(YmapEntityDiff::Removed(vanilla.clone())),
-        (None, Some(modded)) => Some(YmapEntityDiff::Added(modded.clone())),
-        (None, None) => None,
+    for (vanilla, modded) in vanilla.iter().zip(modded).take(paired_count) {
+      let diffs = vanilla.diff(modded);
+      if !diffs.is_empty() {
+        entity_diffs.push(YmapEntityDiff::Modified {
+          vanilla: (*vanilla).clone(),
+          diffs,
+        });
       }
-    })
-    .collect::<Vec<_>>()
+    }
+    entity_diffs.extend(
+      vanilla.iter().skip(paired_count).map(|entity| YmapEntityDiff::Removed((*entity).clone())),
+    );
+    entity_diffs.extend(
+      modded.iter().skip(paired_count).map(|entity| YmapEntityDiff::Added((*entity).clone())),
+    );
+  }
+  entity_diffs
 }
 
 #[cfg(test)]
@@ -93,9 +102,9 @@ mod tests {
     )))
     .unwrap();
     let vanilla: Ymap = xml.into();
-    let guid = *vanilla.entity_map.keys().next().unwrap();
+    let guid = vanilla.entities[0].guid;
     let mut deleted = vanilla.clone();
-    deleted.entity_map.shift_remove(&guid);
+    deleted.entities.remove(0);
     let diffs = YmapEntityDiff::extract_from(&vanilla, &deleted);
     assert!(
       diffs
@@ -103,7 +112,7 @@ mod tests {
         .any(|diff| matches!(diff, YmapEntityDiff::Removed(entity) if entity.guid == guid))
     );
     let mut modified = vanilla.clone();
-    modified.entity_map.get_mut(&guid).unwrap().position.x += 1.0;
+    modified.entities[0].position.x += 1.0;
     for reverse in [false, true] {
       let delete = YmapDiff::extract_from(&vanilla, &deleted);
       let modify = YmapDiff::extract_from(&vanilla, &modified);
@@ -122,14 +131,40 @@ mod tests {
           .all(|diff| matches!(diff, YmapEntityDiff::Removed(entity) if entity.guid == guid))
       );
       let merged = merged_diff.apply_to(&vanilla, None);
-      assert!(!merged.entity_map.contains_key(&guid));
-      assert_eq!(merged.entity_map.len(), vanilla.entity_map.len() - 1);
+      assert_eq!(merged.entities.len(), vanilla.entities.len() - 1);
+      assert!(!merged.entities.iter().any(|entity| entity.guid == guid));
       let mut diff = YmapDiff::extract_from(&vanilla, &deleted);
-      diff.entity_diffs.push(YmapEntityDiff::Added(vanilla.entity_map[&guid].clone()));
+      diff.entity_diffs.push(YmapEntityDiff::Added(vanilla.entities[0].clone()));
       if reverse {
         diff.entity_diffs.reverse();
       }
-      assert!(!diff.apply_to(&vanilla, None).entity_map.contains_key(&guid));
+      assert!(!diff.apply_to(&vanilla, None).entities.iter().any(|entity| entity.guid == guid));
     }
+  }
+
+  #[test]
+  fn entity_diff_applies_changes_to_each_duplicate_guid_occurrence() {
+    let xml: XmlYmap = quick_xml::de::from_str(include_str!(concat!(
+      env!("CARGO_MANIFEST_DIR"),
+      "/docs/sample/parent_refs/vanilla_parent.ymap.xml"
+    )))
+    .unwrap();
+    let mut vanilla: Ymap = xml.into();
+    let first = vanilla.entities[0].clone();
+    let mut second = first.clone();
+    second.position.x += 10.0;
+    vanilla.entities = vec![first, second];
+    assert_eq!(vanilla.entities[0].guid, vanilla.entities[1].guid);
+
+    let mut modded = vanilla.clone();
+    modded.entities[0].position.y += 1.0;
+    modded.entities[1].position.z += 2.0;
+    let merged = YmapDiff::extract_from(&vanilla, &modded).apply_to(&vanilla, None);
+    assert_eq!(merged.entities, modded.entities);
+
+    let mut deleted = vanilla.clone();
+    deleted.entities.remove(0);
+    let merged = YmapDiff::extract_from(&vanilla, &deleted).apply_to(&vanilla, None);
+    assert_eq!(merged.entities, deleted.entities);
   }
 }

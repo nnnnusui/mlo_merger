@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
 use crate::core::{
   config::blacklist::BlacklistConfig,
@@ -116,21 +116,21 @@ impl YmapDiff {
     other: Self,
   ) -> Self {
     self.entity_diffs.extend(other.entity_diffs);
-    let removed =
-      self
-        .entity_diffs
-        .iter()
-        .filter_map(|diff| {
-          if let YmapEntityDiff::Removed(entity) = diff { Some(entity.guid) } else { None }
-        })
-        .collect::<HashSet<_>>();
+    let removed = self
+      .entity_diffs
+      .iter()
+      .filter_map(|diff| match diff {
+        YmapEntityDiff::Removed(entity) => Some(entity.clone()),
+        _ => None,
+      })
+      .collect::<Vec<_>>();
     self.entity_diffs.retain(|diff| match diff {
       YmapEntityDiff::Removed(_) => true,
-      YmapEntityDiff::Added(entity) => !removed.contains(&entity.guid),
+      YmapEntityDiff::Added(entity) => !removed.contains(entity),
       YmapEntityDiff::Modified {
         vanilla,
         ..
-      } => !removed.contains(&vanilla.guid),
+      } => !removed.contains(vanilla),
     });
     self.box_occluder_diffs.extend(other.box_occluder_diffs);
     resolve_box_occluder_removals(&mut self.box_occluder_diffs);
@@ -163,59 +163,38 @@ impl YmapDiff {
     self.metadata.apply_to(&mut modded);
     self.instanced_data.apply_to(&mut modded.instanced_data);
 
-    // Remove duplicates from entity_diffs using Debug string as key
-    let mut seen = HashSet::new();
-    let unique_entity_diffs: Vec<YmapEntityDiff> = self
+    let removed_entities = self
       .entity_diffs
-      .into_iter()
-      .filter(|diff| {
-        let key = format!("{:?}", diff);
-        seen.insert(key)
+      .iter()
+      .filter_map(|diff| match diff {
+        YmapEntityDiff::Removed(entity) => Some(entity.clone()),
+        _ => None,
       })
-      .collect();
-
-    let entity_diffs_map: HashMap<u32, Vec<YmapEntityDiff>> =
-      unique_entity_diffs.into_iter().fold(HashMap::new(), |mut map, diff| {
-        let guid = match &diff {
-          YmapEntityDiff::Added(e) | YmapEntityDiff::Removed(e) => e.guid,
-          YmapEntityDiff::Modified {
-            vanilla,
-            ..
-          } => vanilla.guid,
-        };
-        map.entry(guid).or_default().push(diff);
-        map
-      });
-
-    for (guid, diffs) in entity_diffs_map {
-      let diff = diffs
-        .iter()
-        .find(|diff| matches!(diff, YmapEntityDiff::Removed(_)))
-        .unwrap_or_else(|| diffs.first().unwrap());
-      if diffs.len() > 1 {
-        let tails =
-          diffs.iter().filter(|candidate| !std::ptr::eq(*candidate, diff)).collect::<Vec<_>>();
-        tracing::warn!(
-          "    Multiple diffs for entity GUID {}. applied: {:?} ignored: {:?}",
-          guid,
-          diff,
-          tails
-        );
+      .collect::<Vec<_>>();
+    for removed in &removed_entities {
+      if let Some(index) = modded.entities.iter().position(|entity| entity == removed) {
+        modded.entities.remove(index);
       }
+    }
+
+    for diff in self.entity_diffs {
       match diff {
-        YmapEntityDiff::Added(it) => {
-          modded.entity_map.insert(it.guid, it.clone());
+        YmapEntityDiff::Added(entity) => {
+          if !removed_entities.contains(&entity) {
+            modded.entities.push(entity);
+          }
         }
-        YmapEntityDiff::Removed(it) => {
-          modded.entity_map.shift_remove(&it.guid);
-        }
+        YmapEntityDiff::Removed(_) => {}
         YmapEntityDiff::Modified {
-          vanilla: it,
+          vanilla,
           diffs,
         } => {
-          let before = modded.entity_map.get_mut(&it.guid).unwrap().clone();
-          let after = before.apply(diffs.to_vec());
-          modded.entity_map.insert(it.guid, after);
+          if removed_entities.contains(&vanilla) {
+            continue;
+          }
+          if let Some(entity) = modded.entities.iter_mut().find(|entity| **entity == vanilla) {
+            *entity = entity.clone().apply(diffs);
+          }
         }
       }
     }
@@ -708,7 +687,7 @@ fn check_diffs(
       YmapStructDiffEnum::streaming_extents_min(_) => tracing::info!("    skip changes: <streamingExtentsMin />"),
       YmapStructDiffEnum::entities_extents_max(_) => tracing::info!("    skip changes: <entitiesExtentsMax />"),
       YmapStructDiffEnum::entities_extents_min(_) => tracing::info!("    skip changes: <entitiesExtentsMin />"),
-      YmapStructDiffEnum::entity_map(_) => {}
+      YmapStructDiffEnum::entities(_) => {}
       YmapStructDiffEnum::box_occluders(_) => {}
       YmapStructDiffEnum::occlude_models(_) => {}
       YmapStructDiffEnum::time_cycle_modifiers(_) => {}

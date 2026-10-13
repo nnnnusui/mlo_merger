@@ -85,7 +85,7 @@ fn decodes_ymap_binary_directly_into_the_typed_model() {
   assert_eq!(model.name, "");
   assert_eq!(model.flags, 7);
   assert_eq!(model.content_flags, 11);
-  assert!(model.entity_map.is_empty());
+  assert!(model.entities.is_empty());
   assert_eq!(model.block.name, "");
   let xml = ymap_to_xml(&bytes, &HashMap::new()).unwrap();
   let xml_model: crate::core::format::ymap::model::Ymap =

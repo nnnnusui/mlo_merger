@@ -176,7 +176,7 @@ pub(super) fn native_resources(
     fs::write(directory.join("fxmanifest.lua"), []).unwrap();
     for (path, map) in &maps {
       let mut model = map.model.clone();
-      model.entity_map.clear();
+      model.entities.clear();
       model.block.name.clear();
       model.block.exported_by.clear();
       model.block.owner.clear();

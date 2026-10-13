@@ -1,4 +1,3 @@
-use indexmap::IndexMap;
 use structdiff::{Difference, StructDiff};
 
 use crate::core::common::position::Position;
@@ -22,7 +21,7 @@ pub struct Ymap {
   pub streaming_extents_max: Position,
   pub entities_extents_min: Position,
   pub entities_extents_max: Position,
-  pub entity_map: IndexMap<u32, YmapEntity>,
+  pub entities: Vec<YmapEntity>,
   pub box_occluders: Vec<YmapBoxOccluder>,
   pub occlude_models: Vec<YmapOccludeModel>,
   pub lod_lights: Vec<YmapLodLight>,

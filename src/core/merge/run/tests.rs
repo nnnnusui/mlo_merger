@@ -94,7 +94,7 @@ fn native_ymap_merge_deletion_wins_over_retained_entities_in_both_orders() {
     .iter()
     .find(|path| {
       ymap_to_model_with_entities(&fs::read(path).unwrap(), &HashMap::new()).is_ok_and(
-        |(model, entities)| !entities.is_empty() && model.entity_map.len() == entities.len(),
+        |(model, entities)| !entities.is_empty() && model.entities.len() == entities.len(),
       )
     })
     .unwrap();
@@ -171,7 +171,7 @@ fn merge_emits_only_edited_ymaps_when_rebuilding() {
   merge.run().unwrap();
   assert!(!output.join("parent.ymap.xml").exists());
   let mut edited = parse_ymap_xml(&sample).unwrap();
-  edited.entity_map.values_mut().next().unwrap().position.x += 1.0;
+  edited.entities.first_mut().unwrap().position.x += 1.0;
   let xml: XmlYmap = edited.into();
   fs::write(mods.join("resource_a___parent.ymap.xml"), quick_xml::se::to_string(&xml).unwrap())
     .unwrap();
@@ -218,7 +218,9 @@ fn merge_deletes_omitted_entities_and_detaches_dependent_children() {
   )
   .unwrap();
   let mut deleted_parent = parse_ymap_xml(&samples.join("vanilla_parent.ymap.xml")).unwrap();
-  deleted_parent.entity_map.shift_remove(&200);
+  if let Some(index) = deleted_parent.entities.iter().position(|entity| entity.guid == 200) {
+    deleted_parent.entities.remove(index);
+  }
   let deleted_parent: XmlYmap = deleted_parent.into();
   fs::write(
     mod_dir.join("resource_b___parent.ymap.xml"),

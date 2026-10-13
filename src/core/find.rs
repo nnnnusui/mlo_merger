@@ -600,7 +600,7 @@ mod tests {
     ))
     .unwrap();
     let model: crate::core::format::ymap::model::Ymap = xml.into();
-    let sample = model.entity_map.values().next().unwrap();
+    let sample = model.entities.first().unwrap();
     let positions = [
       [3.5, 4.2, 0.0],
       [4.5, 4.2, 0.0],
@@ -695,7 +695,7 @@ mod tests {
     ))
     .unwrap();
     let model: crate::core::format::ymap::model::Ymap = xml.into();
-    let mut entity = model.entity_map.values().next().unwrap().clone();
+    let mut entity = model.entities.first().unwrap().clone();
     entity.guid = 2443198849;
     let data = entity_data(
       Path::new("merged/ymap/lr_cs4_10_strm_0.ymap"),

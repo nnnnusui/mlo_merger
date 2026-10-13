@@ -109,6 +109,7 @@
 
 ## Ver2: YMAP Merge
 
+- [x] Represent parent YMAP references by origin (vanilla version or resource ID) and map name, independently of merge-time `parentIndex` remapping.
 - [ ] Compare each source YMAP with available vanilla versions and infer its source version from the difference count.
 - [ ] Apply source changes from their inferred baseline to the latest vanilla YMAP and repair parent references.
 - [ ] Load only the target files and required parent/child closure during YMAP merge.

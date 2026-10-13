@@ -64,7 +64,7 @@ fn direct_ymap_binary_preserves_order_and_duplicate_entity_guids() {
   )))
   .unwrap();
   let model: Ymap = xml.into();
-  let mut entities = model.entity_map.values().cloned().collect::<Vec<_>>();
+  let mut entities = model.entities.clone();
   entities.reverse();
   entities.push(entities[0].clone());
   let root = jenk_hash("CMapData");

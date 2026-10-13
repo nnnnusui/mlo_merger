@@ -14,7 +14,7 @@ use std::io;
 /// ```no_run
 /// # use mlo_merger::core::format::{ymap::{binary::to_meta, model::Ymap}, gamefile::meta::MetaSchemaCatalog};
 /// # fn build(model: &Ymap, catalog: &MetaSchemaCatalog) -> std::io::Result<()> {
-/// let entities = model.entity_map.values().cloned().collect::<Vec<_>>();
+/// let entities = model.entities.clone();
 /// let meta = to_meta(model, &entities, catalog)?;
 /// # Ok(()) }
 /// ```
@@ -51,7 +51,7 @@ pub fn to_meta(
 /// ```no_run
 /// # use mlo_merger::core::format::{ymap::{binary::write_ymap, model::Ymap}, gamefile::meta::MetaSchemaCatalog};
 /// # fn save(model: &Ymap, catalog: &MetaSchemaCatalog) -> std::io::Result<()> {
-/// let entities = model.entity_map.values().cloned().collect::<Vec<_>>();
+/// let entities = model.entities.clone();
 /// std::fs::write("map.ymap", write_ymap(model, &entities, catalog)?)?;
 /// # Ok(()) }
 /// ```

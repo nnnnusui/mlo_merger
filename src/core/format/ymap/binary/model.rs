@@ -12,7 +12,7 @@ pub(super) fn prepare(
 ) -> io::Result<Value> {
   let mut value = serde_json::to_value(model).map_err(invalid)?;
   let object = value.as_object_mut().ok_or_else(|| invalid("YMAP model is not an object"))?;
-  object.remove("entity_map");
+  object.remove("entities");
   object.insert("entities".into(), serde_json::to_value(entities).map_err(invalid)?);
   object.remove("lod_lights");
   object.remove("distant_lod_lights");

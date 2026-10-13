@@ -4,12 +4,11 @@ use crate::core::common::function::collect_files_with_suffix;
 use crate::core::config::blacklist::BlacklistConfig;
 use crate::core::format::ymap::diff::{YmapDiff, reference_hash};
 use crate::core::format::ymap::model::ymap::Ymap;
+use crate::core::format::ymap::relation::{EntityParentRef, entity_parent_ref};
 use crate::core::format::ymap::xml::XmlYmap;
 use crate::core::merge::{
   ymap_parent_cache::VanillaParentCache,
-  ymap_parent_refs::{
-    OriginalMap, ParentReferences, SourceMaps, patch_clone, runtime_entities, valid_local_pair,
-  },
+  ymap_parent_refs::{OriginalMap, ParentReferences, SourceMaps, patch_clone, runtime_entities},
 };
 use serde::Serialize;
 use std::collections::{BTreeMap, HashMap, HashSet};

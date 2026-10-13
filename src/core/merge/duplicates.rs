@@ -129,7 +129,7 @@ mod tests {
     ))
     .unwrap();
     let model: crate::core::format::ymap::model::Ymap = xml.into();
-    let mut entity = model.entity_map.values().next().unwrap().clone();
+    let mut entity = model.entities.first().unwrap().clone();
     let guid = entity.guid;
     entity.guid = 1;
     let added = YmapEntityDiff::Added(entity.clone());

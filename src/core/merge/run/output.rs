@@ -26,7 +26,7 @@ impl MergeYmap {
         if let Some(catalog) = binary_catalog {
           let entities = match &output.clone_entities {
             Some(entities) => runtime_entities(entities.iter()),
-            None => runtime_entities(output.model.entity_map.values()),
+            None => runtime_entities(output.model.entities.iter()),
           }
           .into_iter()
           .cloned()
@@ -52,8 +52,7 @@ impl MergeYmap {
         let xml_string = if let Some(entities) = &output.clone_entities {
           if output.original.xml.is_empty() {
             let mut model = output.model.clone();
-            model.entity_map =
-              entities.iter().map(|entity| (entity.guid, entity.clone())).collect();
+            model.entities = entities.clone();
             let xml_ymap: XmlYmap = model.into();
             let mut xml = String::new();
             let mut serializer = quick_xml::se::Serializer::new(&mut xml);

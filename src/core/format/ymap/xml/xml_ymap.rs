@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use crate::core::format::{
   xml::{XmlValueAttr, position::XmlPositionAttr},
   ymap::{
-    model::{Ymap, YmapEntity},
+    model::Ymap,
     xml::{
       XmlYmapBlock, XmlYmapBoxOccluder, XmlYmapCarGenerator, XmlYmapDistantLodLightsSoa,
       XmlYmapEntity, XmlYmapInstancedData, XmlYmapLodLightsSoa, XmlYmapOccludeModel,
@@ -57,15 +57,7 @@ impl From<XmlYmap> for Ymap {
       streaming_extents_max: v.streaming_extents_max.into(),
       entities_extents_min: v.entities_extents_min.into(),
       entities_extents_max: v.entities_extents_max.into(),
-      entity_map: v
-        .entities
-        .items
-        .into_iter()
-        .map(|e| {
-          let entity: YmapEntity = e.into();
-          (entity.guid, entity)
-        })
-        .collect(),
+      entities: v.entities.items.into_iter().map(Into::into).collect(),
       container_lods: v.container_lods.items,
       box_occluders: v.box_occluders.items.into_iter().map(Into::into).collect(),
       occlude_models: v.occlude_models.items.into_iter().map(Into::into).collect(),
@@ -96,7 +88,7 @@ impl From<Ymap> for XmlYmap {
       entities_extents_min: v.entities_extents_min.into(),
       entities_extents_max: v.entities_extents_max.into(),
       entities: XmlEntities {
-        items: v.entity_map.into_values().map(XmlYmapEntity::from).collect(),
+        items: v.entities.into_iter().map(XmlYmapEntity::from).collect(),
       },
       container_lods: XmlContainerLods {
         items: v.container_lods,

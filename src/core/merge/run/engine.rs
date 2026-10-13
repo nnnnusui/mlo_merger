@@ -220,7 +220,7 @@ impl MergeYmap {
       };
       let (vanilla_ymap, vanilla_entities) =
         sources.normalize(&original, None, hash, &mut references)?;
-      if vanilla_ymap.entity_map.len() != vanilla_entities.len() {
+      if vanilla_ymap.entities.len() != vanilla_entities.len() {
         return Err(format!("ambiguous entity identity in {}", vanilla_ymap_path.display()).into());
       }
 
@@ -244,7 +244,7 @@ impl MergeYmap {
         };
         let (mod_ymap, mod_entities) =
           sources.normalize(&source, Some(&mod_info.mod_name), hash, &mut references)?;
-        if mod_ymap.entity_map.len() != source.entities.len() {
+        if mod_ymap.entities.len() != source.entities.len() {
           return Err(
             format!("ambiguous entity identity in {}", mod_info.mod_ymap_path.display()).into(),
           );
@@ -445,16 +445,15 @@ impl MergeYmap {
       }
       let map = &planned[&hash];
       let child = map.entity_at(index).ok_or("final child entity missing")?;
-      let ordered = match &map.clone_entities {
-        Some(entities) => runtime_entities(entities.iter()),
-        None => runtime_entities(map.model.entity_map.values()),
-      };
-      let parent = ordered.get(child.parent_index as usize).ok_or("final local parent missing")?;
-      if !valid_local_pair(child, parent) {
+      let mut final_map = map.model.clone();
+      if let Some(entities) = &map.clone_entities {
+        final_map.entities.clone_from(entities);
+      }
+      if entity_parent_ref(child, &final_map, &final_map) != EntityParentRef::SelfMap(target.guid) {
         return Err(
           format!(
             "invalid final local LOD hierarchy for entity {} and parent {}",
-            child.guid, parent.guid
+            child.guid, target.guid
           )
           .into(),
         );

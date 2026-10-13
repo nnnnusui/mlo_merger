@@ -94,7 +94,6 @@ fn normalization_distinguishes_local_lod_and_explicit_external_parents() {
   assert_eq!(local.guid, normalized[0].guid);
   assert_eq!(references.map_for(normalized[2].parent_index), Some(reference_hash("external")));
   assert_eq!(references.unavailable_index(normalized[2].parent_index), Some(0));
-  assert!(!valid_local_pair(&original.entities[1], &entity(99, "LODTYPES_DEPTH_ORPHANHD", -1)));
 }
 
 #[test]
@@ -105,7 +104,7 @@ fn indistinguishable_duplicates_receive_stable_occurrence_ids() {
   let (model, entities) =
     SourceMaps::default().normalize(&original, None, 123, &mut references).unwrap();
   assert_eq!(entities.len(), 2);
-  assert_eq!(model.entity_map.len(), 2);
+  assert_eq!(model.entities.len(), 2);
   assert_ne!(entities[0].guid, entities[1].guid);
   assert_eq!(references.original_guid(entities[0].guid).unwrap(), 42);
   assert_eq!(references.original_guid(entities[1].guid).unwrap(), 42);

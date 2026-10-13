@@ -117,6 +117,6 @@ fn ymap_from_parsed(
     .map(crate::core::format::ymap::model::YmapEntity::from)
     .collect::<Vec<_>>();
   let mut model: crate::core::format::ymap::model::Ymap = parsed.into();
-  model.entity_map = entities.iter().map(|entity| (entity.guid, entity.clone())).collect();
+  model.entities = entities.clone();
   (model, entities)
 }

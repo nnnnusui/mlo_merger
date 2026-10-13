@@ -14,14 +14,14 @@ impl PlannedMap {
   pub(super) fn differs_from_original(&self) -> bool {
     let mut before = self.original.model.clone();
     let mut after = self.model.clone();
-    before.entity_map.clear();
-    after.entity_map.clear();
+    before.entities.clear();
+    after.entities.clear();
     if before != after {
       return true;
     }
     let entities = match &self.clone_entities {
       Some(entities) => runtime_entities(entities.iter()),
-      None => runtime_entities(self.model.entity_map.values()),
+      None => runtime_entities(self.model.entities.iter()),
     };
     entities != runtime_entities(self.original.entities.iter())
   }
@@ -32,14 +32,14 @@ impl PlannedMap {
   ) -> Option<&crate::core::format::ymap::model::YmapEntity> {
     match &self.clone_entities {
       Some(entities) => entities.get(index),
-      None => self.model.entity_map.get_index(index).map(|(_, entity)| entity),
+      None => self.model.entities.get(index),
     }
   }
 
   pub(super) fn guids(&self) -> Vec<u32> {
     let entities = match &self.clone_entities {
       Some(entities) => runtime_entities(entities.iter()),
-      None => runtime_entities(self.model.entity_map.values()),
+      None => runtime_entities(self.model.entities.iter()),
     };
     entities.into_iter().map(|entity| entity.guid).collect()
   }
@@ -47,7 +47,7 @@ impl PlannedMap {
   pub(super) fn entities_mut(&mut self) -> Vec<&mut crate::core::format::ymap::model::YmapEntity> {
     match &mut self.clone_entities {
       Some(entities) => entities.iter_mut().collect(),
-      None => self.model.entity_map.values_mut().collect(),
+      None => self.model.entities.iter_mut().collect(),
     }
   }
 }
@@ -69,19 +69,14 @@ mod tests {
       copy_target: None,
       rebuild: true,
     };
-    output.model.entity_map = original
-      .entities
-      .iter()
-      .enumerate()
-      .map(|(index, entity)| (index as u32 + 1, entity.clone()))
-      .collect();
+    output.model.entities = original.entities.clone();
     assert!(!output.differs_from_original());
     output.model.flags ^= 1;
     assert!(output.differs_from_original());
     output.model.flags ^= 1;
-    output.model.entity_map.swap_indices(0, 1);
+    output.model.entities.swap(0, 1);
     assert!(output.differs_from_original());
-    output.model.entity_map.swap_indices(0, 1);
+    output.model.entities.swap(0, 1);
     assert!(!output.differs_from_original());
     output.clone_entities = Some(original.entities.clone());
     assert!(!output.differs_from_original());
