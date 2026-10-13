@@ -86,7 +86,7 @@ pub fn restore_source_cache(
         if destination.is_file() {
           let bytes = fs::read(&destination)?;
           use sha2::{Digest, Sha256};
-          if format!("{:x}", Sha256::digest(&bytes)) == file.sha256 {
+          if hex::encode(Sha256::digest(&bytes)) == file.sha256 {
             continue;
           }
         }

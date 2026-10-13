@@ -103,5 +103,5 @@ pub(crate) fn load_manifest_with_revision(cache: &Path) -> Result<(VanillaCacheM
   if manifest.format_version != 1 {
     return Err(format!("Unsupported GTA V cache schema {}", manifest.format_version).into());
   }
-  Ok((manifest, format!("{:x}", Sha256::digest(&bytes))))
+  Ok((manifest, hex::encode(Sha256::digest(&bytes))))
 }

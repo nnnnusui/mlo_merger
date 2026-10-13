@@ -13,7 +13,7 @@ fn builds_latest_files_through_selected_stage_and_reuses_valid_output() {
   fs::write(vanilla.join("0000-base/ybn/map.ybn"), b"base").unwrap();
   fs::write(vanilla.join("0001-patch/ybn/map.ybn"), b"patch").unwrap();
   let artifact = |stage: &str, content: &[u8]| CachedFile {
-    sha256: format!("{:x}", Sha256::digest(content)),
+    sha256: hex::encode(Sha256::digest(content)),
     object: format!("{stage}/ybn/map.ybn"),
     source: format!("{stage}.rpf/map.ybn"),
   };
@@ -41,7 +41,7 @@ fn builds_latest_files_through_selected_stage_and_reuses_valid_output() {
         changes: BTreeMap::from([(
           "map.ybn".into(),
           FileChange {
-            previous_sha256: Some(format!("{:x}", Sha256::digest(b"base"))),
+            previous_sha256: Some(hex::encode(Sha256::digest(b"base"))),
             file: artifact("0001-patch", b"patch"),
           },
         )]),
@@ -159,7 +159,7 @@ fn builds_latest_files_through_selected_stage_and_reuses_valid_output() {
     digest.update(name.as_bytes());
     digest.update(fs::read(output.join(name)).unwrap());
   }
-  assert_eq!(loaded.revision, format!("{:x}", digest.finalize()));
+  assert_eq!(loaded.revision, hex::encode(digest.finalize()));
   assert!(load_cache(&output, "stale").err().unwrap().to_string().contains("stale"));
   let relationship_path = output.join("ymap_relationships.json");
   let relationship_bytes = fs::read(&relationship_path).unwrap();

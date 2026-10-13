@@ -29,7 +29,7 @@ fn merge_dispatches_latest_vanilla_ybn_and_writes_omit_list() {
   let vanilla_file = vanilla_dir.join(object);
   fs::create_dir_all(vanilla_file.parent().unwrap()).unwrap();
   fs::write(&vanilla_file, &bytes).unwrap();
-  let sha256 = format!("{:x}", Sha256::digest(&bytes));
+  let sha256 = hex::encode(Sha256::digest(&bytes));
   write_json(
     &vanilla_dir.join("cache_info.json"),
     &VanillaCacheManifest {
@@ -68,7 +68,7 @@ fn merge_dispatches_latest_vanilla_ybn_and_writes_omit_list() {
     FileChange {
       previous_sha256: None,
       file: CachedFile {
-        sha256: format!("{:x}", Sha256::digest(&bytes)),
+        sha256: hex::encode(Sha256::digest(&bytes)),
         object: independent_object.into(),
         source: "base.rpf/independent.ybn".into(),
       },
@@ -223,7 +223,7 @@ fn merge_dispatches_latest_vanilla_ybn_and_writes_omit_list() {
   updated_vanilla.extend_from_slice(b"changed vanilla fingerprint");
   fs::write(&vanilla_file, &updated_vanilla).unwrap();
   manifest.versions[0].changes.get_mut("collision.ybn").unwrap().file.sha256 =
-    format!("{:x}", Sha256::digest(&updated_vanilla));
+    hex::encode(Sha256::digest(&updated_vanilla));
   write_json(&vanilla_dir.join("cache_info.json"), &manifest).unwrap();
   Merge {
     source_dir: source_dir.clone(),

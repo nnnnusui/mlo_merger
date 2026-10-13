@@ -41,7 +41,7 @@ pub(super) fn write_hash_index(
   let manifest_bytes = fs::read(vanilla_dir.join("cache_info.json"))?;
   let latest_version = manifest.versions.last().ok_or("Vanilla archive has no stages")?.id.clone();
   let files = manifest.resolve_version(&latest_version)?;
-  let revision = format!("{:x}", Sha256::digest(&manifest_bytes));
+  let revision = hex::encode(Sha256::digest(&manifest_bytes));
 
   let mut names = BTreeMap::new();
   let mut archetypes = BTreeSet::new();

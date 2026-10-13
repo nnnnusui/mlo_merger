@@ -55,7 +55,7 @@ fn incremental_merge_preserves_and_restores_duplicate_reports() {
           FileChange {
             previous_sha256: None,
             file: CachedFile {
-              sha256: format!("{:x}", Sha256::digest(&bytes)),
+              sha256: hex::encode(Sha256::digest(&bytes)),
               object,
               source: "base.rpf".into(),
             },

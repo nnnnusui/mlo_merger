@@ -65,6 +65,6 @@ pub(crate) fn load_cache(
     latest_version: metadata.latest_version,
     files: metadata.files,
     relationships,
-    revision: format!("{:x}", digest.finalize()),
+    revision: hex::encode(digest.finalize()),
   })
 }

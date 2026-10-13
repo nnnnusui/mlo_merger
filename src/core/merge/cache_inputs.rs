@@ -134,7 +134,7 @@ impl VanillaHistory {
     if !path.is_file() {
       return Err(format!("Vanilla cache artifact is missing: {}", path.display()).into());
     }
-    let hash = format!("{:x}", Sha256::digest(std::fs::read(&path)?));
+    let hash = hex::encode(Sha256::digest(std::fs::read(&path)?));
     if hash != file.sha256 {
       return Err(format!("Vanilla cache artifact hash mismatch: {}", path.display()).into());
     }

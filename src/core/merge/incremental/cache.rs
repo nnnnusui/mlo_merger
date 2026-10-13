@@ -37,7 +37,7 @@ impl Fingerprint {
       digest.update(&buffer[..count]);
     }
     Ok(Self {
-      sha256: format!("{:x}", digest.finalize()),
+      sha256: hex::encode(digest.finalize()),
       size: metadata.len(),
       modified_seconds: modified.as_secs(),
       modified_nanos: modified.subsec_nanos(),
@@ -155,14 +155,11 @@ pub(super) fn signature(
       (name, serde_json::json!({"dependencies": record.dependencies, "inputs": inputs}))
     })
     .collect::<BTreeMap<_, _>>();
-  Ok(format!(
-    "{:x}",
-    Sha256::digest(serde_json::to_vec(&(
-      algorithm_version(extension)?,
-      crate::core::config::matching::current(),
-      inputs
-    ))?)
-  ))
+  Ok(hex::encode(Sha256::digest(serde_json::to_vec(&(
+    algorithm_version(extension)?,
+    crate::core::config::matching::current(),
+    inputs,
+  ))?)))
 }
 
 #[cfg(test)]
@@ -235,13 +232,9 @@ mod tests {
     let files = BTreeMap::new();
     let inputs = BTreeMap::<String, serde_json::Value>::new();
     for (extension, version) in [("ymap", YMAP_ALGORITHM_VERSION), ("ybn", YBN_ALGORITHM_VERSION)] {
-      let expected = format!(
-        "{:x}",
-        Sha256::digest(
-          serde_json::to_vec(&(version, crate::core::config::matching::current(), &inputs,))
-            .unwrap()
-        )
-      );
+      let expected = hex::encode(Sha256::digest(
+        serde_json::to_vec(&(version, crate::core::config::matching::current(), &inputs)).unwrap(),
+      ));
       assert_eq!(signature(extension, &files).unwrap(), expected);
     }
     assert!(signature("unsupported", &files).is_err());

@@ -45,7 +45,7 @@ impl Fingerprint {
       digest.update(&buffer[..count]);
     }
     Ok(Self {
-      sha256: format!("{:x}", digest.finalize()),
+      sha256: hex::encode(digest.finalize()),
       size: metadata.len(),
       modified_seconds: time.as_secs(),
       modified_nanos: time.subsec_nanos(),

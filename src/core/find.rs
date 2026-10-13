@@ -551,7 +551,7 @@ fn read_input(
   })?;
   if let Some(input) = input
     && (input.fingerprint.size != bytes.len() as u64
-      || input.fingerprint.sha256 != format!("{:x}", Sha256::digest(&bytes)))
+      || input.fingerprint.sha256 != hex::encode(Sha256::digest(&bytes)))
   {
     return Err(
       format!(
@@ -763,7 +763,7 @@ mod tests {
     let input = |path: &Path, resource: Option<&str>| {
       serde_json::json!({
         "path": path, "resource": resource, "original_path": "resources/stream/lr_cs4_10_strm_0.ymap",
-        "fingerprint": {"sha256": format!("{:x}", Sha256::digest(&before)), "size": before.len()},
+        "fingerprint": {"sha256": hex::encode(Sha256::digest(&before)), "size": before.len()},
       })
     };
     let record = serde_json::json!({"format_version": 1, "files": {

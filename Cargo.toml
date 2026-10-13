@@ -8,25 +8,26 @@ default-run = "mlo_merger"
 typescript = ["dep:specta"]
 
 [dependencies]
-bpaf = "0.9.22"
-chrono = { version = "0.4.43", features = ["clock"] }
+bpaf = "0.9.28"
+chrono = { version = "0.4.45", features = ["clock"] }
 deku = "0.20.3"
 flate2 = "1.1"
-globset = "0.4"
-indexmap = { version = "2.7.2", features = ["serde"] }
+globset = "0.4.20"
+hex = "0.4"
+indexmap = { version = "2.14.2", features = ["serde"] }
 indicatif = "0.18"
 netcorehost = "0.22.0"
-quick-xml = { version = "0.39.0", features = ["serialize", "overlapped-lists"] }
-regex = "1.12.2"
-serde = { version = "1.0.228", features = ["derive"] }
-serde_json = "1.0"
-sha2 = "0.10"
+quick-xml = { version = "0.42.0", features = ["serialize", "overlapped-lists"] }
+regex = "1.13.1"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+sha2 = "0.11.1"
 specta = { version = "1.0.5", optional = true, features = ["export"] }
 structdiff = { version = "0.7.3", features = ["debug_diffs", "serde"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 tracing-tree = { version = "0.4", features = ["time"] }
-toml = "0.9.11"
+toml = "1.1.8"
 walkdir = "2.5.0"
 
 [build-dependencies]

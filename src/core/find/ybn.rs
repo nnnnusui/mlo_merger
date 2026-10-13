@@ -656,7 +656,7 @@ mod tests {
     fs::write(merged.join("ybn/hei_collision.ybn"), &bytes).unwrap();
     let input = |path: &Path, resource: Option<&str>| {
       let bytes = fs::read(path).unwrap();
-      serde_json::json!({"path": path, "resource": resource, "original_path": "resource/stream/collision.ybn", "fingerprint": {"size": bytes.len(), "sha256": format!("{:x}", Sha256::digest(bytes))}})
+      serde_json::json!({"path": path, "resource": resource, "original_path": "resource/stream/collision.ybn", "fingerprint": {"size": bytes.len(), "sha256": hex::encode(Sha256::digest(bytes))}})
     };
     let record = serde_json::json!({"vanilla": input(&vanilla, None), "merge_sources": [input(&source, Some("retains")), input(&missing, Some("removes"))]});
     let cache = serde_json::json!({"format_version": 1, "files": {"collision.ybn": record.clone(), "hei_collision.ybn": record}});

@@ -19,7 +19,7 @@ pub(in crate::core::merge) fn patch_clone(
     let empty = matches!(&event, Event::Empty(_));
     match event {
       Event::Start(start) | Event::Empty(start) => {
-        let name = String::from_utf8_lossy(start.name().as_ref()).into_owned();
+        let name = start.name().as_ref().to_owned();
         if name == "Item" && stack.last().is_some_and(|parent| parent == "entities") {
           current = Some(count);
           count += 1;

@@ -41,7 +41,7 @@ fn moves_vanilla_files_retains_history_and_updates_only_selected_resources() {
           FileChange {
             previous_sha256: None,
             file: CachedFile {
-              sha256: format!("{:x}", Sha256::digest(b"original")),
+              sha256: hex::encode(Sha256::digest(b"original")),
               object: object.into(),
               source: "base.rpf".into(),
             },
@@ -311,7 +311,7 @@ fn moves_vanilla_files_retains_history_and_updates_only_selected_resources() {
     fs::File::open(history.join("resource_a/nested/collision.ybn.fingerprint.json")).unwrap(),
   )
   .unwrap();
-  assert_eq!(old_file.sha256, format!("{:x}", Sha256::digest(b"original")));
+  assert_eq!(old_file.sha256, hex::encode(Sha256::digest(b"original")));
   assert!(
     !BuildSourceCache {
       resource: Some("resource_a").map(str::to_owned),
@@ -343,7 +343,7 @@ fn moves_vanilla_files_retains_history_and_updates_only_selected_resources() {
     FileChange {
       previous_sha256: None,
       file: CachedFile {
-        sha256: format!("{:x}", Sha256::digest(b"custom")),
+        sha256: hex::encode(Sha256::digest(b"custom")),
         object: object.into(),
         source: "base.rpf".into(),
       },

@@ -410,7 +410,7 @@ mod tests {
     let binaries =
       [base_xml, patch_xml.as_str(), latest_xml.as_str()].map(|xml| xml_to_ybn(xml).unwrap());
     let source_binaries = [xml_to_ybn(&mod_a_xml).unwrap(), xml_to_ybn(&mod_b_xml).unwrap()];
-    let hash = |bytes: &[u8]| format!("{:x}", Sha256::digest(bytes));
+    let hash = |bytes: &[u8]| hex::encode(Sha256::digest(bytes));
     let mut changes: Vec<CacheVersion> = Vec::new();
     let mut previous_sha = None;
     for (index, (id, bytes)) in

@@ -153,20 +153,18 @@ fn read_parent_hash(path: &Path) -> io::Result<u32> {
       .read_event_into(&mut buffer)
       .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?
     {
-      Event::Start(element) if element.name().as_ref() == b"parent" => inside_parent = true,
+      Event::Start(element) if element.name().as_ref() == "parent" => inside_parent = true,
       Event::Text(text) if inside_parent => {
-        let text =
-          text.decode().map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+        let text = text.xml_content(quick_xml::XmlVersion::Implicit1_0);
         return Ok(reference_hash(&text));
       }
       Event::CData(text) if inside_parent => {
-        let text =
-          text.decode().map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+        let text = text.xml_content(quick_xml::XmlVersion::Implicit1_0);
         return Ok(reference_hash(&text));
       }
-      Event::End(element) if element.name().as_ref() == b"parent" => return Ok(0),
-      Event::Empty(element) if element.name().as_ref() == b"parent" => return Ok(0),
-      Event::Start(element) if element.name().as_ref() == b"entities" => return Ok(0),
+      Event::End(element) if element.name().as_ref() == "parent" => return Ok(0),
+      Event::Empty(element) if element.name().as_ref() == "parent" => return Ok(0),
+      Event::Start(element) if element.name().as_ref() == "entities" => return Ok(0),
       Event::Eof => return Ok(0),
       _ => {}
     }

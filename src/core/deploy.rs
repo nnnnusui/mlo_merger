@@ -330,7 +330,7 @@ fn fingerprint(
     digest.update(&buffer[..count]);
   }
   Ok(Fingerprint {
-    sha256: format!("{:x}", digest.finalize()),
+    sha256: hex::encode(digest.finalize()),
     size: metadata.len(),
     modified_seconds: modified.as_secs(),
     modified_nanos: modified.subsec_nanos(),

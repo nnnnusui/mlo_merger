@@ -12,46 +12,46 @@ pub(super) struct Sample {
 #[ignore = "copies local mod assets and regenerates per-file test cases"]
 fn extract_source_samples() {
   let base = Path::new(env!("CARGO_MANIFEST_DIR"));
-  let source = base.join("asset/source");
+  let source_cache = base.join("asset/source-cache");
+  let source = source_cache.join("resources");
   assert!(source.is_dir(), "missing {}", source.display());
-  let mut paths = walkdir::WalkDir::new(&source)
-    .follow_links(false)
-    .into_iter()
-    .map(|entry| entry.expect("cannot enumerate source assets"))
-    .filter(|entry| entry.file_type().is_file())
-    .map(|entry| entry.into_path())
-    .filter(|path| {
-      path.extension().and_then(|value| value.to_str()).is_some_and(|extension| {
-        ["ymap", "ybn", "ymt", "ynd", "ytyp"].contains(&extension.to_ascii_lowercase().as_str())
-      }) && !path
-        .components()
-        .any(|component| matches!(component.as_os_str().to_str(), Some("_backup" | "_omit")))
-    })
+  let metadata: serde_json::Value = serde_json::from_slice(
+    &fs::read(source_cache.join("source_cache_info.json")).expect("missing source cache metadata"),
+  )
+  .expect("invalid source cache metadata");
+  let resource_names = metadata["resources"]
+    .as_object()
+    .expect("source cache metadata has no resources")
+    .keys()
+    .cloned()
     .collect::<Vec<_>>();
-  paths.sort();
+  let mut paths = Vec::new();
+  for resource_name in resource_names {
+    let resource = source.join(&resource_name);
+    for entry in walkdir::WalkDir::new(&resource).follow_links(false) {
+      let entry = entry.expect("cannot enumerate cached source files");
+      let path = entry.into_path();
+      if !path.is_file()
+        || !path.extension().and_then(|value| value.to_str()).is_some_and(|extension| {
+          ["ymap", "ybn", "ymt", "ynd", "ytyp"].contains(&extension.to_ascii_lowercase().as_str())
+        })
+        || path
+          .components()
+          .any(|component| matches!(component.as_os_str().to_str(), Some("_backup" | "_omit")))
+      {
+        continue;
+      }
+      paths.push((resource_name.clone(), resource.clone(), path));
+    }
+  }
+  paths.sort_by(|left, right| left.0.cmp(&right.0).then_with(|| left.2.cmp(&right.2)));
   assert!(!paths.is_empty(), "source corpus is empty");
   let mut samples = BTreeMap::<String, BTreeMap<String, Sample>>::new();
-  for path in paths {
+  for (resource_name, resource, path) in paths {
     let extension = path.extension().unwrap().to_str().unwrap().to_ascii_lowercase();
-    let resource = path
-      .ancestors()
-      .skip(1)
-      .take_while(|parent| *parent != source)
-      .find(|parent| {
-        parent.join("fxmanifest.lua").is_file() || parent.join("__resource.lua").is_file()
-      })
-      .unwrap_or_else(|| {
-        let relative = path.strip_prefix(&source).unwrap();
-        let mut components = relative.components();
-        let mut root = source.join(components.next().unwrap());
-        while root.file_name().unwrap().to_string_lossy().starts_with('[') {
-          root.push(components.next().expect("group has no resource"));
-        }
-        path.ancestors().find(|parent| *parent == root).unwrap()
-      });
     let mut file = format!(
       "{}___{}",
-      resource.file_name().unwrap().to_str().unwrap(),
+      Path::new(&resource_name).file_name().unwrap().to_str().unwrap(),
       path.file_name().unwrap().to_str().unwrap()
     );
     let relative = path.strip_prefix(base).unwrap().to_str().unwrap().replace('\\', "/");
@@ -63,7 +63,7 @@ fn extract_source_samples() {
       let variant = path
         .parent()
         .unwrap()
-        .strip_prefix(resource)
+        .strip_prefix(&resource)
         .unwrap()
         .components()
         .map(|part| part.as_os_str().to_str().unwrap())
@@ -71,7 +71,7 @@ fn extract_source_samples() {
         .join("__");
       file = format!(
         "{}__{variant}___{}",
-        resource.file_name().unwrap().to_str().unwrap(),
+        Path::new(&resource_name).file_name().unwrap().to_str().unwrap(),
         path.file_name().unwrap().to_str().unwrap()
       );
       assert!(!group.contains_key(&file), "ambiguous fixture name: {relative}");

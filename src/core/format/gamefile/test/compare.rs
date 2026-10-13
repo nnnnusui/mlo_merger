@@ -186,12 +186,12 @@ fn ybn_vertex_arrays(xml: &str) -> Result<Vec<Vec<f32>>, String> {
   let mut arrays = Vec::new();
   loop {
     match reader.read_event().map_err(|error| error.to_string())? {
-      Event::Start(element) if element.name().as_ref() == b"Vertices" => {
+      Event::Start(element) if element.name().as_ref() == "Vertices" => {
         inside_vertices = true;
         values.clear();
       }
       Event::Text(text) if inside_vertices => {
-        let decoded = text.decode().map_err(|error| error.to_string())?;
+        let decoded = text.xml_content(quick_xml::XmlVersion::Implicit1_0);
         for token in decoded
           .split(|character: char| character.is_whitespace() || character == ',')
           .filter(|token| !token.is_empty())
@@ -201,7 +201,7 @@ fn ybn_vertex_arrays(xml: &str) -> Result<Vec<Vec<f32>>, String> {
           );
         }
       }
-      Event::End(element) if element.name().as_ref() == b"Vertices" => {
+      Event::End(element) if element.name().as_ref() == "Vertices" => {
         arrays.push(std::mem::take(&mut values));
         inside_vertices = false;
       }
@@ -235,13 +235,13 @@ fn parse_compare_xml(xml: &str) -> Result<CompareXmlNode, String> {
   let mut root = None;
   loop {
     match reader.read_event().map_err(|error| error.to_string())? {
-      Event::Start(element) => stack.push(compare_xml_element(&reader, &element)?),
+      Event::Start(element) => stack.push(compare_xml_element(&element)?),
       Event::Empty(element) => {
-        attach_compare_node(compare_xml_element(&reader, &element)?, &mut stack, &mut root)?
+        attach_compare_node(compare_xml_element(&element)?, &mut stack, &mut root)?
       }
       Event::Text(text) => {
         if let Some(node) = stack.last_mut() {
-          node.text.push_str(&text.decode().map_err(|error| error.to_string())?);
+          node.text.push_str(&text.xml_content(quick_xml::XmlVersion::Implicit1_0));
         }
       }
       Event::End(_) => {
@@ -256,19 +256,18 @@ fn parse_compare_xml(xml: &str) -> Result<CompareXmlNode, String> {
 }
 
 fn compare_xml_element(
-  reader: &Reader<&[u8]>,
-  element: &quick_xml::events::BytesStart<'_>,
+  element: &quick_xml::events::BytesStart<'_>
 ) -> Result<CompareXmlNode, String> {
   let mut node = CompareXmlNode {
-    name: String::from_utf8_lossy(element.name().as_ref()).into_owned(),
+    name: element.name().as_ref().to_owned(),
     ..CompareXmlNode::default()
   };
   for attribute in element.attributes() {
     let attribute = attribute.map_err(|error| error.to_string())?;
     node.attributes.insert(
-      String::from_utf8_lossy(attribute.key.as_ref()).into_owned(),
+      attribute.key.as_ref().to_owned(),
       attribute
-        .decode_and_unescape_value(reader.decoder())
+        .normalized_value(quick_xml::XmlVersion::Implicit1_0)
         .map_err(|error| error.to_string())?
         .into_owned(),
     );
@@ -408,24 +407,22 @@ fn xml_event_at(
     };
     let label = match event {
       Event::Start(element) => {
-        let name = String::from_utf8_lossy(element.name().as_ref()).into_owned();
+        let name = element.name().as_ref().to_owned();
         let label = format!("start:{}/{}", stack.join("/"), name);
         stack.push(name);
         Some(label)
       }
-      Event::Empty(element) => Some(format!(
-        "empty:{}/{}",
-        stack.join("/"),
-        String::from_utf8_lossy(element.name().as_ref())
-      )),
+      Event::Empty(element) => {
+        Some(format!("empty:{}/{}", stack.join("/"), element.name().as_ref()))
+      }
       Event::End(element) => {
-        let name = String::from_utf8_lossy(element.name().as_ref()).into_owned();
+        let name = element.name().as_ref().to_owned();
         let label = format!("end:{}/{}", stack.join("/"), name);
         stack.pop();
         Some(label)
       }
       Event::Text(text) => {
-        let value = text.decode().unwrap_or_default();
+        let value = text.xml_content(quick_xml::XmlVersion::Implicit1_0);
         let value = value.trim();
         (!value.is_empty()).then(|| format!("text:{}/{}", stack.join("/"), value))
       }
@@ -466,14 +463,10 @@ pub(crate) fn canonical_xml(xml: &str) -> Vec<String> {
   reader.config_mut().trim_text(true);
   loop {
     match reader.read_event().unwrap() {
-      Event::Start(element) => {
-        normalized.push(format!("start:{}", canonical_element(&reader, &element)))
-      }
-      Event::Empty(element) => {
-        normalized.push(format!("empty:{}", canonical_element(&reader, &element)))
-      }
+      Event::Start(element) => normalized.push(format!("start:{}", canonical_element(&element))),
+      Event::Empty(element) => normalized.push(format!("empty:{}", canonical_element(&element))),
       Event::End(element) => {
-        let name = normalize_element_name(&String::from_utf8_lossy(element.name().as_ref()));
+        let name = normalize_element_name(element.name().as_ref());
         let start_prefix = format!("start:{name}");
         if normalized.last().is_some_and(|event| {
           event == &start_prefix || event.starts_with(&format!("{start_prefix} "))
@@ -486,8 +479,7 @@ pub(crate) fn canonical_xml(xml: &str) -> Vec<String> {
       }
       Event::Text(text) => {
         let value = text
-          .decode()
-          .unwrap()
+          .xml_content(quick_xml::XmlVersion::Implicit1_0)
           .split_whitespace()
           .map(normalize_value)
           .collect::<Vec<_>>()
@@ -503,23 +495,21 @@ pub(crate) fn canonical_xml(xml: &str) -> Vec<String> {
   normalized
 }
 
-fn canonical_element(
-  reader: &Reader<&[u8]>,
-  element: &quick_xml::events::BytesStart<'_>,
-) -> String {
+fn canonical_element(element: &quick_xml::events::BytesStart<'_>) -> String {
   let mut attributes = element
     .attributes()
     .map(|attribute| {
       let attribute = attribute.unwrap();
-      let name = String::from_utf8_lossy(attribute.key.as_ref()).into_owned();
-      let value = normalize_value(&attribute.decode_and_unescape_value(reader.decoder()).unwrap());
+      let name = attribute.key.as_ref().to_owned();
+      let value =
+        normalize_value(&attribute.normalized_value(quick_xml::XmlVersion::Implicit1_0).unwrap());
       (name, value)
     })
     .collect::<Vec<_>>();
   attributes.sort();
   format!(
     "{}{}",
-    normalize_element_name(&String::from_utf8_lossy(element.name().as_ref())),
+    normalize_element_name(element.name().as_ref()),
     attributes.into_iter().map(|(name, value)| format!(" {name}={value}")).collect::<String>()
   )
 }

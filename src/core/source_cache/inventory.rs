@@ -205,7 +205,7 @@ pub(super) fn fingerprint(
       .collect::<std::io::Result<Vec<_>>>()?;
     entries.sort();
     return Ok(FileFingerprint {
-      sha256: format!("{:x}", Sha256::digest(serde_json::to_vec(&entries)?)),
+      sha256: hex::encode(Sha256::digest(serde_json::to_vec(&entries)?)),
       modified_seconds: modified.as_secs(),
       modified_nanos: modified.subsec_nanos(),
       size: entries.len() as u64,
@@ -222,7 +222,7 @@ pub(super) fn fingerprint(
   let metadata = fs::metadata(path)?;
   let modified = metadata.modified()?.duration_since(std::time::UNIX_EPOCH)?;
   Ok(FileFingerprint {
-    sha256: format!("{:x}", Sha256::digest(&bytes)),
+    sha256: hex::encode(Sha256::digest(&bytes)),
     modified_seconds: modified.as_secs(),
     modified_nanos: modified.subsec_nanos(),
     size: metadata.len(),
@@ -286,7 +286,7 @@ mod tests {
     let mut stale_stat = cached.clone();
     stale_stat.modified_seconds = stale_stat.modified_seconds.wrapping_add(1);
     let recalculated = fingerprint(&path, Some(&stale_stat)).unwrap();
-    assert_eq!(recalculated.sha256, format!("{:x}", Sha256::digest(b"source bytes")));
+    assert_eq!(recalculated.sha256, hex::encode(Sha256::digest(b"source bytes")));
     fs::remove_file(path).unwrap();
   }
 }

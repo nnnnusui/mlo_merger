@@ -95,7 +95,7 @@ impl IncrementalMerge<'_> {
         .map(|path| Ok((path.clone(), edits.dependency_hash(&path)?)))
         .collect::<Result<BTreeMap<_, _>>>()?;
       if !edit_inputs.is_empty() {
-        signature = format!("{:x}", Sha256::digest(serde_json::to_vec(&(signature, edit_inputs))?));
+        signature = hex::encode(Sha256::digest(serde_json::to_vec(&(signature, edit_inputs))?));
       }
       let mut current = !self.force
         && previous

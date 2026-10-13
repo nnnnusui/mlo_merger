@@ -195,7 +195,7 @@ mod tests {
         FileChange {
           previous_sha256: None,
           file: CachedFile {
-            sha256: format!("{:x}", Sha256::digest(&bytes)),
+            sha256: hex::encode(Sha256::digest(&bytes)),
             object,
             source: format!("base.rpf/{name}"),
           },

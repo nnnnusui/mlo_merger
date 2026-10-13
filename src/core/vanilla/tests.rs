@@ -136,7 +136,7 @@ fn cache_manifest_requires_schema_one_and_root_metadata() {
   assert_eq!(loaded.format_version, 1);
   assert_eq!(
     revision,
-    format!("{:x}", Sha256::digest(fs::read(root.join("cache_info.json")).unwrap()))
+    hex::encode(Sha256::digest(fs::read(root.join("cache_info.json")).unwrap()))
   );
   manifest.format_version = 2;
   write_json(&root.join("cache_info.json"), &manifest).unwrap();
@@ -246,7 +246,7 @@ fn stages_cache_raw_ybn_replacements_and_ymap_files() {
         name: name.into(),
         stored: stored.into(),
         source: format!("fixture.rpf/{name}"),
-        sha256: format!("{:x}", Sha256::digest(fs::read(root.join(stored)).unwrap())),
+        sha256: hex::encode(Sha256::digest(fs::read(root.join(stored)).unwrap())),
       },
       root.clone(),
     )
@@ -321,7 +321,7 @@ fn real_ybn_cache_stores_raw_replacements() {
   let file = &change.file;
   let raw = fs::read(root.join(&file.object)).unwrap();
   assert!(file.object.ends_with(".ybn"));
-  assert_eq!(format!("{:x}", Sha256::digest(&raw)), file.sha256);
+  assert_eq!(hex::encode(Sha256::digest(&raw)), file.sha256);
   let versions = ListVanillaVersions {
     file_name: name.clone(),
     vanilla_cache_dir: root.clone(),

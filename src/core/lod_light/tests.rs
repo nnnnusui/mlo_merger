@@ -221,7 +221,7 @@ fn native_custom_light_edits_merge_deploy_reuse_and_retract() {
           FileChange {
             previous_sha256: None,
             file: CachedFile {
-              sha256: format!("{:x}", Sha256::digest(&bytes)),
+              sha256: hex::encode(Sha256::digest(&bytes)),
               object: object.into(),
               source: "fixture.rpf".into(),
             },
@@ -400,7 +400,7 @@ fn cached_baseline_inputs_accept_combined_removals_and_keep_unchanged_provider()
       FileChange {
         previous_sha256: None,
         file: CachedFile {
-          sha256: format!("{:x}", Sha256::digest(&bytes)),
+          sha256: hex::encode(Sha256::digest(&bytes)),
           object,
           source: "fixture.rpf".into(),
         },

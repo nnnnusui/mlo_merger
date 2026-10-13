@@ -41,14 +41,14 @@ pub(crate) fn parse_xml(xml: &str) -> io::Result<XmlElement> {
     match reader.read_event().map_err(|error| invalid_data(&error.to_string()))? {
       Event::Start(event) => {
         let mut node = XmlElement {
-          name: String::from_utf8_lossy(event.name().as_ref()).into_owned(),
+          name: event.name().as_ref().to_owned(),
           ..XmlElement::default()
         };
         for attribute in event.attributes() {
           let attribute = attribute.map_err(|error| invalid_data(&error.to_string()))?;
-          let key = String::from_utf8_lossy(attribute.key.as_ref()).into_owned();
+          let key = attribute.key.as_ref().to_owned();
           let value = attribute
-            .decode_and_unescape_value(reader.decoder())
+            .normalized_value(quick_xml::XmlVersion::Implicit1_0)
             .map_err(|error| invalid_data(&error.to_string()))?
             .into_owned();
           node.attributes.insert(key, value);
@@ -57,14 +57,14 @@ pub(crate) fn parse_xml(xml: &str) -> io::Result<XmlElement> {
       }
       Event::Empty(event) => {
         let mut node = XmlElement {
-          name: String::from_utf8_lossy(event.name().as_ref()).into_owned(),
+          name: event.name().as_ref().to_owned(),
           ..XmlElement::default()
         };
         for attribute in event.attributes() {
           let attribute = attribute.map_err(|error| invalid_data(&error.to_string()))?;
-          let key = String::from_utf8_lossy(attribute.key.as_ref()).into_owned();
+          let key = attribute.key.as_ref().to_owned();
           let value = attribute
-            .decode_and_unescape_value(reader.decoder())
+            .normalized_value(quick_xml::XmlVersion::Implicit1_0)
             .map_err(|error| invalid_data(&error.to_string()))?
             .into_owned();
           node.attributes.insert(key, value);
@@ -73,7 +73,7 @@ pub(crate) fn parse_xml(xml: &str) -> io::Result<XmlElement> {
       }
       Event::Text(event) => {
         if let Some(node) = stack.last_mut() {
-          node.text.push_str(&event.decode().map_err(|error| invalid_data(&error.to_string()))?);
+          node.text.push_str(&event.xml_content(quick_xml::XmlVersion::Implicit1_0));
         }
       }
       Event::End(_) => {

@@ -47,7 +47,7 @@ fn incremental_ymap_merge_caches_noop_results_and_removes_obsolete_outputs() {
           FileChange {
             previous_sha256: None,
             file: CachedFile {
-              sha256: format!("{:x}", Sha256::digest(&bytes)),
+              sha256: hex::encode(Sha256::digest(&bytes)),
               object: object.into(),
               source: "base.rpf/map.ymap".into(),
             },
