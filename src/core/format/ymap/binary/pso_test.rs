@@ -1,11 +1,9 @@
 use std::{collections::HashMap, path::Path};
 
-use crate::core::{
-  common::{position::Position, rotation::Rotation},
-  format::{
-    gamefile::pso::PsoResource,
-    ymap::model::{Ymap, YmapBlock, YmapDistantLodLights, YmapEntity, YmapInstancedData},
-  },
+use crate::common::{position::Position, rotation::Rotation};
+use crate::core::format::{
+  gamefile::pso::PsoResource,
+  ymap::model::{Ymap, YmapBlock, YmapDistantLodLights, YmapEntity, YmapInstancedData},
 };
 
 fn read(name: &str) -> Ymap {

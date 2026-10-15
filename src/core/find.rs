@@ -584,7 +584,7 @@ mod tests {
 
   #[test]
   fn entity_position_search_includes_the_3d_boundary_and_all_occurrences() {
-    use crate::core::common::position::Position;
+    use crate::common::position::Position;
     let xml: crate::core::format::ymap::xml::XmlYmap = quick_xml::de::from_str(include_str!(
       concat!(env!("CARGO_MANIFEST_DIR"), "/docs/sample/parent_refs/vanilla_parent.ymap.xml")
     ))

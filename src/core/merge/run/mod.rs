@@ -1,6 +1,6 @@
 use super::cache_inputs::VanillaHistory;
 use super::duplicates::{Change, Collector, Contribution, DuplicateReport};
-use crate::core::common::function::collect_files_with_suffix;
+use crate::common::function::collect_files_with_suffix;
 use crate::core::config::blacklist::BlacklistConfig;
 use crate::core::format::ymap::diff::{YmapDiff, reference_hash};
 use crate::core::format::ymap::model::ymap::Ymap;

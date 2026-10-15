@@ -5,7 +5,7 @@ use super::{
   resolve_distant_lod_light_removals, resolve_lod_light_removals, resolve_occlude_model_removals,
   resolve_time_cycle_modifier_removals,
 };
-use crate::core::common::{position::Position, triangle::Triangle};
+use crate::common::{position::Position, triangle::Triangle};
 use crate::core::format::ymap::model::{
   YmapBoxOccluder, YmapCarGenerator, YmapDistantLodLight, YmapLodLight, YmapOccludeModel,
   YmapTimeCycleModifier, ymap_occlude_model::YmapOccludeModelStructDiffEnum,

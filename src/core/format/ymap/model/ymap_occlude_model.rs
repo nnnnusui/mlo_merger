@@ -1,6 +1,6 @@
 use structdiff::{Difference, StructDiff};
 
-use crate::core::common::{position::Position, triangle::Triangle};
+use crate::common::{position::Position, triangle::Triangle};
 
 /// Occlude model definition in YMAP
 #[derive(Debug, Clone, PartialEq, Difference)]
@@ -20,8 +20,7 @@ impl YmapOccludeModel {
   ) -> bool {
     let tolerance = crate::core::config::matching::current().ymap_occlude_model;
     let is_position_similar =
-      |p1: &crate::core::common::position::Position,
-       p2: &crate::core::common::position::Position| {
+      |p1: &crate::common::position::Position, p2: &crate::common::position::Position| {
         (p1.x - p2.x).abs() < tolerance && (p1.y - p2.y).abs() < tolerance
       };
 

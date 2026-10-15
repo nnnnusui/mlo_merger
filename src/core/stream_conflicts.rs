@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 use walkdir::WalkDir;
 
-use crate::core::common::function::get_resource_directories;
+use crate::common::function::get_resource_directories;
 
 /// JSON report containing only basenames that occur more than once.
 #[derive(Debug, Clone, Deserialize, PartialEq, Serialize)]

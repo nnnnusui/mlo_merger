@@ -1,9 +1,14 @@
-//! Shared filesystem, path, JSON and fingerprint primitives.
+//! Shared geometry types, filesystem, path, JSON and fingerprint primitives.
 
 pub(crate) mod filesystem;
 pub(crate) mod fingerprint;
+pub(crate) mod function;
 pub(crate) mod json;
+mod r#macro;
 pub(crate) mod path;
+pub mod position;
+pub mod rotation;
+pub mod triangle;
 
 pub(crate) type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 

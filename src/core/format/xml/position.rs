@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 
-use crate::core::{common::position::Position, format::xml::XmlValueAttr};
+use crate::common::position::Position;
+use crate::core::format::xml::XmlValueAttr;
 
 #[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]

@@ -1,7 +1,5 @@
-use crate::core::{
-  common::position::Position,
-  format::ymap::model::{Ymap, YmapLodLight},
-};
+use crate::common::position::Position;
+use crate::core::format::ymap::model::{Ymap, YmapLodLight};
 use std::collections::{HashMap, HashSet};
 
 #[derive(serde::Serialize, serde::Deserialize)]

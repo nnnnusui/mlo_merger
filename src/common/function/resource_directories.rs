@@ -3,13 +3,6 @@ use std::io;
 use std::path::{Path, PathBuf};
 
 /// Discovers a single FiveM resource or manifest-bearing resources inside bracket groups.
-///
-/// ```no_run
-/// let resources = mlo_merger::core::common::function::get_resource_directories(
-///   std::path::Path::new("asset/source"),
-/// )?;
-/// # Ok::<(), std::io::Error>(())
-/// ```
 pub fn get_resource_directories(input: &Path) -> io::Result<Vec<PathBuf>> {
   fn is_resource(path: &Path) -> bool {
     path.join("fxmanifest.lua").is_file() || path.join("__resource.lua").is_file()

@@ -4,8 +4,9 @@ use super::{
   Result,
   streams::{StreamFile as ResourceFile, StreamInventory as Inventory},
 };
+use crate::common::function::get_resource_directories;
 use crate::common::path::{reject_symlinks, safe_relative};
-use crate::core::{common::function::get_resource_directories, format::ymap::diff::reference_hash};
+use crate::core::format::ymap::diff::reference_hash;
 use serde::Deserialize;
 use std::{
   collections::BTreeMap,

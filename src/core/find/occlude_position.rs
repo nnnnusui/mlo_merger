@@ -188,7 +188,7 @@ fn point_aabb_distance(
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::core::common::{position::Position, triangle::Triangle};
+  use crate::common::{position::Position, triangle::Triangle};
 
   #[test]
   fn occluder_search_matches_centers_and_aabb_radius_boundary() {

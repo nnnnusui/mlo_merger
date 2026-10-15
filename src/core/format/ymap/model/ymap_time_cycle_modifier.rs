@@ -1,6 +1,6 @@
 use structdiff::{Difference, StructDiff};
 
-use crate::core::common::position::Position;
+use crate::common::position::Position;
 
 /// Time cycle modifier definition in YMAP
 #[derive(Debug, Clone, PartialEq, Difference)]

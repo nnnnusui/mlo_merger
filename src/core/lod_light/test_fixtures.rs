@@ -29,7 +29,7 @@ pub(super) fn fixture() -> (BTreeMap<String, LoadedMap>, BTreeMap<String, Finger
   child.distant_lod_lights.items.clear();
   child.lod_lights = (0..3)
     .map(|_| YmapLodLight {
-      direction: crate::core::common::position::Position {
+      direction: crate::common::position::Position {
         x: 0.0,
         y: 0.0,
         z: -1.0,

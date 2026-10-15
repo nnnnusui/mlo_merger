@@ -7,15 +7,13 @@
 use std::io;
 
 use super::read::invalid_data;
-use crate::core::{
-  common::{position::Position, rotation::Rotation, triangle::Triangle},
-  format::{
-    gamefile::struct_reader::{FromScalar, Scalar, StructReader},
-    ymap::model::{
-      BoundingBox, GrassInstance, GrassInstanceBatch, Vector3, Vector4, Ymap, YmapBlock,
-      YmapBoxOccluder, YmapCarGenerator, YmapDistantLodLight, YmapDistantLodLights, YmapEntity,
-      YmapInstancedData, YmapLodLight, YmapOccludeModel, YmapTimeCycleModifier,
-    },
+use crate::common::{position::Position, rotation::Rotation, triangle::Triangle};
+use crate::core::format::{
+  gamefile::struct_reader::{FromScalar, Scalar, StructReader},
+  ymap::model::{
+    BoundingBox, GrassInstance, GrassInstanceBatch, Vector3, Vector4, Ymap, YmapBlock,
+    YmapBoxOccluder, YmapCarGenerator, YmapDistantLodLight, YmapDistantLodLights, YmapEntity,
+    YmapInstancedData, YmapLodLight, YmapOccludeModel, YmapTimeCycleModifier,
   },
 };
 

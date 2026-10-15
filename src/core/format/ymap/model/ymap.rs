@@ -1,6 +1,6 @@
 use structdiff::{Difference, StructDiff};
 
-use crate::core::common::position::Position;
+use crate::common::position::Position;
 
 use super::{
   ymap_block::YmapBlock, ymap_box_occluder::YmapBoxOccluder, ymap_car_generator::YmapCarGenerator,

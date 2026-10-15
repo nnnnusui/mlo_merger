@@ -1,6 +1,6 @@
 use structdiff::{Difference, StructDiff};
 
-use crate::core::common::position::Position;
+use crate::common::position::Position;
 
 /// LOD lights structure of array in YMAP
 #[derive(Debug, Clone, PartialEq, Difference)]

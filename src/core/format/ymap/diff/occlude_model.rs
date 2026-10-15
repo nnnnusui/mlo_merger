@@ -1,10 +1,8 @@
+use crate::common::triangle::Triangle;
 use crate::{
   continue_early,
-  core::{
-    common::triangle::Triangle,
-    format::ymap::model::{
-      Ymap, YmapOccludeModel, ymap_occlude_model::YmapOccludeModelStructDiffEnum,
-    },
+  core::format::ymap::model::{
+    Ymap, YmapOccludeModel, ymap_occlude_model::YmapOccludeModelStructDiffEnum,
   },
 };
 
@@ -184,7 +182,7 @@ fn check_triangles_diff(
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::core::common::{position::Position, triangle::Triangle};
+  use crate::common::{position::Position, triangle::Triangle};
 
   fn model(triangles: Vec<Triangle>) -> YmapOccludeModel {
     YmapOccludeModel {

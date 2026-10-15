@@ -10,8 +10,8 @@ pub(super) fn entity(
     archetype_name: "road".into(),
     flags: 0,
     guid,
-    position: crate::core::common::position::Position::default(),
-    rotation: crate::core::common::rotation::Rotation {
+    position: crate::common::position::Position::default(),
+    rotation: crate::common::rotation::Rotation {
       x: 0.0,
       y: 0.0,
       z: 0.0,

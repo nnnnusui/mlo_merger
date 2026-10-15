@@ -1,14 +1,12 @@
 use serde::{Deserialize, Serialize, Serializer};
 
-use crate::core::{
-  common::{position::Position, triangle::Triangle},
-  format::{
-    xml::{
-      XmlValueAttr, deserialize_trim_and_minify::deserialize_trim_and_minify,
-      position::XmlPositionAttr,
-    },
-    ymap::model::YmapOccludeModel,
+use crate::common::{position::Position, triangle::Triangle};
+use crate::core::format::{
+  xml::{
+    XmlValueAttr, deserialize_trim_and_minify::deserialize_trim_and_minify,
+    position::XmlPositionAttr,
   },
+  ymap::model::YmapOccludeModel,
 };
 
 #[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize)]

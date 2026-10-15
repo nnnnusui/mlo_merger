@@ -1,5 +1,5 @@
 pub mod cli;
-pub(crate) mod common;
+pub mod common;
 pub mod core;
 
 /// TypeScript definitions for persisted reports and configuration inputs.

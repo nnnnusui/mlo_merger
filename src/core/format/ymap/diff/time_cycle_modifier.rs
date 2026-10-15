@@ -108,10 +108,8 @@ pub(super) fn is_same_time_cycle_modifier(
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::core::{
-    common::position::Position,
-    format::ymap::model::{YmapBlock, YmapDistantLodLights, YmapInstancedData},
-  };
+  use crate::common::position::Position;
+  use crate::core::format::ymap::model::{YmapBlock, YmapDistantLodLights, YmapInstancedData};
 
   fn create_test_ymap() -> Ymap {
     Ymap {

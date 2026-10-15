@@ -1,13 +1,11 @@
 use serde::{Deserialize, Serialize};
 
-use crate::core::{
-  common::position::Position,
-  format::{
-    xml::{
-      position::XmlPositionChildValueAttr, serialize_break_line_par_10::serialize_break_line_par_10,
-    },
-    ymap::model::YmapLodLight,
+use crate::common::position::Position;
+use crate::core::format::{
+  xml::{
+    position::XmlPositionChildValueAttr, serialize_break_line_par_10::serialize_break_line_par_10,
   },
+  ymap::model::YmapLodLight,
 };
 
 #[derive(Debug, Deserialize, Default, Serialize)]

@@ -29,8 +29,8 @@ impl BlacklistConfig {
 
   pub fn is_occlude_model_blacklisted(
     &self,
-    bmin: &crate::core::common::position::Position,
-    bmax: &crate::core::common::position::Position,
+    bmin: &crate::common::position::Position,
+    bmax: &crate::common::position::Position,
   ) -> bool {
     const EPSILON: f32 = 0.01;
 
@@ -61,7 +61,7 @@ impl BlacklistConfig {
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::core::common::position::Position;
+  use crate::common::position::Position;
 
   #[test]
   fn test_is_occlude_model_blacklisted() {

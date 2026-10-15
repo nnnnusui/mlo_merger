@@ -1,8 +1,6 @@
+use crate::common::position::Position;
 use crate::{
-  core::{
-    common::position::Position,
-    format::ymap::model::{Ymap, YmapBoxOccluder, YmapBoxOccluderStructDiffEnum},
-  },
+  core::format::ymap::model::{Ymap, YmapBoxOccluder, YmapBoxOccluderStructDiffEnum},
   return_early,
 };
 use std::collections::{HashMap, HashSet};

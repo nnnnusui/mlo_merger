@@ -6,9 +6,9 @@ use std::{
 
 use walkdir::WalkDir;
 
+use crate::common::function::get_resource_directories;
 use crate::core::{
   codewalker::CodeWalker,
-  common::function::get_resource_directories,
   format::ybn::{diff::YbnDiff, merge_ybn_deltas, read_ybn, write_ybn, ybn_to_xml},
 };
 
