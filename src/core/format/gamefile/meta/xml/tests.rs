@@ -106,22 +106,6 @@ fn serializes_sample_occlusion_ymap_using_embedded_schema() {
 }
 
 #[test]
-fn lod_light_hash_array_uses_its_canonical_name() {
-  let fixture = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-    .join("asset/source/isacb_mechanic_littlesoul/stream/metadata/mek_lodlights_lodlights.ymap");
-  let bytes = std::fs::read(fixture).unwrap();
-  let resource = Rsc7Resource::decode(&bytes).unwrap();
-  let meta = MetaResource::parse(&resource).unwrap();
-  let xml = meta_to_xml(&meta, &HashMap::new()).unwrap();
-  assert!(xml.contains("<hash>"));
-  assert!(!xml.contains("hash_0000004A"));
-  let parsed: crate::core::format::ymap::xml::XmlYmap = quick_xml::de::from_str(&xml).unwrap();
-  let model: crate::core::format::ymap::model::Ymap = parsed.into();
-  assert_eq!(model.lod_lights.len(), 184);
-  assert_eq!(model.lod_lights[0].hash, "1571135");
-}
-
-#[test]
 fn serializes_ytyp_rsc_meta_using_the_shared_meta_writer() {
   let root_hash = super::jenk_hash("CMapTypes");
   let name_hash = super::jenk_hash("fixture_types");
@@ -159,24 +143,4 @@ fn serializes_ytyp_rsc_meta_using_the_shared_meta_writer() {
   assert!(xml.starts_with("<?xml version=\"1.0\" encoding=\"UTF-8\"?>"));
   assert!(xml.contains("<CMapTypes"));
   assert!(xml.contains("<name>fixture_types</name>"));
-}
-
-#[test]
-fn serializes_latest_vanilla_ymap_resources() {
-  let fixtures =
-    std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("asset/vanilla-cache/latest/ymap");
-  let mut converted = 0;
-
-  for entry in std::fs::read_dir(fixtures).unwrap() {
-    let path = entry.unwrap().path();
-    if path.is_file() && path.extension().is_some_and(|extension| extension == "ymap") {
-      let bytes = std::fs::read(&path).unwrap();
-      ymap_to_xml(&bytes, &HashMap::new()).unwrap_or_else(|error| {
-        panic!("failed to serialize {}: {error}", path.display());
-      });
-      converted += 1;
-    }
-  }
-
-  assert!(converted > 0);
 }

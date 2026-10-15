@@ -124,3 +124,28 @@ pub(super) fn f32_at(
 pub(super) fn invalid_data(message: &str) -> io::Error {
   io::Error::new(io::ErrorKind::InvalidData, message)
 }
+
+/// Resolves an enum value to its name, or a flags value to its comma-separated names.
+pub(super) fn enum_text(
+  meta: &MetaResource,
+  entry: &MetaStructureEntry,
+  bytes: &[u8],
+  names: &HashMap<u32, String>,
+) -> io::Result<String> {
+  let enum_info = meta.enums.iter().find(|info| info.name_hash == entry.reference_key);
+  let raw = if entry.data_type == 0x64 { i16_at(bytes, 0)? as i32 } else { i32_at(bytes, 0)? };
+  Ok(if matches!(entry.data_type, 0x63 | 0x65) {
+    enum_info
+      .into_iter()
+      .flat_map(|info| info.entries.iter())
+      .filter(|item| item.value >= 0 && raw & (1 << item.value) != 0)
+      .map(|item| resolve_name(item.name_hash, names))
+      .collect::<Vec<_>>()
+      .join(", ")
+  } else {
+    enum_info
+      .and_then(|info| info.entries.iter().find(|item| item.value == raw))
+      .map(|item| resolve_name(item.name_hash, names))
+      .unwrap_or_else(|| raw.to_string())
+  })
+}

@@ -7,7 +7,7 @@ fn incremental_ymap_merge_caches_noop_results_and_removes_obsolete_outputs() {
     meta::{MetaResource, MetaSchemaCatalog},
     rsc7::Rsc7Resource,
   };
-  use crate::core::format::ymap::binary::ymap_to_model_with_entities;
+  use crate::core::format::ymap::binary::ymap_to_model;
   let local = Path::new(env!("CARGO_MANIFEST_DIR")).join("asset/vanilla-cache/latest/ymap");
   let sample = fs::read_dir(local)
     .unwrap()
@@ -18,7 +18,8 @@ fn incremental_ymap_merge_caches_noop_results_and_removes_obsolete_outputs() {
   let meta = MetaResource::parse(&Rsc7Resource::decode(&bytes).unwrap()).unwrap();
   let mut catalog = MetaSchemaCatalog::default();
   catalog.add_resource(&meta);
-  let (model, entities) = ymap_to_model_with_entities(&bytes, &catalog.hash_names).unwrap();
+  let model = ymap_to_model(&bytes, &catalog.hash_names).unwrap();
+  let entities = model.entities.clone();
   let root = std::env::temp_dir().join(format!("incremental_ymap_{}", std::process::id()));
   let _ = fs::remove_dir_all(&root);
   let source = root.join("source");
@@ -121,7 +122,7 @@ fn incremental_ymap_merge_caches_noop_results_and_removes_obsolete_outputs() {
   assert!(output.join("ymap/map.ymap").is_file());
   let actual = fs::read(output.join("ymap/map.ymap")).unwrap();
   assert_eq!(
-    ymap_to_model_with_entities(&actual, &catalog.hash_names).unwrap().0.content_flags,
+    ymap_to_model(&actual, &catalog.hash_names).unwrap().content_flags,
     edited.content_flags
   );
   assert_eq!(fs::read_to_string(output.join("_omit.txt")).unwrap(), "resource/stream/map.ymap");

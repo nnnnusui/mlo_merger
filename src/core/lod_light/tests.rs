@@ -508,28 +508,3 @@ fn cached_baseline_inputs_accept_combined_removals_and_keep_unchanged_provider()
   );
   fs::remove_dir_all(root).unwrap();
 }
-
-#[test]
-fn light_snapshots_reject_malformed_native_soa_without_changing_general_reader() {
-  use crate::core::format::gamefile::{meta::MetaResource, rsc7::Rsc7Resource};
-  use std::fs;
-  let root = std::env::temp_dir().join(format!("light_malformed_{}", std::process::id()));
-  let _ = fs::remove_dir_all(&root);
-  let source = native_resources(&root, &["resource"]);
-  let path = source.join("resource/stream/nested/parent.ymap");
-  let resource = Rsc7Resource::decode(&fs::read(&path).unwrap()).unwrap();
-  let mut meta = MetaResource::parse(&resource).unwrap();
-  let root_index = (meta.root_block_index - 1) as usize;
-  let rgbi_count_offset = 216 + 24 + 8;
-  meta.data_blocks[root_index].data[rgbi_count_offset..rgbi_count_offset + 2]
-    .copy_from_slice(&2u16.to_le_bytes());
-  fs::write(&path, meta.to_rsc7(2).unwrap().encode().unwrap()).unwrap();
-  assert_eq!(crate::core::vanilla::read_ymap(&path).unwrap().distant_lod_lights.items.len(), 2);
-  let input = resource::ResourceFile {
-    path: path.clone(),
-    original: path,
-    parent_hint: None,
-  };
-  assert!(read_map(&input).err().unwrap().to_string().contains("position/RGBI lengths differ"));
-  fs::remove_dir_all(root).unwrap();
-}

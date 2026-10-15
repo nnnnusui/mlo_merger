@@ -8,7 +8,7 @@ fn incremental_merge_preserves_and_restores_duplicate_reports() {
     meta::{MetaResource, MetaSchemaCatalog},
     rsc7::Rsc7Resource,
   };
-  use crate::core::format::ymap::binary::ymap_to_model_with_entities;
+  use crate::core::format::ymap::binary::ymap_to_model;
   let local = Path::new(env!("CARGO_MANIFEST_DIR")).join("asset/vanilla-cache/latest/ymap");
   let mut paths =
     fs::read_dir(local).unwrap().map(|entry| entry.unwrap().path()).collect::<Vec<_>>();
@@ -16,10 +16,8 @@ fn incremental_merge_preserves_and_restores_duplicate_reports() {
   let sample = paths
     .iter()
     .find(|path| {
-      ymap_to_model_with_entities(&fs::read(path).unwrap(), &std::collections::HashMap::new())
-        .is_ok_and(|(model, entities)| {
-          model.entities.len() == entities.len() && entities.iter().any(|entity| entity.guid != 0)
-        })
+      ymap_to_model(&fs::read(path).unwrap(), &std::collections::HashMap::new())
+        .is_ok_and(|model| model.entities.iter().any(|entity| entity.guid != 0))
     })
     .unwrap();
   let name = sample.file_name().unwrap().to_str().unwrap().to_owned();
@@ -27,7 +25,8 @@ fn incremental_merge_preserves_and_restores_duplicate_reports() {
   let meta = MetaResource::parse(&Rsc7Resource::decode(&bytes).unwrap()).unwrap();
   let mut catalog = MetaSchemaCatalog::default();
   catalog.add_resource(&meta);
-  let (model, entities) = ymap_to_model_with_entities(&bytes, &catalog.hash_names).unwrap();
+  let model = ymap_to_model(&bytes, &catalog.hash_names).unwrap();
+  let entities = model.entities.clone();
   let index = entities.iter().position(|entity| entity.guid != 0).unwrap();
   let guid = entities[index].guid;
   let root = std::env::temp_dir().join(format!("duplicate_merge_cache_{}", std::process::id()));

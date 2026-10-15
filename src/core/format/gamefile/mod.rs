@@ -4,6 +4,7 @@ pub mod pso;
 pub mod resource;
 pub mod resource_convert;
 pub mod rsc7;
+pub mod struct_reader;
 pub mod xml_tree;
 pub mod ynd;
 

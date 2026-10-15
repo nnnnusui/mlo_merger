@@ -1,4 +1,5 @@
 use super::*;
+use crate::core::format::stream_file::{StreamFileModel, read_stream_file};
 
 /// Original model, entity order, and optional XML retained for legacy clone patching.
 pub(in crate::core::merge) struct OriginalMap {
@@ -15,11 +16,12 @@ impl OriginalMap {
   }
 
   pub(in crate::core::merge) fn load_raw(path: &Path) -> io::Result<Self> {
-    let (model, entities) = crate::core::format::ymap::binary::ymap_to_model_with_entities(
-      &std::fs::read(path).map_err(|error| invalid(&format!("{}: {error}", path.display())))?,
-      &HashMap::new(),
-    )
-    .map_err(|error| invalid(&format!("{}: {error}", path.display())))?;
+    let StreamFileModel::Ymap(model) =
+      read_stream_file(path).map_err(|error| invalid(&format!("{}: {error}", path.display())))?
+    else {
+      return Err(invalid(&format!("{}: not a YMAP", path.display())));
+    };
+    let entities = model.entities.clone();
     Ok(Self {
       model,
       entities,

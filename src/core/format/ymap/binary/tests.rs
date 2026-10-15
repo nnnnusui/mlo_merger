@@ -125,7 +125,7 @@ fn direct_ymap_binary_preserves_order_and_duplicate_entity_guids() {
 #[ignore = "requires local vanilla YMAP schemas"]
 fn direct_ymap_writer_roundtrips_local_vanilla() {
   use crate::core::format::gamefile::rsc7::Rsc7Resource;
-  use crate::core::format::ymap::binary::ymap_to_model_with_entities;
+  use crate::core::format::ymap::binary::ymap_to_model;
   let root =
     std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("asset/vanilla-cache/latest/ymap");
   let mut paths =
@@ -150,11 +150,12 @@ fn direct_ymap_writer_roundtrips_local_vanilla() {
   }
   for path in selected {
     let bytes = std::fs::read(path).unwrap();
-    let (model, entities) = ymap_to_model_with_entities(&bytes, &catalog.hash_names).unwrap();
+    let model = ymap_to_model(&bytes, &catalog.hash_names).unwrap();
+    let entities = model.entities.clone();
     let output = write_ymap(&model, &entities, &catalog)
       .unwrap_or_else(|error| panic!("{}: {error}", path.display()));
-    let (restored, restored_entities) =
-      ymap_to_model_with_entities(&output, &catalog.hash_names).unwrap();
+    let restored = ymap_to_model(&output, &catalog.hash_names).unwrap();
+    let restored_entities = restored.entities.clone();
     assert_eq!(restored, model, "{}", path.display());
     assert_eq!(restored_entities, entities, "{}", path.display());
     assert_eq!(write_ymap(&model, &entities, &catalog).unwrap(), output);

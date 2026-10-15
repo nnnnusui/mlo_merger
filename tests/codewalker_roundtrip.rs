@@ -29,8 +29,6 @@ use mlo_merger::core::merge::{run::MergeYmap, ybn_conflicts::MergeYbnConflicts};
 mod archive;
 #[path = "codewalker_roundtrip/diagnostics.rs"]
 mod diagnostics;
-#[path = "codewalker_roundtrip/formats.rs"]
-mod formats;
 #[path = "codewalker_roundtrip/helpers.rs"]
 mod helpers;
 #[path = "codewalker_roundtrip/pso.rs"]

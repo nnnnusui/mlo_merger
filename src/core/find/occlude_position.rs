@@ -1,12 +1,8 @@
-use super::{FindEntity, Result, aabb_intersects_radius, file_from_position, read_input};
-use crate::core::format::ymap::binary::ymap_to_model_with_entities_from_meta;
-use crate::core::format::{
-  gamefile::{meta::MetaResource, rsc7::Rsc7Resource},
-  ymap::model::{YmapBoxOccluder, YmapOccludeModel},
-};
+use super::{FindEntity, Result, aabb_intersects_radius, file_from_position, read_ymap};
+use crate::core::format::ymap::model::{YmapBoxOccluder, YmapOccludeModel};
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 use serde::Serialize;
-use std::{collections::HashMap, time::Duration};
+use std::time::Duration;
 
 #[derive(Serialize)]
 #[serde(rename = "OccludePositionSearch")]
@@ -116,15 +112,11 @@ fn read_occluders(
   position: [f64; 3],
   radius: f64,
 ) -> Result<Option<Vec<OccluderItem>>> {
-  let bytes = read_input(&candidate.path, candidate.stage, candidate.input.as_ref())?;
-  let resource = Rsc7Resource::decode(&bytes)?;
-  let meta = MetaResource::parse(&resource)?;
-  if let Some((minimum, maximum)) = file_from_position::ymap_extents(&meta)?
-    && !aabb_intersects_radius(position, radius, minimum, maximum).unwrap_or(true)
-  {
+  let model = read_ymap(&candidate.path, candidate.stage)?;
+  let (minimum, maximum) = file_from_position::ymap_extents(&model);
+  if !aabb_intersects_radius(position, radius, minimum, maximum).unwrap_or(true) {
     return Ok(None);
   }
-  let (model, _) = ymap_to_model_with_entities_from_meta(&meta, &HashMap::new())?;
   let items = collect_occluders(&model.box_occluders, &model.occlude_models, position, radius);
   Ok((!items.is_empty()).then_some(items))
 }

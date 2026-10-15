@@ -1,14 +1,7 @@
 use super::{
-  FindEntity, Input, MergeCache, Result, aabb_intersects_radius, read_input, search_inputs,
+  FindEntity, Input, MergeCache, Result, aabb_intersects_radius, read_stream, search_inputs,
 };
-use crate::core::format::ymap::binary::ymap_to_model_with_entities_from_meta;
-use crate::core::format::{
-  gamefile::{
-    meta::{MetaResource, MetaStructureEntry, jenk_hash},
-    rsc7::Rsc7Resource,
-  },
-  ybn::read_ybn,
-};
+use crate::core::format::{stream_file::StreamFileModel, ymap::model::Ymap};
 #[cfg(not(test))]
 use indicatif::ProgressDrawTarget;
 use indicatif::{ProgressBar, ProgressStyle};
@@ -16,7 +9,7 @@ use serde::{Deserialize, Serialize};
 #[cfg(not(test))]
 use std::io::IsTerminal;
 use std::{
-  collections::{BTreeMap, HashMap, HashSet},
+  collections::{BTreeMap, HashSet},
   path::{Component, Path, PathBuf},
   time::Duration,
 };
@@ -57,7 +50,6 @@ pub(super) struct Candidate {
   pub(super) resource: Option<String>,
   pub(super) original_path: Option<String>,
   pub(super) version: Option<String>,
-  pub(super) input: Option<Input>,
   pub(super) strict: bool,
 }
 
@@ -221,7 +213,6 @@ fn collect_candidates_from(
             resource: None,
             original_path: None,
             version: None,
-            input: None,
             strict: true,
           },
         );
@@ -286,7 +277,6 @@ fn provenance_candidate(
       .as_ref()
       .map(|path| path.to_string_lossy().replace('\\', "/")),
     version: None,
-    input: Some(input.clone()),
     strict: true,
   }
 }
@@ -339,7 +329,6 @@ fn collect_source_candidates(
         resource,
         original_path: None,
         version: None,
-        input: None,
         strict: false,
       },
     );
@@ -400,7 +389,6 @@ fn collect_source_cache_candidates(
             resource: Some(resource_id.clone()),
             original_path: Some(original_path.to_string_lossy().replace('\\', "/")),
             version: None,
-            input: None,
             strict: false,
           },
         );
@@ -453,7 +441,6 @@ fn collect_vanilla_candidates(
         resource: None,
         original_path: None,
         version: Some(file.version),
-        input: None,
         strict: false,
       },
     );
@@ -526,34 +513,9 @@ pub(super) struct SpatialBounds {
 }
 
 pub(super) fn spatial_bounds(candidate: &Candidate) -> Result<Option<SpatialBounds>> {
-  let bytes = read_input(&candidate.path, candidate.stage, candidate.input.as_ref())?;
-  let bounds = match candidate.extension {
-    "ymap" => {
-      let resource = Rsc7Resource::decode(&bytes)?;
-      let meta = MetaResource::parse(&resource)?;
-      match ymap_extents(&meta)? {
-        Some((minimum, maximum)) => Some((minimum, maximum)),
-        None => {
-          let (model, _) = ymap_to_model_with_entities_from_meta(&meta, &HashMap::new())?;
-          let minimum = [
-            model.entities_extents_min.x as f64,
-            model.entities_extents_min.y as f64,
-            model.entities_extents_min.z as f64,
-          ];
-          let maximum = [
-            model.entities_extents_max.x as f64,
-            model.entities_extents_max.y as f64,
-            model.entities_extents_max.z as f64,
-          ];
-          Some((minimum, maximum))
-        }
-      }
-    }
-    "ybn" => {
-      let root = read_ybn(&bytes)?;
-      super::ybn::world_bounds(&root)?
-    }
-    _ => unreachable!(),
+  let bounds = match read_stream(&candidate.path, candidate.stage)? {
+    StreamFileModel::Ymap(model) => Some(ymap_extents(&model)),
+    StreamFileModel::Ybn(root) => super::ybn::world_bounds(&root)?,
   };
   Ok(bounds.map(|(minimum, maximum)| SpatialBounds {
     minimum,
@@ -561,49 +523,14 @@ pub(super) fn spatial_bounds(candidate: &Candidate) -> Result<Option<SpatialBoun
   }))
 }
 
-pub(super) fn ymap_extents(meta: &MetaResource) -> Result<Option<([f64; 3], [f64; 3])>> {
-  let Some(root_index) = meta.root_block_index.checked_sub(1).map(|index| index as usize) else {
-    return Ok(None);
-  };
-  let Some(root) = meta.data_blocks.get(root_index) else {
-    return Ok(None);
-  };
-  let Some(schema) =
-    meta.structures.iter().find(|schema| schema.name_hash == root.structure_name_hash)
-  else {
-    return Ok(None);
-  };
-  let Some(minimum) =
-    read_position_field(&root.data, &schema.entries, jenk_hash("entitiesExtentsMin"))?
-  else {
-    return Ok(None);
-  };
-  let Some(maximum) =
-    read_position_field(&root.data, &schema.entries, jenk_hash("entitiesExtentsMax"))?
-  else {
-    return Ok(None);
-  };
-  Ok(Some((minimum, maximum)))
-}
-
-fn read_position_field(
-  data: &[u8],
-  entries: &[MetaStructureEntry],
-  name_hash: u32,
-) -> Result<Option<[f64; 3]>> {
-  let Some(entry) = entries.iter().find(|entry| entry.name_hash == name_hash) else {
-    return Ok(None);
-  };
-  if entry.data_type != 0x33 {
-    return Ok(None);
-  }
-  let start = entry.data_offset as usize;
-  let Some(bytes) = data.get(start..start + 12) else {
-    return Err("Truncated YMAP entity extents".into());
-  };
-  Ok(Some(std::array::from_fn(|axis| {
-    f64::from(f32::from_le_bytes(bytes[axis * 4..axis * 4 + 4].try_into().unwrap()))
-  })))
+/// Returns the YMAP's stored entity extents as `(minimum, maximum)`.
+pub(super) fn ymap_extents(model: &Ymap) -> ([f64; 3], [f64; 3]) {
+  let minimum = &model.entities_extents_min;
+  let maximum = &model.entities_extents_max;
+  (
+    [minimum.x, minimum.y, minimum.z].map(f64::from),
+    [maximum.x, maximum.y, maximum.z].map(f64::from),
+  )
 }
 
 #[cfg(test)]

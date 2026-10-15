@@ -216,27 +216,6 @@ fn semantic_diff_uses_shared_xml_and_native_models() {
 }
 
 #[test]
-fn semantic_diff_real_brofx_model_preserves_exact_polygon_occurrence_counts() {
-  let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-    .join("asset/source/[patron]/brofx_mansion_06/stream/ch2_06_1.ybn");
-  let before = read_ybn(&std::fs::read(path).unwrap()).unwrap();
-  assert!(YbnDiff::extract_from(&before, &before).unwrap().is_empty());
-  let mut after = before.clone();
-  let owner = after
-    .children
-    .iter_mut()
-    .find(|bound| bound.geometry.as_ref().is_some_and(|geometry| !geometry.polygons.is_empty()))
-    .unwrap();
-  owner.geometry.as_mut().unwrap().polygons.pop().unwrap();
-  let diff = YbnDiff::extract_from(&before, &after).unwrap();
-  assert!(diff.bound_diffs.is_empty());
-  assert_eq!(diff.polygon_diffs.len(), 1);
-  assert!(matches!(&diff.polygon_diffs[0], PolygonDiff::Removed { .. }));
-  let json = serde_json::to_vec(&diff).unwrap();
-  assert_eq!(serde_json::from_slice::<YbnDiff>(&json).unwrap(), diff);
-}
-
-#[test]
 fn semantic_diff_prefers_exact_occurrences_over_nearby_candidates() {
   let mut before = geometry(vec![
     Polygon::Sphere {

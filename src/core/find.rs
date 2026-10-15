@@ -12,8 +12,12 @@ fn bounds_filter_uses_inclusive_sphere_aabb_intersection() {
 }
 
 use crate::core::format::{
-  gamefile::{meta::MetaResource, rsc7::Rsc7Resource},
-  ymap::{model::YmapEntity, xml::XmlYmapEntity},
+  stream_file::{StreamFileModel, read_stream_file},
+  ymap::{
+    binary::ymap_to_model,
+    model::{Ymap, YmapEntity},
+    xml::XmlYmapEntity,
+  },
 };
 use globset::{GlobBuilder, GlobMatcher};
 use serde::{Deserialize, Serialize};
@@ -460,46 +464,13 @@ fn read_entities(
   stage: &'static str,
   input: Option<&Input>,
 ) -> Result<EntityData> {
-  let bytes = read_input(path, stage, input)?;
-  let meta = MetaResource::parse(&Rsc7Resource::decode(&bytes)?)?;
+  let model = ymap_to_model(&read_input(path, stage, input)?, &HashMap::new())?;
   if let EntityQuery::Position {
     position,
     radius,
   } = query
-    && let Some((minimum, maximum)) = file_from_position::ymap_extents(&meta)?
-    && !aabb_intersects_radius(position.map(|value| value as f32 as f64), *radius, minimum, maximum)
-      .unwrap_or(true)
   {
-    return Ok(EntityData {
-      stage,
-      path: Some(path.to_string_lossy().replace('\\', "/")),
-      resource: input.and_then(|input| input.resource.clone()),
-      original_path: input
-        .and_then(|input| input.original_path.as_ref())
-        .map(|path| path.to_string_lossy().replace('\\', "/")),
-      found: false,
-      entities: Vec::new(),
-    });
-  }
-  let names: HashMap<_, _> = meta.hash_names();
-  let (model, entities) =
-    crate::core::format::ymap::binary::ymap_to_model_with_entities_from_meta(&meta, &names)?;
-  if let EntityQuery::Position {
-    radius,
-    position,
-  } = query
-    && file_from_position::ymap_extents(&meta)?.is_none()
-  {
-    let minimum = [
-      model.entities_extents_min.x as f64,
-      model.entities_extents_min.y as f64,
-      model.entities_extents_min.z as f64,
-    ];
-    let maximum = [
-      model.entities_extents_max.x as f64,
-      model.entities_extents_max.y as f64,
-      model.entities_extents_max.z as f64,
-    ];
+    let (minimum, maximum) = file_from_position::ymap_extents(&model);
     if !aabb_intersects_radius(position.map(|value| value as f32 as f64), *radius, minimum, maximum)
       .unwrap_or(true)
     {
@@ -515,7 +486,26 @@ fn read_entities(
       });
     }
   }
-  Ok(entity_data(path, query, stage, input, entities))
+  Ok(entity_data(path, query, stage, input, model.entities))
+}
+
+/// Reads a stream file, naming the stage and path when it cannot be read or decoded.
+fn read_stream(
+  path: &Path,
+  stage: &str,
+) -> Result<StreamFileModel> {
+  read_stream_file(path)
+    .map_err(|error| format!("Cannot read {stage} resource {}: {error}", path.display()).into())
+}
+
+fn read_ymap(
+  path: &Path,
+  stage: &str,
+) -> Result<Ymap> {
+  match read_stream(path, stage)? {
+    StreamFileModel::Ymap(model) => Ok(model),
+    _ => Err(format!("{stage} resource is not a YMAP: {}", path.display()).into()),
+  }
 }
 
 fn aabb_intersects_radius(
@@ -722,8 +712,10 @@ mod tests {
   #[test]
   #[ignore = "requires local vanilla YMAP schemas"]
   fn find_searches_native_merged_and_recorded_before_entities_without_writes() {
-    use crate::core::format::gamefile::meta::MetaSchemaCatalog;
-    use crate::core::format::ymap::binary::ymap_to_model_with_entities;
+    use crate::core::format::gamefile::{
+      meta::{MetaResource, MetaSchemaCatalog},
+      rsc7::Rsc7Resource,
+    };
     let base = Path::new(env!("CARGO_MANIFEST_DIR")).join("asset/vanilla-cache/latest/ymap");
     let mut paths =
       fs::read_dir(base).unwrap().map(|entry| entry.unwrap().path()).collect::<Vec<_>>();
@@ -732,8 +724,8 @@ mod tests {
       paths
         .iter()
         .find(|path| {
-          ymap_to_model_with_entities(&fs::read(path).unwrap(), &HashMap::new())
-            .is_ok_and(|(_, entities)| !entities.is_empty())
+          ymap_to_model(&fs::read(path).unwrap(), &HashMap::new())
+            .is_ok_and(|model| !model.entities.is_empty())
         })
         .unwrap(),
     )
@@ -741,7 +733,8 @@ mod tests {
     let meta = MetaResource::parse(&Rsc7Resource::decode(&bytes).unwrap()).unwrap();
     let mut catalog = MetaSchemaCatalog::default();
     catalog.add_resource(&meta);
-    let (model, mut entities) = ymap_to_model_with_entities(&bytes, &catalog.hash_names).unwrap();
+    let model = ymap_to_model(&bytes, &catalog.hash_names).unwrap();
+    let mut entities = model.entities.clone();
     entities[0].guid = 2443198849;
     let root = std::env::temp_dir().join(format!("find_entity_guid_{}", std::process::id()));
     let _ = fs::remove_dir_all(&root);

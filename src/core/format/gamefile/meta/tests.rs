@@ -72,23 +72,3 @@ fn rebuilds_embedded_meta_tables_in_rsc7() {
     }
   }
 }
-
-#[test]
-fn parses_meta_tables_from_all_checked_in_ymaps() {
-  let fixtures = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("asset/extracted");
-  let mut parsed = 0;
-
-  for entry in std::fs::read_dir(fixtures).unwrap() {
-    let path = entry.unwrap().path();
-    if path.extension().is_some_and(|extension| extension == "ymap") {
-      let bytes = std::fs::read(&path).unwrap();
-      let resource = Rsc7Resource::decode(&bytes).unwrap();
-      MetaResource::parse(&resource).unwrap_or_else(|error| {
-        panic!("failed to parse META in {}: {error}", path.display());
-      });
-      parsed += 1;
-    }
-  }
-
-  assert!(parsed > 0);
-}

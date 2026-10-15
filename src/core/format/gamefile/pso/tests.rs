@@ -18,9 +18,8 @@ fn parses_four_vanilla_pso_ymaps() {
     let expected: crate::core::format::ymap::model::Ymap =
       quick_xml::de::from_str::<crate::core::format::ymap::xml::XmlYmap>(&xml).unwrap().into();
     assert_eq!(model, expected);
-    let (_, ordered_entities) =
-      crate::core::format::ymap::binary::ymap_to_model_with_entities(&bytes, &HashMap::new())
-        .unwrap();
+    let ordered_entities =
+      crate::core::format::ymap::binary::ymap_to_model(&bytes, &HashMap::new()).unwrap().entities;
     let parsed: crate::core::format::ymap::xml::XmlYmap = quick_xml::de::from_str(&xml).unwrap();
     let expected_entities: Vec<crate::core::format::ymap::model::YmapEntity> =
       parsed.entities.items.into_iter().map(Into::into).collect();

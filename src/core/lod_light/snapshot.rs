@@ -3,7 +3,7 @@ use super::{
   resource::{ResourceFile, file_hash},
   *,
 };
-use crate::core::format::ymap::binary::ymap_to_light_model_with_entities;
+use crate::core::format::ymap::binary::ymap_to_model;
 use crate::core::format::ymap::{
   diff::reference_hash,
   model::{Ymap, YmapEntity, YmapLodLight},
@@ -18,7 +18,8 @@ pub(crate) struct LoadedMap {
 
 pub(crate) fn read_map(input: &ResourceFile) -> Result<LoadedMap> {
   let bytes = input.read()?;
-  let (model, entities) = ymap_to_light_model_with_entities(&bytes, &HashMap::new())?;
+  let model = ymap_to_model(&bytes, &HashMap::new())?;
+  let entities = model.entities.clone();
   Ok(LoadedMap {
     model,
     entities,

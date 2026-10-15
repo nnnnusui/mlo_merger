@@ -51,10 +51,13 @@ pub struct PsoResource {
   sections: Vec<([u8; 4], Vec<u8>)>,
 }
 
+mod access;
 mod helpers;
 mod patch;
 mod read;
 mod xml;
+
+pub use access::PsoStruct;
 
 use helpers::*;
 

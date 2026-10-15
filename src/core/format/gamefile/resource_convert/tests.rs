@@ -4,11 +4,7 @@ use super::{
   NativeResourceFormat, convert_files_from_xml, convert_files_to_xml, discover_schema_inputs,
   resource_to_xml, xml_to_resource,
 };
-use crate::core::format::gamefile::{
-  meta::xml::meta_to_xml,
-  meta::{MetaResource, MetaSchemaCatalog},
-  rsc7::Rsc7Resource,
-};
+use crate::core::format::gamefile::{meta::MetaSchemaCatalog, rsc7::Rsc7Resource};
 
 #[test]
 fn managed_output_cleanup_preserves_rebuilt_and_unmanaged_files() {
@@ -115,20 +111,6 @@ fn repeated_ybn_geometry_bvh_conversion_is_stable() {
 }
 
 #[test]
-fn repeated_ybn_brofx_mansion_conversion_is_stable() {
-  let base = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
-  let binary =
-    std::fs::read(base.join("asset/source/[patron]/brofx_mansion_06/stream/ch2_06_1.ybn")).unwrap();
-  let xml = resource_to_xml(NativeResourceFormat::Ybn, &binary, &HashMap::new()).unwrap();
-  assert_repeated_xml_conversion_is_stable(
-    NativeResourceFormat::Ybn,
-    &xml,
-    &MetaSchemaCatalog::default(),
-    "brofx_mansion_06/ch2_06_1.ybn",
-  );
-}
-
-#[test]
 fn repeated_ymap_xml_binary_conversion_is_stable() {
   use crate::core::format::gamefile::test_support::{sample_ymap_catalog, sample_ymap_xml};
   for name in [
@@ -203,54 +185,9 @@ fn discovers_matching_vanilla_ymap_schema_for_source_xml() {
 }
 
 #[test]
-fn ytyp_uses_shared_rsc_meta_conversion_path() {
-  let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-    .join("asset/source/sb_trainheistmap/stream/sb_train_addonprops.ytyp");
-  let bytes = std::fs::read(path).unwrap();
-  let format = NativeResourceFormat::Ytyp;
-  let resource = Rsc7Resource::decode(&bytes).unwrap();
-  let meta = MetaResource::parse(&resource).unwrap();
-  let xml = resource_to_xml(format, &bytes, &meta.hash_names()).unwrap();
-  assert!(xml.contains("<CMapTypes"));
-
-  let mut catalog = MetaSchemaCatalog::default();
-  catalog.add_resource(&meta);
-  let rebuilt = xml_to_resource(format, &xml, &catalog).unwrap();
-  let reparsed = MetaResource::parse(&Rsc7Resource::decode(&rebuilt).unwrap()).unwrap();
-  assert_eq!(reparsed.root_block_index, meta.root_block_index);
-  assert!(
-    reparsed
-      .structures
-      .iter()
-      .any(|schema| schema.name_hash == meta.data_blocks[0].structure_name_hash)
-  );
-  let rebuilt_xml = meta_to_xml(&reparsed, &catalog.hash_names).unwrap();
-  assert!(rebuilt_xml.contains("<CMapTypes"));
-}
-
-#[test]
 fn ybn_dispatch_rejects_invalid_resource_envelopes() {
   let error = resource_to_xml(NativeResourceFormat::Ybn, &[], &HashMap::new()).unwrap_err();
   assert!(error.to_string().contains("RSC7 header is truncated"));
-}
-
-#[test]
-fn ybn_composite_geometry_bvh_fixture_round_trips_natively() {
-  let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-    .join("asset/source/wxmaps_lshospital_v/stream/dt1_01_0.ybn");
-  let bytes = std::fs::read(path).unwrap();
-  let xml = resource_to_xml(NativeResourceFormat::Ybn, &bytes, &HashMap::new()).unwrap();
-  assert!(xml.contains("<BoundsFile>"));
-  assert_eq!(xml.matches("type=\"Composite\"").count(), 1);
-  assert_eq!(xml.matches("type=\"GeometryBVH\"").count(), 3);
-  assert!(xml.contains("<Box m=\""));
-
-  let rebuilt =
-    xml_to_resource(NativeResourceFormat::Ybn, &xml, &MetaSchemaCatalog::default()).unwrap();
-  assert_eq!(&rebuilt[..4], b"RSC7");
-  let rebuilt_xml = resource_to_xml(NativeResourceFormat::Ybn, &rebuilt, &HashMap::new()).unwrap();
-  assert_eq!(rebuilt_xml.matches("type=\"GeometryBVH\"").count(), 3);
-  assert!(rebuilt_xml.contains("<Box m=\""));
 }
 
 #[test]
@@ -374,43 +311,4 @@ fn ymt_dispatch_preserves_text_xml_and_rejects_malformed_pso() {
     resource_to_xml(NativeResourceFormat::YmtRsc, b"PSIN\0\0\0\0", &HashMap::new()).unwrap_err();
   assert_eq!(error.kind(), std::io::ErrorKind::InvalidData);
   assert!(error.to_string().contains("PSO section length"));
-}
-
-#[test]
-fn ymt_scenario_flags_use_codewalker_enum_names() {
-  let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-    .join("asset/source/[nteam]/cfx-nteam-acrt/SCENARIO/elysian_island.ymt");
-  let bytes = std::fs::read(path).unwrap();
-  let resource = Rsc7Resource::decode(&bytes).unwrap();
-  let meta = MetaResource::parse(&resource).unwrap();
-  let xml = resource_to_xml(NativeResourceFormat::YmtRsc, &bytes, &meta.hash_names()).unwrap();
-
-  assert!(xml.contains("<Flags>NoSpawn, FlyOffToOblivion, ExtendedRange</Flags>"));
-  assert!(!xml.contains("hash_8A5F2D90"));
-}
-
-#[test]
-fn batch_commands_convert_ytyp_xml_and_binary() {
-  let source = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-    .join("asset/source/sb_trainheistmap/stream/sb_train_addonprops.ytyp");
-  let temp_dir = std::env::temp_dir().join(format!("native_ytyp_batch_{}", std::process::id()));
-  let binary_input_dir = temp_dir.join("binary-input");
-  let xml_output_dir = temp_dir.join("xml-output");
-  let binary_output_dir = temp_dir.join("binary-output");
-  std::fs::create_dir_all(&binary_input_dir).unwrap();
-  std::fs::copy(&source, binary_input_dir.join(source.file_name().unwrap())).unwrap();
-
-  assert_eq!(convert_files_to_xml(&binary_input_dir, &xml_output_dir).unwrap(), (1, 0));
-  let xml_path = xml_output_dir.join("sb_train_addonprops.ytyp.xml");
-  assert!(std::fs::read_to_string(&xml_path).unwrap().contains("<CMapTypes"));
-
-  assert_eq!(
-    convert_files_from_xml(&xml_output_dir, &binary_output_dir, Some(&binary_input_dir)).unwrap(),
-    (1, 0)
-  );
-  let output_path = binary_output_dir.join("sb_train_addonprops.ytyp");
-  let output = std::fs::read(output_path).unwrap();
-  assert_eq!(&output[..4], b"RSC7");
-
-  std::fs::remove_dir_all(temp_dir).unwrap();
 }

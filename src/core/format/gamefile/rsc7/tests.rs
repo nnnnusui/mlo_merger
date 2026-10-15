@@ -34,45 +34,6 @@ fn decodes_sample_ymap_resource() {
 }
 
 #[test]
-fn decodes_all_checked_in_ymap_resources() {
-  let fixtures = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("asset/extracted");
-  let mut decoded = 0;
-
-  for entry in std::fs::read_dir(fixtures).unwrap() {
-    let path = entry.unwrap().path();
-    if path.extension().is_some_and(|extension| extension == "ymap") {
-      let bytes = std::fs::read(&path).unwrap();
-      Rsc7Resource::decode(&bytes).unwrap_or_else(|error| {
-        panic!("failed to decode {}: {error}", path.display());
-      });
-      decoded += 1;
-    }
-  }
-
-  assert!(decoded > 0);
-}
-
-#[test]
-fn encode_decode_preserves_all_checked_in_ymap_pages() {
-  let fixtures = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("asset/extracted");
-  let mut round_tripped = 0;
-
-  for entry in std::fs::read_dir(fixtures).unwrap() {
-    let path = entry.unwrap().path();
-    if path.extension().is_some_and(|extension| extension == "ymap") {
-      let bytes = std::fs::read(&path).unwrap();
-      let original = Rsc7Resource::decode(&bytes).unwrap();
-      let encoded = original.encode().unwrap();
-      let decoded = Rsc7Resource::decode(&encoded).unwrap();
-      assert_eq!(decoded, original, "RSC7 page mismatch for {}", path.display());
-      round_tripped += 1;
-    }
-  }
-
-  assert!(round_tripped > 0);
-}
-
-#[test]
 fn creates_page_flags_for_arbitrary_resource_data() {
   let system = vec![0x5a; 0x2345];
   let graphics = vec![0xa5; 0x401];

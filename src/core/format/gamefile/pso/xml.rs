@@ -6,6 +6,23 @@ impl PsoResource {
     &self,
     shared_names: &HashMap<u32, String>,
   ) -> io::Result<String> {
+    let names = self.names(shared_names);
+    let block = &self.blocks[self.root - 1];
+    let mut root = XmlElement {
+      name: resolve(block.name, &names),
+      ..XmlElement::default()
+    };
+    self.read_node(self.root, 0, block.name, &names, &mut root, 0)?;
+    let mut xml = String::from("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
+    render(&root, 0, &mut xml);
+    Ok(xml)
+  }
+
+  /// Collects known names, embedded STRF/STRS strings and caller-provided names.
+  pub fn names(
+    &self,
+    shared_names: &HashMap<u32, String>,
+  ) -> HashMap<u32, String> {
     let mut names = known_hash_names();
     for (tag, data) in &self.sections {
       if matches!(tag, b"STRF" | b"STRS") {
@@ -19,15 +36,7 @@ impl PsoResource {
       }
     }
     names.extend(shared_names.iter().map(|(hash, name)| (*hash, name.clone())));
-    let block = &self.blocks[self.root - 1];
-    let mut root = XmlElement {
-      name: resolve(block.name, &names),
-      ..XmlElement::default()
-    };
-    self.read_node(self.root, 0, block.name, &names, &mut root, 0)?;
-    let mut xml = String::from("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
-    render(&root, 0, &mut xml);
-    Ok(xml)
+    names
   }
 
   pub(super) fn read_node(
@@ -204,16 +213,13 @@ impl PsoResource {
     Err(invalid("unsupported PSO string subtype"))
   }
 
-  pub(super) fn read_array(
+  /// Resolves an array field's element schema, data block, data offset and element count.
+  pub(super) fn array_layout<'s>(
     &self,
     field: &Field,
-    schema: &Schema,
-    location: (usize, usize),
-    names: &HashMap<u32, String>,
-    node: &mut XmlElement,
-    depth: usize,
-  ) -> io::Result<()> {
-    let (block, offset) = location;
+    schema: &'s Schema,
+    (block, offset): (usize, usize),
+  ) -> io::Result<(&'s Field, usize, usize, usize)> {
     let address = self.address(block, offset, schema.size)? + field.offset;
     let mut index = (field.reference & 0xffff) as usize;
     if index >= schema.fields.len() {
@@ -229,6 +235,19 @@ impl PsoResource {
       1 | 2 | 129 => (block, offset + field.offset, (field.reference >> 16) as usize),
       _ => return Err(invalid("unsupported PSO array subtype")),
     };
+    Ok((item, target, position, count))
+  }
+
+  pub(super) fn read_array(
+    &self,
+    field: &Field,
+    schema: &Schema,
+    location: (usize, usize),
+    names: &HashMap<u32, String>,
+    node: &mut XmlElement,
+    depth: usize,
+  ) -> io::Result<()> {
+    let (item, target, position, count) = self.array_layout(field, schema, location)?;
     if item.kind == 12 {
       if count == 0 || item.subtype == 0 {
         node.attributes.insert("itemType".into(), resolve(item.reference, names));

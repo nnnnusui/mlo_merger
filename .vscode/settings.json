@@ -1,2 +1,5 @@
 {
+  // rust-analyzer panics ("invalid offset") while building the Implementations hover link
+  // for types using structdiff's `#[difference(expose)]`; re-enable once those derives are gone.
+  "rust-analyzer.hover.actions.implementations.enable": false
 }
