@@ -1,15 +1,31 @@
 use super::*;
 
-pub(super) fn children_by_parent_hash(
+/// Groups child YMAP names under their parent's file name, e.g. `parent.ymap`.
+///
+/// Parents are resolved by hashing every YMAP name in `parent_by_child`; a parent hash that
+/// matches none of them is kept as `hash_XXXXXXXX`.
+pub(super) fn children_by_parent(
   parent_by_child: &BTreeMap<String, u32>
-) -> BTreeMap<String, Vec<String>> {
+) -> Result<BTreeMap<String, Vec<String>>> {
+  let mut names = BTreeMap::new();
+  for name in parent_by_child.keys() {
+    let hash = reference_hash(name.strip_suffix(".ymap").unwrap_or(name));
+    if let Some(previous) = names.insert(hash, name)
+      && previous != name
+    {
+      return Err(format!("YMAP names {previous} and {name} share hash {hash:08x}").into());
+    }
+  }
   let mut children = BTreeMap::new();
   for (child, parent_hash) in parent_by_child {
     if *parent_hash != 0 {
-      children.entry(format!("{parent_hash:08x}")).or_insert_with(Vec::new).push(child.clone());
+      let parent = names
+        .get(parent_hash)
+        .map_or_else(|| format!("hash_{parent_hash:08X}"), |name| (*name).clone());
+      children.entry(parent).or_insert_with(Vec::new).push(child.clone());
     }
   }
-  children
+  Ok(children)
 }
 
 pub(crate) fn ymap_parent_hash(path: &Path) -> Result<u32> {
@@ -77,13 +93,20 @@ mod tests {
   #[test]
   fn relationship_index_groups_children_by_parent_and_omits_root_maps() {
     let parent_hash = reference_hash("hei_ch1_lod");
-    let children = children_by_parent_hash(&BTreeMap::from([
+    let children = children_by_parent(&BTreeMap::from([
       ("hei_ch1_11.ymap".into(), parent_hash),
+      ("hei_ch1_lod.ymap".into(), 0),
       ("root.ymap".into(), 0),
       ("second_child.ymap".into(), parent_hash),
-    ]));
-    assert_eq!(children[&format!("{parent_hash:08x}")], ["hei_ch1_11.ymap", "second_child.ymap"]);
-    assert_eq!(children.len(), 1);
+      ("orphan.ymap".into(), reference_hash("missing_parent")),
+    ]))
+    .unwrap();
+    assert_eq!(children["hei_ch1_lod.ymap"], ["hei_ch1_11.ymap", "second_child.ymap"]);
+    assert_eq!(
+      children[&format!("hash_{:08X}", reference_hash("missing_parent"))],
+      ["orphan.ymap"]
+    );
+    assert_eq!(children.len(), 2);
   }
   #[test]
   fn reads_parent_hash_directly_from_rsc7_meta_root() {

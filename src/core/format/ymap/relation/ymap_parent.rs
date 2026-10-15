@@ -1,19 +1,13 @@
 use serde::{Deserialize, Serialize};
 
-/// Identifies the origin that owns a referenced parent YMAP.
-#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq, Hash)]
-pub enum YmapParentSource {
-  /// A cumulative vanilla cache version ID.
-  Vanilla(String),
-  /// A source resource ID.
-  ResourceName(String),
-}
-
 /// Identifies one parent YMAP within a vanilla version or source resource.
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq, Hash)]
 #[serde(rename_all = "camelCase")]
 pub struct YmapParent {
-  pub source: YmapParentSource,
+  /// The source resource ID owning the parent, when it comes from a resource.
+  pub resource_name: Option<String>,
+  /// The cumulative vanilla cache version ID.
+  pub vanilla_version: String,
   pub ymap_name: String,
 }
 
@@ -22,27 +16,31 @@ mod tests {
   use super::*;
 
   #[test]
-  fn serializes_the_selected_parent_source_and_camel_case_map_name() {
+  fn serializes_parent_origin_and_map_name_in_camel_case() {
     let vanilla = YmapParent {
-      source: YmapParentSource::Vanilla("0001-update".into()),
+      resource_name: None,
+      vanilla_version: "mp2026_01".into(),
       ymap_name: "parent.ymap".into(),
     };
     assert_eq!(
       serde_json::to_value(vanilla).unwrap(),
       serde_json::json!({
-        "source": {"Vanilla": "0001-update"},
+        "resourceName": null,
+        "vanillaVersion": "mp2026_01",
         "ymapName": "parent.ymap"
       })
     );
 
     let resource = YmapParent {
-      source: YmapParentSource::ResourceName("[gabz]/resource".into()),
+      resource_name: Some("resource".into()),
+      vanilla_version: "mp2026_01".into(),
       ymap_name: "parent.ymap".into(),
     };
     assert_eq!(
       serde_json::to_value(resource).unwrap(),
       serde_json::json!({
-        "source": {"ResourceName": "[gabz]/resource"},
+        "resourceName": "resource",
+        "vanillaVersion": "mp2026_01",
         "ymapName": "parent.ymap"
       })
     );

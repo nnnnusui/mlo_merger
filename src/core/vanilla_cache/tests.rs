@@ -67,7 +67,7 @@ fn builds_latest_files_through_selected_stage_and_reuses_valid_output() {
     serde_json::from_reader(fs::File::open(output.join("ymap_relationships.json")).unwrap())
       .unwrap();
   assert_eq!(relationships.version, "0000-base");
-  assert!(relationships.children_by_parent_hash.is_empty());
+  assert!(relationships.children_by_parent.is_empty());
   let latest_link = output.join("latest/ybn/map.ybn");
   assert!(fs::symlink_metadata(&latest_link).unwrap().file_type().is_symlink());
   let target = fs::read_link(&latest_link).unwrap();

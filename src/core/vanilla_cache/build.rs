@@ -100,7 +100,7 @@ impl BuildVanillaCache {
         format_version: CACHE_SCHEMA,
         vanilla_manifest_sha256: revision.to_owned(),
         version: latest_version.to_owned(),
-        children_by_parent_hash: children_by_parent_hash(&parent_by_child),
+        children_by_parent: children_by_parent(&parent_by_child)?,
       },
     )?;
     Ok(())

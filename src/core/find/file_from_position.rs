@@ -412,7 +412,7 @@ fn collect_vanilla_candidates(
     return Ok(());
   }
   let index: VanillaCacheIndex = serde_json::from_reader(std::fs::File::open(manifest_path)?)?;
-  if index.format_version != 2 {
+  if index.format_version != crate::core::vanilla_cache::CACHE_SCHEMA {
     return Err(format!("Unsupported vanilla-cache schema {}", index.format_version).into());
   }
   for (name, file) in index.files {
@@ -579,7 +579,7 @@ mod tests {
     fs::write(
       vanilla_cache.join("cache_info.json"),
       serde_json::to_vec(&serde_json::json!({
-        "format_version": 2,
+        "format_version": crate::core::vanilla_cache::CACHE_SCHEMA,
         "latest_version": "0029-mpapartment",
         "files": {
           "vanilla.ymap": {

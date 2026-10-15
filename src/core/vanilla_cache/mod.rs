@@ -20,7 +20,7 @@ use serde::{Deserialize, Serialize};
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
-const CACHE_SCHEMA: u32 = 2;
+pub(crate) const CACHE_SCHEMA: u32 = 3;
 
 /// Outcome of building or reusing a derived vanilla cache.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -95,7 +95,8 @@ pub(crate) struct YmapRelationshipIndex {
   pub(crate) format_version: u32,
   pub(crate) vanilla_manifest_sha256: String,
   pub(crate) version: String,
-  pub(crate) children_by_parent_hash: BTreeMap<String, Vec<String>>,
+  /// Child YMAP names keyed by their parent's file name (`hash_XXXXXXXX` when unresolved).
+  pub(crate) children_by_parent: BTreeMap<String, Vec<String>>,
 }
 
 mod build;
@@ -108,7 +109,7 @@ mod source;
 use filesystem::*;
 use freshness::cache_is_current;
 pub(crate) use read::{DerivedVanillaFile, LoadedCache, load_cache};
-use relationships::children_by_parent_hash;
+use relationships::children_by_parent;
 pub(crate) use relationships::ymap_parent_hash;
 use source::*;
 

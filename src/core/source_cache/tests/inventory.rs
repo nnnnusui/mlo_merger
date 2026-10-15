@@ -145,7 +145,7 @@ fn builds_source_inventory_and_skips_unchanged_inputs_without_diffing() {
   let mut relationships: serde_json::Value =
     serde_json::from_reader(fs::File::open(derived.join("ymap_relationships.json")).unwrap())
       .unwrap();
-  relationships["children_by_parent_hash"] = serde_json::json!({"00000001": ["child.ymap"]});
+  relationships["children_by_parent"] = serde_json::json!({"parent.ymap": ["child.ymap"]});
   write_json(&derived.join("ymap_relationships.json"), &relationships).unwrap();
   assert!(build().run().unwrap());
   fs::remove_dir_all(root).unwrap();

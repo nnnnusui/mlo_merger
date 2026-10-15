@@ -217,8 +217,8 @@ fn parent_change_lists_vanilla_closure_and_source_children_in_other_resources() 
     format_version: 2,
     vanilla_manifest_sha256: "revision".into(),
     version: "latest".into(),
-    children_by_parent_hash: BTreeMap::from([(
-      format!("{parent_hash:08x}"),
+    children_by_parent: BTreeMap::from([(
+      parent_name.into(),
       vec![child_name.into(), "vanilla_only_child.ymap".into()],
     )]),
   };

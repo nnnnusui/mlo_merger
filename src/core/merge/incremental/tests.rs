@@ -15,7 +15,7 @@ fn ybn_version_change_reuses_current_ymap_groups() {
   write_json(
     &vanilla.join("ymap_relationships.json"),
     &serde_json::json!({
-      "children_by_parent_hash": {}
+      "children_by_parent": {}
     }),
   )
   .unwrap();

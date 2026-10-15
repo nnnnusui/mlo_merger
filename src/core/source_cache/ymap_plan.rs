@@ -64,15 +64,9 @@ pub(super) fn vanilla_ymaps_to_read(
   for parent in changed_source_parents {
     let parent_name = parent.file_name.to_ascii_lowercase();
     if vanilla_files.contains_key(&parent_name) {
-      vanilla_ymaps_to_read.insert(parent_name);
+      vanilla_ymaps_to_read.insert(parent_name.clone());
     }
-    let parent_hash =
-      reference_hash(parent.file_name.strip_suffix(".ymap").unwrap_or(&parent.file_name));
-    if parent_hash == 0 {
-      continue;
-    }
-    if let Some(children) = relationships.children_by_parent_hash.get(&format!("{parent_hash:08x}"))
-    {
+    if let Some(children) = relationships.children_by_parent.get(&parent_name) {
       vanilla_ymaps_to_read.extend(children.iter().map(|name| name.to_ascii_lowercase()));
     }
   }

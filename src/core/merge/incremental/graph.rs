@@ -7,7 +7,7 @@ pub(super) struct Group {
 
 #[derive(Deserialize)]
 struct Relationships {
-  children_by_parent_hash: BTreeMap<String, Vec<String>>,
+  children_by_parent: BTreeMap<String, Vec<String>>,
 }
 
 #[derive(Deserialize)]
@@ -44,13 +44,10 @@ impl IncrementalMerge<'_> {
     let relationships: Relationships = serde_json::from_reader(BufReader::new(fs::File::open(
       self.vanilla_cache.join("ymap_relationships.json"),
     )?))?;
-    for (parent_hash, children) in relationships.children_by_parent_hash {
-      if let Ok(hash) = u32::from_str_radix(&parent_hash, 16)
-        && let Some(parent) = hashes.get(&hash)
-      {
-        for child in children {
-          connect(&mut graph, parent, &child.to_ascii_lowercase());
-        }
+    for (parent, children) in relationships.children_by_parent {
+      let parent = parent.to_ascii_lowercase();
+      for child in children {
+        connect(&mut graph, &parent, &child.to_ascii_lowercase());
       }
     }
     let metadata: SourceParents = serde_json::from_reader(BufReader::new(fs::File::open(
