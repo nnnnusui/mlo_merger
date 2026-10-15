@@ -59,7 +59,7 @@ fn sample_parent_relink_survives_native_and_codewalker_rebuild() {
     let xml_path = output.join(format!("{name}.ymap.xml"));
     let xml = std::fs::read_to_string(&xml_path).unwrap();
     let source: XmlYmap = quick_xml::de::from_str(&xml).unwrap();
-    let native = xml_to_resource(NativeResourceFormat::Ymap, &xml, &catalog).unwrap();
+    let native = StreamFile::encode_xml(FileType::Ymap, &xml, &catalog).unwrap();
     let native_path = reports.join(format!("{name}.native.ymap"));
     let dll_path = reports.join(format!("{name}.dll.ymap"));
     std::fs::write(&native_path, native).unwrap();
@@ -138,12 +138,9 @@ fn native_meta_rebuild_is_readable_by_codewalker() {
   let source: XmlYmap =
     quick_xml::de::from_str(&std::fs::read_to_string(&sample).unwrap()).unwrap();
   let catalog = local_ymap_schema_catalog(base);
-  let bytes = xml_to_resource(
-    NativeResourceFormat::Ymap,
-    &std::fs::read_to_string(&sample).unwrap(),
-    &catalog,
-  )
-  .unwrap();
+  let bytes =
+    StreamFile::encode_xml(FileType::Ymap, &std::fs::read_to_string(&sample).unwrap(), &catalog)
+      .unwrap();
   let resource = Rsc7Resource::decode(&bytes).unwrap();
   let meta = MetaResource::parse(&resource).unwrap();
   let rebuilt_resource = meta.to_rsc7(resource.version).unwrap();
@@ -171,12 +168,9 @@ fn native_xml_rebuild_is_readable_by_codewalker() {
   let expected: XmlYmap =
     quick_xml::de::from_str(&std::fs::read_to_string(&input).unwrap()).unwrap();
   let catalog = local_ymap_schema_catalog(base);
-  let bytes = xml_to_resource(
-    NativeResourceFormat::Ymap,
-    &std::fs::read_to_string(&input).unwrap(),
-    &catalog,
-  )
-  .unwrap();
+  let bytes =
+    StreamFile::encode_xml(FileType::Ymap, &std::fs::read_to_string(&input).unwrap(), &catalog)
+      .unwrap();
   let rebuilt_binary_path = temp_dir.join("rebuilt.ymap");
   let rebuilt_xml_path = temp_dir.join("rebuilt.ymap.xml");
   std::fs::write(&rebuilt_binary_path, bytes).unwrap();
@@ -196,7 +190,8 @@ fn native_xml_to_ymap_rebuilds_full_extracted_xml_corpus() {
   let output_dir = std::env::temp_dir().join("mlo_merger_native_xml_corpus");
   std::fs::create_dir_all(&output_dir).unwrap();
 
-  let (_, failed) = convert_files_from_xml(&input_dir, &output_dir, Some(&schema_dir)).unwrap();
+  let (_, failed) =
+    mlo_merger::core::conversion::from_xml(&input_dir, &output_dir, Some(&schema_dir)).unwrap();
   assert_eq!(failed, 0);
 
   let inputs = std::fs::read_dir(input_dir)
@@ -228,8 +223,12 @@ fn native_xml_to_ymap_matches_codewalker_corpus() {
   let roundtrip_dir = output_dir.join("codewalker-xml");
   std::fs::create_dir_all(&roundtrip_dir).unwrap();
 
-  let (_, failed) =
-    convert_files_from_xml(&input_dir, &output_dir.join("native-ymap"), Some(&schema_dir)).unwrap();
+  let (_, failed) = mlo_merger::core::conversion::from_xml(
+    &input_dir,
+    &output_dir.join("native-ymap"),
+    Some(&schema_dir),
+  )
+  .unwrap();
   assert_eq!(failed, 0);
 
   let binary_inputs = std::fs::read_dir(&schema_dir)
@@ -307,7 +306,7 @@ fn native_ymap_xml_matches_codewalker() {
   let bytes = std::fs::read(binary_path).unwrap();
   let resource = Rsc7Resource::decode(&bytes).unwrap();
   let hash_names = MetaResource::parse(&resource).unwrap().hash_names();
-  let native = ymap_to_xml(&bytes, &hash_names).unwrap();
+  let native = StreamFile::decode_to_xml(FileType::Ymap, &bytes, &hash_names).unwrap();
   let expected: XmlYmap =
     quick_xml::de::from_str(&std::fs::read_to_string(codewalker_xml_path).unwrap()).unwrap();
   let actual: XmlYmap = quick_xml::de::from_str(&native).unwrap();
@@ -356,7 +355,7 @@ fn native_ymap_xml_matches_codewalker_corpus() {
   let mut codewalker_errors = 0usize;
   for (input, reference_path) in &references {
     let bytes = std::fs::read(input).unwrap();
-    let native = ymap_to_xml(&bytes, &shared_names)
+    let native = StreamFile::decode_to_xml(FileType::Ymap, &bytes, &shared_names)
       .unwrap_or_else(|error| panic!("native conversion failed for {}: {error}", input.display()));
     let expected = std::fs::read_to_string(reference_path).unwrap();
     if expected.contains("<error>") {

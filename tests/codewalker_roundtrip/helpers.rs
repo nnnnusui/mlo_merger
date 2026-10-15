@@ -46,7 +46,7 @@ pub(super) fn assert_sample_entity_refs(
 
 pub(super) fn compare_resource_with_codewalker(
   codewalker: &CodeWalker,
-  format: NativeResourceFormat,
+  format: FileType,
   input: &Path,
   name: &str,
   temp_dir: &Path,
@@ -57,12 +57,12 @@ pub(super) fn compare_resource_with_codewalker(
     std::fs::read_to_string(&reference_xml_path).map_err(|error| error.to_string())?;
   let bytes = std::fs::read(input).map_err(|error| error.to_string())?;
   let mut catalog = MetaSchemaCatalog::default();
-  if matches!(format, NativeResourceFormat::YmtRsc | NativeResourceFormat::Ytyp) {
+  if matches!(format, FileType::Ymt | FileType::Ytyp) {
     let resource = Rsc7Resource::decode(&bytes).map_err(|error| error.to_string())?;
     catalog.add_resource(&MetaResource::parse(&resource).map_err(|error| error.to_string())?);
   }
-  let native_xml =
-    resource_to_xml(format, &bytes, &catalog.hash_names).map_err(|error| error.to_string())?;
+  let native_xml = StreamFile::decode_to_xml(format, &bytes, &catalog.hash_names)
+    .map_err(|error| error.to_string())?;
   assert_canonical_xml_eq(
     &native_xml,
     &expected_xml,
@@ -71,7 +71,7 @@ pub(super) fn compare_resource_with_codewalker(
 
   let mut rebuilt_reference_xml = expected_xml.clone();
   let codewalker_binary_path =
-    (format == NativeResourceFormat::Ybn).then(|| temp_dir.join(format!("{name}.codewalker.ybn")));
+    (format == FileType::Ybn).then(|| temp_dir.join(format!("{name}.codewalker.ybn")));
   if let Some(codewalker_binary_path) = &codewalker_binary_path {
     codewalker
       .game_file_from_xml(&reference_xml_path, codewalker_binary_path)
@@ -85,7 +85,7 @@ pub(super) fn compare_resource_with_codewalker(
   }
 
   let native_binary =
-    xml_to_resource(format, &native_xml, &catalog).map_err(|error| error.to_string())?;
+    StreamFile::encode_xml(format, &native_xml, &catalog).map_err(|error| error.to_string())?;
   if let Some(codewalker_binary_path) = &codewalker_binary_path {
     let codewalker_binary =
       std::fs::read(codewalker_binary_path).map_err(|error| error.to_string())?;

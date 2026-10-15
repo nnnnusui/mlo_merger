@@ -1,28 +1,28 @@
 use super::*;
 
-/// Serializes a parsed META resource to the schema-driven XML representation.
-pub fn meta_to_xml(
-  meta: &MetaResource,
-  shared_hash_names: &HashMap<u32, String>,
-) -> io::Result<String> {
-  if meta.root_block_index <= 0 {
-    return Err(invalid_data("META resource has no root data block"));
-  }
-  let root_index = meta.root_block_index as usize - 1;
-  let root_block = meta
-    .data_blocks
-    .get(root_index)
-    .ok_or_else(|| invalid_data("META root data block is missing"))?;
-  let mut names = known_hash_names();
-  names.extend(meta.hash_names());
-  names.extend(shared_hash_names.iter().map(|(hash, name)| (*hash, name.clone())));
+impl MetaResource {
+  /// Serializes this META resource to the schema-driven XML representation.
+  pub fn to_xml(
+    &self,
+    shared_hash_names: &HashMap<u32, String>,
+  ) -> io::Result<String> {
+    if self.root_block_index <= 0 {
+      return Err(invalid_data("META resource has no root data block"));
+    }
+    let root_index = self.root_block_index as usize - 1;
+    let root_block = self
+      .data_blocks
+      .get(root_index)
+      .ok_or_else(|| invalid_data("META root data block is missing"))?;
+    let names = self.names(shared_hash_names);
 
-  let mut output = String::from("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
-  let root_name = resolve_name(root_block.structure_name_hash, &names);
-  write_open_tag(&mut output, 0, &root_name, meta.name.as_deref().map(|name| ("name", name)));
-  write_structure(meta, root_index, 0, root_block.structure_name_hash, &names, 1, &mut output)?;
-  write_close_tag(&mut output, 0, &root_name);
-  Ok(output)
+    let mut output = String::from("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
+    let root_name = resolve_name(root_block.structure_name_hash, &names);
+    write_open_tag(&mut output, 0, &root_name, self.name.as_deref().map(|name| ("name", name)));
+    write_structure(self, root_index, 0, root_block.structure_name_hash, &names, 1, &mut output)?;
+    write_close_tag(&mut output, 0, &root_name);
+    Ok(output)
+  }
 }
 
 fn write_structure(

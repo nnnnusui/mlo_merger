@@ -1,7 +1,7 @@
 use super::{
   FindEntity, Input, MergeCache, Result, aabb_intersects_radius, read_stream, search_inputs,
 };
-use crate::core::format::{stream_file::StreamFileModel, ymap::model::Ymap};
+use crate::core::format::{stream_file::StreamFile, ymap::model::Ymap};
 #[cfg(not(test))]
 use indicatif::ProgressDrawTarget;
 use indicatif::{ProgressBar, ProgressStyle};
@@ -514,8 +514,8 @@ pub(super) struct SpatialBounds {
 
 pub(super) fn spatial_bounds(candidate: &Candidate) -> Result<Option<SpatialBounds>> {
   let bounds = match read_stream(&candidate.path, candidate.stage)? {
-    StreamFileModel::Ymap(model) => Some(ymap_extents(&model)),
-    StreamFileModel::Ybn(root) => super::ybn::world_bounds(&root)?,
+    StreamFile::Ymap(model) => Some(ymap_extents(&model)),
+    StreamFile::Ybn(root) => super::ybn::world_bounds(&root)?,
   };
   Ok(bounds.map(|(minimum, maximum)| SpatialBounds {
     minimum,

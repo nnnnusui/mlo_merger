@@ -1,12 +1,10 @@
 use std::collections::HashMap;
 
-use super::meta_to_xml;
 use crate::core::format::gamefile::{
   meta::{MetaDataBlock, MetaResource, MetaStructureEntry, MetaStructureInfo},
   rsc7::Rsc7Resource,
   test_support::{sample_ymap_binary, sample_ymap_xml},
 };
-use crate::core::format::ymap::binary::ymap_to_xml;
 
 #[test]
 fn decodes_ymap_binary_directly_into_the_typed_model() {
@@ -87,7 +85,10 @@ fn decodes_ymap_binary_directly_into_the_typed_model() {
   assert_eq!(model.content_flags, 11);
   assert!(model.entities.is_empty());
   assert_eq!(model.block.name, "");
-  let xml = ymap_to_xml(&bytes, &HashMap::new()).unwrap();
+  let xml = MetaResource::parse(&Rsc7Resource::decode(&bytes).unwrap())
+    .unwrap()
+    .to_xml(&HashMap::new())
+    .unwrap();
   let xml_model: crate::core::format::ymap::model::Ymap =
     quick_xml::de::from_str::<crate::core::format::ymap::xml::XmlYmap>(&xml).unwrap().into();
   assert_eq!(model, xml_model);
@@ -97,7 +98,10 @@ fn decodes_ymap_binary_directly_into_the_typed_model() {
 fn serializes_sample_occlusion_ymap_using_embedded_schema() {
   let xml = sample_ymap_xml("occlusion/occlusion.ymap.xml");
   let bytes = sample_ymap_binary(&xml);
-  let xml = ymap_to_xml(&bytes, &HashMap::new()).unwrap();
+  let xml = MetaResource::parse(&Rsc7Resource::decode(&bytes).unwrap())
+    .unwrap()
+    .to_xml(&HashMap::new())
+    .unwrap();
 
   assert!(xml.starts_with("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<CMapData>"));
   assert!(xml.contains("<boxOccluders itemType=\"BoxOccluder\">"));
@@ -138,7 +142,7 @@ fn serializes_ytyp_rsc_meta_using_the_shared_meta_writer() {
   let resource = Rsc7Resource::decode(&bytes).unwrap();
   let meta = MetaResource::parse(&resource).unwrap();
   let names = HashMap::from([(name_hash, "fixture_types".to_string())]);
-  let xml = meta_to_xml(&meta, &names).unwrap();
+  let xml = meta.to_xml(&names).unwrap();
 
   assert!(xml.starts_with("<?xml version=\"1.0\" encoding=\"UTF-8\"?>"));
   assert!(xml.contains("<CMapTypes"));

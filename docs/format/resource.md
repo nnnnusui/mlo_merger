@@ -36,10 +36,11 @@ flowchart TD
 | `meta::xml` | 汎用 META の値表現と CodeWalker XML の相互変換 | YMAP モデルへの変換、光源編集用の検証 |
 | `pso` | section・mapping・schema の解釈、XML 表現、template 更新 | RSC7 の展開、META の参照解決 |
 | `format/ymap` 等 | 配置・光源・衝突等の型付きモデルへの変換と検証 | ファイル探索やバッチ処理 |
-| `resource_convert` | 拡張子による adapter 選択、XML / binary 変換、バッチ処理 | 保存形式固有の低レベル処理 |
+| `stream_file` | 拡張子による種別（`FileType`）判定、1ファイル単位の型付きモデル・XML・binary 変換 | 保存形式固有の低レベル処理、バッチ処理 |
+| `core::conversion` | ファイル・ディレクトリ単位のバッチ変換、schema の収集 | 1ファイルの変換処理 |
 
 `resource` は入力 bytes の `RSC7` / `PSIN` を確認します。
-一方、拡張子は `resource_convert` 等が YMAP・YTYP・YBN・YND の adapter を選ぶために使います。
+一方、拡張子は `stream_file` の `FileType` が YMAP・YTYP・YMT・YBN・YND の adapter を選ぶために使います。
 拡張子だけでは保存形式を判定できません。
 RSC7 専用と分かっている YBN / YND の reader は、共通の形式判定を省いて RSC7 codec を直接利用します。
 
@@ -101,8 +102,8 @@ RBF 等の未対応バイナリは、別形式として明示的に拒否しま�
 | META のモデル | [meta/model.rs](../../src/core/format/gamefile/meta/model.rs) |
 | RSC7 領域と META の相互変換 | [meta/read.rs](../../src/core/format/gamefile/meta/read.rs)、[meta/write.rs](../../src/core/format/gamefile/meta/write.rs) |
 | META と XML の相互変換 | [meta/xml/read.rs](../../src/core/format/gamefile/meta/xml/read.rs)、[meta/xml/write.rs](../../src/core/format/gamefile/meta/xml/write.rs) |
-| META の値表現 | [meta/xml/value.rs](../../src/core/format/gamefile/meta/xml/value.rs) |
-| YMAP モデルへの変換 | [ymap/binary/read.rs](../../src/core/format/ymap/binary/read.rs) |
-| 光源編集用の配列検証 | [ymap/binary/light_validation.rs](../../src/core/format/ymap/binary/light_validation.rs) |
+| schema 経由のフィールド読み取り | [struct_reader.rs](../../src/core/format/gamefile/struct_reader.rs)、[meta/xml/access.rs](../../src/core/format/gamefile/meta/xml/access.rs)、[pso/access.rs](../../src/core/format/gamefile/pso/access.rs) |
+| YMAP モデルへの変換 | [ymap/binary/read.rs](../../src/core/format/ymap/binary/read.rs)、[ymap/binary/decode.rs](../../src/core/format/ymap/binary/decode.rs) |
 | PSO codec | [pso/mod.rs](../../src/core/format/gamefile/pso/mod.rs) |
-| 変換 adapter とバッチ処理 | [resource_convert/mod.rs](../../src/core/format/gamefile/resource_convert/mod.rs) |
+| 種別判定と1ファイルの変換 | [stream_file.rs](../../src/core/format/stream_file.rs) |
+| バッチ変換 | [conversion/mod.rs](../../src/core/conversion/mod.rs) |

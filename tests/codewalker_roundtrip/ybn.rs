@@ -7,9 +7,9 @@ fn codewalker_accepts_native_ybn_xml_with_vertex_quantum() {
   let source =
     std::fs::read_to_string(base.join("docs/sample/ybn_conflicts/geometry_bvh.ybn.xml")).unwrap();
   let native =
-    xml_to_resource(NativeResourceFormat::Ybn, &source, &MetaSchemaCatalog::default()).unwrap();
+    StreamFile::encode_xml(FileType::Ybn, &source, &MetaSchemaCatalog::default()).unwrap();
   let xml =
-    resource_to_xml(NativeResourceFormat::Ybn, &native, &std::collections::HashMap::new()).unwrap();
+    StreamFile::decode_to_xml(FileType::Ybn, &native, &std::collections::HashMap::new()).unwrap();
   assert!(xml.contains("<VertexQuantum "));
   let directory =
     std::env::temp_dir().join(format!("ybn_quantum_codewalker_{}", std::process::id()));
@@ -52,10 +52,8 @@ fn sample_ybn_conflicts_merge_vanilla_deltas_and_omit_source_files() {
   }
   let baseline_xml = std::fs::read_to_string(samples.join("resource_a.ybn.xml")).unwrap();
   let changed_xml = std::fs::read_to_string(samples.join("resource_b.ybn.xml")).unwrap();
-  let baseline =
-    xml_to_resource(NativeResourceFormat::Ybn, &baseline_xml, &Default::default()).unwrap();
-  let changed =
-    xml_to_resource(NativeResourceFormat::Ybn, &changed_xml, &Default::default()).unwrap();
+  let baseline = StreamFile::encode_xml(FileType::Ybn, &baseline_xml, &Default::default()).unwrap();
+  let changed = StreamFile::encode_xml(FileType::Ybn, &changed_xml, &Default::default()).unwrap();
   std::fs::write(vanilla.join("sc1_18_0.ybn"), &baseline).unwrap();
   std::fs::write(resource_a.join("sc1_18_0.ybn"), &baseline).unwrap();
   std::fs::write(resource_b.join("sc1_18_0.ybn"), &changed).unwrap();
@@ -147,7 +145,7 @@ fn native_ybn_matches_codewalker_active_source_corpus() {
   for (index, input) in input_paths.iter().enumerate() {
     let result = compare_resource_with_codewalker(
       &codewalker,
-      NativeResourceFormat::Ybn,
+      FileType::Ybn,
       input,
       &format!("ybn_{index}.ybn"),
       &temp_dir,

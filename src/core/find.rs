@@ -12,7 +12,7 @@ fn bounds_filter_uses_inclusive_sphere_aabb_intersection() {
 }
 
 use crate::core::format::{
-  stream_file::{StreamFileModel, read_stream_file},
+  stream_file::StreamFile,
   ymap::{
     binary::ymap_to_model,
     model::{Ymap, YmapEntity},
@@ -493,8 +493,8 @@ fn read_entities(
 fn read_stream(
   path: &Path,
   stage: &str,
-) -> Result<StreamFileModel> {
-  read_stream_file(path)
+) -> Result<StreamFile> {
+  StreamFile::read(path, &HashMap::new())
     .map_err(|error| format!("Cannot read {stage} resource {}: {error}", path.display()).into())
 }
 
@@ -503,7 +503,7 @@ fn read_ymap(
   stage: &str,
 ) -> Result<Ymap> {
   match read_stream(path, stage)? {
-    StreamFileModel::Ymap(model) => Ok(model),
+    StreamFile::Ymap(model) => Ok(model),
     _ => Err(format!("{stage} resource is not a YMAP: {}", path.display()).into()),
   }
 }

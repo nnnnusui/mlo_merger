@@ -1,10 +1,13 @@
-use std::path::{Path, PathBuf};
+use std::{
+  collections::HashMap,
+  path::{Path, PathBuf},
+};
 
 use walkdir::WalkDir;
 
-use crate::core::format::stream_file::{FileType, read_stream_file};
+use crate::core::format::stream_file::{FileType, StreamFile};
 
-/// Collects every supported stream file below `asset/<directory>`, following symlinks.
+/// Collects every YMAP and YBN file below `asset/<directory>`, following symlinks.
 fn stream_files(directory: &str) -> Vec<PathBuf> {
   let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("asset").join(directory);
   assert!(root.is_dir(), "missing {}", root.display());
@@ -12,7 +15,9 @@ fn stream_files(directory: &str) -> Vec<PathBuf> {
     .follow_links(true)
     .into_iter()
     .map(|entry| entry.unwrap().into_path())
-    .filter(|path| path.is_file() && FileType::from_path(path).is_some())
+    .filter(|path| {
+      path.is_file() && matches!(FileType::from_path(path), Ok(FileType::Ymap | FileType::Ybn))
+    })
     .collect::<Vec<_>>();
   paths.sort();
   paths
@@ -32,7 +37,9 @@ fn assert_all_readable(directory: &str) {
           paths
             .iter()
             .filter_map(|path| {
-              read_stream_file(path).err().map(|error| format!("{}: {error}", path.display()))
+              StreamFile::read(path, &HashMap::new())
+                .err()
+                .map(|error| format!("{}: {error}", path.display()))
             })
             .collect::<Vec<_>>()
         })

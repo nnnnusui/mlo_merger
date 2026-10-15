@@ -6,11 +6,11 @@ use std::{
   time::{Duration, Instant},
 };
 
+use mlo_merger::core::format::stream_file::{FileType, StreamFile};
 use mlo_merger::core::{
   codewalker::CodeWalker,
   format::gamefile::{
     meta::{MetaResource, MetaSchemaCatalog},
-    resource_convert::{NativeResourceFormat, resource_to_xml, xml_to_resource},
     rsc7::Rsc7Resource,
   },
 };
@@ -205,12 +205,10 @@ fn compare_case(
 ) -> Result<(), String> {
   let input = base.join("asset/sample").join(request.extension).join(request.file);
   let source = fs::read(&input).map_err(|error| error.to_string())?;
-  let format = NativeResourceFormat::from_path(&input).map_err(|error| error.to_string())?;
+  let format = FileType::from_path(&input).map_err(|error| error.to_string())?;
   let mut catalog = MetaSchemaCatalog::default();
-  if matches!(
-    format,
-    NativeResourceFormat::Ymap | NativeResourceFormat::Ytyp | NativeResourceFormat::YmtRsc
-  ) && let Ok(resource) = Rsc7Resource::decode(&source)
+  if matches!(format, FileType::Ymap | FileType::Ytyp | FileType::Ymt)
+    && let Ok(resource) = Rsc7Resource::decode(&source)
     && let Ok(meta) = MetaResource::parse(&resource)
   {
     catalog.add_resource(&meta);
@@ -224,7 +222,7 @@ fn compare_case(
     );
   }
   if !request.rebuild {
-    let native = resource_to_xml(format, &source, &catalog.hash_names)
+    let native = StreamFile::decode_to_xml(format, &source, &catalog.hash_names)
       .map_err(|error| format!("Native to-xml: {error}"))?;
     return assert_canonical_xml_eq(
       &native,
@@ -233,7 +231,7 @@ fn compare_case(
     );
   }
 
-  let native = xml_to_resource(format, &reference, &catalog)
+  let native = StreamFile::encode_xml(format, &reference, &catalog)
     .map_err(|error| format!("Native from-xml: {error}"))?;
   report.native_binary_identical_to_source = Some(native == source);
   let native_path = temporary.join(request.file);
@@ -246,7 +244,7 @@ fn compare_case(
 
   let reference_binary_path = temporary.join("codewalker").join(request.file);
   fs::create_dir_all(reference_binary_path.parent().unwrap()).map_err(|error| error.to_string())?;
-  if format == NativeResourceFormat::Ymap {
+  if format == FileType::Ymap {
     codewalker.xml_to_ymap(&reference_path, &reference_binary_path)
   } else {
     codewalker.game_file_from_xml(&reference_path, &reference_binary_path)
@@ -263,7 +261,7 @@ fn compare_case(
   if native_xml.contains("<error") || rebuilt_reference.contains("<error") {
     return Err("rebuilt binary exports an error node".into());
   }
-  if format == NativeResourceFormat::Ybn {
+  if format == FileType::Ybn {
     let native_quantums = ybn_resource_quantums(&native)?;
     let reference_quantums = ybn_resource_quantums(&reference_binary)?;
     assert_ybn_xml_eq(
@@ -280,11 +278,11 @@ fn compare_case(
 
 fn export(
   codewalker: &CodeWalker,
-  format: NativeResourceFormat,
+  format: FileType,
   input: &Path,
   output: &Path,
 ) -> Result<(), String> {
-  if format == NativeResourceFormat::Ymap {
+  if format == FileType::Ymap {
     codewalker.ymap_to_xml(input, output)
   } else {
     codewalker.game_file_to_xml(input, output)

@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::{collections::HashMap, path::Path};
 
 use crate::core::{
   common::{position::Position, rotation::Rotation},
@@ -13,7 +13,7 @@ fn read(name: &str) -> Ymap {
     .join("asset/vanilla-cache/latest/ymap")
     .join(format!("{name}.ymap"));
   let resource = PsoResource::parse(&std::fs::read(path).unwrap()).unwrap();
-  Ymap::try_from(&resource).unwrap()
+  super::pso_to_ymap(&resource, &HashMap::new()).unwrap()
 }
 
 fn position(

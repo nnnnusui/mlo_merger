@@ -29,10 +29,6 @@ fn parses_four_vanilla_pso_ymaps() {
       crate::core::vanilla_cache::ymap_parent_hash(&path).unwrap(),
       crate::core::format::ymap::diff::reference_hash(&expected.parent),
     );
-    assert_eq!(
-      crate::core::format::ymap::binary::ymap_to_xml(&bytes, &HashMap::new()).unwrap(),
-      xml,
-    );
     let rebuilt = resource.rebuild_xml(&xml).unwrap();
     assert_eq!(PsoResource::parse(&rebuilt).unwrap().to_xml(&HashMap::new()).unwrap(), xml);
   }

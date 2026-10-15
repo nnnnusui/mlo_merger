@@ -2,9 +2,9 @@ use std::{path::Path, sync::OnceLock};
 
 use super::{
   meta::{MetaResource, MetaSchemaCatalog},
-  resource_convert::{NativeResourceFormat, xml_to_resource},
   rsc7::Rsc7Resource,
 };
+use crate::core::format::stream_file::{FileType, StreamFile};
 
 pub(crate) fn sample_ymap_xml(relative_path: &str) -> String {
   let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("docs/sample").join(relative_path);
@@ -43,6 +43,6 @@ pub(crate) fn sample_ymap_catalog() -> &'static MetaSchemaCatalog {
 }
 
 pub(crate) fn sample_ymap_binary(xml: &str) -> Vec<u8> {
-  xml_to_resource(NativeResourceFormat::Ymap, xml, sample_ymap_catalog())
+  StreamFile::encode_xml(FileType::Ymap, xml, sample_ymap_catalog())
     .expect("sample YMAP XML could not be rebuilt")
 }

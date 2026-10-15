@@ -15,7 +15,7 @@ fn native_pso_ymap_exports_match_codewalker() {
     let reference = output.join(format!("{name}.ymap.codewalker.pso.xml"));
     codewalker.ymap_to_xml(&input, &reference).unwrap();
     let bytes = std::fs::read(&input).unwrap();
-    let native = resource_to_xml(NativeResourceFormat::Ymap, &bytes, &Default::default()).unwrap();
+    let native = StreamFile::decode_to_xml(FileType::Ymap, &bytes, &Default::default()).unwrap();
     std::fs::write(output.join(format!("{name}.ymap.native.pso.xml")), &native).unwrap();
     let expected = std::fs::read_to_string(reference).unwrap();
     assert_canonical_xml_eq(&native, &expected, &format!("PSO export {name}")).unwrap();

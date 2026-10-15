@@ -1,18 +1,44 @@
-use super::*;
+//! Batch conversion between native stream files and CodeWalker-style XML.
+
+use std::{
+  collections::{BTreeSet, HashMap},
+  error::Error,
+  fs, io,
+  path::{Path, PathBuf},
+};
+
+use walkdir::WalkDir;
+
+use crate::core::format::{
+  gamefile::{
+    meta::{MetaResource, MetaSchemaCatalog},
+    pso::PsoResource,
+    rsc7::Rsc7Resource,
+  },
+  stream_file::{FileType, StreamFile},
+};
+
+mod names;
+
+use names::load_vanilla_hash_names;
+
+#[cfg(test)]
+mod tests;
+
+fn invalid_data(message: &str) -> io::Error {
+  io::Error::new(io::ErrorKind::InvalidData, message)
+}
 
 /// Converts supported native binary resources from a file or directory to XML.
-pub fn convert_files_to_xml(
+pub fn to_xml(
   input: &Path,
   output_dir: &Path,
-) -> Result<(usize, usize), Box<dyn std::error::Error>> {
-  let inputs = collect_inputs(input, &|path| NativeResourceFormat::from_path(path).is_ok())?;
+) -> Result<(usize, usize), Box<dyn Error>> {
+  let inputs = collect_inputs(input, &|path| FileType::from_path(path).is_ok())?;
   fs::create_dir_all(output_dir)?;
   let mut shared_names = load_vanilla_hash_names();
   for source in &inputs {
-    if !matches!(
-      NativeResourceFormat::from_path(source),
-      Ok(NativeResourceFormat::Ymap | NativeResourceFormat::Ytyp | NativeResourceFormat::YmtRsc)
-    ) {
+    if !matches!(FileType::from_path(source), Ok(FileType::Ymap | FileType::Ytyp | FileType::Ymt)) {
       continue;
     }
     if let Ok(bytes) = fs::read(source)
@@ -37,7 +63,7 @@ pub fn convert_files_to_xml(
     if let Some(parent) = output.parent() {
       fs::create_dir_all(parent)?;
     }
-    let result = resource_to_xml(NativeResourceFormat::from_path(source)?, &bytes, &shared_names);
+    let result = StreamFile::decode_to_xml(FileType::from_path(source)?, &bytes, &shared_names);
     match result {
       Ok(xml) => {
         fs::write(output, xml)?;
@@ -53,12 +79,12 @@ pub fn convert_files_to_xml(
 }
 
 /// Converts supported native XML files from a file or directory into binary resources.
-pub fn convert_files_from_xml(
+pub fn from_xml(
   input: &Path,
   output_dir: &Path,
   schema_dir: Option<&Path>,
-) -> Result<(usize, usize), Box<dyn std::error::Error>> {
-  let inputs = collect_inputs(input, &|path| NativeResourceFormat::from_xml_path(path).is_ok())?;
+) -> Result<(usize, usize), Box<dyn Error>> {
+  let inputs = collect_inputs(input, &|path| FileType::from_xml_path(path).is_ok())?;
   if schema_dir.is_none() && inputs.iter().any(|path| is_pso_xml(path)) {
     return Err(
       io::Error::new(
@@ -76,10 +102,7 @@ pub fn convert_files_from_xml(
   let mut catalog = MetaSchemaCatalog::default();
   let schema_inputs = if let Some(schema_dir) = schema_dir {
     collect_inputs(schema_dir, &|path| {
-      matches!(
-        NativeResourceFormat::from_path(path),
-        Ok(NativeResourceFormat::Ymap | NativeResourceFormat::Ytyp | NativeResourceFormat::YmtRsc)
-      )
+      matches!(FileType::from_path(path), Ok(FileType::Ymap | FileType::Ytyp | FileType::Ymt))
     })?
   } else {
     discover_schema_inputs(input, &inputs)?
@@ -87,8 +110,7 @@ pub fn convert_files_from_xml(
   if schema_dir.is_none()
     && schema_inputs.is_empty()
     && inputs.iter().any(|path| {
-      NativeResourceFormat::from_xml_path(path)
-        .is_ok_and(|format| format.is_generic_meta() && !is_pso_xml(path))
+      FileType::from_xml_path(path).is_ok_and(|format| format.is_meta() && !is_pso_xml(path))
     })
   {
     return Err(
@@ -117,7 +139,7 @@ pub fn convert_files_from_xml(
     if let Some(parent) = output.parent() {
       fs::create_dir_all(parent)?;
     }
-    let format = NativeResourceFormat::from_xml_path(source)?;
+    let format = FileType::from_xml_path(source)?;
     let result = fs::read_to_string(source).and_then(|xml| {
       if is_pso_xml(source) {
         let schema_dir = schema_dir.expect("PSO schema directory was validated");
@@ -126,10 +148,9 @@ pub fn convert_files_from_xml(
         } else {
           schema_dir.join(&output_name)
         };
-        crate::core::format::gamefile::pso::PsoResource::parse(&fs::read(template)?)?
-          .rebuild_xml(&xml)
+        PsoResource::parse(&fs::read(template)?)?.rebuild_xml(&xml)
       } else {
-        xml_to_resource(format, &xml, &catalog)
+        StreamFile::encode_xml(format, &xml, &catalog)
       }
     });
     match result {
@@ -147,7 +168,7 @@ pub fn convert_files_from_xml(
 }
 
 /// Removes stale managed YMAP binaries when their XML has been demoted to a clone or vanilla.
-pub(crate) fn prune_managed_ymap_outputs(
+fn prune_managed_ymap_outputs(
   input_dir: &Path,
   output_dir: &Path,
 ) -> io::Result<()> {
@@ -241,17 +262,17 @@ fn is_pso_xml(path: &Path) -> bool {
     .is_some_and(|name| name.to_ascii_lowercase().ends_with(".pso.xml"))
 }
 
-pub(super) fn discover_schema_inputs(
+fn discover_schema_inputs(
   input: &Path,
   sources: &[PathBuf],
 ) -> io::Result<Vec<PathBuf>> {
   let mut schemas = BTreeSet::new();
   for source in sources {
-    let format = NativeResourceFormat::from_xml_path(source)?;
+    let format = FileType::from_xml_path(source)?;
     let vanilla_family = match format {
-      NativeResourceFormat::Ymap => "ymap",
-      NativeResourceFormat::Ytyp => "ytyp",
-      NativeResourceFormat::YmtRsc => "ymt",
+      FileType::Ymap => "ymap",
+      FileType::Ytyp => "ytyp",
+      FileType::Ymt => "ymt",
       _ => continue,
     };
     let relative = relative_input_path(input, source)?;

@@ -1,10 +1,8 @@
 use std::collections::HashMap;
 
-use super::{
-  NativeResourceFormat, convert_files_from_xml, convert_files_to_xml, discover_schema_inputs,
-  resource_to_xml, xml_to_resource,
-};
+use super::{discover_schema_inputs, from_xml, to_xml};
 use crate::core::format::gamefile::{meta::MetaSchemaCatalog, rsc7::Rsc7Resource};
+use crate::core::format::stream_file::{FileType, StreamFile};
 
 #[test]
 fn managed_output_cleanup_preserves_rebuilt_and_unmanaged_files() {
@@ -20,7 +18,7 @@ fn managed_output_cleanup_preserves_rebuilt_and_unmanaged_files() {
   for name in ["clone.ymap", "rebuilt.ymap", "vanilla.ymap", "unmanaged.ymap"] {
     std::fs::write(output.join(name), "binary").unwrap();
   }
-  let prune = || super::batch::prune_managed_ymap_outputs(&input, &output);
+  let prune = || super::prune_managed_ymap_outputs(&input, &output);
   prune().unwrap();
   assert!(!output.join("clone.ymap").exists());
   assert!(!output.join("vanilla.ymap").exists());
@@ -36,15 +34,15 @@ fn managed_output_cleanup_preserves_rebuilt_and_unmanaged_files() {
 }
 
 fn assert_repeated_xml_conversion_is_stable(
-  format: NativeResourceFormat,
+  format: FileType,
   original_xml: &str,
   catalog: &MetaSchemaCatalog,
   label: &str,
 ) {
-  let first_binary = xml_to_resource(format, original_xml, catalog).unwrap();
-  let first_xml = resource_to_xml(format, &first_binary, &catalog.hash_names).unwrap();
-  let second_binary = xml_to_resource(format, &first_xml, catalog).unwrap();
-  let second_xml = resource_to_xml(format, &second_binary, &catalog.hash_names).unwrap();
+  let first_binary = StreamFile::encode_xml(format, original_xml, catalog).unwrap();
+  let first_xml = StreamFile::decode_to_xml(format, &first_binary, &catalog.hash_names).unwrap();
+  let second_binary = StreamFile::encode_xml(format, &first_xml, catalog).unwrap();
+  let second_xml = StreamFile::decode_to_xml(format, &second_binary, &catalog.hash_names).unwrap();
   if first_binary != second_binary {
     let first = Rsc7Resource::decode(&first_binary).unwrap();
     let second = Rsc7Resource::decode(&second_binary).unwrap();
@@ -83,7 +81,7 @@ fn assert_ybn_fixture_conversion_is_stable(name: &str) {
   let path = base.join("docs/sample/ybn_conflicts").join(name);
   let xml = std::fs::read_to_string(&path).unwrap();
   assert_repeated_xml_conversion_is_stable(
-    NativeResourceFormat::Ybn,
+    FileType::Ybn,
     &xml,
     &MetaSchemaCatalog::default(),
     name,
@@ -120,7 +118,7 @@ fn repeated_ymap_xml_binary_conversion_is_stable() {
     "parent_refs/resource_b_parent.ymap.xml",
   ] {
     assert_repeated_xml_conversion_is_stable(
-      NativeResourceFormat::Ymap,
+      FileType::Ymap,
       &sample_ymap_xml(name),
       sample_ymap_catalog(),
       name,
@@ -138,17 +136,17 @@ fn pso_batch_commands_preserve_suffix_and_template_format() {
   std::fs::create_dir_all(input.join("nested")).unwrap();
   let source = base.join("asset/vanilla/0000-base/ymap/cs1_railwyc.ymap");
   std::fs::copy(&source, input.join("nested/cs1_railwyc.ymap")).unwrap();
-  assert_eq!(convert_files_to_xml(&input, &xml_dir).unwrap(), (1, 0));
+  assert_eq!(to_xml(&input, &xml_dir).unwrap(), (1, 0));
   assert!(xml_dir.join("nested/cs1_railwyc.ymap.pso.xml").is_file());
   assert_eq!(
-    NativeResourceFormat::from_xml_path(&xml_dir.join("nested/cs1_railwyc.ymap.pso.xml")).unwrap(),
-    NativeResourceFormat::Ymap
+    FileType::from_xml_path(&xml_dir.join("nested/cs1_railwyc.ymap.pso.xml")).unwrap(),
+    FileType::Ymap
   );
-  assert!(convert_files_from_xml(&xml_dir, &rebuilt_dir, None).is_err());
-  assert_eq!(convert_files_from_xml(&xml_dir, &rebuilt_dir, Some(&input)).unwrap(), (1, 0));
+  assert!(from_xml(&xml_dir, &rebuilt_dir, None).is_err());
+  assert_eq!(from_xml(&xml_dir, &rebuilt_dir, Some(&input)).unwrap(), (1, 0));
   let bytes = std::fs::read(rebuilt_dir.join("nested/cs1_railwyc.ymap")).unwrap();
   assert!(bytes.starts_with(b"PSIN"));
-  let xml = resource_to_xml(NativeResourceFormat::Ymap, &bytes, &HashMap::new()).unwrap();
+  let xml = StreamFile::decode_to_xml(FileType::Ymap, &bytes, &HashMap::new()).unwrap();
   assert_eq!(
     xml,
     std::fs::read_to_string(xml_dir.join("nested/cs1_railwyc.ymap.pso.xml")).unwrap()
@@ -162,7 +160,7 @@ fn ybn_xml_does_not_require_a_schema_directory() {
   let input = base.join("docs/sample/ybn_conflicts/resource_a.ybn.xml");
   let output = std::env::temp_dir().join(format!("ybn_from_xml_{}", std::process::id()));
 
-  assert_eq!(convert_files_from_xml(&input, &output, None).unwrap(), (1, 0));
+  assert_eq!(from_xml(&input, &output, None).unwrap(), (1, 0));
   assert!(output.join("resource_a.ybn").is_file());
   std::fs::remove_dir_all(output).unwrap();
 }
@@ -186,7 +184,7 @@ fn discovers_matching_vanilla_ymap_schema_for_source_xml() {
 
 #[test]
 fn ybn_dispatch_rejects_invalid_resource_envelopes() {
-  let error = resource_to_xml(NativeResourceFormat::Ybn, &[], &HashMap::new()).unwrap_err();
+  let error = StreamFile::decode_to_xml(FileType::Ybn, &[], &HashMap::new()).unwrap_err();
   assert!(error.to_string().contains("RSC7 header is truncated"));
 }
 
@@ -205,8 +203,8 @@ fn ybn_remaining_primitive_bounds_round_trip_natively() {
       </Bounds></BoundsFile>"#
     );
     let binary =
-      xml_to_resource(NativeResourceFormat::Ybn, &xml, &MetaSchemaCatalog::default()).unwrap();
-    let output = resource_to_xml(NativeResourceFormat::Ybn, &binary, &HashMap::new()).unwrap();
+      StreamFile::encode_xml(FileType::Ybn, &xml, &MetaSchemaCatalog::default()).unwrap();
+    let output = StreamFile::decode_to_xml(FileType::Ybn, &binary, &HashMap::new()).unwrap();
     assert!(output.contains(&format!("<Bounds type=\"{kind}\">")), "missing {kind}");
     assert!(output.contains("<SphereRadius value=\"2\""), "lost common fields for {kind}");
   }
@@ -224,9 +222,8 @@ fn ybn_composite_none_child_round_trips_natively() {
     <PolyFlags value="0" /><UnkType value="1" />
     <Children><Item type="None" /></Children>
   </Bounds></BoundsFile>"#;
-  let binary =
-    xml_to_resource(NativeResourceFormat::Ybn, xml, &MetaSchemaCatalog::default()).unwrap();
-  let output = resource_to_xml(NativeResourceFormat::Ybn, &binary, &HashMap::new()).unwrap();
+  let binary = StreamFile::encode_xml(FileType::Ybn, xml, &MetaSchemaCatalog::default()).unwrap();
+  let output = StreamFile::decode_to_xml(FileType::Ybn, &binary, &HashMap::new()).unwrap();
   assert!(output.contains("<Item type=\"None\" />"));
 }
 
@@ -254,9 +251,8 @@ fn ybn_remaining_geometry_polygons_round_trip_natively() {
       <Cylinder m="0" v1="2" v2="3" radius="0.75" />
     </Polygons>
   </Bounds></BoundsFile>"#;
-  let binary =
-    xml_to_resource(NativeResourceFormat::Ybn, xml, &MetaSchemaCatalog::default()).unwrap();
-  let output = resource_to_xml(NativeResourceFormat::Ybn, &binary, &HashMap::new()).unwrap();
+  let binary = StreamFile::encode_xml(FileType::Ybn, xml, &MetaSchemaCatalog::default()).unwrap();
+  let output = StreamFile::decode_to_xml(FileType::Ybn, &binary, &HashMap::new()).unwrap();
   assert!(output.contains("<Sphere m=\"0\" v=\"0\" radius=\"0.5\""));
   assert!(output.contains("<Capsule m=\"0\" v1=\"0\" v2=\"1\" radius=\"0.25\""));
   assert!(output.contains("<Cylinder m=\"0\" v1=\"2\" v2=\"3\" radius=\"0.75\""));
@@ -284,11 +280,10 @@ fn ynd_xml_round_trips_through_native_resource_codec() {
       <AreaID value="7" /><NodeID value="0" /><JunctionID value="0" /><Unk0 value="0" />
     </Item></JunctionRefs>
   </NodeDictionary>"#;
-  let binary =
-    xml_to_resource(NativeResourceFormat::Ynd, xml, &MetaSchemaCatalog::default()).unwrap();
+  let binary = StreamFile::encode_xml(FileType::Ynd, xml, &MetaSchemaCatalog::default()).unwrap();
   assert_eq!(&binary[..4], b"RSC7");
   let names = HashMap::from([(0x1234_ABCD, "test_street".to_string())]);
-  let output = resource_to_xml(NativeResourceFormat::Ynd, &binary, &names).unwrap();
+  let output = StreamFile::decode_to_xml(FileType::Ynd, &binary, &names).unwrap();
   assert!(output.contains("<VehicleNodeCount value=\"1\""));
   assert!(output.contains("<StreetName>test_street</StreetName>"));
   assert!(output.contains("<LinkLength value=\"13\""));
@@ -300,15 +295,15 @@ fn ynd_xml_round_trips_through_native_resource_codec() {
 fn ymt_dispatch_preserves_text_xml_and_rejects_malformed_pso() {
   let xml = "<ScenarioManifest><Item /></ScenarioManifest>";
   assert_eq!(
-    resource_to_xml(NativeResourceFormat::YmtRsc, xml.as_bytes(), &HashMap::new()).unwrap(),
+    StreamFile::decode_to_xml(FileType::Ymt, xml.as_bytes(), &HashMap::new()).unwrap(),
     xml
   );
   assert_eq!(
-    xml_to_resource(NativeResourceFormat::YmtRsc, xml, &MetaSchemaCatalog::default()).unwrap(),
+    StreamFile::encode_xml(FileType::Ymt, xml, &MetaSchemaCatalog::default()).unwrap(),
     xml.as_bytes()
   );
   let error =
-    resource_to_xml(NativeResourceFormat::YmtRsc, b"PSIN\0\0\0\0", &HashMap::new()).unwrap_err();
+    StreamFile::decode_to_xml(FileType::Ymt, b"PSIN\0\0\0\0", &HashMap::new()).unwrap_err();
   assert_eq!(error.kind(), std::io::ErrorKind::InvalidData);
   assert!(error.to_string().contains("PSO section length"));
 }

@@ -16,12 +16,9 @@ use compare::{
 use mlo_merger::core::codewalker::CodeWalker;
 use mlo_merger::core::format::gamefile::{
   meta::{MetaResource, MetaSchemaCatalog},
-  resource_convert::{
-    NativeResourceFormat, convert_files_from_xml, resource_to_xml, xml_to_resource,
-  },
   rsc7::Rsc7Resource,
 };
-use mlo_merger::core::format::ymap::binary::ymap_to_xml;
+use mlo_merger::core::format::stream_file::{FileType, StreamFile};
 use mlo_merger::core::format::ymap::xml::XmlYmap;
 use mlo_merger::core::merge::{run::MergeYmap, ybn_conflicts::MergeYbnConflicts};
 

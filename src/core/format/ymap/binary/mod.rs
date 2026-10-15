@@ -7,7 +7,7 @@ mod read;
 mod values;
 mod write;
 
-pub use read::{ymap_to_model, ymap_to_xml};
+pub use read::ymap_to_model;
 pub use write::{to_meta, write_ymap};
 
 #[cfg(test)]

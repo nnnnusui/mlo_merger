@@ -1,45 +1,12 @@
 use std::{collections::HashMap, io};
 
 use crate::core::format::gamefile::{
-  meta::{MetaResource, xml::meta_to_xml},
-  pso::PsoResource,
-  resource::Resource,
-  rsc7::Rsc7Resource,
+  meta::MetaResource, pso::PsoResource, resource::Resource, rsc7::Rsc7Resource,
 };
 use crate::core::format::ymap::model::Ymap;
 
 pub(super) fn invalid_data(message: &str) -> io::Error {
   io::Error::new(io::ErrorKind::InvalidData, message)
-}
-
-impl TryFrom<&Rsc7Resource> for Ymap {
-  type Error = io::Error;
-
-  fn try_from(resource: &Rsc7Resource) -> io::Result<Self> {
-    rsc7_to_ymap(resource, &HashMap::new())
-  }
-}
-
-impl TryFrom<&PsoResource> for Ymap {
-  type Error = io::Error;
-
-  fn try_from(resource: &PsoResource) -> io::Result<Self> {
-    pso_to_ymap(resource, &HashMap::new())
-  }
-}
-
-/// Converts a binary RSC7 or PSO YMAP into CodeWalker-style XML using its embedded schema.
-pub fn ymap_to_xml(
-  bytes: &[u8],
-  shared_hash_names: &HashMap<u32, String>,
-) -> io::Result<String> {
-  match Resource::decode(bytes)? {
-    Resource::Pso(resource) => resource.to_xml(shared_hash_names),
-    Resource::Rsc7(resource) => {
-      let meta = MetaResource::parse(&resource)?;
-      meta_to_xml(&meta, shared_hash_names)
-    }
-  }
 }
 
 /// Converts a binary RSC7 or PSO YMAP into its typed model.

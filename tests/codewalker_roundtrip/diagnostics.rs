@@ -31,7 +31,7 @@ fn native_merged_distant_lights_match_codewalker() {
     let mut catalog = MetaSchemaCatalog::default();
     catalog.add_resource(&MetaResource::parse(&Rsc7Resource::decode(&bytes).unwrap()).unwrap());
     let xml = std::fs::read_to_string(&input).unwrap();
-    let native = xml_to_resource(NativeResourceFormat::Ymap, &xml, &catalog).unwrap();
+    let native = StreamFile::encode_xml(FileType::Ymap, &xml, &catalog).unwrap();
     let native_path = output.join(name);
     std::fs::write(&native_path, &native).unwrap();
     let dll_path = reports.join(name);
