@@ -1,4 +1,5 @@
 pub(crate) mod binary_io;
+pub mod hash_names;
 pub mod meta;
 pub mod pso;
 pub mod resource;

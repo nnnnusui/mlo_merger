@@ -42,14 +42,14 @@ pub(super) fn field_size(data_type: u8) -> usize {
 
 pub(super) fn resolve_hash(
   hash: u32,
-  names: &HashMap<u32, String>,
+  names: &HashNames,
 ) -> String {
   if hash == 0 { String::new() } else { resolve_name(hash, names) }
 }
 
 pub(super) fn resolve_name(
   hash: u32,
-  names: &HashMap<u32, String>,
+  names: &HashNames,
 ) -> String {
   names.get(&hash).cloned().unwrap_or_else(|| format!("hash_{hash:08X}"))
 }
@@ -130,7 +130,7 @@ pub(super) fn enum_text(
   meta: &MetaResource,
   entry: &MetaStructureEntry,
   bytes: &[u8],
-  names: &HashMap<u32, String>,
+  names: &HashNames,
 ) -> io::Result<String> {
   let enum_info = meta.enums.iter().find(|info| info.name_hash == entry.reference_key);
   let raw = if entry.data_type == 0x64 { i16_at(bytes, 0)? as i32 } else { i32_at(bytes, 0)? };

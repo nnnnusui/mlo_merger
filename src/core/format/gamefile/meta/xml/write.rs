@@ -30,7 +30,7 @@ fn write_structure(
   block_index: usize,
   offset: usize,
   structure_hash: u32,
-  names: &HashMap<u32, String>,
+  names: &HashNames,
   depth: usize,
   output: &mut String,
 ) -> io::Result<()> {
@@ -124,7 +124,7 @@ fn write_array(
   array_info: Option<&MetaStructureEntry>,
   descriptor: &[u8],
   name: &str,
-  names: &HashMap<u32, String>,
+  names: &HashNames,
   depth: usize,
   output: &mut String,
 ) -> io::Result<()> {
@@ -324,7 +324,7 @@ fn write_enum_value(
   name: &str,
   entry: &MetaStructureEntry,
   bytes: &[u8],
-  names: &HashMap<u32, String>,
+  names: &HashNames,
 ) -> io::Result<()> {
   let enum_info = meta.enums.iter().find(|info| info.name_hash == entry.reference_key);
   let raw = if entry.data_type == 0x64 { i16_at(bytes, 0)? as i32 } else { i32_at(bytes, 0)? };

@@ -20,7 +20,7 @@ use crate::core::format::{
 
 mod names;
 
-use names::load_vanilla_hash_names;
+pub(crate) use names::load_vanilla_hash_names;
 
 #[cfg(test)]
 mod tests;

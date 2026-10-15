@@ -321,12 +321,13 @@ fn native_ymap_xml_matches_codewalker_corpus() {
   let bridge_dll = std::env::var("CODEWALKER_BRIDGE_DLL")
     .unwrap_or_else(|_| "bridge/CodeWalker.Bridge/bin/publish/CodeWalker.Bridge.dll".to_string());
   let codewalker = CodeWalker::init(Path::new(&bridge_dll)).expect("failed to init CodeWalker");
-  let input_dir = Path::new("asset/extracted");
+  let input_dir = Path::new("asset/source-cache/resources");
   let tmp_dir = std::env::temp_dir().join("mlo_merger_native_codewalker_corpus");
   std::fs::create_dir_all(&tmp_dir).unwrap();
-  let inputs = std::fs::read_dir(input_dir)
-    .unwrap()
-    .map(|entry| entry.unwrap().path())
+  let inputs = walkdir::WalkDir::new(input_dir)
+    .sort_by_file_name()
+    .into_iter()
+    .map(|entry| entry.unwrap().into_path())
     .filter(|path| path.extension().is_some_and(|extension| extension == "ymap"))
     .filter(|path| {
       std::env::var("NATIVE_XML_COMPARE_FILTER")
@@ -343,10 +344,14 @@ fn native_ymap_xml_matches_codewalker_corpus() {
   let mut references = Vec::new();
   for input in &inputs {
     let bytes = std::fs::read(input).unwrap();
-    let resource = Rsc7Resource::decode(&bytes).unwrap();
-    shared_names.extend(MetaResource::parse(&resource).unwrap().hash_names());
+    if let Ok(meta) = Rsc7Resource::decode(&bytes).and_then(|resource| MetaResource::parse(&resource))
+    {
+      shared_names.extend(meta.hash_names());
+    }
 
-    let output = tmp_dir.join(format!("{}.xml", input.file_name().unwrap().to_string_lossy()));
+    // Resources reuse vanilla file names, so flatten the relative path to keep outputs apart.
+    let relative = input.strip_prefix(input_dir).unwrap().to_string_lossy().replace('/', "__");
+    let output = tmp_dir.join(format!("{relative}.xml"));
     codewalker.ymap_to_xml(input, &output).unwrap();
     references.push((input.clone(), output));
   }

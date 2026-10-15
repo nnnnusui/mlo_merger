@@ -1,6 +1,7 @@
 use std::{collections::HashMap, fmt::Write as _, io};
 
 use super::{MetaResource, MetaStructureEntry, MetaStructureInfo};
+use crate::core::format::gamefile::hash_names::HashNames;
 
 mod access;
 mod helpers;

@@ -19,11 +19,11 @@ impl PsoResource {
   }
 
   /// Collects known names, embedded STRF/STRS strings and caller-provided names.
-  pub fn names(
+  pub fn names<'a>(
     &self,
-    shared_names: &HashMap<u32, String>,
-  ) -> HashMap<u32, String> {
-    let mut names = known_hash_names();
+    shared_names: &'a HashMap<u32, String>,
+  ) -> HashNames<'a> {
+    let mut names = HashMap::new();
     for (tag, data) in &self.sections {
       if matches!(tag, b"STRF" | b"STRS") {
         for value in data[8..].split(|byte| *byte == 0).filter(|value| !value.is_empty()) {
@@ -35,8 +35,7 @@ impl PsoResource {
         }
       }
     }
-    names.extend(shared_names.iter().map(|(hash, name)| (*hash, name.clone())));
-    names
+    HashNames::new(shared_names, names, known_hash_names())
   }
 
   pub(super) fn read_node(
@@ -44,7 +43,7 @@ impl PsoResource {
     block: usize,
     offset: usize,
     kind: u32,
-    names: &HashMap<u32, String>,
+    names: &HashNames,
     node: &mut XmlElement,
     depth: usize,
   ) -> io::Result<()> {
@@ -186,7 +185,7 @@ impl PsoResource {
     &self,
     field: &Field,
     address: usize,
-    names: &HashMap<u32, String>,
+    names: &HashNames,
   ) -> io::Result<String> {
     if matches!(field.subtype, 7 | 8) {
       return Ok(resolve(u32_at(&self.data, address)?, names));
@@ -243,7 +242,7 @@ impl PsoResource {
     field: &Field,
     schema: &Schema,
     location: (usize, usize),
-    names: &HashMap<u32, String>,
+    names: &HashNames,
     node: &mut XmlElement,
     depth: usize,
   ) -> io::Result<()> {

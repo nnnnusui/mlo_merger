@@ -1,7 +1,7 @@
 use super::*;
 
 #[test]
-#[ignore = "requires four local vanilla PSO YMAPs and CodeWalker.Core.dll"]
+#[ignore = "requires four local vanilla-cache PSO YMAPs and CodeWalker.Core.dll"]
 fn native_pso_ymap_exports_match_codewalker() {
   let base = Path::new(env!("CARGO_MANIFEST_DIR"));
   let bridge = std::env::var("CODEWALKER_BRIDGE_DLL").unwrap_or_else(|_| {
@@ -11,7 +11,7 @@ fn native_pso_ymap_exports_match_codewalker() {
   let output = base.join("asset/merge_validation/pso_ymap");
   std::fs::create_dir_all(&output).unwrap();
   for name in ["cs1_railwyc", "cs1_railwyc_long_0", "id2_17", "id2_17_strm_0"] {
-    let input = base.join(format!("asset/vanilla/ymap/{name}.ymap"));
+    let input = base.join(format!("asset/vanilla-cache/latest/ymap/{name}.ymap"));
     let reference = output.join(format!("{name}.ymap.codewalker.pso.xml"));
     codewalker.ymap_to_xml(&input, &reference).unwrap();
     let bytes = std::fs::read(&input).unwrap();

@@ -11,7 +11,7 @@ use crate::core::format::gamefile::struct_reader::{Scalar, StructReader};
 #[derive(Clone)]
 pub struct MetaStruct<'a> {
   meta: &'a MetaResource,
-  names: &'a HashMap<u32, String>,
+  names: &'a HashNames<'a>,
   structure: Cow<'a, MetaStructureInfo>,
   kind: u32,
   block: usize,
@@ -20,20 +20,17 @@ pub struct MetaStruct<'a> {
 
 impl MetaResource {
   /// Collects known names, this resource's string blocks and caller-provided names.
-  pub fn names(
+  pub fn names<'a>(
     &self,
-    shared_names: &HashMap<u32, String>,
-  ) -> HashMap<u32, String> {
-    let mut names = known_hash_names();
-    names.extend(self.hash_names());
-    names.extend(shared_names.iter().map(|(hash, name)| (*hash, name.clone())));
-    names
+    shared_names: &'a HashMap<u32, String>,
+  ) -> HashNames<'a> {
+    HashNames::new(shared_names, self.hash_names(), known_hash_names())
   }
 
   /// Returns the root structure, resolving hashes through `names` (see [`Self::names`]).
   pub fn root_struct<'a>(
     &'a self,
-    names: &'a HashMap<u32, String>,
+    names: &'a HashNames<'a>,
   ) -> io::Result<MetaStruct<'a>> {
     if self.root_block_index <= 0 {
       return Err(invalid_data("META resource has no root data block"));
@@ -48,7 +45,7 @@ impl MetaResource {
 impl<'a> MetaStruct<'a> {
   fn new(
     meta: &'a MetaResource,
-    names: &'a HashMap<u32, String>,
+    names: &'a HashNames<'a>,
     block: usize,
     offset: usize,
     kind: u32,
@@ -353,7 +350,7 @@ impl StructReader for MetaStruct<'_> {
 fn element(
   data_type: u8,
   bytes: &[u8],
-  names: &HashMap<u32, String>,
+  names: &HashNames,
 ) -> io::Result<Scalar> {
   Ok(match data_type {
     0x10 => Scalar::Int(bytes[0] as i8 as i64),

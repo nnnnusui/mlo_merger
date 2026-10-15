@@ -10,7 +10,7 @@ use crate::core::format::gamefile::struct_reader::{Scalar, StructReader};
 #[derive(Clone, Copy)]
 pub struct PsoStruct<'a> {
   resource: &'a PsoResource,
-  names: &'a HashMap<u32, String>,
+  names: &'a HashNames<'a>,
   schema: &'a Schema,
   kind: u32,
   block: usize,
@@ -23,7 +23,7 @@ impl PsoResource {
   /// Returns the root structure, resolving hashes through `names` (see [`Self::names`]).
   pub fn root_struct<'a>(
     &'a self,
-    names: &'a HashMap<u32, String>,
+    names: &'a HashNames<'a>,
   ) -> io::Result<PsoStruct<'a>> {
     let kind = self
       .blocks
@@ -37,7 +37,7 @@ impl PsoResource {
 impl<'a> PsoStruct<'a> {
   fn new(
     resource: &'a PsoResource,
-    names: &'a HashMap<u32, String>,
+    names: &'a HashNames<'a>,
     block: usize,
     offset: usize,
     kind: u32,
@@ -267,7 +267,7 @@ impl PsoResource {
     field: &Field,
     address: usize,
     schema: Option<&Schema>,
-    names: &HashMap<u32, String>,
+    names: &HashNames,
   ) -> io::Result<Scalar> {
     let byte = || slice(&self.data, address, 1).map(|bytes| bytes[0]);
     Ok(match field.kind {

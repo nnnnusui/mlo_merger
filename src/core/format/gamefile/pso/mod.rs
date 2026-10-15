@@ -1,6 +1,7 @@
 use std::{collections::HashMap, io};
 
 use super::{
+  hash_names::HashNames,
   meta::jenk_hash,
   meta::xml::known_hash_names,
   xml_tree::{XmlElement, parse_xml},

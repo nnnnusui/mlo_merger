@@ -73,7 +73,7 @@ pub(super) fn float_text(value: &str) -> io::Result<f32> {
 
 pub(super) fn resolve(
   hash: u32,
-  names: &HashMap<u32, String>,
+  names: &HashNames,
 ) -> String {
   if hash == 0 {
     String::new()

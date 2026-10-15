@@ -236,8 +236,11 @@ pub(super) const KNOWN_NAMES: &[&str] = &[
 ];
 
 /// Returns built-in field, structure, and enum names shared by META and PSO XML.
-pub(crate) fn known_hash_names() -> HashMap<u32, String> {
-  KNOWN_NAMES.iter().map(|name| (jenk_hash(name), (*name).to_string())).collect()
+pub(crate) fn known_hash_names() -> &'static HashMap<u32, String> {
+  static NAMES: std::sync::LazyLock<HashMap<u32, String>> = std::sync::LazyLock::new(|| {
+    KNOWN_NAMES.iter().map(|name| (jenk_hash(name), (*name).to_string())).collect()
+  });
+  &NAMES
 }
 
 pub(super) fn fallback_structure(hash: u32) -> Option<MetaStructureInfo> {
