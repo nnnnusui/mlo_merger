@@ -687,17 +687,8 @@ fn check_diffs(
       YmapStructDiffEnum::streaming_extents_min(_) => tracing::info!("    skip changes: <streamingExtentsMin />"),
       YmapStructDiffEnum::entities_extents_max(_) => tracing::info!("    skip changes: <entitiesExtentsMax />"),
       YmapStructDiffEnum::entities_extents_min(_) => tracing::info!("    skip changes: <entitiesExtentsMin />"),
-      YmapStructDiffEnum::entities(_) => {}
-      YmapStructDiffEnum::box_occluders(_) => {}
-      YmapStructDiffEnum::occlude_models(_) => {}
-      YmapStructDiffEnum::time_cycle_modifiers(_) => {}
-      YmapStructDiffEnum::car_generators(_) => {}
-      YmapStructDiffEnum::lod_lights(_) => {}
-      YmapStructDiffEnum::distant_lod_lights(_) => {}
       YmapStructDiffEnum::block(_) => tracing::info!("    skip changes: <block/>"),
-      YmapStructDiffEnum::parent(_) | YmapStructDiffEnum::physics_dictionaries(_) => {}
-      YmapStructDiffEnum::instanced_data(_) => {}
-      it => tracing::warn!("    skip unsupported changes: {:?}", it),
+      YmapStructDiffEnum::parent(_) => {}
     }
   }
 }

@@ -1,0 +1,69 @@
+use serde_json::json;
+
+use super::*;
+use crate::core::format::ymap::compare::*;
+use crate::core::format::ymap::model::YmapLodLight;
+
+fn light(falloff: f32) -> YmapLodLight {
+  YmapLodLight {
+    falloff,
+    hash: "0".into(),
+    ..YmapLodLight::default()
+  }
+}
+
+#[test]
+fn lod_lights_compare_as_a_multiset_without_parent_positions() {
+  let vanilla = Ymap {
+    lod_lights: vec![light(1.0), light(2.0), light(3.0)],
+    ..base()
+  };
+  // Dropping the first light shifts the rest, which must not read as modifications.
+  let modded = Ymap {
+    lod_lights: vec![light(2.0), light(3.0), light(9.0)],
+    ..base()
+  };
+  assert_eq!(
+    json(&vanilla, &modded),
+    json!({
+      "lod_lights": [
+        { "Removed": { "index": 0 } },
+        { "Added": { "index": 2, "lod_light": serde_json::to_value(light(9.0)).unwrap() } },
+      ],
+    })
+  );
+}
+
+// Moved from `ymap_lod_light_diff.rs`: the diff function on its own.
+
+#[test]
+fn compares_lights_as_a_multiset() {
+  let vanilla = Ymap {
+    lod_lights: vec![light(1.0), light(2.0), light(3.0), light(2.0)],
+    ..base()
+  };
+  // The source drops the first light and one duplicate, and edits the third.
+  let modded = Ymap {
+    lod_lights: vec![light(2.0), light(9.0)],
+    ..base()
+  };
+  assert_eq!(
+    lod_light_diffs(&vanilla, &modded),
+    vec![
+      YmapLodLightDiff::Removed {
+        index: 0
+      },
+      YmapLodLightDiff::Removed {
+        index: 2
+      },
+      YmapLodLightDiff::Removed {
+        index: 3
+      },
+      YmapLodLightDiff::Added {
+        index: 1,
+        lod_light: light(9.0),
+      },
+    ]
+  );
+  assert!(lod_light_diffs(&vanilla, &vanilla).is_empty());
+}

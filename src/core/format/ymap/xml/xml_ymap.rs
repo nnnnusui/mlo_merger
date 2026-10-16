@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use crate::core::format::{
   xml::{XmlValueAttr, position::XmlPositionAttr},
   ymap::{
-    model::Ymap,
+    model::{Ymap, YmapContainerLod},
     xml::{
       XmlYmapBlock, XmlYmapBoxOccluder, XmlYmapCarGenerator, XmlYmapDistantLodLightsSoa,
       XmlYmapEntity, XmlYmapInstancedData, XmlYmapLodLightsSoa, XmlYmapOccludeModel,
@@ -58,7 +58,7 @@ impl From<XmlYmap> for Ymap {
       entities_extents_min: v.entities_extents_min.into(),
       entities_extents_max: v.entities_extents_max.into(),
       entities: v.entities.items.into_iter().map(Into::into).collect(),
-      container_lods: v.container_lods.items,
+      container_lods: v.container_lods.items.into_iter().map(Into::into).collect(),
       box_occluders: v.box_occluders.items.into_iter().map(Into::into).collect(),
       occlude_models: v.occlude_models.items.into_iter().map(Into::into).collect(),
       physics_dictionaries: v.physics_dictionaries.items,
@@ -91,7 +91,7 @@ impl From<Ymap> for XmlYmap {
         items: v.entities.into_iter().map(XmlYmapEntity::from).collect(),
       },
       container_lods: XmlContainerLods {
-        items: v.container_lods,
+        items: v.container_lods.into_iter().map(Into::into).collect(),
       },
       box_occluders: XmlBoxOccluders {
         items: v.box_occluders.into_iter().map(XmlYmapBoxOccluder::from).collect(),
@@ -137,7 +137,34 @@ pub struct XmlOccludeModels {
 #[derive(Debug, Deserialize, Default, Serialize)]
 pub struct XmlContainerLods {
   #[serde(rename = "Item", default)]
-  pub items: Vec<String>,
+  pub items: Vec<XmlYmapContainerLod>,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct XmlYmapContainerLod {
+  pub name: String,
+  pub parent_index: XmlValueAttr<u32>,
+}
+
+impl From<XmlYmapContainerLod> for YmapContainerLod {
+  fn from(v: XmlYmapContainerLod) -> Self {
+    Self {
+      name: v.name,
+      parent_index: v.parent_index.value,
+    }
+  }
+}
+
+impl From<YmapContainerLod> for XmlYmapContainerLod {
+  fn from(v: YmapContainerLod) -> Self {
+    Self {
+      name: v.name,
+      parent_index: XmlValueAttr {
+        value: v.parent_index,
+      },
+    }
+  }
 }
 
 #[derive(Debug, Deserialize, Default, Serialize)]
@@ -156,4 +183,39 @@ pub struct XmlTimeCycleModifiers {
 pub struct XmlCarGenerators {
   #[serde(rename = "Item", default)]
   pub items: Vec<XmlYmapCarGenerator>,
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn container_lods_round_trip_through_xml() {
+    let xml = r#"
+      <containerLods>
+        <Item>
+          <name>container_a</name>
+          <parentIndex value="7" />
+        </Item>
+      </containerLods>
+    "#;
+    let parsed: XmlContainerLods = quick_xml::de::from_str(xml).unwrap();
+    let model: Vec<YmapContainerLod> = parsed.items.into_iter().map(Into::into).collect();
+    assert_eq!(
+      model,
+      vec![YmapContainerLod {
+        name: "container_a".into(),
+        parent_index: 7,
+      }]
+    );
+    let serialized = quick_xml::se::to_string_with_root(
+      "containerLods",
+      &XmlContainerLods {
+        items: model.iter().cloned().map(Into::into).collect(),
+      },
+    )
+    .unwrap();
+    let reparsed: XmlContainerLods = quick_xml::de::from_str(&serialized).unwrap();
+    assert_eq!(reparsed.items.into_iter().map(YmapContainerLod::from).collect::<Vec<_>>(), model);
+  }
 }

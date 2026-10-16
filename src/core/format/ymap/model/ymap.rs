@@ -4,8 +4,8 @@ use crate::common::position::Position;
 
 use super::{
   ymap_block::YmapBlock, ymap_box_occluder::YmapBoxOccluder, ymap_car_generator::YmapCarGenerator,
-  ymap_distant_lod_lights::YmapDistantLodLights, ymap_entity::YmapEntity,
-  ymap_instanced_data::YmapInstancedData, ymap_lod_light::YmapLodLight,
+  ymap_container_lod::YmapContainerLod, ymap_distant_lod_lights::YmapDistantLodLights,
+  ymap_entity::YmapEntity, ymap_instanced_data::YmapInstancedData, ymap_lod_light::YmapLodLight,
   ymap_occlude_model::YmapOccludeModel, ymap_time_cycle_modifier::YmapTimeCycleModifier,
 };
 
@@ -19,20 +19,36 @@ pub struct Ymap {
   pub content_flags: u32,
   #[difference(recurse)]
   pub streaming_extents_min: Position,
+  #[difference(recurse)]
   pub streaming_extents_max: Position,
+  #[difference(recurse)]
   pub entities_extents_min: Position,
+  #[difference(recurse)]
   pub entities_extents_max: Position,
-  pub entities: Vec<YmapEntity>,
-  pub box_occluders: Vec<YmapBoxOccluder>,
-  pub occlude_models: Vec<YmapOccludeModel>,
-  pub lod_lights: Vec<YmapLodLight>,
-  pub distant_lod_lights: YmapDistantLodLights,
+  #[difference(recurse)]
   pub block: YmapBlock,
-  pub container_lods: Vec<String>,
+  #[difference(skip)]
+  pub entities: Vec<YmapEntity>,
+  #[difference(skip)]
+  pub box_occluders: Vec<YmapBoxOccluder>,
+  #[difference(skip)]
+  pub occlude_models: Vec<YmapOccludeModel>,
+  #[difference(skip)]
+  pub lod_lights: Vec<YmapLodLight>,
+  #[difference(skip)]
+  pub distant_lod_lights: YmapDistantLodLights,
+  #[difference(skip)]
   pub physics_dictionaries: Vec<String>,
+  #[difference(skip)]
   pub instanced_data: YmapInstancedData,
+  #[difference(skip)]
   pub time_cycle_modifiers: Vec<YmapTimeCycleModifier>,
+  #[difference(skip)]
   pub car_generators: Vec<YmapCarGenerator>,
+  /// Unused by every vanilla YMAP (0/12,584 across all vanilla versions) and every local
+  /// source YMAP (0/700) as of 2026-10-16.
+  #[difference(skip)]
+  pub container_lods: Vec<YmapContainerLod>,
 }
 
 #[cfg(test)]
@@ -82,16 +98,6 @@ mod tests {
 
     let diffs = vanilla.diff(&modded);
     println!("{diffs:#?}");
-
-    let recursed = diffs
-      .iter()
-      .find_map(|diff| match diff {
-        YmapStructDiffEnum::streaming_extents_min(inner) => Some(inner),
-        _ => None,
-      })
-      .expect("streaming_extents_min diff");
-    println!("streaming_extents_min inner diffs: {recursed:#?}");
-    assert_eq!(recursed.len(), 2);
 
     assert_eq!(vanilla.apply(diffs), modded);
   }

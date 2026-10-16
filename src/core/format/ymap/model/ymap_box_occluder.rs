@@ -4,6 +4,7 @@ use structdiff::{Difference, StructDiff};
 #[derive(Debug, Clone, PartialEq, Difference)]
 #[difference(expose)]
 #[derive(serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 pub struct YmapBoxOccluder {
   pub i_center_x: i32,
   pub i_center_y: i32,

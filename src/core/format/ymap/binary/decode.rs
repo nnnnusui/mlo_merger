@@ -12,8 +12,8 @@ use crate::core::format::{
   gamefile::struct_reader::{FromScalar, Scalar, StructReader},
   ymap::model::{
     BoundingBox, GrassInstance, GrassInstanceBatch, Vector3, Vector4, Ymap, YmapBlock,
-    YmapBoxOccluder, YmapCarGenerator, YmapDistantLodLight, YmapDistantLodLights, YmapEntity,
-    YmapInstancedData, YmapLodLight, YmapOccludeModel, YmapTimeCycleModifier,
+    YmapBoxOccluder, YmapCarGenerator, YmapContainerLod, YmapDistantLodLight, YmapDistantLodLights,
+    YmapEntity, YmapInstancedData, YmapLodLight, YmapOccludeModel, YmapTimeCycleModifier,
   },
 };
 
@@ -40,7 +40,7 @@ pub(super) fn ymap_from_root<S: StructReader>(root: &S) -> io::Result<Ymap> {
       None => YmapDistantLodLights::default(),
     },
     block: block(&root.child("block")?.ok_or_else(|| invalid_data("CMapData.block is missing"))?)?,
-    container_lods: root.list("containerLods")?,
+    container_lods: collect(root.children("containerLods")?, container_lod)?,
     physics_dictionaries: root.list("physicsDictionaries")?,
     instanced_data: match root.child("instancedData")? {
       Some(data) => instanced_data(&data)?,
@@ -235,6 +235,13 @@ fn block<S: StructReader>(item: &S) -> io::Result<YmapBlock> {
     exported_by: item.get("exportedBy")?,
     owner: item.get("owner")?,
     time: item.get("time")?,
+  })
+}
+
+fn container_lod<S: StructReader>(item: &S) -> io::Result<YmapContainerLod> {
+  Ok(YmapContainerLod {
+    name: item.get("name")?,
+    parent_index: item.get("parentIndex")?,
   })
 }
 

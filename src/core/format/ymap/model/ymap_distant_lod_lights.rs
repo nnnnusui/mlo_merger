@@ -1,5 +1,6 @@
 /// Single distant LOD light entry in YMAP
 #[derive(Debug, Clone, PartialEq, Default, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 pub struct YmapDistantLodLight {
   pub position: String,
   pub rgbi: String,

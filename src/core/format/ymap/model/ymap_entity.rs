@@ -12,7 +12,9 @@ pub struct YmapEntity {
   pub archetype_name: String,
   pub flags: u32,
   pub guid: u32,
+  #[difference(recurse)]
   pub position: Position,
+  #[difference(recurse)]
   pub rotation: Rotation,
   pub scale_x_y: f32,
   pub scale_z: f32,

@@ -6,6 +6,7 @@ use crate::common::position::Position;
 #[derive(Debug, Clone, PartialEq, Difference)]
 #[difference(expose)]
 #[derive(serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 pub struct YmapTimeCycleModifier {
   pub name: String,
   pub min_extents: Position,

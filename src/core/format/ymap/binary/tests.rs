@@ -161,3 +161,26 @@ fn direct_ymap_writer_roundtrips_local_vanilla() {
     assert_eq!(write_ymap(&model, &entities, &catalog).unwrap(), output);
   }
 }
+
+#[test]
+#[ignore = "requires local vanilla YMAP schemas"]
+fn direct_ymap_writer_rejects_container_lods_without_a_schema() {
+  use super::super::model::YmapContainerLod;
+  use crate::core::format::gamefile::rsc7::Rsc7Resource;
+  use crate::core::format::ymap::binary::ymap_to_model;
+  // No local YMAP uses containerLods, so none embeds the rage__fwContainerLodDef schema and
+  // CodeWalker has no META layout for it; writing them must fail rather than drop them.
+  let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+    .join("asset/vanilla-cache/latest/ymap/ap1_01_a.ymap");
+  let bytes = std::fs::read(path).unwrap();
+  let mut catalog = MetaSchemaCatalog::default();
+  catalog.add_resource(&MetaResource::parse(&Rsc7Resource::decode(&bytes).unwrap()).unwrap());
+  let mut model = ymap_to_model(&bytes, &catalog.hash_names).unwrap();
+  model.container_lods = vec![YmapContainerLod {
+    name: "container".into(),
+    parent_index: 0,
+  }];
+  let entities = model.entities.clone();
+  let error = write_ymap(&model, &entities, &catalog).unwrap_err();
+  assert!(error.to_string().contains(&format!("{:08X}", jenk_hash("rage__fwContainerLodDef"))));
+}

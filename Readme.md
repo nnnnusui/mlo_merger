@@ -173,16 +173,25 @@ ybn = 0.05
 ymap = 0.001
 ymap_occlude_model = 0.01
 ymap_box_occluder = 1
+ymap_box_occluder_rotation = 1
+ymap_car_generator_position_decimals = 3
+ymap_lod_light_position_decimals = 3
+ymap_grass_position = 0.01
 ```
 
 `ybn` controls inclusive per-axis polygon coordinates and radius matching across
 all supported polygon types, not only boxes. `ymap` controls floating scalar
 comparisons for car generators and LOD lights. Occlude models use their XY extent
 tolerance; box occluders use integer stored-coordinate units. YMAP comparisons
-remain exclusive of the boundary. Entity coordinates remain exact, and existing
+remain exclusive of the boundary. `ymap_box_occluder_rotation` ignores `iCosZ`/`iSinZ`
+changes up to and including that many stored units (0 compares exactly), and
+`ymap_car_generator_position_decimals` (0 to 6) sets the decimal places car generator
+positions are rounded to when pairing generators; `ymap_lod_light_position_decimals` (0 to 6)
+does the same for distant LOD light positions. `ymap_grass_position` is the per-axis
+world-space distance, in metres, within which grass instances are treated as the same one. Entity coordinates remain exact, and existing
 position-key rounding is unchanged. These settings do not change search radii.
 
-All values must be positive; floating values must also be finite. Unknown keys
+All other values must be positive; floating values must also be finite. Unknown keys
 and invalid TOML are errors. Effective settings are included in merge freshness,
 so changing them causes regeneration on the next merge without requiring `-f`.
 Larger tolerances can treat intentionally different nearby shapes as identical.

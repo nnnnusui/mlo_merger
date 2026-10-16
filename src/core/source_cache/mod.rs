@@ -109,6 +109,44 @@ pub fn load_moved_source_paths(cache_dir: &Path) -> Result<BTreeSet<String>> {
   Ok(paths)
 }
 
+/// Recorded source YMAP paths and the vanilla version the source cache was generated against.
+pub(crate) struct SourceYmapIndex {
+  pub(crate) latest_vanilla_version: String,
+  /// Paths keyed by resource name (its directory name, as under `resources/`) and lowercase
+  /// file name; a resource may hold several YMAPs with the same name in different stream
+  /// directories.
+  pub(crate) paths: BTreeMap<(String, String), Vec<PathBuf>>,
+}
+
+/// Indexes the YMAPs recorded in a generated source cache by resource name and file name.
+pub(crate) fn load_source_ymap_index(cache_dir: &Path) -> Result<SourceYmapIndex> {
+  let metadata: SourceCacheMetadata = serde_json::from_reader(BufReader::new(
+    std::fs::File::open(cache_dir.join("source_cache_info.json"))?,
+  ))?;
+  if !matches!(metadata.format_version, 2 | 3) {
+    return Err(format!("Unsupported source cache schema {}", metadata.format_version).into());
+  }
+  let mut paths = BTreeMap::<_, Vec<_>>::new();
+  for resource in metadata.resources.into_values() {
+    let resource_name =
+      resource.source.file_name().ok_or("Resource has no name")?.to_string_lossy().into_owned();
+    for file in resource.files_by_format.get(".ymap").into_iter().flatten() {
+      let path = file
+        .cached_path
+        .as_ref()
+        .map_or_else(|| resource.source.join(&file.path), |path| cache_dir.join(path));
+      paths
+        .entry((resource_name.clone(), file.file_name.to_ascii_lowercase()))
+        .or_default()
+        .push(path);
+    }
+  }
+  Ok(SourceYmapIndex {
+    latest_vanilla_version: metadata.latest_vanilla_version,
+    paths,
+  })
+}
+
 /// Loads merge inputs from a generated source cache without rescanning source streams.
 pub fn load_merge_inputs(cache_dir: &Path) -> Result<MergeInputs> {
   let metadata: SourceCacheMetadata = serde_json::from_reader(BufReader::new(

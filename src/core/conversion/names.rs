@@ -6,7 +6,11 @@ struct HashNameIndex {
 }
 
 pub(crate) fn load_vanilla_hash_names() -> HashMap<u32, String> {
-  let path = Path::new("asset/vanilla/hash_names.json");
+  load_hash_names_or_empty(Path::new("asset/vanilla/hash_names.json"))
+}
+
+/// Loads a `hash_names.json` index, returning no names when it is missing or unreadable.
+pub(crate) fn load_hash_names_or_empty(path: &Path) -> HashMap<u32, String> {
   match load_hash_names(path) {
     Ok(names) => names,
     Err(error) if error.kind() == io::ErrorKind::NotFound => HashMap::new(),

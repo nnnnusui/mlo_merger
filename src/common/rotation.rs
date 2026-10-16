@@ -1,5 +1,8 @@
+use structdiff::{Difference, StructDiff};
+
 /// Quaternion rotation (x, y, z, w)
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, Default, Difference, PartialEq, serde::Serialize, serde::Deserialize)]
+#[difference(expose)]
 #[cfg_attr(feature = "typescript", derive(specta::Type))]
 pub struct Rotation {
   pub x: f32,

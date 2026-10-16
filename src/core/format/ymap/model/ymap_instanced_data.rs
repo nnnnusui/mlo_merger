@@ -14,6 +14,7 @@ pub struct YmapInstancedData {
 #[derive(Debug, Clone, PartialEq, Difference)]
 #[difference(expose)]
 #[derive(serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 pub struct GrassInstanceBatch {
   pub batch_aabb: BoundingBox,
   pub scale_range: Vector3,
@@ -29,6 +30,7 @@ pub struct GrassInstanceBatch {
 #[derive(Debug, Clone, PartialEq, Difference)]
 #[difference(expose)]
 #[derive(serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 pub struct BoundingBox {
   pub min: Vector4,
   pub max: Vector4,
@@ -38,6 +40,7 @@ pub struct BoundingBox {
 #[derive(Debug, Clone, PartialEq, Difference)]
 #[difference(expose)]
 #[derive(serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 pub struct Vector3 {
   pub x: f32,
   pub y: f32,
@@ -48,6 +51,7 @@ pub struct Vector3 {
 #[derive(Debug, Clone, PartialEq, Difference)]
 #[difference(expose)]
 #[derive(serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 pub struct Vector4 {
   pub x: f32,
   pub y: f32,
@@ -59,6 +63,7 @@ pub struct Vector4 {
 #[derive(Debug, Clone, PartialEq, Difference)]
 #[difference(expose)]
 #[derive(serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 pub struct GrassInstance {
   pub position: Vec<f32>,
   pub normal_x: u32,

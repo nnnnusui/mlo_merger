@@ -20,6 +20,18 @@ pub struct MatchTolerances {
   /// Exclusive integer center tolerance for YMAP box occluders, in stored units.
   #[cfg_attr(feature = "typescript", specta(optional))]
   pub ymap_box_occluder: i32,
+  /// Inclusive tolerance for YMAP box occluder `i_cos_z`/`i_sin_z`, in stored units.
+  #[cfg_attr(feature = "typescript", specta(optional))]
+  pub ymap_box_occluder_rotation: i32,
+  /// Decimal places YMAP car generator positions are rounded to when pairing generators.
+  #[cfg_attr(feature = "typescript", specta(optional))]
+  pub ymap_car_generator_position_decimals: u32,
+  /// Inclusive per-axis world-space tolerance for YMAP grass instance positions, in metres.
+  #[cfg_attr(feature = "typescript", specta(optional))]
+  pub ymap_grass_position: f32,
+  /// Decimal places YMAP distant LOD light positions are rounded to when pairing lights.
+  #[cfg_attr(feature = "typescript", specta(optional))]
+  pub ymap_lod_light_position_decimals: u32,
 }
 
 impl Default for MatchTolerances {
@@ -29,6 +41,10 @@ impl Default for MatchTolerances {
       ymap: 0.001,
       ymap_occlude_model: 0.01,
       ymap_box_occluder: 1,
+      ymap_box_occluder_rotation: 1,
+      ymap_car_generator_position_decimals: 3,
+      ymap_grass_position: 0.01,
+      ymap_lod_light_position_decimals: 3,
     }
   }
 }
@@ -66,9 +82,12 @@ impl MatchTolerances {
     let config: Config =
       toml::from_str(text).map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
     let value = config.tolerance;
-    for (name, tolerance) in
-      [("ybn", value.ybn), ("ymap", value.ymap), ("ymap_occlude_model", value.ymap_occlude_model)]
-    {
+    for (name, tolerance) in [
+      ("ybn", value.ybn),
+      ("ymap", value.ymap),
+      ("ymap_occlude_model", value.ymap_occlude_model),
+      ("ymap_grass_position", value.ymap_grass_position),
+    ] {
       if !tolerance.is_finite() || tolerance <= 0.0 {
         return Err(io::Error::new(
           io::ErrorKind::InvalidData,
@@ -81,6 +100,23 @@ impl MatchTolerances {
         io::ErrorKind::InvalidData,
         "tolerance.ymap_box_occluder must be positive",
       ));
+    }
+    if value.ymap_box_occluder_rotation < 0 {
+      return Err(io::Error::new(
+        io::ErrorKind::InvalidData,
+        "tolerance.ymap_box_occluder_rotation must not be negative",
+      ));
+    }
+    for (name, decimals) in [
+      ("ymap_car_generator_position_decimals", value.ymap_car_generator_position_decimals),
+      ("ymap_lod_light_position_decimals", value.ymap_lod_light_position_decimals),
+    ] {
+      if decimals > 6 {
+        return Err(io::Error::new(
+          io::ErrorKind::InvalidData,
+          format!("tolerance.{name} must be at most 6"),
+        ));
+      }
     }
     Ok(value)
   }
@@ -131,12 +167,26 @@ mod tests {
     assert_eq!(configured.ybn, 0.025);
     assert_eq!(configured.ymap, 0.002);
     assert_eq!(configured.ymap_occlude_model, 0.01);
+    assert_eq!(configured.ymap_box_occluder_rotation, 1);
+    assert_eq!(configured.ymap_car_generator_position_decimals, 3);
+    assert_eq!(configured.ymap_lod_light_position_decimals, 3);
+    assert_eq!(configured.ymap_grass_position, 0.01);
+    let exact = MatchTolerances::parse(
+      "[tolerance]\nymap_box_occluder_rotation = 0\nymap_car_generator_position_decimals = 0",
+    )
+    .unwrap();
+    assert_eq!(exact.ymap_box_occluder_rotation, 0);
+    assert_eq!(exact.ymap_car_generator_position_decimals, 0);
     for text in [
       "[tolerance]\nybn = 0",
       "[tolerance]\nybn = nan",
       "[tolerance]\nymap = inf",
       "[tolerance]\nymap_occlude_model = -0.01",
       "[tolerance]\nymap_box_occluder = 0",
+      "[tolerance]\nymap_box_occluder_rotation = -1",
+      "[tolerance]\nymap_car_generator_position_decimals = 7",
+      "[tolerance]\nymap_lod_light_position_decimals = 7",
+      "[tolerance]\nymap_grass_position = 0",
       "[tolerance]\nunknown = 0.1",
       "not valid toml",
     ] {

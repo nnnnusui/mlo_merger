@@ -3,3 +3,7 @@ ybn = 0.05
 ymap = 0.001
 ymap_occlude_model = 0.01
 ymap_box_occluder = 1
+ymap_box_occluder_rotation = 1
+ymap_car_generator_position_decimals = 3
+ymap_lod_light_position_decimals = 3
+ymap_grass_position = 0.01

@@ -59,6 +59,11 @@ mod tests {
       "LightObb",
       "LightEditProvenance",
       "LightExportCache",
+      "YmapComparisonDiff",
+      "YmapComparisonFile",
+      "YmapDiffFields",
+      "YmapEntityDiff",
+      "YmapEntityFieldDiff",
     ] {
       assert!(actual.contains(&format!("export type {name} =")), "Missing {name}");
     }
@@ -75,6 +80,7 @@ mod tests {
     assert!(actual.contains("source_conflicts?:"));
     assert!(actual.contains("modified_seconds: number"));
     assert!(actual.contains("algorithm_versions?: { [key: string]: number }"));
+    assert!(actual.contains("entities?: YmapEntityDiff[]"));
     assert!(!actual.contains(": bigint"));
     fs::remove_file(path).unwrap();
   }

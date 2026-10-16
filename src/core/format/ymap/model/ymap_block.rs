@@ -1,5 +1,8 @@
+use structdiff::{Difference, StructDiff};
+
 /// Block metadata in YMAP
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, Default, Difference, PartialEq, serde::Serialize, serde::Deserialize)]
+#[difference(expose)]
 pub struct YmapBlock {
   pub version: u32,
   pub flags: u32,
