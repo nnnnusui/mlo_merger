@@ -37,7 +37,7 @@ fn box_occluders_derive_modified_removed_and_added() {
       "box_occluders": [
         { "Modified": { "vanilla_index": 1, "modded_index": 1, "changes": { "i_width": 8, "i_sin_z": 5 } } },
         { "Removed": { "index": 2 } },
-        { "Added": { "index": 2, "box_occluder": serde_json::to_value(occluder(300)).unwrap() } },
+        { "Added": { "index": 2, "item": serde_json::to_value(occluder(300)).unwrap() } },
       ],
     })
   );
@@ -99,7 +99,7 @@ fn pairs_by_center_and_thresholds_rotation() {
       },
       YmapBoxOccluderDiff::Added {
         index: 2,
-        box_occluder: occluder(300),
+        item: occluder(300),
       },
     ]
   );

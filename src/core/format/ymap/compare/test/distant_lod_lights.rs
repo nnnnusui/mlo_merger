@@ -42,7 +42,7 @@ fn distant_lights_pair_by_position_and_report_block_fields() {
         "items": [
           { "Modified": { "vanilla_index": 0, "modded_index": 1, "changes": { "rgbi": "11" } } },
           { "Removed": { "index": 2 } },
-          { "Added": { "index": 2, "distant_lod_light": { "position": "10 11 12", "rgbi": "40" } } },
+          { "Added": { "index": 2, "item": { "position": "10 11 12", "rgbi": "40" } } },
         ],
       },
     })
@@ -112,7 +112,7 @@ fn pairs_by_rounded_position_and_reports_block_fields() {
       },
       YmapDistantLodLightDiff::Added {
         index: 2,
-        distant_lod_light: light("10 11 12", "d"),
+        item: light("10 11 12", "d"),
       },
     ]
   );

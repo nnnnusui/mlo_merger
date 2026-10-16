@@ -28,7 +28,7 @@ fn lod_lights_compare_as_a_multiset_without_parent_positions() {
     json!({
       "lod_lights": [
         { "Removed": { "index": 0 } },
-        { "Added": { "index": 2, "lod_light": serde_json::to_value(light(9.0)).unwrap() } },
+        { "Added": { "index": 2, "item": serde_json::to_value(light(9.0)).unwrap() } },
       ],
     })
   );
@@ -61,7 +61,7 @@ fn compares_lights_as_a_multiset() {
       },
       YmapLodLightDiff::Added {
         index: 1,
-        lod_light: light(9.0),
+        item: light(9.0),
       },
     ]
   );

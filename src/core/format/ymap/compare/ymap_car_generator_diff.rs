@@ -7,8 +7,8 @@
 use serde::{Deserialize, Serialize};
 
 use super::{
-  PositionDiff,
-  field::{changed, changed_f32, pair_by_keys, rounded_position_key},
+  PositionDiff, YmapItemDiff,
+  field::{changed, changed_f32, pair_by_keys, rounded_position_key, set_changed},
 };
 use crate::core::{
   config::matching::MatchTolerances,
@@ -16,25 +16,7 @@ use crate::core::{
 };
 
 /// How one car generator of a modded YMAP differs from vanilla.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[cfg_attr(feature = "typescript", derive(specta::Type))]
-pub enum YmapCarGeneratorDiff {
-  /// Present only in the modded YMAP, at `index`.
-  Added {
-    index: usize,
-    car_generator: YmapCarGenerator,
-  },
-  /// Present only in vanilla, at `index`.
-  Removed {
-    index: usize,
-  },
-  /// Paired with a modded item and differing beyond the tolerances.
-  Modified {
-    vanilla_index: usize,
-    modded_index: usize,
-    changes: YmapCarGeneratorFieldDiff,
-  },
-}
+pub type YmapCarGeneratorDiff = YmapItemDiff<YmapCarGenerator, YmapCarGeneratorFieldDiff>;
 
 /// Changed car generator fields, each holding its new value.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -90,32 +72,51 @@ pub fn car_generator_diffs(
     items.iter().map(|item| Some(rounded_position_key(&item.position, decimals))).collect()
   };
   let pairing = pair_by_keys(keys(vanilla_items), keys(modded_items));
-  let mut diffs = Vec::new();
-  for (vanilla_index, modded_index) in pairing.pairs {
-    let changes = YmapCarGeneratorFieldDiff::between(
+  YmapItemDiff::collect(pairing, modded_items, |vanilla_index, modded_index| {
+    YmapCarGeneratorFieldDiff::between(
       &vanilla_items[vanilla_index],
       &modded_items[modded_index],
       tolerances.ymap,
-    );
-    if changes != YmapCarGeneratorFieldDiff::default() {
-      diffs.push(YmapCarGeneratorDiff::Modified {
-        vanilla_index,
-        modded_index,
-        changes,
-      });
-    }
-  }
-  diffs.extend(pairing.removed.into_iter().map(|index| YmapCarGeneratorDiff::Removed {
-    index,
-  }));
-  diffs.extend(pairing.added.into_iter().map(|index| YmapCarGeneratorDiff::Added {
-    index,
-    car_generator: modded_items[index].clone(),
-  }));
-  diffs
+    )
+  })
 }
 
 impl YmapCarGeneratorFieldDiff {
+  /// Overwrites the changed fields of `item`.
+  pub fn apply_to(
+    &self,
+    item: &mut YmapCarGenerator,
+  ) {
+    let Self {
+      position,
+      orient_x,
+      orient_y,
+      perpendicular_length,
+      car_model,
+      flags,
+      body_color_remap_1,
+      body_color_remap_2,
+      body_color_remap_3,
+      body_color_remap_4,
+      pop_group,
+      livery,
+    } = self;
+    if let Some(position) = position {
+      position.apply_to(&mut item.position);
+    }
+    set_changed(&mut item.orient_x, orient_x);
+    set_changed(&mut item.orient_y, orient_y);
+    set_changed(&mut item.perpendicular_length, perpendicular_length);
+    set_changed(&mut item.car_model, car_model);
+    set_changed(&mut item.flags, flags);
+    set_changed(&mut item.body_color_remap_1, body_color_remap_1);
+    set_changed(&mut item.body_color_remap_2, body_color_remap_2);
+    set_changed(&mut item.body_color_remap_3, body_color_remap_3);
+    set_changed(&mut item.body_color_remap_4, body_color_remap_4);
+    set_changed(&mut item.pop_group, pop_group);
+    set_changed(&mut item.livery, livery);
+  }
+
   /// Fields of `after` changed from `before`, ignoring float changes below `tolerance`.
   pub fn between(
     before: &YmapCarGenerator,

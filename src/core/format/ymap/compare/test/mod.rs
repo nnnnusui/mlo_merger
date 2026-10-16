@@ -3,6 +3,7 @@
 //! Each test changes one kind of data and checks the serialized diff, so it also covers that
 //! unchanged fields are omitted from the JSON.
 
+mod apply;
 mod box_occluders;
 mod car_generators;
 mod context;

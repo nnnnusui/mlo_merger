@@ -7,14 +7,14 @@
 use serde::{Deserialize, Serialize};
 
 use super::{
-  PositionDiff,
-  field::{changed, pair_by_keys, rounded_position_key},
+  PositionDiff, YmapItemDiff,
+  field::{changed, pair_by_keys, rounded_position_key, set_changed},
 };
 use crate::{
-  common::position::Position,
+  common::{Result, position::Position},
   core::{
     config::matching::MatchTolerances,
-    format::ymap::model::{Ymap, YmapDistantLodLight},
+    format::ymap::model::{Ymap, YmapDistantLodLight, YmapDistantLodLights},
   },
 };
 
@@ -33,25 +33,7 @@ pub struct YmapDistantLodLightsDiff {
 }
 
 /// How one distant LOD light of a modded YMAP differs from vanilla.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[cfg_attr(feature = "typescript", derive(specta::Type))]
-pub enum YmapDistantLodLightDiff {
-  /// Present only in the modded YMAP, at `index`.
-  Added {
-    index: usize,
-    distant_lod_light: YmapDistantLodLight,
-  },
-  /// Present only in vanilla, at `index`.
-  Removed {
-    index: usize,
-  },
-  /// Paired with a modded item and differing beyond the tolerances.
-  Modified {
-    vanilla_index: usize,
-    modded_index: usize,
-    changes: YmapDistantLodLightFieldDiff,
-  },
-}
+pub type YmapDistantLodLightDiff = YmapItemDiff<YmapDistantLodLight, YmapDistantLodLightFieldDiff>;
 
 /// Changed distant LOD light fields, each holding its new value.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -94,31 +76,13 @@ pub fn distant_lod_lights_diff(
       .collect()
   };
   let pairing = pair_by_keys(keys(vanilla_items), keys(modded_items));
-  let items = {
-    let mut diffs = Vec::new();
-    for (vanilla_index, modded_index) in pairing.pairs {
-      let changes = YmapDistantLodLightFieldDiff::between(
-        &vanilla_items[vanilla_index],
-        &modded_items[modded_index],
-        tolerances.ymap,
-      );
-      if changes != YmapDistantLodLightFieldDiff::default() {
-        diffs.push(YmapDistantLodLightDiff::Modified {
-          vanilla_index,
-          modded_index,
-          changes,
-        });
-      }
-    }
-    diffs.extend(pairing.removed.into_iter().map(|index| YmapDistantLodLightDiff::Removed {
-      index,
-    }));
-    diffs.extend(pairing.added.into_iter().map(|index| YmapDistantLodLightDiff::Added {
-      index,
-      distant_lod_light: modded_items[index].clone(),
-    }));
-    diffs
-  };
+  let items = YmapItemDiff::collect(pairing, modded_items, |vanilla_index, modded_index| {
+    YmapDistantLodLightFieldDiff::between(
+      &vanilla_items[vanilla_index],
+      &modded_items[modded_index],
+      tolerances.ymap,
+    )
+  });
   let diff = YmapDistantLodLightsDiff {
     num_street_lights: changed(&before.num_street_lights, &after.num_street_lights),
     category: changed(&before.category, &after.category),
@@ -127,7 +91,47 @@ pub fn distant_lod_lights_diff(
   (diff != YmapDistantLodLightsDiff::default()).then_some(diff)
 }
 
+impl YmapDistantLodLightsDiff {
+  /// Overwrites the changed block fields of `lights` and rebuilds its items.
+  pub fn apply_to(
+    &self,
+    lights: &mut YmapDistantLodLights,
+  ) -> Result<()> {
+    let Self {
+      num_street_lights,
+      category,
+      items,
+    } = self;
+    set_changed(&mut lights.num_street_lights, num_street_lights);
+    set_changed(&mut lights.category, category);
+    lights.items =
+      YmapItemDiff::apply("distant_lod_lights", &lights.items, items, |item, changes| {
+        changes.apply_to(item)
+      })?;
+    Ok(())
+  }
+}
+
 impl YmapDistantLodLightFieldDiff {
+  /// Overwrites the changed fields of `light`, rewriting its position as `"x y z"`.
+  ///
+  /// Position changes are only recorded between parseable positions, so they are ignored for a
+  /// light whose position cannot be parsed.
+  pub fn apply_to(
+    &self,
+    light: &mut YmapDistantLodLight,
+  ) {
+    let Self {
+      position,
+      rgbi,
+    } = self;
+    if let (Some(diff), Some(mut position)) = (position, parse_distant_position(light)) {
+      diff.apply_to(&mut position);
+      light.position = format!("{} {} {}", position.x, position.y, position.z);
+    }
+    set_changed(&mut light.rgbi, rgbi);
+  }
+
   /// Fields of `after` changed from `before`, ignoring position changes below `tolerance`.
   pub fn between(
     before: &YmapDistantLodLight,

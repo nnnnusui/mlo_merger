@@ -1,25 +1,44 @@
 //! Writes each source YMAP's differences from vanilla as `diff/{resource}/{path}.diff.json`.
+//!
+//! A diff is rewritten only when the source or vanilla YMAP it was taken from changed; the
+//! document records both files' fingerprints for that check.
 
 use super::Result;
 use crate::{
   common::{json::write_json, path::ensure_safe_path},
   core::{
     conversion::load_hash_names_or_empty,
-    format::ymap::compare::{StreamFileRef, YmapComparisonContext},
+    format::ymap::compare::{StreamFileRef, YmapComparisonContext, YmapComparisonFile},
     source_cache::{layout::stream_relative_path, types::SourceCacheMetadata},
   },
 };
 use std::{fs, io::BufReader, path::Path};
 
-/// Regenerates the `diff` directory for every source YMAP that overrides a vanilla YMAP.
+/// How many diff documents [`write_ymap_diffs`] wrote and kept.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(in crate::core::source_cache) struct YmapDiffCounts {
+  pub written: usize,
+  pub reused: usize,
+}
+
+/// The fingerprints a diff document was taken from, read without its differences.
+#[derive(serde::Deserialize)]
+struct DiffInputs {
+  source: YmapComparisonFile,
+  vanilla: YmapComparisonFile,
+}
+
+/// Rebuilds the `diff` directory for every source YMAP that overrides a vanilla YMAP.
 ///
-/// Reads the published `source_cache_info.json`, so it runs after publication. Returns the
-/// number of diff files written; YMAPs whose diff cannot be built are logged and skipped.
-pub(super) fn write_ymap_diffs(
+/// Reads the published `source_cache_info.json`, so it runs after publication. Diffs whose
+/// source and vanilla YMAPs are unchanged are kept; the rest are regenerated, and diffs of YMAPs
+/// no longer overriding vanilla are dropped. YMAPs whose diff cannot be built are logged and
+/// skipped.
+pub(in crate::core::source_cache) fn write_ymap_diffs(
   output: &Path,
   vanilla_dir: &Path,
   vanilla_cache_dir: &Path,
-) -> Result<usize> {
+) -> Result<YmapDiffCounts> {
   let metadata: SourceCacheMetadata = serde_json::from_reader(BufReader::new(fs::File::open(
     output.join("source_cache_info.json"),
   )?))?;
@@ -32,7 +51,10 @@ pub(super) fn write_ymap_diffs(
   ensure_safe_path(output, &target)?;
   remove_dir_if_exists(&staging)?;
 
-  let mut written = 0;
+  let mut counts = YmapDiffCounts {
+    written: 0,
+    reused: 0,
+  };
   for resource in metadata.resources.values() {
     let resource_name =
       resource.source.file_name().ok_or("Resource has no name")?.to_string_lossy().into_owned();
@@ -46,6 +68,17 @@ pub(super) fn write_ymap_diffs(
         vanilla_version: metadata.latest_vanilla_version.clone(),
         file_name: file.file_name.clone(),
       };
+      let file_path = Path::new(&resource_name).join(format!("{relative}.diff.json"));
+      let (previous, path) = (target.join(&file_path), staging.join(&file_path));
+      ensure_safe_path(&target, &previous)?;
+      ensure_safe_path(&staging, &path)?;
+      let parent = path.parent().ok_or("Diff path has no parent")?;
+      if is_current(&context, &stream_file, &previous) {
+        fs::create_dir_all(parent)?;
+        fs::rename(&previous, &path)?;
+        counts.reused += 1;
+        continue;
+      }
       let diff = match context.get_diff(&stream_file) {
         Ok(diff) => diff,
         Err(error) => {
@@ -53,19 +86,39 @@ pub(super) fn write_ymap_diffs(
           continue;
         }
       };
-      let path = staging.join(&resource_name).join(format!("{relative}.diff.json"));
-      ensure_safe_path(&staging, &path)?;
-      fs::create_dir_all(path.parent().ok_or("Diff path has no parent")?)?;
+      fs::create_dir_all(parent)?;
       write_json(&path, &diff)?;
-      written += 1;
+      counts.written += 1;
     }
   }
 
   fs::create_dir_all(&staging)?;
   remove_dir_if_exists(&target)?;
   fs::rename(&staging, &target)?;
-  tracing::info!("Wrote {written} YMAP diffs to {}", target.display());
-  Ok(written)
+  tracing::info!(
+    "Wrote {} and kept {} YMAP diffs in {}",
+    counts.written,
+    counts.reused,
+    target.display()
+  );
+  Ok(counts)
+}
+
+/// Whether the diff at `path` exists and was taken from the files `file` resolves to now.
+///
+/// Unreadable diffs and files are treated as stale, so they are regenerated.
+fn is_current(
+  context: &YmapComparisonContext,
+  file: &StreamFileRef,
+  path: &Path,
+) -> bool {
+  let Ok(reader) = fs::File::open(path) else {
+    return false;
+  };
+  let Ok(inputs) = serde_json::from_reader::<_, DiffInputs>(BufReader::new(reader)) else {
+    return false;
+  };
+  context.is_diff_current(file, &inputs.source, &inputs.vanilla).unwrap_or(false)
 }
 
 fn remove_dir_if_exists(path: &Path) -> Result<()> {
@@ -97,8 +150,9 @@ mod tests {
       }
     }
 
-    let written =
-      write_ymap_diffs(&output, &asset.join("vanilla"), &asset.join("vanilla-cache")).unwrap();
+    let written = write_ymap_diffs(&output, &asset.join("vanilla"), &asset.join("vanilla-cache"))
+      .unwrap()
+      .written;
     let files = walkdir::WalkDir::new(output.join("diff"))
       .into_iter()
       .filter_map(std::result::Result::ok)
@@ -108,5 +162,16 @@ mod tests {
     assert!(written > 0);
     assert_eq!(files, written);
     assert!(!output.join("diff.tmp").exists());
+
+    // Nothing changed since, so every diff is kept.
+    let rerun =
+      write_ymap_diffs(&output, &asset.join("vanilla"), &asset.join("vanilla-cache")).unwrap();
+    assert_eq!(
+      rerun,
+      YmapDiffCounts {
+        written: 0,
+        reused: written,
+      }
+    );
   }
 }

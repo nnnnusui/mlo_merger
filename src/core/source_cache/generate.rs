@@ -11,7 +11,7 @@ use super::{
 };
 use crate::core::vanilla_cache::LoadedCache;
 
-mod diff;
+pub(super) mod diff;
 mod prepare;
 mod publish;
 mod resources;
@@ -77,10 +77,8 @@ pub(super) fn run(build: &BuildSourceCache) -> Result<bool> {
   let vanilla_dir = vanilla.vanilla_dir.clone();
   let vanilla_cache_dir = vanilla.vanilla_cache_dir.clone();
   let published = publish::publish_if_changed(source, vanilla, publication, state, changed)?;
-  if published || !output.join("diff").is_dir() {
-    crate::core::config::matching::with_config(|| {
-      diff::write_ymap_diffs(&output, &vanilla_dir, &vanilla_cache_dir)
-    })??;
-  }
+  crate::core::config::matching::with_config(|| {
+    diff::write_ymap_diffs(&output, &vanilla_dir, &vanilla_cache_dir)
+  })??;
   Ok(published)
 }

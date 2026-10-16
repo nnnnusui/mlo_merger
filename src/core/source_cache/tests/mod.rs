@@ -5,6 +5,7 @@ use crate::core::vanilla_cache::{DerivedVanillaFile, YmapRelationshipIndex};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 
+mod diff;
 mod inventory;
 mod migration;
 mod selection;

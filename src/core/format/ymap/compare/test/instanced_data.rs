@@ -91,7 +91,7 @@ fn prop_instances_and_the_imap_link_compare_by_name() {
         "imap_link": "other_link",
         "prop_instances": [
           { "Removed": { "index": 0 } },
-          { "Added": { "index": 1, "name": "c" } },
+          { "Added": { "index": 1, "item": "c" } },
         ],
       },
     })
@@ -237,7 +237,7 @@ fn reports_attribute_changes_and_whole_batches() {
     diff.prop_instances,
     vec![YmapPropInstanceDiff::Added {
       index: 0,
-      name: "prop".into(),
+      item: "prop".into(),
     }]
   );
   let diffs = diff.grass_batches;

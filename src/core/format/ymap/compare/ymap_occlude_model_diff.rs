@@ -7,11 +7,12 @@
 use serde::{Deserialize, Serialize};
 
 use super::{
-  PositionDiff,
-  field::{changed, pair_in_order},
+  PositionDiff, YmapItemDiff,
+  field::{changed, pair_in_order, set_changed},
+  item_diff::{ItemChange, apply_changes},
 };
 use crate::{
-  common::{position::Position, triangle::Triangle},
+  common::{Result, position::Position, triangle::Triangle},
   core::{
     config::matching::MatchTolerances,
     format::ymap::model::{Ymap, YmapOccludeModel},
@@ -19,25 +20,7 @@ use crate::{
 };
 
 /// How one occlude model of a modded YMAP differs from vanilla.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[cfg_attr(feature = "typescript", derive(specta::Type))]
-pub enum YmapOccludeModelDiff {
-  /// Present only in the modded YMAP, at `index`.
-  Added {
-    index: usize,
-    occlude_model: YmapOccludeModel,
-  },
-  /// Present only in vanilla, at `index`.
-  Removed {
-    index: usize,
-  },
-  /// Paired with a modded item and differing beyond the tolerances.
-  Modified {
-    vanilla_index: usize,
-    modded_index: usize,
-    changes: YmapOccludeModelFieldDiff,
-  },
-}
+pub type YmapOccludeModelDiff = YmapItemDiff<YmapOccludeModel, YmapOccludeModelFieldDiff>;
 
 /// Changed occlude model fields, each holding its new value.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -73,31 +56,47 @@ pub fn occlude_model_diffs(
       |p: &Position, q: &Position| (p.x - q.x).abs() < tolerance && (p.y - q.y).abs() < tolerance;
     close(&a.bmin, &b.bmin) || close(&a.bmax, &b.bmax)
   });
-  let mut diffs = Vec::new();
-  for (vanilla_index, modded_index) in pairing.pairs {
-    let changes = YmapOccludeModelFieldDiff::between(
-      &vanilla_items[vanilla_index],
-      &modded_items[modded_index],
-    );
-    if changes != YmapOccludeModelFieldDiff::default() {
-      diffs.push(YmapOccludeModelDiff::Modified {
-        vanilla_index,
-        modded_index,
-        changes,
-      });
-    }
-  }
-  diffs.extend(pairing.removed.into_iter().map(|index| YmapOccludeModelDiff::Removed {
-    index,
-  }));
-  diffs.extend(pairing.added.into_iter().map(|index| YmapOccludeModelDiff::Added {
-    index,
-    occlude_model: modded_items[index].clone(),
-  }));
-  diffs
+  YmapItemDiff::collect(pairing, modded_items, |vanilla_index, modded_index| {
+    YmapOccludeModelFieldDiff::between(&vanilla_items[vanilla_index], &modded_items[modded_index])
+  })
 }
 
 impl YmapOccludeModelFieldDiff {
+  /// Overwrites the changed fields of `item`, removing its listed triangles and appending the
+  /// added ones.
+  pub fn apply_to(
+    &self,
+    item: &mut YmapOccludeModel,
+  ) -> Result<()> {
+    let Self {
+      bmin,
+      bmax,
+      flags,
+      removed_triangles,
+      added_triangles,
+    } = self;
+    if let Some(corner) = bmin {
+      corner.apply_to(&mut item.bmin);
+    }
+    if let Some(corner) = bmax {
+      corner.apply_to(&mut item.bmax);
+    }
+    set_changed(&mut item.flags, flags);
+    let kept = item.triangles.len().saturating_sub(removed_triangles.len());
+    let changes = removed_triangles
+      .iter()
+      .map(|&index| ItemChange::Removed {
+        index,
+      })
+      .chain(added_triangles.iter().enumerate().map(|(offset, item)| ItemChange::Added {
+        index: kept + offset,
+        item,
+      }));
+    item.triangles =
+      apply_changes("occlude model triangles", &item.triangles, changes, |_, _: &()| Ok(()))?;
+    Ok(())
+  }
+
   /// Fields and triangles of `after` changed from `before`, compared exactly.
   pub fn between(
     before: &YmapOccludeModel,

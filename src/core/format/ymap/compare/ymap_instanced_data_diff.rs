@@ -17,14 +17,18 @@ use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
-use super::field::{changed, pair_by_keys};
+use super::{
+  NoFieldDiff, YmapItemDiff,
+  field::{Pairing, changed, pair_by_keys, set_changed},
+  item_diff::{ItemChange, apply_changes},
+};
 use crate::{
-  common::position::Position,
+  common::{Result, position::Position},
   core::{
     config::matching::MatchTolerances,
     format::ymap::{
       diff::reference_hash,
-      model::{BoundingBox, GrassInstance, GrassInstanceBatch, Ymap},
+      model::{BoundingBox, GrassInstance, GrassInstanceBatch, Ymap, YmapInstancedData},
     },
   },
 };
@@ -46,40 +50,10 @@ pub struct YmapInstancedDataDiff {
 }
 
 /// How one prop instance name of a modded YMAP differs from vanilla.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[cfg_attr(feature = "typescript", derive(specta::Type))]
-pub enum YmapPropInstanceDiff {
-  /// Listed only by the modded YMAP, at `index`.
-  Added {
-    index: usize,
-    name: String,
-  },
-  /// Listed only by vanilla, at `index`.
-  Removed {
-    index: usize,
-  },
-}
+pub type YmapPropInstanceDiff = YmapItemDiff<String, NoFieldDiff>;
 
 /// How one grass batch of a modded YMAP differs from vanilla.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[cfg_attr(feature = "typescript", derive(specta::Type))]
-pub enum YmapGrassBatchDiff {
-  /// Present only in the modded YMAP, at `index`.
-  Added {
-    index: usize,
-    batch: GrassInstanceBatch,
-  },
-  /// Present only in vanilla, at `index`.
-  Removed {
-    index: usize,
-  },
-  /// Paired with a modded batch whose bounds or instances differ.
-  Modified {
-    vanilla_index: usize,
-    modded_index: usize,
-    changes: YmapGrassBatchFieldDiff,
-  },
-}
+pub type YmapGrassBatchDiff = YmapItemDiff<GrassInstanceBatch, YmapGrassBatchFieldDiff>;
 
 /// Changes of a paired grass batch.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -151,21 +125,10 @@ pub fn instanced_data_diff(
   let (before, after) = (&vanilla.instanced_data, &modded.instanced_data);
   let names = |list: &[String]| list.iter().map(|name| Some(reference_hash(name))).collect();
   let props = pair_by_keys(names(&before.prop_instance_list), names(&after.prop_instance_list));
-  let mut prop_instances = props
-    .removed
-    .into_iter()
-    .map(|index| YmapPropInstanceDiff::Removed {
-      index,
-    })
-    .collect::<Vec<_>>();
-  prop_instances.extend(props.added.into_iter().map(|index| YmapPropInstanceDiff::Added {
-    index,
-    name: after.prop_instance_list[index].clone(),
-  }));
   let diff = YmapInstancedDataDiff {
     imap_link: (reference_hash(&before.imap_link) != reference_hash(&after.imap_link))
       .then(|| after.imap_link.clone()),
-    prop_instances,
+    prop_instances: YmapItemDiff::unpaired(props, &after.prop_instance_list),
     grass_batches: grass_batch_diffs(
       &before.grass_instance_list,
       &after.grass_instance_list,
@@ -195,10 +158,18 @@ pub fn grass_world_position(
   batch: &GrassInstanceBatch,
   instance: &GrassInstance,
 ) -> Option<Position> {
-  let [x, y, z] = instance.position.as_slice() else {
+  unpack_position(&batch.batch_aabb, &instance.position)
+}
+
+/// World position of a `packed` position within `bounds`, or `None` if malformed.
+fn unpack_position(
+  bounds: &BoundingBox,
+  packed: &[f32],
+) -> Option<Position> {
+  let [x, y, z] = packed else {
     return None;
   };
-  let (min, max) = (&batch.batch_aabb.min, &batch.batch_aabb.max);
+  let (min, max) = (&bounds.min, &bounds.max);
   let axis = |min: f32, max: f32, packed: f32| {
     (f64::from(min)
       + (f64::from(max) - f64::from(min)) * (f64::from(packed) * BATCH_VERT_MULTIPLIER)) as f32
@@ -208,6 +179,28 @@ pub fn grass_world_position(
     y: axis(min.y, max.y, *y),
     z: axis(min.z, max.z, *z),
   })
+}
+
+/// `position` packed relative to `bounds`, the inverse of [`unpack_position`] up to one packed
+/// step; axes of zero size pack to 0.
+fn pack_position(
+  bounds: &BoundingBox,
+  position: &Position,
+) -> Vec<f32> {
+  let (min, max) = (&bounds.min, &bounds.max);
+  let axis = |min: f32, max: f32, world: f32| {
+    let size = f64::from(max) - f64::from(min);
+    if size == 0.0 {
+      return 0.0;
+    }
+    let packed = (f64::from(world) - f64::from(min)) / size / BATCH_VERT_MULTIPLIER;
+    packed.round().clamp(0.0, f64::from(u16::MAX)) as f32
+  };
+  vec![
+    axis(min.x, max.x, position.x),
+    axis(min.y, max.y, position.y),
+    axis(min.z, max.z, position.z),
+  ]
 }
 
 /// An instance located in world space, remembering where it is stored.
@@ -401,37 +394,95 @@ fn grass_batch_diffs(
     pair_by_score(overlaps, &mut vanilla_paired, &mut modded_paired, &mut pairs);
   }
   pairs.sort();
-
-  let mut diffs = Vec::new();
-  for (vanilla_index, modded_index) in pairs {
-    let changes = YmapGrassBatchFieldDiff::between(
+  let pairing = Pairing {
+    pairs,
+    removed: (0..vanilla.len()).filter(|index| !vanilla_paired[*index]).collect(),
+    added: (0..modded.len()).filter(|index| !modded_paired[*index]).collect(),
+  };
+  YmapItemDiff::collect(pairing, modded, |vanilla_index, modded_index| {
+    YmapGrassBatchFieldDiff::between(
       (&vanilla[vanilla_index], &vanilla_placed[vanilla_index]),
       (&modded[modded_index], &modded_placed[modded_index]),
       tolerance,
-    );
-    if changes != YmapGrassBatchFieldDiff::default() {
-      diffs.push(YmapGrassBatchDiff::Modified {
-        vanilla_index,
-        modded_index,
-        changes,
-      });
-    }
+    )
+  })
+}
+
+impl YmapInstancedDataDiff {
+  /// Overwrites the changed fields of `data` and rebuilds its prop instances and grass batches.
+  pub fn apply_to(
+    &self,
+    data: &mut YmapInstancedData,
+  ) -> Result<()> {
+    let Self {
+      imap_link,
+      prop_instances,
+      grass_batches,
+    } = self;
+    set_changed(&mut data.imap_link, imap_link);
+    data.prop_instance_list = YmapItemDiff::apply(
+      "prop instances",
+      &data.prop_instance_list,
+      prop_instances,
+      |item, changes| changes.apply_to(item),
+    )?;
+    data.grass_instance_list = YmapItemDiff::try_apply(
+      "grass batches",
+      &data.grass_instance_list,
+      grass_batches,
+      |batch, changes| changes.apply_to(batch),
+    )?;
+    Ok(())
   }
-  diffs.extend((0..vanilla.len()).filter(|index| !vanilla_paired[*index]).map(|index| {
-    YmapGrassBatchDiff::Removed {
-      index,
-    }
-  }));
-  diffs.extend((0..modded.len()).filter(|index| !modded_paired[*index]).map(|index| {
-    YmapGrassBatchDiff::Added {
-      index,
-      batch: modded[index].clone(),
-    }
-  }));
-  diffs
 }
 
 impl YmapGrassBatchFieldDiff {
+  /// Applies the changes to `batch`.
+  ///
+  /// When the bounds change, the vanilla instances are repacked into the new bounds so they keep
+  /// their world positions; added instances are already packed relative to the new bounds.
+  pub fn apply_to(
+    &self,
+    batch: &mut GrassInstanceBatch,
+  ) -> Result<()> {
+    let Self {
+      batch_aabb,
+      removed_instances,
+      added_instances,
+      modified_instances,
+    } = self;
+    if let Some(bounds) = batch_aabb {
+      for instance in &mut batch.instances {
+        if let Some(position) = unpack_position(&batch.batch_aabb, &instance.position) {
+          instance.position = pack_position(bounds, &position);
+        }
+      }
+      batch.batch_aabb = bounds.clone();
+    }
+    let removed = removed_instances.iter().map(|&index| ItemChange::Removed {
+      index,
+    });
+    let added = added_instances.iter().map(|added| ItemChange::Added {
+      index: added.index,
+      item: &added.instance,
+    });
+    let modified = modified_instances.iter().map(|modified| ItemChange::Modified {
+      vanilla_index: modified.vanilla_index,
+      modded_index: modified.modded_index,
+      changes: &modified.changes,
+    });
+    batch.instances = apply_changes(
+      "grass instances",
+      &batch.instances,
+      removed.chain(added).chain(modified),
+      |instance, changes| {
+        changes.apply_to(instance);
+        Ok(())
+      },
+    )?;
+    Ok(())
+  }
+
   /// Bounds and instance changes of a paired batch, comparing instances in world space.
   fn between(
     (before, before_placed): (&GrassInstanceBatch, &[Placed]),
@@ -475,6 +526,25 @@ impl YmapGrassBatchFieldDiff {
 }
 
 impl YmapGrassInstanceFieldDiff {
+  /// Overwrites the changed attributes of `instance`.
+  pub fn apply_to(
+    &self,
+    instance: &mut GrassInstance,
+  ) {
+    let Self {
+      normal_x,
+      normal_y,
+      color,
+      scale,
+      ao,
+    } = self;
+    set_changed(&mut instance.normal_x, normal_x);
+    set_changed(&mut instance.normal_y, normal_y);
+    set_changed(&mut instance.color, color);
+    set_changed(&mut instance.scale, scale);
+    set_changed(&mut instance.ao, ao);
+  }
+
   /// Attributes of `after` changed from `before`, excluding position and `pad`.
   pub fn between(
     before: &GrassInstance,

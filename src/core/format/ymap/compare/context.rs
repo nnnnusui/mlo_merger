@@ -137,16 +137,38 @@ impl YmapComparisonContext {
       &matching::current(),
     );
     Ok(YmapComparisonDiff {
-      source: self.comparison_file(file)?,
-      vanilla: self.comparison_file(&baseline)?,
+      source: self.comparison_file(file, None)?,
+      vanilla: self.comparison_file(&baseline, None)?,
       diffs,
     })
   }
 
-  /// Fingerprints the file that `file` resolves to.
+  /// Whether a diff of `file` taken from `source` against `vanilla` still describes the files
+  /// that `file` and its vanilla baseline resolve to.
+  ///
+  /// Files whose size and modification time match are not hashed again.
+  pub fn is_diff_current(
+    &self,
+    file: &StreamFileRef,
+    source: &YmapComparisonFile,
+    vanilla: &YmapComparisonFile,
+  ) -> Result<bool> {
+    let baseline = StreamFileRef {
+      resource_name: None,
+      ..file.clone()
+    };
+    Ok(
+      self.comparison_file(file, Some(source))? == *source
+        && self.comparison_file(&baseline, Some(vanilla))? == *vanilla,
+    )
+  }
+
+  /// Fingerprints the file that `file` resolves to, reusing `previous` when its path, size and
+  /// modification time still match.
   fn comparison_file(
     &self,
     file: &StreamFileRef,
+    previous: Option<&YmapComparisonFile>,
   ) -> Result<YmapComparisonFile> {
     let path = resolve_stream_file(
       &self.vanilla_cache_dir,
@@ -154,14 +176,21 @@ impl YmapComparisonContext {
       &self.source_index,
       file,
     )?;
+    let path = path.display().to_string();
+    let previous = previous.filter(|previous| previous.path == path).map(|previous| Fingerprint {
+      sha256: previous.sha256.clone(),
+      size: previous.size,
+      modified_seconds: previous.modified_seconds,
+      modified_nanos: previous.modified_nanos,
+    });
     let Fingerprint {
       sha256,
       size,
       modified_seconds,
       modified_nanos,
-    } = Fingerprint::read(&path, None, false)?;
+    } = Fingerprint::read(Path::new(&path), previous.as_ref(), false)?;
     Ok(YmapComparisonFile {
-      path: path.display().to_string(),
+      path,
       sha256,
       size,
       modified_seconds,

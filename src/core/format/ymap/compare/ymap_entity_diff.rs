@@ -3,9 +3,13 @@
 use serde::{Deserialize, Serialize};
 use structdiff::StructDiff;
 
-use super::{PositionDiff, RotationDiff, YmapComparisonData};
+use super::{
+  PositionDiff, RotationDiff, YmapComparisonData,
+  field::set_changed,
+  item_diff::{ItemChange, apply_changes},
+};
 use crate::{
-  common::{position::PositionStructDiffEnum, rotation::RotationStructDiffEnum},
+  common::{Result, position::PositionStructDiffEnum, rotation::RotationStructDiffEnum},
   core::format::ymap::model::{Ymap, YmapEntity, ymap_entity::YmapEntityStructDiffEnum},
 };
 
@@ -137,7 +141,91 @@ pub fn entity_diffs(
   diffs
 }
 
+/// The modded entities rebuilt from `vanilla` and `diffs`, keeping unchanged entities in vanilla
+/// order.
+pub(super) fn apply_entity_diffs(
+  vanilla: &[YmapEntity],
+  diffs: &[YmapEntityDiff],
+) -> Result<Vec<YmapEntity>> {
+  let changes = diffs.iter().map(|diff| match diff {
+    YmapEntityDiff::Added {
+      index,
+      entity,
+    } => ItemChange::Added {
+      index: *index,
+      item: entity,
+    },
+    YmapEntityDiff::Removed {
+      index,
+      ..
+    } => ItemChange::Removed {
+      index: *index,
+    },
+    YmapEntityDiff::Modified {
+      vanilla_index,
+      modded_index,
+      changes,
+      ..
+    } => ItemChange::Modified {
+      vanilla_index: *vanilla_index,
+      modded_index: *modded_index,
+      changes,
+    },
+  });
+  apply_changes("entities", vanilla, changes, |entity, changes: &YmapEntityFieldDiff| {
+    changes.apply_to(entity);
+    Ok(())
+  })
+}
+
 impl YmapEntityFieldDiff {
+  /// Overwrites the changed fields of `entity`.
+  pub fn apply_to(
+    &self,
+    entity: &mut YmapEntity,
+  ) {
+    let Self {
+      entity_type,
+      archetype_name,
+      flags,
+      guid,
+      position,
+      rotation,
+      scale_x_y,
+      scale_z,
+      parent_index,
+      lod_dist,
+      child_lod_dist,
+      lod_level,
+      num_children,
+      priority_level,
+      ambient_occlusion_multiplier,
+      artificial_ambient_occlusion,
+      tint_value,
+    } = self;
+    set_changed(&mut entity.entity_type, entity_type);
+    set_changed(&mut entity.archetype_name, archetype_name);
+    set_changed(&mut entity.flags, flags);
+    set_changed(&mut entity.guid, guid);
+    if let Some(position) = position {
+      position.apply_to(&mut entity.position);
+    }
+    if let Some(rotation) = rotation {
+      rotation.apply_to(&mut entity.rotation);
+    }
+    set_changed(&mut entity.scale_x_y, scale_x_y);
+    set_changed(&mut entity.scale_z, scale_z);
+    set_changed(&mut entity.parent_index, parent_index);
+    set_changed(&mut entity.lod_dist, lod_dist);
+    set_changed(&mut entity.child_lod_dist, child_lod_dist);
+    set_changed(&mut entity.lod_level, lod_level);
+    set_changed(&mut entity.num_children, num_children);
+    set_changed(&mut entity.priority_level, priority_level);
+    set_changed(&mut entity.ambient_occlusion_multiplier, ambient_occlusion_multiplier);
+    set_changed(&mut entity.artificial_ambient_occlusion, artificial_ambient_occlusion);
+    set_changed(&mut entity.tint_value, tint_value);
+  }
+
   /// Fields of `after` changed from `before`, ignoring float changes below `tolerance`.
   pub fn between(
     before: &YmapEntity,

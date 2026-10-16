@@ -25,7 +25,32 @@ pub(super) fn changed<T: PartialEq + Clone>(
   (from != to).then(|| to.clone())
 }
 
+/// Overwrites `target` with `value` when it holds one.
+pub(super) fn set_changed<T: Clone>(
+  target: &mut T,
+  value: &Option<T>,
+) {
+  if let Some(value) = value {
+    *target = value.clone();
+  }
+}
+
 impl PositionDiff {
+  /// Overwrites the changed axes of `position`.
+  pub fn apply_to(
+    &self,
+    position: &mut Position,
+  ) {
+    let Self {
+      x,
+      y,
+      z,
+    } = self;
+    set_changed(&mut position.x, x);
+    set_changed(&mut position.y, y);
+    set_changed(&mut position.z, z);
+  }
+
   /// Axes of `after` differing from `before` by at least `tolerance`, or `None` if none do.
   pub fn between(
     before: &Position,

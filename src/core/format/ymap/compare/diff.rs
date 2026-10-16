@@ -7,16 +7,22 @@ use structdiff::StructDiff;
 
 use super::{
   YmapBoxOccluderDiff, YmapCarGeneratorDiff, YmapComparisonData, YmapDistantLodLightsDiff,
-  YmapEntityDiff, YmapInstancedDataDiff, YmapLodLightDiff, YmapOccludeModelDiff,
-  YmapTimeCycleModifierDiff, box_occluder_diffs, car_generator_diffs, distant_lod_lights_diff,
-  entity_diffs, instanced_data_diff, lod_light_diffs, occlude_model_diffs,
-  time_cycle_modifier_diffs,
+  YmapEntityDiff, YmapInstancedDataDiff, YmapItemDiff, YmapLodLightDiff, YmapOccludeModelDiff,
+  YmapTimeCycleModifierDiff, apply_entity_diffs, box_occluder_diffs, car_generator_diffs,
+  distant_lod_lights_diff, entity_diffs, field::set_changed, instanced_data_diff, lod_light_diffs,
+  occlude_model_diffs, time_cycle_modifier_diffs,
 };
 use crate::{
-  common::{position::PositionStructDiffEnum, rotation::RotationStructDiffEnum},
+  common::{
+    Result,
+    position::{Position, PositionStructDiffEnum},
+    rotation::{Rotation, RotationStructDiffEnum},
+  },
   core::{
     config::matching::MatchTolerances,
-    format::ymap::model::{Ymap, YmapStructDiffEnum, ymap_block::YmapBlockStructDiffEnum},
+    format::ymap::model::{
+      Ymap, YmapBlock, YmapStructDiffEnum, ymap_block::YmapBlockStructDiffEnum,
+    },
   },
 };
 
@@ -198,6 +204,90 @@ impl YmapDiffFields {
     }
   }
 
+  /// The modded YMAP rebuilt from `vanilla` and these differences.
+  ///
+  /// Differences within the tolerances of [`Self::between`] are not recorded, so the result
+  /// equals the modded YMAP only up to them. The diffs also leave out where unchanged items
+  /// moved, where added occlude model triangles sit and which physics dictionaries were
+  /// removed: unchanged items keep their vanilla order, added triangles are appended and every
+  /// vanilla physics dictionary is kept.
+  pub fn apply_to(
+    &self,
+    vanilla: &Ymap,
+  ) -> Result<Ymap> {
+    let Self {
+      name,
+      parent,
+      flags,
+      content_flags,
+      streaming_extents,
+      entities_extents,
+      block,
+      entities,
+      box_occluders,
+      occlude_models,
+      lod_lights,
+      distant_lod_lights,
+      physics_dictionaries,
+      instanced_data,
+      time_cycle_modifiers,
+      car_generators,
+    } = self;
+    let mut ymap = vanilla.clone();
+    set_changed(&mut ymap.name, name);
+    set_changed(&mut ymap.parent, parent);
+    set_changed(&mut ymap.flags, flags);
+    set_changed(&mut ymap.content_flags, content_flags);
+    if let Some(extents) = streaming_extents {
+      extents.apply_to(&mut ymap.streaming_extents_min, &mut ymap.streaming_extents_max);
+    }
+    if let Some(extents) = entities_extents {
+      extents.apply_to(&mut ymap.entities_extents_min, &mut ymap.entities_extents_max);
+    }
+    if let Some(block) = block {
+      block.apply_to(&mut ymap.block);
+    }
+    ymap.entities = apply_entity_diffs(&ymap.entities, entities)?;
+    ymap.box_occluders =
+      YmapItemDiff::apply("box_occluders", &ymap.box_occluders, box_occluders, |item, changes| {
+        changes.apply_to(item)
+      })?;
+    ymap.occlude_models = YmapItemDiff::try_apply(
+      "occlude_models",
+      &ymap.occlude_models,
+      occlude_models,
+      |item, changes| changes.apply_to(item),
+    )?;
+    ymap.lod_lights =
+      YmapItemDiff::apply("lod_lights", &ymap.lod_lights, lod_lights, |item, changes| {
+        changes.apply_to(item)
+      })?;
+    if let Some(distant_lod_lights) = distant_lod_lights {
+      distant_lod_lights.apply_to(&mut ymap.distant_lod_lights)?;
+    }
+    for name in physics_dictionaries {
+      if !ymap.physics_dictionaries.contains(name) {
+        ymap.physics_dictionaries.push(name.clone());
+      }
+    }
+    if let Some(instanced_data) = instanced_data {
+      instanced_data.apply_to(&mut ymap.instanced_data)?;
+    }
+    ymap.time_cycle_modifiers = YmapItemDiff::apply(
+      "time_cycle_modifiers",
+      &ymap.time_cycle_modifiers,
+      time_cycle_modifiers,
+      |item, changes| changes.apply_to(item),
+    )?;
+    ymap.car_generators = YmapItemDiff::apply(
+      "car_generators",
+      &ymap.car_generators,
+      car_generators,
+      |item, changes| changes.apply_to(item),
+    )?;
+    Ok(ymap)
+  }
+
   /// Collects structdiff field differences of a YMAP, leaving entities empty.
   pub fn from_struct_diffs(diffs: Vec<YmapStructDiffEnum>) -> Self {
     let mut fields = Self::default();
@@ -232,6 +322,26 @@ impl YmapDiffFields {
   }
 }
 
+impl ExtentsDiff {
+  /// Overwrites the changed axes of the `min` and `max` corners.
+  pub fn apply_to(
+    &self,
+    min: &mut Position,
+    max: &mut Position,
+  ) {
+    let Self {
+      min: min_diff,
+      max: max_diff,
+    } = self;
+    if let Some(diff) = min_diff {
+      diff.apply_to(min);
+    }
+    if let Some(diff) = max_diff {
+      diff.apply_to(max);
+    }
+  }
+}
+
 impl PositionDiff {
   pub fn from_struct_diffs(diffs: Vec<PositionStructDiffEnum>) -> Self {
     let mut axes = Self::default();
@@ -247,6 +357,23 @@ impl PositionDiff {
 }
 
 impl RotationDiff {
+  /// Overwrites the changed components of `rotation`.
+  pub fn apply_to(
+    &self,
+    rotation: &mut Rotation,
+  ) {
+    let Self {
+      x,
+      y,
+      z,
+      w,
+    } = self;
+    set_changed(&mut rotation.x, x);
+    set_changed(&mut rotation.y, y);
+    set_changed(&mut rotation.z, z);
+    set_changed(&mut rotation.w, w);
+  }
+
   pub fn from_struct_diffs(diffs: Vec<RotationStructDiffEnum>) -> Self {
     let mut axes = Self::default();
     for diff in diffs {
@@ -262,6 +389,27 @@ impl RotationDiff {
 }
 
 impl YmapBlockDiff {
+  /// Overwrites the changed fields of `block`.
+  pub fn apply_to(
+    &self,
+    block: &mut YmapBlock,
+  ) {
+    let Self {
+      version,
+      flags,
+      name,
+      exported_by,
+      owner,
+      time,
+    } = self;
+    set_changed(&mut block.version, version);
+    set_changed(&mut block.flags, flags);
+    set_changed(&mut block.name, name);
+    set_changed(&mut block.exported_by, exported_by);
+    set_changed(&mut block.owner, owner);
+    set_changed(&mut block.time, time);
+  }
+
   pub fn from_struct_diffs(diffs: Vec<YmapBlockStructDiffEnum>) -> Self {
     let mut block = Self::default();
     for diff in diffs {

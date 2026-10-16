@@ -41,7 +41,7 @@ fn time_cycle_modifiers_pair_by_either_extent() {
             "changes": { "name": "night", "max_extents": { "z": 30.5 } },
           },
         },
-        { "Added": { "index": 2, "time_cycle_modifier": serde_json::to_value(modifier(200.0)).unwrap() } },
+        { "Added": { "index": 2, "item": serde_json::to_value(modifier(200.0)).unwrap() } },
       ],
     })
   );
@@ -79,7 +79,7 @@ fn pairs_by_either_extent_and_thresholds_floats() {
       },
       YmapTimeCycleModifierDiff::Added {
         index: 2,
-        time_cycle_modifier: modifier(200.0),
+        item: modifier(200.0),
       },
     ]
   );

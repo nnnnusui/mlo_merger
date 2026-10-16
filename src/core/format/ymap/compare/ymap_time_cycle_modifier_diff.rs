@@ -6,8 +6,8 @@
 use serde::{Deserialize, Serialize};
 
 use super::{
-  PositionDiff,
-  field::{changed, changed_f32, pair_in_order},
+  PositionDiff, YmapItemDiff,
+  field::{changed, changed_f32, pair_in_order, set_changed},
 };
 use crate::core::{
   config::matching::MatchTolerances,
@@ -15,25 +15,8 @@ use crate::core::{
 };
 
 /// How one time cycle modifier of a modded YMAP differs from vanilla.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[cfg_attr(feature = "typescript", derive(specta::Type))]
-pub enum YmapTimeCycleModifierDiff {
-  /// Present only in the modded YMAP, at `index`.
-  Added {
-    index: usize,
-    time_cycle_modifier: YmapTimeCycleModifier,
-  },
-  /// Present only in vanilla, at `index`.
-  Removed {
-    index: usize,
-  },
-  /// Paired with a modded item and differing beyond the tolerances.
-  Modified {
-    vanilla_index: usize,
-    modded_index: usize,
-    changes: YmapTimeCycleModifierFieldDiff,
-  },
-}
+pub type YmapTimeCycleModifierDiff =
+  YmapItemDiff<YmapTimeCycleModifier, YmapTimeCycleModifierFieldDiff>;
 
 /// Changed time cycle modifier fields, each holding its new value.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -72,32 +55,43 @@ pub fn time_cycle_modifier_diffs(
   let pairing = pair_in_order(vanilla_items, modded_items, |a, b| {
     a.min_extents == b.min_extents || a.max_extents == b.max_extents
   });
-  let mut diffs = Vec::new();
-  for (vanilla_index, modded_index) in pairing.pairs {
-    let changes = YmapTimeCycleModifierFieldDiff::between(
+  YmapItemDiff::collect(pairing, modded_items, |vanilla_index, modded_index| {
+    YmapTimeCycleModifierFieldDiff::between(
       &vanilla_items[vanilla_index],
       &modded_items[modded_index],
       tolerances.ymap,
-    );
-    if changes != YmapTimeCycleModifierFieldDiff::default() {
-      diffs.push(YmapTimeCycleModifierDiff::Modified {
-        vanilla_index,
-        modded_index,
-        changes,
-      });
-    }
-  }
-  diffs.extend(pairing.removed.into_iter().map(|index| YmapTimeCycleModifierDiff::Removed {
-    index,
-  }));
-  diffs.extend(pairing.added.into_iter().map(|index| YmapTimeCycleModifierDiff::Added {
-    index,
-    time_cycle_modifier: modded_items[index].clone(),
-  }));
-  diffs
+    )
+  })
 }
 
 impl YmapTimeCycleModifierFieldDiff {
+  /// Overwrites the changed fields of `item`.
+  pub fn apply_to(
+    &self,
+    item: &mut YmapTimeCycleModifier,
+  ) {
+    let Self {
+      name,
+      min_extents,
+      max_extents,
+      percentage,
+      range,
+      start_hour,
+      end_hour,
+    } = self;
+    set_changed(&mut item.name, name);
+    if let Some(extents) = min_extents {
+      extents.apply_to(&mut item.min_extents);
+    }
+    if let Some(extents) = max_extents {
+      extents.apply_to(&mut item.max_extents);
+    }
+    set_changed(&mut item.percentage, percentage);
+    set_changed(&mut item.range, range);
+    set_changed(&mut item.start_hour, start_hour);
+    set_changed(&mut item.end_hour, end_hour);
+  }
+
   /// Fields of `after` changed from `before`, ignoring float changes below `tolerance`.
   pub fn between(
     before: &YmapTimeCycleModifier,

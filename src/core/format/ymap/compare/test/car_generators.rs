@@ -95,7 +95,7 @@ fn pairs_by_rounded_position_and_thresholds_floats() {
       },
       YmapCarGeneratorDiff::Added {
         index: 1,
-        car_generator: modded.car_generators[1].clone(),
+        item: modded.car_generators[1].clone(),
       },
     ]
   );

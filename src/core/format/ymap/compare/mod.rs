@@ -4,6 +4,7 @@ mod context;
 mod data;
 mod diff;
 mod field;
+mod item_diff;
 #[cfg(test)]
 mod test;
 mod ymap_box_occluder_diff;
@@ -21,6 +22,7 @@ pub use diff::{
   ExtentsDiff, PositionDiff, RotationDiff, YmapBlockDiff, YmapComparisonDiff, YmapComparisonFile,
   YmapDiffFields, added_physics_dictionaries,
 };
+pub use item_diff::{NoFieldDiff, YmapItemDiff};
 pub use ymap_box_occluder_diff::{
   YmapBoxOccluderDiff, YmapBoxOccluderFieldDiff, box_occluder_diffs,
 };
@@ -31,6 +33,7 @@ pub use ymap_distant_lod_light_diff::{
   YmapDistantLodLightDiff, YmapDistantLodLightFieldDiff, YmapDistantLodLightsDiff,
   distant_lod_lights_diff, parse_distant_position,
 };
+use ymap_entity_diff::apply_entity_diffs;
 pub use ymap_entity_diff::{YmapEntityDiff, YmapEntityFieldDiff, entity_diffs};
 pub use ymap_instanced_data_diff::{
   YmapAddedGrassInstance, YmapGrassBatchDiff, YmapGrassBatchFieldDiff, YmapGrassInstanceFieldDiff,

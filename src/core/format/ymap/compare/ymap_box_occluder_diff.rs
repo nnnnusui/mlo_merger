@@ -6,32 +6,17 @@
 
 use serde::{Deserialize, Serialize};
 
-use super::field::{changed, pair_in_order};
+use super::{
+  YmapItemDiff,
+  field::{changed, pair_in_order, set_changed},
+};
 use crate::core::{
   config::matching::MatchTolerances,
   format::ymap::model::{Ymap, YmapBoxOccluder},
 };
 
 /// How one box occluder of a modded YMAP differs from vanilla.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[cfg_attr(feature = "typescript", derive(specta::Type))]
-pub enum YmapBoxOccluderDiff {
-  /// Present only in the modded YMAP, at `index`.
-  Added {
-    index: usize,
-    box_occluder: YmapBoxOccluder,
-  },
-  /// Present only in vanilla, at `index`.
-  Removed {
-    index: usize,
-  },
-  /// Paired with a modded item and differing beyond the tolerances.
-  Modified {
-    vanilla_index: usize,
-    modded_index: usize,
-    changes: YmapBoxOccluderFieldDiff,
-  },
-}
+pub type YmapBoxOccluderDiff = YmapItemDiff<YmapBoxOccluder, YmapBoxOccluderFieldDiff>;
 
 /// Changed box occluder fields, each holding its new value, in stored units.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -76,32 +61,41 @@ pub fn box_occluder_diffs(
       && (a.i_center_y - b.i_center_y).abs() < tolerance
       && (a.i_center_z - b.i_center_z).abs() < tolerance
   });
-  let mut diffs = Vec::new();
-  for (vanilla_index, modded_index) in pairing.pairs {
-    let changes = YmapBoxOccluderFieldDiff::between(
+  YmapItemDiff::collect(pairing, modded_items, |vanilla_index, modded_index| {
+    YmapBoxOccluderFieldDiff::between(
       &vanilla_items[vanilla_index],
       &modded_items[modded_index],
       tolerances.ymap_box_occluder_rotation,
-    );
-    if changes != YmapBoxOccluderFieldDiff::default() {
-      diffs.push(YmapBoxOccluderDiff::Modified {
-        vanilla_index,
-        modded_index,
-        changes,
-      });
-    }
-  }
-  diffs.extend(pairing.removed.into_iter().map(|index| YmapBoxOccluderDiff::Removed {
-    index,
-  }));
-  diffs.extend(pairing.added.into_iter().map(|index| YmapBoxOccluderDiff::Added {
-    index,
-    box_occluder: modded_items[index].clone(),
-  }));
-  diffs
+    )
+  })
 }
 
 impl YmapBoxOccluderFieldDiff {
+  /// Overwrites the changed fields of `item`.
+  pub fn apply_to(
+    &self,
+    item: &mut YmapBoxOccluder,
+  ) {
+    let Self {
+      i_center_x,
+      i_center_y,
+      i_center_z,
+      i_cos_z,
+      i_length,
+      i_width,
+      i_height,
+      i_sin_z,
+    } = self;
+    set_changed(&mut item.i_center_x, i_center_x);
+    set_changed(&mut item.i_center_y, i_center_y);
+    set_changed(&mut item.i_center_z, i_center_z);
+    set_changed(&mut item.i_cos_z, i_cos_z);
+    set_changed(&mut item.i_length, i_length);
+    set_changed(&mut item.i_width, i_width);
+    set_changed(&mut item.i_height, i_height);
+    set_changed(&mut item.i_sin_z, i_sin_z);
+  }
+
   /// Fields of `after` changed from `before`, ignoring rotation changes up to `rotation`.
   pub fn between(
     before: &YmapBoxOccluder,
