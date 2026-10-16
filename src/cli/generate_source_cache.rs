@@ -48,8 +48,11 @@ pub(crate) fn exclusions_parser() -> impl Parser<Option<Vec<String>>> {
     .optional()
 }
 
-/// Builds or reuses the source-derived conflict cache.
+/// Updates the vanilla cache, then builds or reuses the source-derived conflict cache.
+///
+/// `--force` applies only to the source cache.
 pub fn run(command: GenerateSourceCache) -> Result<(), Box<dyn std::error::Error>> {
+  super::generate_vanilla_cache::update(&command.common.vanilla, &command.common.vanilla_cache)?;
   let build = crate::core::source_cache::BuildSourceCache {
     source_dir: command.source_dir,
     output_dir: command.common.output,

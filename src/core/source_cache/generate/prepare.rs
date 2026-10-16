@@ -12,7 +12,7 @@ use crate::core::source_cache::{
 };
 use crate::core::{
   vanilla::load_manifest_with_revision,
-  vanilla_cache::{BuildVanillaCache, load_cache},
+  vanilla_cache::load_cache,
 };
 use std::{
   collections::{BTreeMap, BTreeSet},
@@ -52,13 +52,6 @@ pub(super) fn prepare(build: &BuildSourceCache) -> Result<Prepared> {
     );
   }
   let vanilla_dir = build.vanilla_dir.canonicalize()?;
-  BuildVanillaCache {
-    vanilla_dir: vanilla_dir.clone(),
-    output_dir: build.vanilla_cache_dir.clone(),
-    through_version: None,
-    force: false,
-  }
-  .run()?;
   let vanilla_cache_dir = build.vanilla_cache_dir.canonicalize()?;
   let previous = if output.join("source_cache_info.json").is_file() {
     let metadata: SourceCacheMetadata = serde_json::from_reader(BufReader::new(fs::File::open(

@@ -79,15 +79,13 @@ fn incremental_merge_preserves_and_restores_duplicate_reports() {
   let run_merge = || {
     Merge {
       source_dir: source.clone(),
-      vanilla_dir: vanilla.clone(),
       vanilla_cache_dir: cache.clone(),
       source_cache_dir: source_cache.clone(),
       output_dir: output.clone(),
       overwrite_dir: root.join("overwrite"),
-      exclusions: None,
       force: false,
     }
-    .run()
+    .run_after_caches(&vanilla)
     .unwrap()
   };
   let read_report = || {

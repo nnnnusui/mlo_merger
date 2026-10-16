@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use bpaf::*;
 
@@ -32,5 +32,20 @@ pub fn run(command: GenerateVanillaCache) -> Result<(), Box<dyn std::error::Erro
   }
   .run()?;
   tracing::info!("{}", result.summary());
+  Ok(())
+}
+
+/// Builds the latest vanilla cache when its inputs changed, as a prerequisite of later steps.
+pub(crate) fn update(
+  vanilla_dir: &Path,
+  vanilla_cache_dir: &Path,
+) -> Result<(), Box<dyn std::error::Error>> {
+  crate::core::vanilla_cache::BuildVanillaCache {
+    vanilla_dir: vanilla_dir.to_path_buf(),
+    output_dir: vanilla_cache_dir.to_path_buf(),
+    through_version: None,
+    force: false,
+  }
+  .run()?;
   Ok(())
 }

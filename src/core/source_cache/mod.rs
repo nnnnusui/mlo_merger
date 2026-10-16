@@ -274,6 +274,8 @@ impl BuildSourceCache {
   /// Exclusions are not persisted; absent or empty means no exclusions. Excluded active
   /// cache files are retained under `_old/`.
   ///
+  /// The vanilla cache must already be built; this does not update it.
+  ///
   /// ```no_run
   /// use mlo_merger::core::source_cache::BuildSourceCache;
   /// BuildSourceCache {

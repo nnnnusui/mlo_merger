@@ -78,15 +78,13 @@ fn merge_dispatches_latest_vanilla_ybn_and_writes_omit_list() {
 
   Merge {
     source_dir: source_dir.clone(),
-    vanilla_dir: vanilla_dir.clone(),
     vanilla_cache_dir: vanilla_cache_dir.clone(),
     source_cache_dir: source_cache_dir.clone(),
     output_dir: output_dir.clone(),
     overwrite_dir: root.join("overwrite"),
-    exclusions: None,
     force: false,
   }
-  .run()
+  .run_after_caches(&vanilla_dir)
   .unwrap();
 
   assert!(vanilla_cache_dir.join("latest/ybn/collision.ybn").is_file());
@@ -136,15 +134,13 @@ fn merge_dispatches_latest_vanilla_ybn_and_writes_omit_list() {
     fs::metadata(output_dir.join("merge_cache_info.json")).unwrap().modified().unwrap();
   Merge {
     source_dir: source_dir.clone(),
-    vanilla_dir: vanilla_dir.clone(),
     vanilla_cache_dir: vanilla_cache_dir.clone(),
     source_cache_dir: source_cache_dir.clone(),
     output_dir: output_dir.clone(),
     overwrite_dir: root.join("overwrite"),
-    exclusions: None,
     force: false,
   }
-  .run()
+  .run_after_caches(&vanilla_dir)
   .unwrap();
   assert_eq!(
     fs::metadata(output_dir.join("merge_cache_info.json")).unwrap().modified().unwrap(),
@@ -160,15 +156,13 @@ fn merge_dispatches_latest_vanilla_ybn_and_writes_omit_list() {
     .unwrap();
   Merge {
     source_dir: source_dir.clone(),
-    vanilla_dir: vanilla_dir.clone(),
     vanilla_cache_dir: vanilla_cache_dir.clone(),
     source_cache_dir: source_cache_dir.clone(),
     output_dir: output_dir.clone(),
     overwrite_dir: root.join("overwrite"),
-    exclusions: None,
     force: false,
   }
-  .run()
+  .run_after_caches(&vanilla_dir)
   .unwrap();
   assert_eq!(
     read_cache().files["independent.ybn"].merged_at,
@@ -182,15 +176,13 @@ fn merge_dispatches_latest_vanilla_ybn_and_writes_omit_list() {
   fs::write(&cached_source, &changed_source).unwrap();
   Merge {
     source_dir: source_dir.clone(),
-    vanilla_dir: vanilla_dir.clone(),
     vanilla_cache_dir: vanilla_cache_dir.clone(),
     source_cache_dir: source_cache_dir.clone(),
     output_dir: output_dir.clone(),
     overwrite_dir: root.join("overwrite"),
-    exclusions: None,
     force: false,
   }
-  .run()
+  .run_after_caches(&vanilla_dir)
   .unwrap();
   let changed = read_cache();
   assert_ne!(changed.files["collision.ybn"].merged_at, initial.files["collision.ybn"].merged_at);
@@ -202,15 +194,13 @@ fn merge_dispatches_latest_vanilla_ybn_and_writes_omit_list() {
   fs::write(output_dir.join("ybn/collision.ybn"), b"broken output").unwrap();
   Merge {
     source_dir: source_dir.clone(),
-    vanilla_dir: vanilla_dir.clone(),
     vanilla_cache_dir: vanilla_cache_dir.clone(),
     source_cache_dir: source_cache_dir.clone(),
     output_dir: output_dir.clone(),
     overwrite_dir: root.join("overwrite"),
-    exclusions: None,
     force: false,
   }
-  .run()
+  .run_after_caches(&vanilla_dir)
   .unwrap();
   crate::core::format::ybn::read_ybn(&fs::read(output_dir.join("ybn/collision.ybn")).unwrap())
     .unwrap();
@@ -227,15 +217,13 @@ fn merge_dispatches_latest_vanilla_ybn_and_writes_omit_list() {
   write_json(&vanilla_dir.join("cache_info.json"), &manifest).unwrap();
   Merge {
     source_dir: source_dir.clone(),
-    vanilla_dir: vanilla_dir.clone(),
     vanilla_cache_dir: vanilla_cache_dir.clone(),
     source_cache_dir: source_cache_dir.clone(),
     output_dir: output_dir.clone(),
     overwrite_dir: root.join("overwrite"),
-    exclusions: None,
     force: false,
   }
-  .run()
+  .run_after_caches(&vanilla_dir)
   .unwrap();
   let after_vanilla = read_cache();
   assert_ne!(
@@ -249,29 +237,25 @@ fn merge_dispatches_latest_vanilla_ybn_and_writes_omit_list() {
   fs::remove_file(&independent).unwrap();
   Merge {
     source_dir: source_dir.clone(),
-    vanilla_dir: vanilla_dir.clone(),
     vanilla_cache_dir: vanilla_cache_dir.clone(),
     source_cache_dir: source_cache_dir.clone(),
     output_dir: output_dir.clone(),
     overwrite_dir: root.join("overwrite"),
-    exclusions: None,
     force: false,
   }
-  .run()
+  .run_after_caches(&vanilla_dir)
   .unwrap();
   assert!(independent.is_file());
   let before_force = read_cache();
   Merge {
     source_dir: source_dir.clone(),
-    vanilla_dir: vanilla_dir.clone(),
     vanilla_cache_dir: vanilla_cache_dir.clone(),
     source_cache_dir: source_cache_dir.clone(),
     output_dir: output_dir.clone(),
     overwrite_dir: root.join("overwrite"),
-    exclusions: None,
     force: true,
   }
-  .run()
+  .run_after_caches(&vanilla_dir)
   .unwrap();
   let forced = read_cache();
   assert!(
@@ -286,15 +270,13 @@ fn merge_dispatches_latest_vanilla_ybn_and_writes_omit_list() {
   assert!(
     Merge {
       source_dir: source_dir.clone(),
-      vanilla_dir: vanilla_dir.clone(),
       vanilla_cache_dir: vanilla_cache_dir.clone(),
       source_cache_dir: source_cache_dir.clone(),
       output_dir: output_dir.clone(),
       overwrite_dir: root.join("overwrite"),
-      exclusions: None,
       force: false
     }
-    .run()
+    .run_after_caches(&vanilla_dir)
     .is_err()
   );
   assert_eq!(fs::read(output_dir.join("merge_cache_info.json")).unwrap(), preserved);
@@ -303,15 +285,13 @@ fn merge_dispatches_latest_vanilla_ybn_and_writes_omit_list() {
   fs::remove_dir_all(&second_resource_dir).unwrap();
   Merge {
     source_dir: source_dir.clone(),
-    vanilla_dir: vanilla_dir.clone(),
     vanilla_cache_dir: vanilla_cache_dir.clone(),
     source_cache_dir: source_cache_dir.clone(),
     output_dir: output_dir.clone(),
     overwrite_dir: root.join("overwrite"),
-    exclusions: None,
     force: false,
   }
-  .run()
+  .run_after_caches(&vanilla_dir)
   .unwrap();
   assert!(read_cache().files.is_empty());
   assert!(!output_dir.join("ybn/collision.ybn").exists());

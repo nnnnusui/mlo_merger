@@ -76,30 +76,26 @@ fn incremental_ymap_merge_caches_noop_results_and_removes_obsolete_outputs() {
   write_source(&unsupported);
   Merge {
     source_dir: source.clone(),
-    vanilla_dir: vanilla.clone(),
     vanilla_cache_dir: cache.clone(),
     source_cache_dir: source_cache.clone(),
     output_dir: output.clone(),
     overwrite_dir: root.join("overwrite"),
-    exclusions: None,
     force: false,
   }
-  .run()
+  .run_after_caches(&vanilla)
   .unwrap();
   let initial = read_cache();
   assert!(initial.files["map.ymap"].output.is_none());
   assert!(!output.join("ymap/map.ymap").exists());
   Merge {
     source_dir: source.clone(),
-    vanilla_dir: vanilla.clone(),
     vanilla_cache_dir: cache.clone(),
     source_cache_dir: source_cache.clone(),
     output_dir: output.clone(),
     overwrite_dir: root.join("overwrite"),
-    exclusions: None,
     force: false,
   }
-  .run()
+  .run_after_caches(&vanilla)
   .unwrap();
   assert_eq!(read_cache().files["map.ymap"].merged_at, initial.files["map.ymap"].merged_at);
   let mut edited = model.clone();
@@ -109,15 +105,13 @@ fn incremental_ymap_merge_caches_noop_results_and_removes_obsolete_outputs() {
   write_source(&edited);
   Merge {
     source_dir: source.clone(),
-    vanilla_dir: vanilla.clone(),
     vanilla_cache_dir: cache.clone(),
     source_cache_dir: source_cache.clone(),
     output_dir: output.clone(),
     overwrite_dir: root.join("overwrite"),
-    exclusions: None,
     force: false,
   }
-  .run()
+  .run_after_caches(&vanilla)
   .unwrap();
   assert!(output.join("ymap/map.ymap").is_file());
   let actual = fs::read(output.join("ymap/map.ymap")).unwrap();
@@ -129,29 +123,25 @@ fn incremental_ymap_merge_caches_noop_results_and_removes_obsolete_outputs() {
   let changed = read_cache();
   Merge {
     source_dir: source.clone(),
-    vanilla_dir: vanilla.clone(),
     vanilla_cache_dir: cache.clone(),
     source_cache_dir: source_cache.clone(),
     output_dir: output.clone(),
     overwrite_dir: root.join("overwrite"),
-    exclusions: None,
     force: false,
   }
-  .run()
+  .run_after_caches(&vanilla)
   .unwrap();
   assert_eq!(read_cache().files["map.ymap"].merged_at, changed.files["map.ymap"].merged_at);
   write_source(&unsupported);
   Merge {
     source_dir: source.clone(),
-    vanilla_dir: vanilla.clone(),
     vanilla_cache_dir: cache.clone(),
     source_cache_dir: source_cache.clone(),
     output_dir: output.clone(),
     overwrite_dir: root.join("overwrite"),
-    exclusions: None,
     force: false,
   }
-  .run()
+  .run_after_caches(&vanilla)
   .unwrap();
   assert!(!output.join("ymap/map.ymap").exists());
   assert!(read_cache().files["map.ymap"].output.is_none());

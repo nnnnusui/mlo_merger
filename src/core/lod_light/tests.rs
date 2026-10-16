@@ -259,15 +259,13 @@ fn native_custom_light_edits_merge_deploy_reuse_and_retract() {
   let run = || {
     crate::core::merge::Merge {
       source_dir: source.clone(),
-      vanilla_dir: vanilla.clone(),
       vanilla_cache_dir: cache.clone(),
       source_cache_dir: source_cache.clone(),
       output_dir: output.clone(),
       overwrite_dir: overwrite.clone(),
-      exclusions: None,
       force: false,
     }
-    .run()
+    .run_after_caches(&vanilla)
     .unwrap()
   };
   run();
@@ -425,15 +423,13 @@ fn cached_baseline_inputs_accept_combined_removals_and_keep_unchanged_provider()
   let run = || {
     crate::core::merge::Merge {
       source_dir: source.clone(),
-      vanilla_dir: vanilla.clone(),
       vanilla_cache_dir: cache.clone(),
       source_cache_dir: source_cache.clone(),
       output_dir: output.clone(),
       overwrite_dir: overwrite.clone(),
-      exclusions: None,
       force: false,
     }
-    .run()
+    .run_after_caches(&vanilla)
     .unwrap()
   };
   run();

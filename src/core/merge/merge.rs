@@ -6,7 +6,7 @@ use std::{
 use walkdir::WalkDir;
 
 use super::incremental::IncrementalMerge;
-use crate::core::source_cache::{self, BuildSourceCache};
+use crate::core::source_cache;
 
 pub(super) type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
@@ -28,8 +28,6 @@ impl Drop for Staging {
 pub struct Merge {
   /// Root containing source resources.
   pub source_dir: PathBuf,
-  /// Raw vanilla archive used by prerequisites.
-  pub vanilla_dir: PathBuf,
   /// Derived latest vanilla files.
   pub vanilla_cache_dir: PathBuf,
   /// Source inventory and cached stream files.
@@ -38,20 +36,21 @@ pub struct Merge {
   pub output_dir: PathBuf,
   /// Resource-local edit documents.
   pub overwrite_dir: PathBuf,
-  /// Resource exclusions for this run, also applied to prerequisite source indexing.
-  pub exclusions: Option<Vec<String>>,
   /// Rebuilds merge groups and overwrite preparation regardless of freshness.
   pub force: bool,
 }
 
 impl Merge {
-  /// Updates prerequisites, merges changed groups and publishes output atomically.
+  /// Merges changed groups from the current vanilla and source caches and publishes output
+  /// atomically.
+  ///
+  /// Both caches must already be built; this does not update them.
   ///
   /// ```no_run
   /// mlo_merger::core::merge::Merge {
-  ///   source_dir: "asset/source".into(), vanilla_dir: "asset/vanilla".into(),
-  ///   vanilla_cache_dir: "asset/vanilla-cache".into(), source_cache_dir: "asset/source-cache".into(),
-  ///   output_dir: "asset/merged".into(), overwrite_dir: "asset/overwrite".into(), exclusions: None, force: false,
+  ///   source_dir: "asset/source".into(), vanilla_cache_dir: "asset/vanilla-cache".into(),
+  ///   source_cache_dir: "asset/source-cache".into(), output_dir: "asset/merged".into(),
+  ///   overwrite_dir: "asset/overwrite".into(), force: false,
   /// }.run()?;
   /// # Ok::<(), Box<dyn std::error::Error>>(())
   /// ```
@@ -62,7 +61,6 @@ impl Merge {
 
   fn validate_paths(&self) -> Result<()> {
     let paths = [
-      ("vanilla", &self.vanilla_dir),
       ("vanilla-cache", &self.vanilla_cache_dir),
       ("source-cache", &self.source_cache_dir),
       ("merged", &self.output_dir),
@@ -85,17 +83,6 @@ impl Merge {
 
   fn run_inner(&self) -> Result<()> {
     let source_dir = self.source_dir.canonicalize()?;
-    let vanilla_dir = self.vanilla_dir.canonicalize()?;
-    BuildSourceCache {
-      source_dir: source_dir.clone(),
-      output_dir: self.source_cache_dir.clone(),
-      vanilla_dir: vanilla_dir.clone(),
-      vanilla_cache_dir: self.vanilla_cache_dir.clone(),
-      resource: None,
-      exclusions: self.exclusions.clone(),
-      force: false,
-    }
-    .run()?;
     let vanilla_cache_dir = self.vanilla_cache_dir.canonicalize()?;
     let source_cache_dir = self.source_cache_dir.canonicalize()?;
     let mut merge_inputs = source_cache::load_merge_inputs(&source_cache_dir)?;

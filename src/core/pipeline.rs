@@ -95,12 +95,10 @@ impl Pipeline {
     tracing::info!("Pipeline: merge");
     Merge {
       source_dir: self.source_dir.clone(),
-      vanilla_dir: self.vanilla_dir.clone(),
       vanilla_cache_dir: self.vanilla_cache_dir.clone(),
       source_cache_dir: self.source_cache_dir.clone(),
       output_dir: self.merged_dir.clone(),
       overwrite_dir: self.overwrite_dir.clone(),
-      exclusions: self.exclusions.clone(),
       force: self.force,
     }
     .run()?;

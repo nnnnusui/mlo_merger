@@ -45,9 +45,9 @@ fn builds_source_inventory_and_skips_unchanged_inputs_without_diffing() {
     exclusions: Some(vec!["resource_b".into()]),
     ..build()
   };
-  assert!(excluded().run().unwrap());
+  assert!(excluded().run_after_vanilla_cache().unwrap());
   assert!(second_resource.join("stream/unmatched.ymap").is_file());
-  assert!(!excluded().run().unwrap());
+  assert!(!excluded().run_after_vanilla_cache().unwrap());
   let excluded_info: SourceCacheMetadata =
     serde_json::from_reader(fs::File::open(output.join("source_cache_info.json")).unwrap())
       .unwrap();
@@ -62,21 +62,21 @@ fn builds_source_inventory_and_skips_unchanged_inputs_without_diffing() {
       resource: Some("resource_b".into()),
       ..excluded()
     }
-    .run()
+    .run_after_vanilla_cache()
     .is_err()
   );
   let exclude_all = || BuildSourceCache {
     exclusions: Some(vec!["resource_".into()]),
     ..build()
   };
-  assert!(exclude_all().run().unwrap());
+  assert!(exclude_all().run_after_vanilla_cache().unwrap());
   let empty_info: SourceCacheMetadata =
     serde_json::from_reader(fs::File::open(output.join("source_cache_info.json")).unwrap())
       .unwrap();
   assert!(empty_info.resources.is_empty());
-  assert!(!exclude_all().run().unwrap());
+  assert!(!exclude_all().run_after_vanilla_cache().unwrap());
   fs::write(output.join("source_exclusions.json"), b"not valid JSON").unwrap();
-  assert!(build().run().unwrap());
+  assert!(build().run_after_vanilla_cache().unwrap());
   assert!(!output.join("source_exclusions.json").exists());
   assert!(output.join("source_cache_info.json").is_file());
   assert!(output.join("stream_conflicts.json").is_file());
@@ -102,11 +102,11 @@ fn builds_source_inventory_and_skips_unchanged_inputs_without_diffing() {
     serde_json::from_reader(fs::File::open(output.join("vanilla_ymaps_to_read.json")).unwrap())
       .unwrap();
   assert!(vanilla_ymaps_to_read.is_empty());
-  assert!(!build().run().unwrap());
+  assert!(!build().run_after_vanilla_cache().unwrap());
 
   write_json(&output.join("stream_conflicts.json"), &report.report).unwrap();
-  assert!(build().run().unwrap());
-  assert!(!build().run().unwrap());
+  assert!(build().run_after_vanilla_cache().unwrap());
+  assert!(!build().run_after_vanilla_cache().unwrap());
   for (name, file_name) in [("resource_a", "cached.ybn"), ("resource_b", "CACHED.YBN")] {
     fs::create_dir_all(output.join("resources").join(name).join("nested")).unwrap();
     fs::write(
@@ -115,7 +115,7 @@ fn builds_source_inventory_and_skips_unchanged_inputs_without_diffing() {
     )
     .unwrap();
   }
-  assert!(build().run().unwrap());
+  assert!(build().run_after_vanilla_cache().unwrap());
   let cache_report: SourceCacheConflictReport =
     serde_json::from_reader(fs::File::open(output.join("stream_conflicts.json")).unwrap()).unwrap();
   assert_eq!(cache_report.report.input_dir, output.to_string_lossy());
@@ -129,24 +129,24 @@ fn builds_source_inventory_and_skips_unchanged_inputs_without_diffing() {
   assert_eq!(cache_report.source_conflicts, report.source_conflicts);
   fs::create_dir_all(output.join("_old/timestamp/resource_c")).unwrap();
   fs::write(output.join("_old/timestamp/resource_c/cached.ybn"), b"old bytes").unwrap();
-  assert!(!build().run().unwrap());
+  assert!(!build().run_after_vanilla_cache().unwrap());
   fs::remove_file(output.join("resources/resource_b/nested/CACHED.YBN")).unwrap();
-  assert!(build().run().unwrap());
+  assert!(build().run_after_vanilla_cache().unwrap());
   let cache_report: SourceCacheConflictReport =
     serde_json::from_reader(fs::File::open(output.join("stream_conflicts.json")).unwrap()).unwrap();
   assert!(cache_report.report.conflicts.is_empty());
   assert_eq!(cache_report.report.scanned_file_count, 1);
   assert_eq!(cache_report.source_conflicts, report.source_conflicts);
-  assert!(!build().run().unwrap());
+  assert!(!build().run_after_vanilla_cache().unwrap());
 
   fs::remove_file(output.join("vanilla_ymaps_to_read.json")).unwrap();
-  assert!(build().run().unwrap());
+  assert!(build().run_after_vanilla_cache().unwrap());
 
   let mut relationships: serde_json::Value =
     serde_json::from_reader(fs::File::open(derived.join("ymap_relationships.json")).unwrap())
       .unwrap();
   relationships["children_by_parent"] = serde_json::json!({"parent.ymap": ["child.ymap"]});
   write_json(&derived.join("ymap_relationships.json"), &relationships).unwrap();
-  assert!(build().run().unwrap());
+  assert!(build().run_after_vanilla_cache().unwrap());
   fs::remove_dir_all(root).unwrap();
 }
