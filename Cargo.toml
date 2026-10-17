@@ -37,10 +37,6 @@ walkdir = "2.5.0"
 [build-dependencies]
 netcorehost = "0.22.0"
 
-[[test]]
-name = "gamefile_samples"
-path = "src/core/format/gamefile/test/mod.rs"
-
 [[bin]]
 name = "export-types"
 path = "src/bin/export_types.rs"

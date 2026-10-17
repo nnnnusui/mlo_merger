@@ -9,4 +9,6 @@ pub mod xml_tree;
 pub mod ynd;
 
 #[cfg(test)]
+mod roundtrip_tests;
+#[cfg(test)]
 pub(crate) mod test_support;

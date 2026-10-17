@@ -41,10 +41,15 @@ pub fn meta_from_xml(
   data_blocks[0].data =
     build_structure(&root, root_hash, structures, enums, names, &mut data_blocks)?;
 
+  // Order the schemas by hash so the same XML always encodes to the same bytes.
+  let mut structures = structures.values().cloned().collect::<Vec<_>>();
+  structures.sort_by_key(|structure| structure.name_hash);
+  let mut enums = enums.values().cloned().collect::<Vec<_>>();
+  enums.sort_by_key(|info| info.name_hash);
   Ok(MetaResource {
     root_block_index: 1,
-    structures: structures.values().cloned().collect(),
-    enums: enums.values().cloned().collect(),
+    structures,
+    enums,
     data_blocks,
     name: root.attributes.get("name").cloned(),
   })

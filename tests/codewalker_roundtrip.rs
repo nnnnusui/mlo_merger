@@ -6,7 +6,7 @@
 
 use std::path::Path;
 
-#[path = "../src/core/format/gamefile/test/compare.rs"]
+#[path = "codewalker_roundtrip/compare.rs"]
 mod compare;
 use compare::{
   assert_canonical_xml_eq, assert_ybn_xml_eq, canonical_xml, describe_difference, truncate,
