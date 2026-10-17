@@ -1,14 +1,12 @@
-use structdiff::{Difference, StructDiff};
-
 use crate::core::{
   config::matching::MatchTolerances,
   format::ymap::compare::{self, YmapGrassBatchDiff, YmapPropInstanceDiff},
 };
 
 /// Instanced data definition in YMAP
-#[derive(Debug, Clone, PartialEq, Difference, struct_diff::Diff)]
-#[difference(expose)]
-#[derive(Default, serde::Serialize, serde::Deserialize)]
+#[derive(
+  Debug, Clone, PartialEq, struct_diff::Diff, Default, serde::Serialize, serde::Deserialize,
+)]
 #[diff(
   context = MatchTolerances,
   attr(cfg_attr(feature = "typescript", derive(specta::Type)))
@@ -27,9 +25,7 @@ pub struct YmapInstancedData {
 }
 
 /// Grass instance batch definition
-#[derive(Debug, Clone, PartialEq, Difference)]
-#[difference(expose)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[cfg_attr(feature = "typescript", derive(specta::Type))]
 pub struct GrassInstanceBatch {
   pub batch_aabb: BoundingBox,
@@ -43,9 +39,7 @@ pub struct GrassInstanceBatch {
 }
 
 /// Bounding box with min and max vectors
-#[derive(Debug, Clone, PartialEq, Difference)]
-#[difference(expose)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[cfg_attr(feature = "typescript", derive(specta::Type))]
 pub struct BoundingBox {
   pub min: Vector4,
@@ -53,9 +47,7 @@ pub struct BoundingBox {
 }
 
 /// 3D vector
-#[derive(Debug, Clone, PartialEq, Difference)]
-#[difference(expose)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[cfg_attr(feature = "typescript", derive(specta::Type))]
 pub struct Vector3 {
   pub x: f32,
@@ -64,9 +56,7 @@ pub struct Vector3 {
 }
 
 /// 4D vector
-#[derive(Debug, Clone, PartialEq, Difference)]
-#[difference(expose)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[cfg_attr(feature = "typescript", derive(specta::Type))]
 pub struct Vector4 {
   pub x: f32,
@@ -76,9 +66,7 @@ pub struct Vector4 {
 }
 
 /// Individual grass instance data
-#[derive(Debug, Clone, PartialEq, Difference, struct_diff::Diff)]
-#[difference(expose)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, struct_diff::Diff, serde::Serialize, serde::Deserialize)]
 #[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[diff(
   name = YmapGrassInstanceFieldDiff,

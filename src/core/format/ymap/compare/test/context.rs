@@ -4,7 +4,7 @@ use std::{collections::HashMap, fs, path::Path, rc::Rc};
 
 use crate::core::format::ymap::{
   compare::{StreamFileRef, YmapComparisonContext, YmapParentRef},
-  diff::reference_hash,
+  reference_hash,
 };
 
 #[test]
@@ -39,12 +39,13 @@ fn reads_vanilla_and_source_ymaps_once() {
   let first = context.get_cache(&vanilla).unwrap();
   assert!(Rc::ptr_eq(&context.get_cache(&vanilla).unwrap(), &first));
   let entity_count = context.get_cache(&source).unwrap().entities.len();
-  let data = context.get_prepared(&source).unwrap();
-  assert_eq!(data.entity_indices_by_guid.values().map(Vec::len).sum::<usize>(), entity_count);
-  assert_eq!(context.prepared_by_ref.len(), 1);
-  // The diff also loads the vanilla baseline, from the cache.
+  assert!(entity_count > 0);
+  // The diff also loads the vanilla baseline, and the parent YMAPs of both, from the cache.
   context.get_diff(&source).unwrap();
-  assert_eq!(context.cache_by_ref.len(), 2);
+  assert!(
+    context.cache_by_ref.contains_key(&vanilla) && context.cache_by_ref.contains_key(&source)
+  );
+  assert!(Rc::ptr_eq(&context.get_cache(&vanilla).unwrap(), &first));
 
   // A resource without the requested YMAP falls back to vanilla.
   let missing_in_resource = fs::read_dir(&latest)
@@ -101,8 +102,8 @@ fn resolves_parents_of_every_source_ymap() {
   let (mut with_parent, mut source_parents, mut unresolved) = (0, 0, 0);
   let mut failures = Vec::new();
   for file in &files {
-    let parent = match context.get_prepared(file) {
-      Ok(data) => data.parent_ref.clone(),
+    let parent = match context.parent_of(file) {
+      Ok(parent) => parent,
       Err(error) => {
         failures.push(format!("{file:?}: {error}"));
         continue;
@@ -187,7 +188,7 @@ fn dump_source_ymaps_with_changed_parents() {
       let hash = reference_hash(&context.get_cache(file).unwrap().parent);
       ParentSide {
         parent_hash: (hash != 0).then(|| format!("hash_{hash:08X}")),
-        parent_ref: context.get_prepared(file).unwrap().parent_ref.clone(),
+        parent_ref: context.parent_of(file).unwrap(),
       }
     };
     let (vanilla, source) = (side(&vanilla), side(&source));

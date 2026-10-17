@@ -9,7 +9,7 @@ use super::duplicates::{DuplicateReport, EntityDuplicate};
 use super::merge::Result;
 use super::{run::MergeYmap, ybn_conflicts::MergeYbnConflicts};
 use crate::core::{
-  format::ymap::diff::reference_hash,
+  format::ymap::reference_hash,
   source_cache::{MergeInputs, MergeSourceFile},
   vanilla::write_json,
 };

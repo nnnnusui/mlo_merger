@@ -24,7 +24,7 @@ use crate::{
 pub type YmapDistantLodLightDiff = YmapItemDiff<YmapDistantLodLight, YmapDistantLodLightFieldDiff>;
 
 /// Parses a distant light's `"x y z"` position.
-pub fn parse_distant_position(light: &YmapDistantLodLight) -> Option<Position> {
+fn parse_distant_position(light: &YmapDistantLodLight) -> Option<Position> {
   parse_position(&light.position)
 }
 

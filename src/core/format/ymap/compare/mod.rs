@@ -7,10 +7,10 @@
 pub mod box_occluders;
 pub mod car_generators;
 mod context;
-mod data;
 mod diff;
 pub mod distant_lod_lights;
 pub mod entities;
+mod entity_parent;
 mod field;
 pub mod instanced_data;
 mod item_diff;
@@ -23,14 +23,14 @@ pub mod time_cycle_modifiers;
 
 pub use box_occluders::YmapBoxOccluderDiff;
 pub use car_generators::YmapCarGeneratorDiff;
-pub use context::{StreamFileRef, YmapComparisonContext};
-pub use data::{YmapComparisonData, YmapParentRef};
+pub use context::{StreamFileRef, YmapComparisonContext, YmapParentRef};
 pub use diff::{YmapComparisonDiff, YmapComparisonFile, physics_dictionaries};
-pub use distant_lod_lights::{YmapDistantLodLightDiff, parse_distant_position};
+pub use distant_lod_lights::YmapDistantLodLightDiff;
 pub use entities::YmapEntityDiff;
+pub use entity_parent::{EntityParent, EntityParents, YmapDiffContext, entity_parents};
 pub use instanced_data::{
   YmapAddedGrassInstance, YmapGrassBatchDiff, YmapGrassBatchFieldDiff, YmapModifiedGrassInstance,
-  YmapPropInstanceDiff, grass_world_position,
+  YmapPropInstanceDiff,
 };
 pub use item_diff::{NoFieldDiff, YmapItemDiff};
 pub use lod_lights::YmapLodLightDiff;

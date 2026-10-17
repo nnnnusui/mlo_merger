@@ -161,7 +161,7 @@ fn merge_input_selector_uses_format_conflicts_and_ymap_load_closure() {
 fn parent_change_lists_vanilla_closure_and_source_children_in_other_resources() {
   let parent_name = "parent_map.ymap";
   let child_name = "child_map.ymap";
-  let parent_hash = crate::core::format::ymap::diff::reference_hash("parent_map");
+  let parent_hash = crate::core::format::ymap::reference_hash("parent_map");
   let source_file =
     |file_name: &str, vanilla: Option<VanillaMatch>, parent: Option<String>| SourceFile {
       path: format!("stream/{file_name}"),

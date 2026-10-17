@@ -105,8 +105,8 @@ fn entity_diff(
   vanilla: &Ymap,
   modded: &Ymap,
 ) -> Vec<YmapEntityDiff> {
-  compare::entities::diff(&vanilla.entities, &modded.entities, &MatchTolerances::default())
-    .unwrap_or_default()
+  let ctx = YmapDiffContext::new(MatchTolerances::default(), (vanilla, None), (modded, None));
+  compare::entities::diff(&vanilla.entities, &modded.entities, &ctx).unwrap_or_default()
 }
 
 #[test]
@@ -139,6 +139,7 @@ fn reports_modified_removed_and_added_entities() {
     vanilla_index: 0,
     modded_index: 0,
     changes,
+    parent: None,
   } = &diffs[0]
   else {
     panic!("{:?}", diffs[0]);
@@ -168,7 +169,7 @@ fn reports_modified_removed_and_added_entities() {
     }
   ));
   assert!(
-    matches!(&diffs[3], YmapEntityDiff::Added { after: Some(1), entity } if entity.guid == 99)
+    matches!(&diffs[3], YmapEntityDiff::Added { after: Some(1), entity, .. } if entity.guid == 99)
   );
 }
 
@@ -192,6 +193,88 @@ fn pairs_shared_guids_in_order_and_reports_the_rest() {
     }
   ));
   assert!(
-    matches!(&diffs[1], YmapEntityDiff::Added { after: Some(1), entity } if entity.guid == 1)
+    matches!(&diffs[1], YmapEntityDiff::Added { after: Some(1), entity, .. } if entity.guid == 1)
+  );
+}
+
+/// An entity at `lod_level` pointing at `parent_index`, of its own YMAP unless `in_parent`.
+fn linked(
+  guid: u32,
+  lod_level: &str,
+  parent_index: i32,
+  in_parent: bool,
+) -> YmapEntity {
+  let mut entity = entity(guid);
+  entity.lod_level = lod_level.into();
+  entity.parent_index = parent_index;
+  entity.flags = if in_parent { entity.flags | 8 } else { entity.flags & !8 };
+  entity
+}
+
+#[test]
+fn parents_compare_by_the_entity_they_point_at() {
+  let lod = "LODTYPES_DEPTH_LOD";
+  let hd = "LODTYPES_DEPTH_HD";
+  let vanilla = with_entities(vec![linked(1, lod, -1, false), linked(2, hd, 0, false)]);
+  // An entity inserted first shifts the parent, so the child's index changes but not its parent.
+  let shifted = with_entities(vec![
+    linked(3, lod, -1, false),
+    linked(1, lod, -1, false),
+    linked(2, hd, 1, false),
+  ]);
+  let ctx =
+    |modded| YmapDiffContext::new(MatchTolerances::default(), (&vanilla, None), (modded, None));
+  let diffs =
+    compare::entities::diff(&vanilla.entities, &shifted.entities, &ctx(&shifted)).unwrap();
+  assert!(
+    matches!(
+      diffs.as_slice(),
+      [YmapEntityDiff::Added {
+        after: None,
+        ..
+      }]
+    ),
+    "{diffs:?}"
+  );
+  // Pointing at the new entity instead is a parent change.
+  let reparented = Ymap {
+    entities: vec![linked(3, lod, -1, false), linked(1, lod, -1, false), linked(2, hd, 0, false)],
+    ..base()
+  };
+  let diffs =
+    compare::entities::diff(&vanilla.entities, &reparented.entities, &ctx(&reparented)).unwrap();
+  assert!(
+    diffs.iter().any(|diff| matches!(
+      diff,
+      YmapEntityDiff::Modified {
+        guid: 2,
+        parent: Some(EntityParent::Own {
+          guid: 3
+        }),
+        ..
+      }
+    )),
+    "{diffs:?}"
+  );
+}
+
+#[test]
+fn external_parents_are_named_by_their_map_and_guid() {
+  let parent_entities = vec![entity(10), entity(20)];
+  let mut child = with_entities(vec![linked(1, "LODTYPES_DEPTH_HD", 1, true)]);
+  child.parent = "parent_map".into();
+  assert_eq!(
+    entity_parents(&child, Some(&parent_entities)),
+    vec![EntityParent::Parent {
+      map: crate::core::format::ymap::reference_hash("parent_map"),
+      guid: 20,
+    }]
+  );
+  assert_eq!(
+    entity_parents(&child, None),
+    vec![EntityParent::Unresolved {
+      in_parent: true,
+      index: 1,
+    }]
   );
 }

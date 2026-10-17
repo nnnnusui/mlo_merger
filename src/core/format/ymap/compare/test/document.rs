@@ -28,7 +28,11 @@ fn get_diff_fingerprints_both_files_and_derives_their_differences() {
     .add_resource(&MetaResource::parse(&Rsc7Resource::decode(&vanilla_bytes).unwrap()).unwrap());
   let mut modded = ymap_to_model(&vanilla_bytes, &catalog.hash_names).unwrap();
   modded.flags ^= 2;
-  let removed_guid = modded.entities.remove(0).guid;
+  // The last entity, so no other entity's parentIndex shifts; parents compare by the entity
+  // they point at, and shifted indices would point at other entities.
+  let removed_index = modded.entities.len() - 1;
+  assert!(modded.entities.iter().all(|entity| entity.parent_index != removed_index as i32));
+  let removed_guid = modded.entities.remove(removed_index).guid;
   let modded_bytes = write_ymap(&modded, &modded.entities, &catalog).unwrap();
 
   let root = std::env::temp_dir().join(format!("ymap_compare_document_{}", std::process::id()));
@@ -96,7 +100,7 @@ fn get_diff_fingerprints_both_files_and_derives_their_differences() {
   assert_eq!(document["diffs"]["flags"], json!(modded.flags));
   assert_eq!(
     document["diffs"]["entities"],
-    json!([{ "Removed": { "index": 0, "guid": removed_guid } }])
+    json!([{ "Removed": { "index": removed_index, "guid": removed_guid } }])
   );
   let unexpected = document["diffs"]
     .as_object()

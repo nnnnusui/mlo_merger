@@ -1,13 +1,8 @@
-use structdiff::{Difference, StructDiff};
-
 use crate::{
   common::position::Position,
-  core::{
-    config::matching::MatchTolerances,
-    format::ymap::compare::{
-      self, YmapBoxOccluderDiff, YmapCarGeneratorDiff, YmapEntityDiff, YmapLodLightDiff,
-      YmapOccludeModelDiff, YmapTimeCycleModifierDiff,
-    },
+  core::format::ymap::compare::{
+    self, YmapBoxOccluderDiff, YmapCarGeneratorDiff, YmapDiffContext, YmapEntityDiff,
+    YmapLodLightDiff, YmapOccludeModelDiff, YmapTimeCycleModifierDiff,
   },
 };
 
@@ -18,12 +13,10 @@ use super::{
   ymap_occlude_model::YmapOccludeModel, ymap_time_cycle_modifier::YmapTimeCycleModifier,
 };
 
-#[derive(Debug, Clone, PartialEq, Difference, struct_diff::Diff)]
-#[difference(expose)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, struct_diff::Diff, serde::Serialize, serde::Deserialize)]
 #[diff(
   name = YmapDiffFields,
-  context = MatchTolerances,
+  context = YmapDiffContext,
   attr(cfg_attr(feature = "typescript", derive(specta::Type)))
 )]
 pub struct Ymap {
@@ -31,57 +24,44 @@ pub struct Ymap {
   pub parent: String,
   pub flags: u32,
   pub content_flags: u32,
-  #[difference(recurse)]
   #[diff(nested, context = 0.0)]
   pub streaming_extents_min: Position,
-  #[difference(recurse)]
   #[diff(nested, context = 0.0)]
   pub streaming_extents_max: Position,
-  #[difference(recurse)]
   #[diff(nested, context = 0.0)]
   pub entities_extents_min: Position,
-  #[difference(recurse)]
   #[diff(nested, context = 0.0)]
   pub entities_extents_max: Position,
-  #[difference(recurse)]
   #[diff(nested, context = ())]
   pub block: YmapBlock,
-  #[difference(skip)]
   #[diff(with = compare::entities, output = Vec<YmapEntityDiff>)]
   pub entities: Vec<YmapEntity>,
-  #[difference(skip)]
-  #[diff(with = compare::box_occluders, output = Vec<YmapBoxOccluderDiff>)]
+  #[diff(with = compare::box_occluders, context = ctx.tolerances, output = Vec<YmapBoxOccluderDiff>)]
   pub box_occluders: Vec<YmapBoxOccluder>,
-  #[difference(skip)]
-  #[diff(with = compare::occlude_models, output = Vec<YmapOccludeModelDiff>)]
+  #[diff(with = compare::occlude_models, context = ctx.tolerances, output = Vec<YmapOccludeModelDiff>)]
   pub occlude_models: Vec<YmapOccludeModel>,
-  #[difference(skip)]
   #[diff(with = compare::lod_lights, output = Vec<YmapLodLightDiff>)]
   pub lod_lights: Vec<YmapLodLight>,
-  #[difference(skip)]
-  #[diff(nested)]
+  #[diff(nested, context = ctx.tolerances)]
   pub distant_lod_lights: YmapDistantLodLights,
-  #[difference(skip)]
   #[diff(with = compare::physics_dictionaries, output = Vec<String>)]
   pub physics_dictionaries: Vec<String>,
-  #[difference(skip)]
-  #[diff(nested)]
+  #[diff(nested, context = ctx.tolerances)]
   pub instanced_data: YmapInstancedData,
-  #[difference(skip)]
-  #[diff(with = compare::time_cycle_modifiers, output = Vec<YmapTimeCycleModifierDiff>)]
+  #[diff(with = compare::time_cycle_modifiers, context = ctx.tolerances, output = Vec<YmapTimeCycleModifierDiff>)]
   pub time_cycle_modifiers: Vec<YmapTimeCycleModifier>,
-  #[difference(skip)]
-  #[diff(with = compare::car_generators, output = Vec<YmapCarGeneratorDiff>)]
+  #[diff(with = compare::car_generators, context = ctx.tolerances, output = Vec<YmapCarGeneratorDiff>)]
   pub car_generators: Vec<YmapCarGenerator>,
   /// Unused by every vanilla YMAP (0/12,584 across all vanilla versions) and every local
   /// source YMAP (0/700) as of 2026-10-16.
-  #[difference(skip)]
   #[diff(skip)]
   pub container_lods: Vec<YmapContainerLod>,
 }
 
 #[cfg(test)]
 mod tests {
+  use struct_diff::Diff;
+
   use super::*;
   use crate::core::format::ymap::model::{YmapBlock, YmapDistantLodLights, YmapInstancedData};
 
@@ -117,17 +97,17 @@ mod tests {
   }
 
   #[test]
-  fn print_recursive_streaming_extents_min_diff() {
+  fn extent_changes_round_trip_through_the_diff() {
     let vanilla = create_test_ymap();
     let mut modded = vanilla.clone();
     modded.streaming_extents_min.x = 1.0;
     modded.streaming_extents_min.z = 3.0;
-    // non-recursive field for comparison
     modded.streaming_extents_max.y = 2.0;
 
-    let diffs = vanilla.diff(&modded);
-    println!("{diffs:#?}");
-
-    assert_eq!(vanilla.apply(diffs), modded);
+    let ctx = YmapDiffContext::new(Default::default(), (&vanilla, None), (&modded, None));
+    let diff = vanilla.diff(&modded, &ctx).unwrap();
+    let mut applied = vanilla.clone();
+    applied.apply(&diff).unwrap();
+    assert_eq!(applied, modded);
   }
 }

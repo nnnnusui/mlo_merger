@@ -4,7 +4,7 @@ use crate::core::format::{
     meta::{MetaResource, jenk_hash},
     rsc7::Rsc7Resource,
   },
-  ymap::diff::reference_hash,
+  ymap::reference_hash,
 };
 use serde::{Deserialize, Serialize};
 

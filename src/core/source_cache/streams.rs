@@ -94,7 +94,7 @@ pub(crate) fn load_stream_inventory(
         .file_stem()
         .and_then(|name| name.to_str())
         .ok_or("Invalid recorded YMAP name")?;
-      let hash = crate::core::format::ymap::diff::reference_hash(stem);
+      let hash = crate::core::format::ymap::reference_hash(stem);
       if hashes.insert(hash, relative.to_owned()).is_some() {
         return Err("Ambiguous YMAP name/hash within recorded resource".into());
       }

@@ -219,19 +219,15 @@ impl MergeYmap {
         tracing::warn!("Vanilla YMAP is unavailable; skipping {}", vanilla_ymap_path.display());
         continue;
       };
-      let (vanilla_ymap, vanilla_entities) =
-        sources.normalize(&original, None, hash, &mut references)?;
-      if vanilla_ymap.entities.len() != vanilla_entities.len() {
-        return Err(format!("ambiguous entity identity in {}", vanilla_ymap_path.display()).into());
-      }
+      // Sources are compared as they are, each entity's parent named by the entity it points
+      // at; the merged result is linked into the merge's identities afterwards.
+      let vanilla_ymap = &original.model;
+      let vanilla_parents = parents_of(&mut sources, &mut references, None, vanilla_ymap)?;
 
       let mut ymap_diffs = Vec::new();
       let mut duplicates = Collector::default();
-      let vanilla_originals = vanilla_entities
-        .iter()
-        .zip(&original.entities)
-        .map(|(normalized, original)| (normalized.guid, original))
-        .collect::<HashMap<_, _>>();
+      let vanilla_originals =
+        original.entities.iter().map(|entity| (entity.guid, entity)).collect::<HashMap<_, _>>();
       for mod_info in mod_refs {
         tracing::info!("  Mod: {} ({})", mod_info.mod_name, mod_info.mod_ymap_path.display());
 
@@ -243,22 +239,23 @@ impl MergeYmap {
           );
           continue;
         };
-        let (mod_ymap, mod_entities) =
-          sources.normalize(&source, Some(&mod_info.mod_name), hash, &mut references)?;
-        if mod_ymap.entities.len() != source.entities.len() {
-          return Err(
-            format!("ambiguous entity identity in {}", mod_info.mod_ymap_path.display()).into(),
-          );
-        }
+        references.register_entities(hash, &source.entities);
+        let ctx = YmapDiffContext {
+          tolerances,
+          vanilla_parents: vanilla_parents.clone(),
+          modded_parents: parents_of(
+            &mut sources,
+            &mut references,
+            Some(&mod_info.mod_name),
+            &source.model,
+          )?,
+        };
         // Diffs index into the vanilla they were taken from, so every source is compared with
         // the latest vanilla, also when older vanilla versions are available.
-        let ymap_diff = vanilla_ymap.diff(&mod_ymap, &tolerances).unwrap_or_default();
+        let ymap_diff = vanilla_ymap.diff(&source.model, &ctx).unwrap_or_default();
         log_diff_counts(&ymap_diff);
-        let source_originals = mod_entities
-          .iter()
-          .zip(&source.entities)
-          .map(|(normalized, original)| (normalized.guid, original))
-          .collect::<HashMap<_, _>>();
+        let source_originals =
+          source.entities.iter().map(|entity| (entity.guid, entity)).collect::<HashMap<_, _>>();
         for diff in ymap_diff.entities.iter().flatten() {
           let key = diff.guid();
           let change = match diff {
@@ -274,7 +271,7 @@ impl MergeYmap {
           };
           duplicates.add(
             diff,
-            references.original_guid(key)?,
+            key,
             vanilla_originals.get(&key).map(|entity| (*entity).clone()),
             Contribution {
               resource: mod_info.mod_name.clone(),
@@ -295,11 +292,19 @@ impl MergeYmap {
       if !duplicates.is_empty() {
         duplicate_files.insert(ymap_name.trim_end_matches(".xml").to_ascii_lowercase(), duplicates);
       }
-      let merged_diff = merge_diffs(&vanilla_ymap, &ymap_diffs, blacklist.as_ref());
+      let merged_diff = merge_diffs(vanilla_ymap, &ymap_diffs, blacklist.as_ref());
+      let failed =
+        |error: struct_diff::ApplyError| format!("{}: {error}", vanilla_ymap_path.display());
       let mut model = vanilla_ymap.clone();
-      model
-        .apply(&merged_diff)
-        .map_err(|error| format!("{}: {error}", vanilla_ymap_path.display()))?;
+      model.apply(&merged_diff).map_err(failed)?;
+      let (entities, parents) = entities::apply_linked(
+        &vanilla_ymap.entities,
+        &vanilla_parents,
+        merged_diff.entities.as_deref().unwrap_or_default(),
+      )
+      .map_err(|error| failed(error.at("entities")))?;
+      model.entities =
+        link_entities(&mut sources, &mut references, hash, &model, entities, &parents)?;
       planned.insert(
         hash,
         PlannedMap {

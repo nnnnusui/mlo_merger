@@ -20,8 +20,8 @@ use super::{
 use crate::core::{
   config::blacklist::BlacklistConfig,
   format::ymap::{
-    diff::reference_hash,
     model::{Ymap, YmapOccludeModel},
+    reference_hash,
   },
 };
 

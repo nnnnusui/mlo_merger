@@ -2,9 +2,13 @@ use super::cache_inputs::VanillaHistory;
 use super::duplicates::{Change, Collector, Contribution, DuplicateReport};
 use crate::common::function::collect_files_with_suffix;
 use crate::core::config::blacklist::BlacklistConfig;
-use crate::core::format::ymap::compare::{YmapDiffFields, YmapEntityDiff, merge_diffs};
-use crate::core::format::ymap::diff::reference_hash;
+use crate::core::format::ymap::compare::{
+  EntityParent, EntityParents, YmapDiffContext, YmapDiffFields, YmapEntityDiff, entities,
+  entity_parents, merge_diffs,
+};
+use crate::core::format::ymap::model::YmapEntity;
 use crate::core::format::ymap::model::ymap::Ymap;
+use crate::core::format::ymap::reference_hash;
 use crate::core::format::ymap::relation::{EntityParentRef, entity_parent_ref};
 use crate::core::format::ymap::xml::XmlYmap;
 use crate::core::merge::{
@@ -89,4 +93,100 @@ fn log_diff_counts(diff: &YmapDiffFields) {
     "    Changed items: {}",
     if changed.is_empty() { "none".into() } else { changed.join(", ") }
   );
+}
+
+/// The parent of each entity of `ymap`, read from `resource`'s or else vanilla's parent YMAP.
+fn parents_of(
+  sources: &mut SourceMaps,
+  references: &mut ParentReferences,
+  resource: Option<&str>,
+  ymap: &Ymap,
+) -> Result<EntityParents, Box<dyn std::error::Error>> {
+  let parent_hash = reference_hash(&ymap.parent);
+  let parent = if parent_hash == 0 { None } else { sources.get(resource, parent_hash)? };
+  if let Some(parent) = &parent {
+    references.register_entities(parent_hash, &parent.entities);
+  }
+  Ok(entity_parents(ymap, parent.as_ref().map(|parent| parent.entities.as_slice())))
+}
+
+/// `entities` of the merged `model` (map `hash`) with the merge's internal identities: GUIDs
+/// replaced by entity ids and parents by the handles the final phase restores to indices.
+fn link_entities(
+  sources: &mut SourceMaps,
+  references: &mut ParentReferences,
+  hash: u32,
+  model: &Ymap,
+  mut entities: Vec<YmapEntity>,
+  parents: &[EntityParent],
+) -> Result<Vec<YmapEntity>, Box<dyn std::error::Error>> {
+  let ids = references.entity_ids(hash, &entities)?;
+  for (entity, (id, parent)) in entities.iter_mut().zip(ids.into_iter().zip(parents)) {
+    let original_guid = entity.guid;
+    entity.guid = id;
+    let (owner, guid) = match parent {
+      EntityParent::None => {
+        entity.parent_index = -1;
+        continue;
+      }
+      EntityParent::Unresolved {
+        in_parent,
+        index,
+      } => {
+        let owner = if *in_parent { reference_hash(&model.parent) } else { hash };
+        entity.parent_index = unresolved(sources, references, owner, *index)?;
+        continue;
+      }
+      EntityParent::Own {
+        guid,
+      } => (hash, *guid),
+      EntityParent::Parent {
+        map,
+        guid,
+      } => (*map, *guid),
+    };
+    entity.parent_index = match references.capture_guid(owner, guid) {
+      Ok(handle) => handle,
+      Err(error) => {
+        tracing::warn!(
+          "    Unresolved parent for entity {original_guid}: {error}; changes to its parent layout will be rejected"
+        );
+        let index = vanilla_index(sources, owner, guid)?.unwrap_or(-1);
+        unresolved(sources, references, owner, index)?
+      }
+    };
+  }
+  Ok(entities)
+}
+
+/// A handle keeping `index` into map `owner` as it is, valid while the vanilla layout of `owner`
+/// is unchanged, or while `owner` stays unavailable.
+fn unresolved(
+  sources: &mut SourceMaps,
+  references: &mut ParentReferences,
+  owner: u32,
+  index: i32,
+) -> Result<i32, Box<dyn std::error::Error>> {
+  let layout = match sources.get(None, owner)? {
+    Some(vanilla) => Some(references.runtime_entity_ids(owner, &vanilla.entities)?),
+    None => None,
+  };
+  Ok(references.capture_unresolved(None, owner, layout.as_deref(), index)?)
+}
+
+/// The runtime index of the first entity with `guid` in the vanilla map `owner`.
+fn vanilla_index(
+  sources: &mut SourceMaps,
+  owner: u32,
+  guid: u32,
+) -> Result<Option<i32>, Box<dyn std::error::Error>> {
+  let Some(vanilla) = sources.get(None, owner)? else {
+    return Ok(None);
+  };
+  Ok(
+    runtime_entities(vanilla.entities.iter())
+      .iter()
+      .position(|entity| entity.guid == guid)
+      .and_then(|index| i32::try_from(index).ok()),
+  )
 }

@@ -13,7 +13,7 @@ use crate::core::{
     meta::{MetaResource, jenk_hash},
     rsc7::Rsc7Resource,
   },
-  format::ymap::diff::reference_hash,
+  format::ymap::reference_hash,
   vanilla::{CachedFile, read_ymap},
 };
 use serde::{Deserialize, Serialize};

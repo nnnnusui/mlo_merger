@@ -444,7 +444,11 @@ fn grass_instances_keep_their_world_position_when_bounds_change() {
   let xs = batch
     .instances
     .iter()
-    .map(|instance| grass_world_position(batch, instance).unwrap().x)
+    .map(|instance| {
+      crate::core::format::ymap::compare::instanced_data::grass_world_position(batch, instance)
+        .unwrap()
+        .x
+    })
     .collect::<Vec<_>>();
   for (x, expected) in xs.iter().zip([1.0, 2.0, 3.0, 15.0]) {
     assert!((x - expected).abs() < 0.001, "{xs:?}");

@@ -58,7 +58,7 @@ pub(crate) fn apply(
       .values()
       .filter(|map| {
         !map.model.lod_lights.is_empty()
-          && crate::core::format::ymap::diff::reference_hash(&map.model.parent) == parent_hash
+          && crate::core::format::ymap::reference_hash(&map.model.parent) == parent_hash
       })
       .collect::<Vec<_>>();
     let first = children.first().ok_or("Distant removal has no linked child")?;

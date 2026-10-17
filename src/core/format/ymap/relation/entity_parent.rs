@@ -1,6 +1,6 @@
 use super::super::{
-  diff::reference_hash,
   model::{Ymap, YmapEntity},
+  reference_hash,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

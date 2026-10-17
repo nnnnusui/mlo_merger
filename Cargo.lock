@@ -1028,7 +1028,6 @@ dependencies = [
  "sha2",
  "specta",
  "struct-diff",
- "structdiff",
  "toml",
  "tracing",
  "tracing-appender",
@@ -1522,25 +1521,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 3.0.9",
-]
-
-[[package]]
-name = "structdiff"
-version = "0.7.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0ded2e61f645b60f23f1ee69c122a77ba68dd187abb751c67ad2387bcb773f0b"
-dependencies = [
- "serde",
- "structdiff-derive",
-]
-
-[[package]]
-name = "structdiff-derive"
-version = "0.7.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9cec3cf082379c048a963041e18a8e741a4e0a1afb14b825bd4bd771366b9a6e"
-dependencies = [
- "serde",
 ]
 
 [[package]]

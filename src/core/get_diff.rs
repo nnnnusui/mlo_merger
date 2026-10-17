@@ -1,14 +1,24 @@
-use std::path::{Path, PathBuf};
+use std::{
+  collections::HashMap,
+  path::{Path, PathBuf},
+};
+
+use struct_diff::Diff;
+use walkdir::WalkDir;
 
 use crate::core::{
-  format::ymap::diff::YmapDiff,
+  config::matching,
+  format::ymap::{compare::YmapDiffContext, model::Ymap, reference_hash},
   vanilla::{read_ymap, write_json},
 };
-use walkdir::WalkDir;
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
-/// Writes a source YMAP's merge-oriented diff against its latest vanilla-cache baseline.
+/// Writes each source YMAP's differences from its latest vanilla-cache baseline, as
+/// `compare` takes them (the `diffs` of a source-cache `.diff.json`).
+///
+/// Entity parents are read from the parent YMAP among the inputs when there is one, from the
+/// latest vanilla cache otherwise. Tolerances come from `asset/config.toml`.
 ///
 /// The output is written to `<output_dir>/<source filename>.diff.json`.
 pub fn generate_ymap_diff(
@@ -16,11 +26,24 @@ pub fn generate_ymap_diff(
   vanilla_cache_dir: &Path,
   output_path: &Path,
 ) -> Result<Vec<PathBuf>> {
+  matching::with_config(|| generate(source_input, vanilla_cache_dir, output_path))?
+}
+
+fn generate(
+  source_input: &Path,
+  vanilla_cache_dir: &Path,
+  output_path: &Path,
+) -> Result<Vec<PathBuf>> {
   let sources = collect_source_ymaps(source_input)?;
+  let vanilla_dir = vanilla_cache_dir.join("latest/ymap");
+  let source_paths = by_reference(sources.iter().cloned());
+  let vanilla_paths = by_reference(
+    std::fs::read_dir(&vanilla_dir)?.filter_map(|entry| entry.ok().map(|entry| entry.path())),
+  );
   let mut outputs = Vec::with_capacity(sources.len());
   for source_path in &sources {
     let name = source_path.file_name().ok_or("Source YMAP has no filename")?;
-    let vanilla_path = vanilla_cache_dir.join("latest/ymap").join(name);
+    let vanilla_path = vanilla_dir.join(name);
     if !vanilla_path.is_file() {
       return Err(
         format!("Latest vanilla YMAP baseline is missing: {}", vanilla_path.display()).into(),
@@ -28,39 +51,40 @@ pub fn generate_ymap_diff(
     }
     let vanilla = read_ymap(&vanilla_path)?;
     let source = read_ymap(source_path)?;
-    let diff = YmapDiff::extract_for_merge(&vanilla, &source);
-    let mut diff_json = serde_json::to_value(&diff)?;
-    omit_occlude_model_baseline_triangles(&mut diff_json);
+    let parent = |ymap: &Ymap, own: Option<&HashMap<u32, PathBuf>>| -> Result<Option<Ymap>> {
+      let hash = reference_hash(&ymap.parent);
+      let path = own.and_then(|paths| paths.get(&hash)).or_else(|| vanilla_paths.get(&hash));
+      Ok(if hash == 0 { None } else { path.map(|path| read_ymap(path)).transpose()? })
+    };
+    let (vanilla_parent, source_parent) =
+      (parent(&vanilla, None)?, parent(&source, Some(&source_paths))?);
+    let ctx = YmapDiffContext::new(
+      matching::current(),
+      (&vanilla, vanilla_parent.as_ref().map(|parent| parent.entities.as_slice())),
+      (&source, source_parent.as_ref().map(|parent| parent.entities.as_slice())),
+    );
+    let diff = vanilla.diff(&source, &ctx).unwrap_or_default();
     let output = diff_output_path(source_input, source_path, sources.len(), output_path)?;
     if let Some(parent) = output.parent() {
       std::fs::create_dir_all(parent)?;
     }
-    write_json(&output, &diff_json)?;
+    write_json(&output, &diff)?;
     outputs.push(output);
   }
   Ok(outputs)
 }
 
-fn omit_occlude_model_baseline_triangles(diff: &mut serde_json::Value) {
-  let Some(diffs) = diff.get_mut("occlude_model_diffs").and_then(serde_json::Value::as_array_mut)
-  else {
-    return;
-  };
-  for item in diffs {
-    let Some(variants) = item.as_object_mut() else {
-      continue;
-    };
-    if let Some(model) = variants.get_mut("Removed").and_then(serde_json::Value::as_object_mut) {
-      model.remove("triangles");
-    }
-    if let Some(model) = variants
-      .get_mut("Modified")
-      .and_then(|modified| modified.get_mut("vanilla"))
-      .and_then(serde_json::Value::as_object_mut)
+/// YMAP `paths` keyed by the reference hash of their file stem.
+fn by_reference(paths: impl Iterator<Item = PathBuf>) -> HashMap<u32, PathBuf> {
+  let mut by_hash = HashMap::new();
+  for path in paths {
+    if let Some(stem) = path.file_stem().and_then(|stem| stem.to_str())
+      && path.extension().is_some_and(|extension| extension.eq_ignore_ascii_case("ymap"))
     {
-      model.remove("triangles");
+      by_hash.entry(reference_hash(stem)).or_insert(path);
     }
   }
+  by_hash
 }
 
 fn diff_output_path(
@@ -159,30 +183,6 @@ mod tests {
       .unwrap(),
       PathBuf::from("out/stream/my_map.ymap.diff.json")
     );
-  }
-
-  #[test]
-  fn omits_baseline_triangles_but_keeps_triangle_diffs_and_added_geometry() {
-    let mut diff = serde_json::json!({
-      "occlude_model_diffs": [
-        {"Removed": {"triangles": ["baseline removed"]}},
-        {"Modified": {
-          "vanilla": {"triangles": ["baseline modified"]},
-          "triangle_diffs": [{"Added": "changed triangle"}]
-        }},
-        {"Added": {"triangles": ["new model geometry"]}}
-      ]
-    });
-
-    omit_occlude_model_baseline_triangles(&mut diff);
-
-    assert!(diff["occlude_model_diffs"][0]["Removed"].get("triangles").is_none());
-    assert!(diff["occlude_model_diffs"][1]["Modified"]["vanilla"].get("triangles").is_none());
-    assert_eq!(
-      diff["occlude_model_diffs"][1]["Modified"]["triangle_diffs"][0]["Added"],
-      "changed triangle"
-    );
-    assert_eq!(diff["occlude_model_diffs"][2]["Added"]["triangles"][0], "new model geometry");
   }
 
   #[test]

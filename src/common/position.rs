@@ -1,16 +1,6 @@
-use structdiff::{Difference, StructDiff};
-
 #[derive(
-  Clone,
-  Debug,
-  Default,
-  Difference,
-  PartialEq,
-  serde::Serialize,
-  serde::Deserialize,
-  struct_diff::Diff,
+  Clone, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize, struct_diff::Diff,
 )]
-#[difference(expose)]
 #[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[diff(
   context = f32,

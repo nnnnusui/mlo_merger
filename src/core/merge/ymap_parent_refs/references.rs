@@ -120,10 +120,32 @@ impl ParentReferences {
     if guid == 0 || original.iter().filter(|candidate| **candidate == guid).count() != 1 {
       return Err(invalid("referenced parent GUID is zero or ambiguous"));
     }
-    let target = ParentTarget {
+    self.handle_for(ParentTarget {
       map,
       guid,
-    };
+    })
+  }
+
+  /// Resolves the entity of `map` with the original, unique `guid` to a merge-stable handle.
+  pub(in crate::core::merge) fn capture_guid(
+    &mut self,
+    map: u32,
+    guid: u32,
+  ) -> io::Result<i32> {
+    if guid == 0 || self.ambiguous_guids.contains(&(map, guid)) {
+      return Err(invalid("referenced parent GUID is zero or ambiguous"));
+    }
+    let id = self.entity_id_with_occurrence(map, vec![guid], 0, guid)?;
+    self.handle_for(ParentTarget {
+      map,
+      guid: id,
+    })
+  }
+
+  fn handle_for(
+    &mut self,
+    target: ParentTarget,
+  ) -> io::Result<i32> {
     if let Some(handle) = self.handles.get(&target) {
       return Ok(*handle);
     }

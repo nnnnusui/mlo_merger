@@ -1,8 +1,6 @@
-use structdiff::{Difference, StructDiff};
-
 use crate::common::position::Position;
 
-#[derive(Debug, Clone, PartialEq, Difference, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[cfg_attr(feature = "typescript", derive(specta::Type))]
 pub struct Triangle {
   pub corner_1: Position,

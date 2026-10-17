@@ -1,14 +1,10 @@
-use structdiff::{Difference, StructDiff};
-
 use crate::{
   common::{position::Position, triangle::Triangle},
   core::format::ymap::compare::{self, YmapTriangleDiff},
 };
 
 /// Occlude model definition in YMAP
-#[derive(Debug, Clone, PartialEq, Difference, struct_diff::Diff)]
-#[difference(expose)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, struct_diff::Diff, serde::Serialize, serde::Deserialize)]
 #[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[diff(
   name = YmapOccludeModelFieldDiff,

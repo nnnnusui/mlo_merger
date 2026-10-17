@@ -1,11 +1,7 @@
-use structdiff::{Difference, StructDiff};
-
 use crate::common::position::Position;
 
 /// LOD lights structure of array in YMAP
-#[derive(Debug, Clone, PartialEq, Difference)]
-#[difference(expose)]
-#[derive(Default, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, serde::Serialize, serde::Deserialize)]
 #[cfg_attr(feature = "typescript", derive(specta::Type))]
 pub struct YmapLodLight {
   pub direction: Position,

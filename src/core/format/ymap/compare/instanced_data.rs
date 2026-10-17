@@ -26,11 +26,11 @@ use super::{
 use crate::{
   common::position::Position,
   core::format::ymap::{
-    diff::reference_hash,
     model::{
       BoundingBox, GrassInstance, GrassInstanceBatch,
       ymap_instanced_data::YmapGrassInstanceFieldDiff,
     },
+    reference_hash,
   },
 };
 
@@ -87,7 +87,7 @@ pub struct YmapModifiedGrassInstance {
 pub mod imap_link {
   pub use struct_diff::replace::apply;
 
-  use crate::core::format::ymap::diff::reference_hash;
+  use crate::core::format::ymap::reference_hash;
 
   pub fn diff<C: ?Sized>(
     before: &str,
@@ -163,7 +163,7 @@ fn attributes(instance: &GrassInstance) -> (u32, u32, Vec<u32>, u32, u32) {
 }
 
 /// World position of `instance` (CodeWalker `GetGrassWorldPos`), or `None` if malformed.
-pub fn grass_world_position(
+pub(super) fn grass_world_position(
   batch: &GrassInstanceBatch,
   instance: &GrassInstance,
 ) -> Option<Position> {

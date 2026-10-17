@@ -11,10 +11,8 @@ pub mod ymap_occlude_model;
 pub mod ymap_time_cycle_modifier;
 
 pub use ymap::Ymap;
-pub use ymap::YmapStructDiffEnum;
 pub use ymap_block::YmapBlock;
 pub use ymap_box_occluder::YmapBoxOccluder;
-pub use ymap_box_occluder::YmapBoxOccluderStructDiffEnum;
 pub use ymap_car_generator::YmapCarGenerator;
 pub use ymap_container_lod::YmapContainerLod;
 pub use ymap_distant_lod_lights::{YmapDistantLodLight, YmapDistantLodLights};

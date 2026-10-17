@@ -5,8 +5,8 @@ use super::{
 };
 use crate::core::format::ymap::binary::ymap_to_model;
 use crate::core::format::ymap::{
-  diff::reference_hash,
   model::{Ymap, YmapEntity, YmapLodLight},
+  reference_hash,
 };
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 

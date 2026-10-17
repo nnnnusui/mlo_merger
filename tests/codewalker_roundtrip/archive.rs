@@ -3,7 +3,7 @@ use super::*;
 #[test]
 #[ignore = "requires a successfully generated asset/vanilla-cache schema 2 or 3 cache"]
 fn gtav_generated_version_cache_has_complete_artifacts_without_log_files() {
-  use mlo_merger::core::{merge::YmapDiff, vanilla_cache::VanillaCacheManifest};
+  use mlo_merger::core::vanilla_cache::VanillaCacheManifest;
 
   fn read_json<T: serde::de::DeserializeOwned>(path: &Path) -> T {
     serde_json::from_reader(std::io::BufReader::new(std::fs::File::open(path).unwrap())).unwrap()
@@ -46,7 +46,8 @@ fn gtav_generated_version_cache_has_complete_artifacts_without_log_files() {
             assert!(delta["entity_order"].is_array());
           }
         } else {
-          let _: YmapDiff = read_json(&artifact);
+          // Schema 2 reports hold the removed merge diff; only their JSON form is checked.
+          let _: serde_json::Value = read_json(&artifact);
         }
       } else {
         added += 1;

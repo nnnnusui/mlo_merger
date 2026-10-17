@@ -1,6 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::core::format::ymap::diff::reference_hash;
+use crate::core::format::ymap::reference_hash;
 use crate::core::vanilla_cache::{DerivedVanillaFile, YmapRelationshipIndex};
 
 use super::types::{ResourceInventory, SourceYmapRef, YmapLoadPlan};

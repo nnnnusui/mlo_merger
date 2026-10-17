@@ -22,7 +22,7 @@ mod time_cycle_modifiers;
 use serde_json::Value;
 use struct_diff::Diff;
 
-use super::YmapDiffFields;
+use super::{YmapDiffContext, YmapDiffFields};
 use crate::{
   common::position::Position,
   core::{
@@ -86,7 +86,8 @@ fn diff_with(
   modded: &Ymap,
   tolerances: &MatchTolerances,
 ) -> YmapDiffFields {
-  vanilla.diff(modded, tolerances).unwrap_or_default()
+  let ctx = YmapDiffContext::new(*tolerances, (vanilla, None), (modded, None));
+  vanilla.diff(modded, &ctx).unwrap_or_default()
 }
 
 fn diff(

@@ -6,7 +6,7 @@ use super::{
 };
 use crate::common::function::get_resource_directories;
 use crate::common::path::{reject_symlinks, safe_relative};
-use crate::core::format::ymap::diff::reference_hash;
+use crate::core::format::ymap::reference_hash;
 use serde::Deserialize;
 use std::{
   collections::BTreeMap,

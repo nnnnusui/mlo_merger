@@ -85,7 +85,7 @@ impl Collector {
     });
   }
 
-  /// Mirrors deletion-first, otherwise first-change-wins resolution in YmapDiff.
+  /// Mirrors the deletion-first, otherwise first-change-wins resolution of `compare::merge_diffs`.
   pub(super) fn finish(self) -> Vec<EntityDuplicate> {
     self
       .entries
@@ -142,6 +142,7 @@ mod tests {
     let added = YmapEntityDiff::Added {
       after: None,
       entity,
+      parent: crate::core::format::ymap::compare::EntityParent::None,
     };
     let removed = YmapEntityDiff::Removed {
       index: 0,

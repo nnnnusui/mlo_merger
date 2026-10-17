@@ -1,7 +1,7 @@
 //! Light identity helpers; stream filesystem operations belong to source-cache.
 
 use super::Result;
-use crate::core::format::ymap::diff::reference_hash;
+use crate::core::format::ymap::reference_hash;
 use std::path::Path;
 
 pub(crate) use crate::core::source_cache::StreamFile as ResourceFile;

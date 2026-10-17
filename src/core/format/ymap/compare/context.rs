@@ -7,15 +7,24 @@ use std::{
 
 use struct_diff::Diff;
 
-use super::{YmapComparisonData, YmapComparisonDiff, YmapComparisonFile, YmapParentRef};
+use super::{YmapComparisonDiff, YmapComparisonFile, YmapDiffContext};
 use crate::{
   common::{Result, fingerprint::Fingerprint},
   core::{
     config::matching,
-    format::ymap::{binary::ymap_to_model, diff::reference_hash, model::Ymap},
+    format::ymap::{binary::ymap_to_model, model::Ymap, reference_hash},
     source_cache::{SourceYmapIndex, load_source_ymap_index, read_stream_bytes},
   },
 };
+
+/// A declared parent YMAP.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize)]
+pub enum YmapParentRef {
+  /// Found in the child's resource or in vanilla.
+  Resolved(StreamFileRef),
+  /// The parent's reference hash, matching no YMAP in the child's resource or vanilla.
+  Unresolved(u32),
+}
 
 /// Identifies one YMAP stream file in the vanilla cache or a source resource.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize)]
@@ -45,7 +54,6 @@ pub struct YmapComparisonContext {
   /// Names used to resolve hashes while decoding, e.g. vanilla `hash_names.json`.
   hash_names: HashMap<u32, String>,
   pub(super) cache_by_ref: HashMap<StreamFileRef, Rc<Ymap>>,
-  pub(super) prepared_by_ref: HashMap<StreamFileRef, Rc<YmapComparisonData>>,
 }
 
 impl YmapComparisonContext {
@@ -75,7 +83,6 @@ impl YmapComparisonContext {
       file_names_by_hash,
       hash_names,
       cache_by_ref: HashMap::new(),
-      prepared_by_ref: HashMap::new(),
     })
   }
 
@@ -101,19 +108,14 @@ impl YmapComparisonContext {
     }
   }
 
-  /// Returns the comparison data for `file`, deriving it from [`Self::get_cache`] on first
-  /// access.
-  pub fn get_prepared(
+  /// The parent YMAP that `file` declares; see [`Self::parent_ref`].
+  #[cfg(test)]
+  pub(super) fn parent_of(
     &mut self,
     file: &StreamFileRef,
-  ) -> Result<Rc<YmapComparisonData>> {
-    if !self.prepared_by_ref.contains_key(file) {
-      let ymap = self.get_cache(file)?;
-      let parent_ref = self.parent_ref(file, &ymap.parent)?;
-      let data = YmapComparisonData::new(&ymap, parent_ref);
-      self.prepared_by_ref.insert(file.clone(), Rc::new(data));
-    }
-    Ok(self.prepared_by_ref[file].clone())
+  ) -> Result<Option<YmapParentRef>> {
+    let ymap = self.get_cache(file)?;
+    self.parent_ref(file, &ymap.parent)
   }
 
   /// Returns the differences of `file` from the vanilla YMAP of the same name.
@@ -129,12 +131,33 @@ impl YmapComparisonContext {
     };
     let vanilla = self.get_cache(&baseline)?;
     let modded = self.get_cache(file)?;
+    let vanilla_parent = self.parent_map(&baseline, &vanilla)?;
+    let modded_parent = self.parent_map(file, &modded)?;
+    let ctx = YmapDiffContext::new(
+      matching::current(),
+      (&vanilla, vanilla_parent.as_ref().map(|parent| parent.entities.as_slice())),
+      (&modded, modded_parent.as_ref().map(|parent| parent.entities.as_slice())),
+    );
     Ok(YmapComparisonDiff {
       schema_version: YmapComparisonDiff::SCHEMA_VERSION,
-      diffs: vanilla.diff(&modded, &matching::current()).unwrap_or_default(),
+      diffs: vanilla.diff(&modded, &ctx).unwrap_or_default(),
       source: self.comparison_file(file, None)?,
       vanilla: self.comparison_file(&baseline, None)?,
     })
+  }
+
+  /// The parent YMAP `ymap` (loaded from `file`) declares, resolved as [`Self::parent_ref`]
+  /// does: from `file`'s resource when it has one of that name, from vanilla otherwise; `None`
+  /// when it declares none or none is found.
+  fn parent_map(
+    &mut self,
+    file: &StreamFileRef,
+    ymap: &Ymap,
+  ) -> Result<Option<Rc<Ymap>>> {
+    match self.parent_ref(file, &ymap.parent)? {
+      Some(YmapParentRef::Resolved(parent)) => Ok(Some(self.get_cache(&parent)?)),
+      Some(YmapParentRef::Unresolved(_)) | None => Ok(None),
+    }
   }
 
   /// Whether a diff of `file` taken from `source` against `vanilla` still describes the files

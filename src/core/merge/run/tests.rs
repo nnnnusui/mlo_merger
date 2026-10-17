@@ -1,5 +1,5 @@
 use super::*;
-use crate::core::format::ymap::diff::reference_hash;
+use crate::core::format::ymap::reference_hash;
 use std::collections::HashMap;
 
 #[test]

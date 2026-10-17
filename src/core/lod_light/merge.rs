@@ -12,8 +12,8 @@ use crate::core::{
     },
     ymap::{
       binary::write_ymap,
-      diff::reference_hash,
       model::{YmapDistantLodLight, YmapDistantLodLights, YmapLodLight},
+      reference_hash,
     },
   },
   source_cache::{MergeSourceFile, StreamInventory, read_stream_bytes},
