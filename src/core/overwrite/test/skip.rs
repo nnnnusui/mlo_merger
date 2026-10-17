@@ -130,7 +130,7 @@ fn applies_only_against_the_files_it_was_written_for() {
     skip: json!({"flags": false}),
     ..overwrite
   };
-  let mut diff = super::tests::diff();
+  let mut diff = self::diff();
   diff.flags = Some(1);
   assert!(
     invalid.apply(&mut diff, &fingerprint("source"), &fingerprint("vanilla"), "map").is_err()

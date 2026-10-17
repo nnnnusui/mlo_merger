@@ -1,0 +1,87 @@
+{
+  "schema_version": 6,
+  "source": {
+    "path": "docs/sample/source/sample_resource_b/stream/maps/hei_ch1_11.ymap",
+    "sha256": "8ffb740820db8690a8e216722f03e2b80decbd15721dcabebe36248f6824b2b7",
+    "size": 5701,
+    "modified_seconds": 0,
+    "modified_nanos": 0
+  },
+  "vanilla": {
+    "path": "docs/sample/sample.ymap",
+    "sha256": "5ec1c9f8c018d3773fb30efcbe32bf199d57fac8a9468df49143baa9e52d0d13",
+    "size": 5675,
+    "modified_seconds": 0,
+    "modified_nanos": 0
+  },
+  "tolerances": {
+    "ybn": 0.05,
+    "ymap": 0.001,
+    "ymap_occlude_model": 0.01,
+    "ymap_box_occluder": 1,
+    "ymap_box_occluder_rotation": 1,
+    "ymap_car_generator_position_decimals": 3,
+    "ymap_grass_position": 0.01,
+    "ymap_lod_light_position_decimals": 3
+  },
+  "diffs": {
+    "entities": [
+      {
+        "Added": {
+          "after": 0,
+          "entity": {
+            "entity_type": "CEntityDef",
+            "archetype_name": "ch1_11_props_combo11_SLOD",
+            "flags": 68681736,
+            "guid": 1513947137,
+            "position": {
+              "x": -3256.318,
+              "y": 967.0864,
+              "z": 5.441396
+            },
+            "rotation": {
+              "x": 0.0,
+              "y": 0.0,
+              "z": 0.0,
+              "w": 1.0
+            },
+            "scale_x_y": 1.0,
+            "scale_z": 1.0,
+            "parent_index": 27,
+            "lod_dist": 1250.0,
+            "child_lod_dist": 400.0,
+            "lod_level": "LODTYPES_DEPTH_SLOD1",
+            "num_children": 2,
+            "priority_level": "PRI_REQUIRED",
+            "ambient_occlusion_multiplier": 254,
+            "artificial_ambient_occlusion": 0,
+            "tint_value": 0
+          },
+          "parent": {
+            "Unresolved": {
+              "in_parent": true,
+              "index": 27
+            }
+          }
+        }
+      }
+    ],
+    "occlude_models": [
+      {
+        "Modified": {
+          "before_index": 0,
+          "after_index": 0,
+          "changes": {
+            "triangles": [
+              {
+                "Removed": {
+                  "index": 20
+                }
+              }
+            ]
+          }
+        }
+      }
+    ]
+  }
+}

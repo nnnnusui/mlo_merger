@@ -2,7 +2,10 @@ use super::*;
 use crate::core::format::gamefile::test_support::sample_ymap;
 use crate::core::format::ymap::binary::{write_ymap, ymap_to_model};
 use crate::core::format::ymap::compare::YmapComparisonDiff;
-use crate::core::overwrite::{OverwriteFingerprint, ResourceOverwrite, StreamFileOverwrite};
+use crate::core::merge::Merge;
+use crate::core::vanilla::{
+  CacheVersion, CachedFile, FileChange, VanillaCacheManifest, write_json,
+};
 
 #[test]
 fn overwrites_skip_source_diffs_written_against_the_current_files() {
@@ -77,12 +80,10 @@ fn overwrites_skip_source_diffs_written_against_the_current_files() {
     ymap_to_model(&fs::read(output.join("ymap/map.ymap")).unwrap(), &catalog.hash_names).unwrap()
   };
   let merged_at = || {
-    serde_json::from_reader::<_, super::super::super::incremental::MergeMetadata>(
+    serde_json::from_reader::<_, serde_json::Value>(
       fs::File::open(output.join("merge_cache_info.json")).unwrap(),
     )
-    .unwrap()
-    .files["map.ymap"]
-      .merged_at
+    .unwrap()["files"]["map.ymap"]["merged_at"]
       .clone()
   };
   merge.run_after_caches(&vanilla).unwrap();

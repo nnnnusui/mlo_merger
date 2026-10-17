@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "files": {
+    "hei_ch1_11.ymap": {
+      "source": {
+        "sha256": "feccd20e68f663f6e0ec44bff591d1e1a3d40a15229bd469a9a3b282d96ce281",
+        "size": 5648
+      },
+      "vanilla": {
+        "sha256": "5ec1c9f8c018d3773fb30efcbe32bf199d57fac8a9468df49143baa9e52d0d13",
+        "size": 5675
+      },
+      "skip": {
+        "box_occluders": [
+          {
+            "Removed": {
+              "index": 0
+            }
+          }
+        ],
+        "content_flags": true,
+        "entities": [
+          {
+            "Modified": {
+              "changes": {
+                "position": true
+              },
+              "guid": 3592082822
+            }
+          }
+        ],
+        "occlude_models": [
+          {
+            "Modified": {
+              "before_index": 0,
+              "changes": {
+                "triangles": [
+                  {
+                    "Removed": {
+                      "index": 10
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}

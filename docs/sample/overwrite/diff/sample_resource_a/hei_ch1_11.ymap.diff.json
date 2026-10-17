@@ -1,0 +1,74 @@
+{
+  "schema_version": 6,
+  "source": {
+    "path": "docs/sample/source/[maps]/sample_resource_a/stream/hei_ch1_11.ymap",
+    "sha256": "feccd20e68f663f6e0ec44bff591d1e1a3d40a15229bd469a9a3b282d96ce281",
+    "size": 5648,
+    "modified_seconds": 0,
+    "modified_nanos": 0
+  },
+  "vanilla": {
+    "path": "docs/sample/sample.ymap",
+    "sha256": "5ec1c9f8c018d3773fb30efcbe32bf199d57fac8a9468df49143baa9e52d0d13",
+    "size": 5675,
+    "modified_seconds": 0,
+    "modified_nanos": 0
+  },
+  "tolerances": {
+    "ybn": 0.05,
+    "ymap": 0.001,
+    "ymap_occlude_model": 0.01,
+    "ymap_box_occluder": 1,
+    "ymap_box_occluder_rotation": 1,
+    "ymap_car_generator_position_decimals": 3,
+    "ymap_grass_position": 0.01,
+    "ymap_lod_light_position_decimals": 3
+  },
+  "diffs": {
+    "content_flags": 82,
+    "entities": [
+      {
+        "Modified": {
+          "guid": 3592082822,
+          "before_index": 0,
+          "after_index": 0,
+          "changes": {
+            "flags": 68714504,
+            "position": {
+              "z": 7.441396
+            }
+          }
+        }
+      }
+    ],
+    "box_occluders": [
+      {
+        "Removed": {
+          "index": 0
+        }
+      }
+    ],
+    "occlude_models": [
+      {
+        "Modified": {
+          "before_index": 0,
+          "after_index": 0,
+          "changes": {
+            "triangles": [
+              {
+                "Removed": {
+                  "index": 10
+                }
+              },
+              {
+                "Removed": {
+                  "index": 11
+                }
+              }
+            ]
+          }
+        }
+      }
+    ]
+  }
+}

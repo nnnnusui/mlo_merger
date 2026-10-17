@@ -6,7 +6,7 @@
 
 mod skip;
 #[cfg(test)]
-mod tests;
+mod test;
 
 use crate::common::Result;
 use crate::core::format::ymap::compare::YmapDiffFields;
