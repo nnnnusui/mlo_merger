@@ -23,7 +23,7 @@ pub struct YmapComparisonDiff {
 
 impl YmapComparisonDiff {
   /// The current [`Self::schema_version`]. Documents without one predate versioning.
-  pub const SCHEMA_VERSION: u32 = 1;
+  pub const SCHEMA_VERSION: u32 = 3;
 }
 
 /// A compared YMAP file and its fingerprint when the diff was taken.

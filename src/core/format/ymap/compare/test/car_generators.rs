@@ -56,8 +56,14 @@ fn car_generators_pair_by_rounded_position() {
 fn car_generator_pairing_follows_the_configured_decimals() {
   let vanilla = with_generators(vec![generator(10.0)]);
   let modded = with_generators(vec![generator(10.25)]);
-  // Three decimals tell 10.25 from 10.0; none round both to 10.
-  assert_eq!(diff(&vanilla, &modded).car_generators.unwrap_or_default().len(), 2);
+  // Three decimals tell 10.25 from 10.0, so the generator is replaced; none round both to 10.
+  assert!(matches!(
+    diff(&vanilla, &modded).car_generators.unwrap().as_slice(),
+    [YmapCarGeneratorDiff::Replaced {
+      index: 0,
+      ..
+    }]
+  ));
   let coarse = MatchTolerances {
     ymap_car_generator_position_decimals: 0,
     ..Default::default()
@@ -94,15 +100,10 @@ fn pairs_by_rounded_position_and_thresholds_floats() {
   .unwrap();
   assert_eq!(
     diffs,
-    vec![
-      YmapCarGeneratorDiff::Removed {
-        index: 1
-      },
-      YmapCarGeneratorDiff::Added {
-        index: 1,
-        item: modded.car_generators[1].clone(),
-      },
-    ]
+    vec![YmapCarGeneratorDiff::Replaced {
+      index: 1,
+      item: modded.car_generators[1].clone(),
+    },]
   );
   // One decimal pairs them, reporting the moved position and the model.
   let coarse = MatchTolerances {

@@ -15,6 +15,7 @@ mod field;
 pub mod instanced_data;
 mod item_diff;
 pub mod lod_lights;
+mod merge;
 pub mod occlude_models;
 #[cfg(test)]
 mod test;
@@ -33,6 +34,7 @@ pub use instanced_data::{
 };
 pub use item_diff::{NoFieldDiff, YmapItemDiff};
 pub use lod_lights::YmapLodLightDiff;
+pub use merge::merge_diffs;
 pub use occlude_models::{YmapOccludeModelDiff, triangles::YmapTriangleDiff};
 pub use time_cycle_modifiers::YmapTimeCycleModifierDiff;
 

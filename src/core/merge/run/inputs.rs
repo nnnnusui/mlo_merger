@@ -10,42 +10,6 @@ pub(super) fn latest_ymap_paths(files: &[PathBuf]) -> HashMap<u32, PathBuf> {
   paths
 }
 
-pub(super) fn best_cached_ymap_diff(
-  history: &VanillaHistory,
-  sources: &mut SourceMaps,
-  references: &mut ParentReferences,
-  hash: u32,
-  name: &str,
-  modded: &Ymap,
-) -> Result<YmapDiff, Box<dyn std::error::Error>> {
-  let mut candidates = Vec::new();
-  for (version, file) in history.candidate_files(name)? {
-    let original = OriginalMap::load_raw(&history.raw_path(&file)?)?;
-    let (candidate, entities) = sources.normalize(&original, None, hash, references)?;
-    if candidate.entities.len() != entities.len() {
-      continue;
-    }
-    candidates.push((version, candidate));
-  }
-  let (score, version, diff) = best_ymap_diff(candidates, modded)?;
-  tracing::info!("Best YMAP baseline {name}: {version} ({score} changes)");
-  Ok(diff)
-}
-
-pub(super) fn best_ymap_diff(
-  candidates: Vec<(String, Ymap)>,
-  modded: &Ymap,
-) -> Result<(usize, String, YmapDiff), Box<dyn std::error::Error>> {
-  let mut best: Option<(usize, String, YmapDiff)> = None;
-  for (version, candidate) in candidates {
-    let score = ymap_distance(&candidate, modded)?;
-    tracing::info!("Candidate YMAP baseline {version}: {score} changes");
-    if best.as_ref().is_none_or(|(best_score, _, _)| score < *best_score) {
-      best = Some((score, version, YmapDiff::extract_for_merge(&candidate, modded)));
-    }
-  }
-  best.ok_or_else(|| "No usable vanilla YMAP candidates".into())
-}
 /// Information about a modded ymap file
 #[derive(Debug, Clone)]
 pub(super) struct ModYmapReference {
@@ -88,33 +52,6 @@ pub(super) fn collect_modded_ymaps_map(
 #[cfg(test)]
 mod tests {
   use super::*;
-
-  #[test]
-  fn cached_ymap_diff_uses_best_baseline_and_preserves_latest_changes() {
-    let xml: XmlYmap = quick_xml::de::from_str(include_str!(concat!(
-      env!("CARGO_MANIFEST_DIR"),
-      "/docs/sample/parent_refs/vanilla_parent.ymap.xml"
-    )))
-    .unwrap();
-    let baseline: Ymap = xml.into();
-    let entity_id = baseline.entities[0].guid;
-    let mut modded = baseline.clone();
-    modded.entities[0].position.x += 1.0;
-    let mut latest = baseline.clone();
-    latest.flags ^= 1;
-
-    let (score, version, diff) =
-      best_ymap_diff(vec![("latest".into(), latest.clone()), ("base".into(), baseline)], &modded)
-        .unwrap();
-
-    assert_eq!(version, "base");
-    assert_eq!(score, 1);
-    let merged = diff.apply_to(&latest, None);
-    let merged_entity = merged.entities.iter().find(|entity| entity.guid == entity_id).unwrap();
-    let modded_entity = modded.entities.iter().find(|entity| entity.guid == entity_id).unwrap();
-    assert_eq!(merged_entity.position.x, modded_entity.position.x);
-    assert_eq!(merged.flags, latest.flags);
-  }
 
   #[test]
   fn latest_ymap_log_paths_use_actual_native_files() {

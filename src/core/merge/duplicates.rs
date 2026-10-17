@@ -1,4 +1,4 @@
-use crate::core::format::ymap::{diff::YmapEntityDiff, model::YmapEntity};
+use crate::core::format::ymap::{compare::YmapEntityDiff, model::YmapEntity};
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, path::PathBuf};
 
@@ -63,18 +63,25 @@ impl Collector {
     vanilla: Option<YmapEntity>,
     source: Contribution,
   ) {
-    let key = match diff {
-      YmapEntityDiff::Added(entity) | YmapEntityDiff::Removed(entity) => entity.guid,
-      YmapEntityDiff::Modified {
-        vanilla,
+    // Indices differ between sources, so identical changes are compared without them.
+    let signature = match diff {
+      YmapEntityDiff::Added {
+        entity,
         ..
-      } => vanilla.guid,
+      } => format!("Added {entity:?}"),
+      YmapEntityDiff::Removed {
+        ..
+      } => "Removed".into(),
+      YmapEntityDiff::Modified {
+        changes,
+        ..
+      } => format!("Modified {changes:?}"),
     };
-    self.entries.entry(key).or_default().push(Candidate {
+    self.entries.entry(diff.guid()).or_default().push(Candidate {
       guid,
       vanilla,
       source,
-      signature: format!("{diff:?}"),
+      signature,
     });
   }
 
@@ -132,8 +139,14 @@ mod tests {
     let mut entity = model.entities.first().unwrap().clone();
     let guid = entity.guid;
     entity.guid = 1;
-    let added = YmapEntityDiff::Added(entity.clone());
-    let removed = YmapEntityDiff::Removed(entity);
+    let added = YmapEntityDiff::Added {
+      after: None,
+      entity,
+    };
+    let removed = YmapEntityDiff::Removed {
+      index: 0,
+      guid: 1,
+    };
     let source = |resource: &str, change| Contribution {
       resource: resource.into(),
       path: format!("{resource}/map.ymap").into(),

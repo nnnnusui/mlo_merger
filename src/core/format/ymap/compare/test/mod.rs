@@ -13,6 +13,7 @@ mod entities;
 mod field;
 mod instanced_data;
 mod lod_lights;
+mod merge;
 mod metadata;
 mod occlude_models;
 mod physics_dictionaries;

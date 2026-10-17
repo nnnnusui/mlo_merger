@@ -35,6 +35,7 @@ impl MergeYmap {
     } else {
       None
     };
+    let tolerances = crate::core::config::matching::current();
 
     let vanilla = if history.is_none() && latest_files.is_none() {
       Some(VanillaParentCache::update(&self.vanilla_dir)?.0)
@@ -249,28 +250,27 @@ impl MergeYmap {
             format!("ambiguous entity identity in {}", mod_info.mod_ymap_path.display()).into(),
           );
         }
-        let ymap_diff = if let Some(history) = history {
-          best_cached_ymap_diff(history, &mut sources, &mut references, hash, ymap_name, &mod_ymap)?
-        } else {
-          YmapDiff::extract_for_merge(&vanilla_ymap, &mod_ymap)
-        };
+        // Diffs index into the vanilla they were taken from, so every source is compared with
+        // the latest vanilla, also when older vanilla versions are available.
+        let ymap_diff = vanilla_ymap.diff(&mod_ymap, &tolerances).unwrap_or_default();
+        log_diff_counts(&ymap_diff);
         let source_originals = mod_entities
           .iter()
           .zip(&source.entities)
           .map(|(normalized, original)| (normalized.guid, original))
           .collect::<HashMap<_, _>>();
-        for diff in &ymap_diff.entity_diffs {
-          let (key, change) = match diff {
-            crate::core::format::ymap::diff::YmapEntityDiff::Added(entity) => {
-              (entity.guid, Change::Added)
-            }
-            crate::core::format::ymap::diff::YmapEntityDiff::Removed(entity) => {
-              (entity.guid, Change::Removed)
-            }
-            crate::core::format::ymap::diff::YmapEntityDiff::Modified {
-              vanilla,
+        for diff in ymap_diff.entities.iter().flatten() {
+          let key = diff.guid();
+          let change = match diff {
+            YmapEntityDiff::Added {
               ..
-            } => (vanilla.guid, Change::Modified),
+            } => Change::Added,
+            YmapEntityDiff::Removed {
+              ..
+            } => Change::Removed,
+            YmapEntityDiff::Modified {
+              ..
+            } => Change::Modified,
           };
           duplicates.add(
             diff,
@@ -295,8 +295,11 @@ impl MergeYmap {
       if !duplicates.is_empty() {
         duplicate_files.insert(ymap_name.trim_end_matches(".xml").to_ascii_lowercase(), duplicates);
       }
-      let merged_diff = ymap_diffs.into_iter().reduce(|acc, d| acc.merge(d)).unwrap();
-      let model = merged_diff.apply_to(&vanilla_ymap, blacklist.as_ref());
+      let merged_diff = merge_diffs(&vanilla_ymap, &ymap_diffs, blacklist.as_ref());
+      let mut model = vanilla_ymap.clone();
+      model
+        .apply(&merged_diff)
+        .map_err(|error| format!("{}: {error}", vanilla_ymap_path.display()))?;
       planned.insert(
         hash,
         PlannedMap {

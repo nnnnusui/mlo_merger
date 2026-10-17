@@ -36,8 +36,7 @@ fn box_occluders_derive_modified_removed_and_added() {
     json!({
       "box_occluders": [
         { "Modified": { "vanilla_index": 1, "modded_index": 1, "changes": { "i_width": 8, "i_sin_z": 5 } } },
-        { "Removed": { "index": 2 } },
-        { "Added": { "index": 2, "item": serde_json::to_value(occluder(300)).unwrap() } },
+        { "Replaced": { "index": 2, "item": serde_json::to_value(occluder(300)).unwrap() } },
       ],
     })
   );
@@ -49,8 +48,14 @@ fn box_occluders_follow_the_configured_tolerances() {
   let mut modded = vanilla.clone();
   modded.box_occluders[0].i_center_x = 2;
   modded.box_occluders[0].i_cos_z += 1;
-  // By default the center moved past the pairing tolerance and the rotation is noise.
-  assert_eq!(diff(&vanilla, &modded).box_occluders.unwrap_or_default().len(), 2);
+  // By default the center moved past the pairing tolerance, so the occluder is replaced in place.
+  assert!(matches!(
+    diff(&vanilla, &modded).box_occluders.unwrap().as_slice(),
+    [YmapBoxOccluderDiff::Replaced {
+      index: 0,
+      ..
+    }]
+  ));
   let configured = MatchTolerances {
     ymap_box_occluder: 3,
     ymap_box_occluder_rotation: 0,
@@ -99,10 +104,7 @@ fn pairs_by_center_and_thresholds_rotation() {
           ..Default::default()
         },
       },
-      YmapBoxOccluderDiff::Removed {
-        index: 2
-      },
-      YmapBoxOccluderDiff::Added {
+      YmapBoxOccluderDiff::Replaced {
         index: 2,
         item: occluder(300),
       },
@@ -116,6 +118,7 @@ fn pairs_by_center_and_thresholds_rotation() {
     compare::box_occluders::diff(&vanilla.box_occluders, &modded.box_occluders, &exact)
       .unwrap()
       .len(),
-    4
+    3,
+    "both occluders modified, and the third replaced"
   );
 }

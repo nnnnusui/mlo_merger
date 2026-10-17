@@ -53,7 +53,7 @@ fn added_entities_hold_the_whole_entity() {
   let vanilla = with_entities(vec![entity(1)]);
   let modded = with_entities(vec![entity(1), entity(3)]);
   let diffs = json(&vanilla, &modded);
-  assert_eq!(diffs["entities"][0]["Added"]["index"], json!(1));
+  assert_eq!(diffs["entities"][0]["Added"]["after"], json!(0));
   assert_eq!(diffs["entities"][0]["Added"]["entity"], serde_json::to_value(entity(3)).unwrap());
 }
 
@@ -65,7 +65,7 @@ fn shared_guids_pair_in_order_and_report_the_rest() {
   let diffs = json(&vanilla, &modded);
   assert_eq!(diffs["entities"][0]["Modified"]["vanilla_index"], json!(1));
   assert_eq!(diffs["entities"][0]["Modified"]["changes"], json!({ "scale_z": 3.0 }));
-  assert_eq!(diffs["entities"][1]["Added"]["index"], json!(2));
+  assert_eq!(diffs["entities"][1]["Added"]["after"], json!(1));
   assert_eq!(diffs["entities"].as_array().unwrap().len(), 2);
 }
 
@@ -167,7 +167,9 @@ fn reports_modified_removed_and_added_entities() {
       guid: 3
     }
   ));
-  assert!(matches!(&diffs[3], YmapEntityDiff::Added { index: 2, entity } if entity.guid == 99));
+  assert!(
+    matches!(&diffs[3], YmapEntityDiff::Added { after: Some(1), entity } if entity.guid == 99)
+  );
 }
 
 #[test]
@@ -189,5 +191,7 @@ fn pairs_shared_guids_in_order_and_reports_the_rest() {
       ..
     }
   ));
-  assert!(matches!(&diffs[1], YmapEntityDiff::Added { index: 2, entity } if entity.guid == 1));
+  assert!(
+    matches!(&diffs[1], YmapEntityDiff::Added { after: Some(1), entity } if entity.guid == 1)
+  );
 }

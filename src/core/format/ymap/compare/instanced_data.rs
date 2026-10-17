@@ -20,7 +20,7 @@ use struct_diff::{ApplyError, Diff};
 
 use super::{
   NoFieldDiff, YmapItemDiff,
-  field::{Pairing, pair_by_keys},
+  field::{Pairing, anchors, pair_by_keys},
   item_diff::{ItemChange, apply_changes},
 };
 use crate::{
@@ -65,8 +65,8 @@ pub struct YmapGrassBatchFieldDiff {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "typescript", derive(specta::Type))]
 pub struct YmapAddedGrassInstance {
-  /// Index of the instance within the modded batch.
-  pub index: usize,
+  /// The vanilla instance it follows, or `None` when it comes first.
+  pub after: Option<usize>,
   pub world_position: Position,
   pub instance: GrassInstance,
 }
@@ -445,7 +445,7 @@ impl YmapGrassBatchFieldDiff {
       index,
     });
     let added = added_instances.iter().map(|added| ItemChange::Added {
-      index: added.index,
+      after: added.after,
       item: &added.instance,
     });
     let modified = modified_instances.iter().map(|modified| ItemChange::Modified {
@@ -472,6 +472,8 @@ impl YmapGrassBatchFieldDiff {
       before_kept[from] = true;
       after_kept[to] = true;
     }
+    let pairs = unchanged.iter().chain(&modified).copied().collect::<Vec<_>>();
+    let anchors = anchors(&pairs, after_placed.len());
     let mut modified_instances = modified
       .into_iter()
       .map(|(from, to)| YmapModifiedGrassInstance {
@@ -492,7 +494,7 @@ impl YmapGrassBatchFieldDiff {
       added_instances: (0..after_placed.len())
         .filter(|index| !after_kept[*index])
         .map(|index| YmapAddedGrassInstance {
-          index,
+          after: anchors[index],
           world_position: after_placed[index].position.clone().unwrap_or_default(),
           instance: after.instances[index].clone(),
         })

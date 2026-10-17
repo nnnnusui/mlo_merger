@@ -48,8 +48,7 @@ fn occlude_models_list_triangle_changes_by_vanilla_index() {
               "bmax": { "z": 12.5 },
               "flags": 1,
               "triangles": [
-                { "Removed": { "index": 1 } },
-                { "Added": { "index": 1, "item": serde_json::to_value(triangle(4.0)).unwrap() } },
+                { "Replaced": { "index": 1, "item": serde_json::to_value(triangle(4.0)).unwrap() } },
               ],
             },
           },
@@ -76,7 +75,7 @@ fn occlude_models_pair_within_the_xy_tolerance() {
 // Moved from `ymap_occlude_model_diff.rs`: the diff function on its own.
 
 #[test]
-fn lists_removed_triangles_by_vanilla_index_and_added_ones_by_modded_index() {
+fn lists_removed_and_replaced_triangles_by_vanilla_index() {
   let vanilla = Ymap {
     occlude_models: vec![model(0.0, vec![triangle(0.0), triangle(2.0), triangle(0.0)])],
     ..base()
@@ -105,12 +104,9 @@ fn lists_removed_triangles_by_vanilla_index_and_added_ones_by_modded_index() {
         flags: Some(1),
         triangles: Some(vec![
           YmapTriangleDiff::Removed {
-            index: 1,
-          },
-          YmapTriangleDiff::Removed {
             index: 2,
           },
-          YmapTriangleDiff::Added {
+          YmapTriangleDiff::Replaced {
             index: 1,
             item: triangle(4.0),
           },

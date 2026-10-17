@@ -42,7 +42,7 @@ fn distant_lights_pair_by_position_and_report_block_fields() {
         "items": [
           { "Modified": { "vanilla_index": 0, "modded_index": 1, "changes": { "rgbi": "11" } } },
           { "Removed": { "index": 2 } },
-          { "Added": { "index": 2, "item": { "position": "10 11 12", "rgbi": "40" } } },
+          { "Added": { "after": 0, "item": { "position": "10 11 12", "rgbi": "40" } } },
         ],
       },
     })
@@ -53,8 +53,14 @@ fn distant_lights_pair_by_position_and_report_block_fields() {
 fn distant_lights_moved_within_the_rounding_report_the_position() {
   let vanilla = with_lights(vec![light("1 2 3", "10")], 0);
   let modded = with_lights(vec![light("1.0002 2 3.25", "10")], 0);
-  // 3.25 rounds apart from 3 at three decimals, so the light no longer pairs.
-  assert_eq!(diff(&vanilla, &modded).distant_lod_lights.unwrap().items.unwrap().len(), 2);
+  // 3.25 rounds apart from 3 at three decimals, so the light no longer pairs and is replaced.
+  assert!(matches!(
+    diff(&vanilla, &modded).distant_lod_lights.unwrap().items.unwrap().as_slice(),
+    [YmapDistantLodLightDiff::Replaced {
+      index: 0,
+      ..
+    }]
+  ));
   let coarse = MatchTolerances {
     ymap_lod_light_position_decimals: 0,
     ..Default::default()
@@ -113,8 +119,9 @@ fn pairs_by_rounded_position_and_reports_block_fields() {
       YmapDistantLodLightDiff::Removed {
         index: 2
       },
+      // After the light the source puts before it, vanilla's first.
       YmapDistantLodLightDiff::Added {
-        index: 2,
+        after: Some(0),
         item: light("10 11 12", "d"),
       },
     ]

@@ -14,6 +14,30 @@ pub(super) struct Pairing {
   pub added: Vec<usize>,
 }
 
+/// For each of `modded_len` modded items, the vanilla index of the nearest earlier modded item
+/// paired with vanilla, or `None` when no earlier item is paired.
+///
+/// An unpaired modded item is placed right after that vanilla item, so additions keep their place
+/// among the kept items whatever other changes are applied with them.
+pub(super) fn anchors(
+  pairs: &[(usize, usize)],
+  modded_len: usize,
+) -> Vec<Option<usize>> {
+  let mut paired = vec![None; modded_len];
+  for &(vanilla_index, modded_index) in pairs {
+    paired[modded_index] = Some(vanilla_index);
+  }
+  let mut last = None;
+  paired
+    .into_iter()
+    .map(|vanilla_index| {
+      let anchor = last;
+      last = vanilla_index.or(last);
+      anchor
+    })
+    .collect()
+}
+
 /// Pairs each vanilla item with the first unpaired modded item that `is_same` accepts.
 pub(super) fn pair_in_order<T>(
   vanilla: &[T],

@@ -88,6 +88,27 @@ Merge writes native files under `ymap/` and `ybn/`, plus `_omit.txt` for replace
 source paths and `duplicates.json` for competing YMAP entity changes. It rebuilds
 only changed or invalid groups. Failed merges leave the prior output intact.
 
+Each YMAP is merged by taking every source's difference from the latest vanilla YMAP
+and applying them together to vanilla:
+
+- Array items are paired as the source cache's YMAP diffs pair them. Removed and
+  modified items are named by their vanilla index, and an unpaired source item takes
+  the place of an unpaired vanilla item between the same kept items (a replacement),
+  or is added right after the vanilla item preceding it. Kept items stay in vanilla
+  order, so a source's reordering of kept items is not reproduced.
+- A removal wins over every other change of that vanilla item, including another
+  source's replacement of it. Otherwise the first source to modify or replace an item
+  wins, except occlude models, which take each field from the first source changing it
+  and every source's triangle changes. Additions keep their place, in source order.
+- `contentFlags` are OR-ed into vanilla's; the parent and IMAP link keep the first
+  change. Added physics dictionaries and prop instances skip names already present;
+  dictionary removals are not applied. Name, flags, extents, block and the distant LOD
+  light counts keep their vanilla values.
+- Entity `parentIndex` values are compared and merged as the entity they point at, read
+  from the source resource's parent YMAP or else vanilla's, and written back as indices
+  into the final entity arrays. Unmodified child YMAPs whose parent's entity order
+  changed are rebuilt with relinked indices.
+
 Deploy consumes existing merge and source-cache data without regenerating them:
 
 - Merged files: `stream/{extension}/merged/{filename}`.
@@ -180,16 +201,18 @@ ymap_grass_position = 0.01
 ```
 
 `ybn` controls inclusive per-axis polygon coordinates and radius matching across
-all supported polygon types, not only boxes. `ymap` controls floating scalar
-comparisons for car generators and LOD lights. Occlude models use their XY extent
+all supported polygon types, not only boxes. `ymap` is the smallest change of a YMAP
+float field that counts as a change: entity positions, rotations, scales and LOD
+distances, car generator, time cycle modifier and distant LOD light values. Extents and
+occlude model corners compare exactly. Occlude models use their XY extent
 tolerance; box occluders use integer stored-coordinate units. YMAP comparisons
 remain exclusive of the boundary. `ymap_box_occluder_rotation` ignores `iCosZ`/`iSinZ`
 changes up to and including that many stored units (0 compares exactly), and
 `ymap_car_generator_position_decimals` (0 to 6) sets the decimal places car generator
 positions are rounded to when pairing generators; `ymap_lod_light_position_decimals` (0 to 6)
 does the same for distant LOD light positions. `ymap_grass_position` is the per-axis
-world-space distance, in metres, within which grass instances are treated as the same one. Entity coordinates remain exact, and existing
-position-key rounding is unchanged. These settings do not change search radii.
+world-space distance, in metres, within which grass instances are treated as the same one.
+These settings do not change search radii.
 
 All other values must be positive; floating values must also be finite. Unknown keys
 and invalid TOML are errors. Effective settings are included in merge freshness,
@@ -266,7 +289,9 @@ a precision-aware JSON reader. These definitions do not validate data at runtime
 
 ### Limitations
 
-- `--get-diff` currently prints a mock invocation and does not compare files.
+- `--get-diff SOURCE` writes the source YMAP's differences from the latest vanilla
+  cache in the source cache's diff form; `--get-diff SOURCE TARGET` only prints a mock
+  invocation.
 - Merge uses the latest selected vanilla, without historical baseline inference.
 - Cache stages do not reproduce the complete game-engine mount rules or historical installations.
 - MLO semantic differences are reports, not lossless history patches.

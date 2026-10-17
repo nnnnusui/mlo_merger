@@ -240,14 +240,29 @@ fn distant_lod_lights_are_applied() {
   );
   let mut modded = lights(
     vec![
-      distant_light("4 5 6", "21"),
       distant_light("1 2 3", "10"),
+      distant_light("4 5 6", "21"),
       distant_light("10 11 12", "40"),
     ],
     3,
   );
   modded.distant_lod_lights.category = 1;
   assert_round_trip(&vanilla, &modded);
+}
+
+#[test]
+fn kept_items_stay_in_vanilla_order() {
+  // Diffs do not record moves of kept items, so a reordering source rebuilds in vanilla order.
+  let vanilla = Ymap {
+    box_occluders: vec![occluder(0), occluder(100)],
+    ..base()
+  };
+  let modded = Ymap {
+    box_occluders: vec![occluder(100), occluder(0)],
+    ..base()
+  };
+  assert_eq!(diff(&vanilla, &modded), YmapDiffFields::default());
+  assert_eq!(apply(&vanilla, &modded), vanilla);
 }
 
 #[test]
@@ -499,27 +514,39 @@ fn out_of_range_indices_are_rejected() {
 
   let past_the_end = YmapDiffFields {
     box_occluders: Some(vec![YmapBoxOccluderDiff::Added {
-      index: 2,
+      after: Some(1),
       item: occluder(100),
     }]),
     ..Default::default()
   };
   let error = apply_diff(&past_the_end, &vanilla).unwrap_err().to_string();
-  assert_eq!(error, "box_occluders: modded index 2 is out of 2 items");
+  assert_eq!(error, "box_occluders: vanilla index 1 is out of 1 items");
+}
 
-  let duplicate_slot = YmapDiffFields {
-    entities: Some(vec![
-      YmapEntityDiff::Added {
-        index: 0,
-        entity: entity(1),
+#[test]
+fn additions_follow_their_vanilla_item_even_when_it_is_removed() {
+  let vanilla = Ymap {
+    box_occluders: vec![occluder(0), occluder(100), occluder(200)],
+    ..base()
+  };
+  let added = |after, x| YmapBoxOccluderDiff::Added {
+    after,
+    item: occluder(x),
+  };
+  let diff = YmapDiffFields {
+    box_occluders: Some(vec![
+      YmapBoxOccluderDiff::Removed {
+        index: 1,
       },
-      YmapEntityDiff::Added {
-        index: 0,
-        entity: entity(2),
-      },
+      added(Some(1), 150),
+      added(None, -100),
+      added(Some(1), 160),
+      added(Some(2), 300),
     ]),
     ..Default::default()
   };
-  let error = apply_diff(&duplicate_slot, &base()).unwrap_err().to_string();
-  assert_eq!(error, "entities: modded index 0 is filled twice");
+  assert_eq!(
+    apply_diff(&diff, &vanilla).unwrap().box_occluders,
+    [-100, 0, 150, 160, 200, 300].map(occluder)
+  );
 }

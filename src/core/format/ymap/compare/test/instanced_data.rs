@@ -91,7 +91,7 @@ fn prop_instances_and_the_imap_link_compare_by_name() {
         "imap_link": "other_link",
         "prop_instance_list": [
           { "Removed": { "index": 0 } },
-          { "Added": { "index": 1, "item": "c" } },
+          { "Added": { "after": 1, "item": "c" } },
         ],
       },
     })
@@ -108,7 +108,7 @@ fn grass_batches_compare_instances_in_world_space() {
   let changes = &diffs["instanced_data"]["grass_instance_list"][0]["Modified"]["changes"];
   assert_eq!(changes["batch_aabb"], serde_json::to_value(bounds(5.0, 40.0)).unwrap());
   assert_eq!(changes.get("removed_instances"), None);
-  assert_eq!(changes["added_instances"][0]["index"], json!(3));
+  assert_eq!(changes["added_instances"][0]["after"], json!(2));
   assert_eq!(changes["modified_instances"][0]["vanilla_index"], json!(1));
   assert_eq!(changes["modified_instances"][0]["changes"], json!({ "scale": 2 }));
   assert_eq!(diffs["instanced_data"]["grass_instance_list"].as_array().unwrap().len(), 1);
@@ -196,7 +196,7 @@ fn split_batches_keep_the_larger_share_and_add_the_rest() {
   assert!(matches!(
     &diffs[1],
     YmapGrassBatchDiff::Added {
-      index: 0,
+      after: None,
       ..
     }
   ));
@@ -239,12 +239,12 @@ fn reports_attribute_changes_and_whole_batches() {
   assert_eq!(
     diff.prop_instance_list.unwrap(),
     vec![YmapPropInstanceDiff::Added {
-      index: 0,
+      after: None,
       item: "prop".into(),
     }]
   );
   let diffs = diff.grass_instance_list.unwrap();
-  assert_eq!(diffs.len(), 3, "{diffs:?}");
+  assert_eq!(diffs.len(), 2, "{diffs:?}");
   let YmapGrassBatchDiff::Modified {
     vanilla_index: 0,
     modded_index: 0,
@@ -255,7 +255,7 @@ fn reports_attribute_changes_and_whole_batches() {
   };
   assert_eq!(changes.batch_aabb, None);
   assert_eq!(changes.removed_instances, vec![1]);
-  assert_eq!(changes.added_instances.iter().map(|it| it.index).collect::<Vec<_>>(), vec![1]);
+  assert_eq!(changes.added_instances.iter().map(|it| it.after).collect::<Vec<_>>(), vec![Some(0)]);
   assert!((changes.added_instances[0].world_position.x - 25.0).abs() < 0.01);
   assert_eq!(
     changes.modified_instances,
@@ -271,13 +271,7 @@ fn reports_attribute_changes_and_whole_batches() {
   );
   assert!(matches!(
     diffs[1],
-    YmapGrassBatchDiff::Removed {
-      index: 1
-    }
-  ));
-  assert!(matches!(
-    diffs[2],
-    YmapGrassBatchDiff::Added {
+    YmapGrassBatchDiff::Replaced {
       index: 1,
       ..
     }
