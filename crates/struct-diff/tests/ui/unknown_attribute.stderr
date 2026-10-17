@@ -1,0 +1,5 @@
+error: unknown `diff` field attribute; expected `skip`, `nested`, `threshold`, `with`, `context`, `output` or `attr`
+ --> tests/ui/unknown_attribute.rs:3:10
+  |
+3 |   #[diff(by_key = id)]
+  |          ^^^^^^

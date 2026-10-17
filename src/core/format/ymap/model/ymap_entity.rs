@@ -1,25 +1,39 @@
 use structdiff::{Difference, StructDiff};
 
-use crate::common::{position::Position, rotation::Rotation};
+use crate::{
+  common::{position::Position, rotation::Rotation},
+  core::config::matching::MatchTolerances,
+};
 
 /// Entity definition in YMAP
-#[derive(Debug, Clone, PartialEq, Difference)]
+#[derive(Debug, Clone, PartialEq, Difference, struct_diff::Diff)]
 #[difference(expose)]
 #[derive(serde::Serialize, serde::Deserialize)]
 #[cfg_attr(feature = "typescript", derive(specta::Type))]
+#[diff(
+  name = YmapEntityFieldDiff,
+  context = MatchTolerances,
+  attr(cfg_attr(feature = "typescript", derive(specta::Type)))
+)]
 pub struct YmapEntity {
   pub entity_type: String,
   pub archetype_name: String,
   pub flags: u32,
   pub guid: u32,
   #[difference(recurse)]
+  #[diff(nested, context = ctx.ymap)]
   pub position: Position,
   #[difference(recurse)]
+  #[diff(nested, context = ctx.ymap)]
   pub rotation: Rotation,
+  #[diff(threshold = ctx.ymap)]
   pub scale_x_y: f32,
+  #[diff(threshold = ctx.ymap)]
   pub scale_z: f32,
   pub parent_index: i32,
+  #[diff(threshold = ctx.ymap)]
   pub lod_dist: f32,
+  #[diff(threshold = ctx.ymap)]
   pub child_lod_dist: f32,
   pub lod_level: String,
   pub num_children: u32,

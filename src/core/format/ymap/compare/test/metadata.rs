@@ -50,8 +50,9 @@ fn extents_list_only_the_changed_axes_of_each_corner() {
   assert_eq!(
     json(&vanilla, &modded),
     json!({
-      "streaming_extents": { "min": { "x": 100.5 }, "max": expected_max },
-      "entities_extents": { "max": { "z": -4.25 } },
+      "streaming_extents_min": { "x": 100.5 },
+      "streaming_extents_max": expected_max,
+      "entities_extents_max": { "z": -4.25 },
     })
   );
 }

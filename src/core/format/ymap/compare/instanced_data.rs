@@ -1,4 +1,4 @@
-//! Instanced data differences.
+//! Instanced data differences, the `#[diff(with)]` strategies of `YmapInstancedData` fields.
 //!
 //! Grass batches are paired, then their instances compared, in world space: instance positions
 //! are packed relative to their batch bounds, which editors change (CodeWalker
@@ -16,38 +16,26 @@
 use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
+use struct_diff::{ApplyError, Diff};
 
 use super::{
   NoFieldDiff, YmapItemDiff,
-  field::{Pairing, changed, pair_by_keys, set_changed},
+  field::{Pairing, pair_by_keys},
   item_diff::{ItemChange, apply_changes},
 };
 use crate::{
-  common::{Result, position::Position},
-  core::{
-    config::matching::MatchTolerances,
-    format::ymap::{
-      diff::reference_hash,
-      model::{BoundingBox, GrassInstance, GrassInstanceBatch, Ymap, YmapInstancedData},
+  common::position::Position,
+  core::format::ymap::{
+    diff::reference_hash,
+    model::{
+      BoundingBox, GrassInstance, GrassInstanceBatch,
+      ymap_instanced_data::YmapGrassInstanceFieldDiff,
     },
   },
 };
 
 /// CodeWalker's `BatchVertMultiplier`, scaling packed positions to the batch bounds.
 const BATCH_VERT_MULTIPLIER: f64 = 0.00001525878;
-
-/// Changed instanced data.
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
-#[cfg_attr(feature = "typescript", derive(specta::Type))]
-pub struct YmapInstancedDataDiff {
-  #[serde(default, skip_serializing_if = "Option::is_none")]
-  #[cfg_attr(feature = "typescript", specta(optional))]
-  pub imap_link: Option<String>,
-  #[serde(skip_serializing_if = "Vec::is_empty", default)]
-  pub prop_instances: Vec<YmapPropInstanceDiff>,
-  #[serde(skip_serializing_if = "Vec::is_empty", default)]
-  pub grass_batches: Vec<YmapGrassBatchDiff>,
-}
 
 /// How one prop instance name of a modded YMAP differs from vanilla.
 pub type YmapPropInstanceDiff = YmapItemDiff<String, NoFieldDiff>;
@@ -95,47 +83,68 @@ pub struct YmapModifiedGrassInstance {
   pub changes: YmapGrassInstanceFieldDiff,
 }
 
-/// Changed grass instance attributes, each holding its new value.
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
-#[cfg_attr(feature = "typescript", derive(specta::Type))]
-pub struct YmapGrassInstanceFieldDiff {
-  #[serde(default, skip_serializing_if = "Option::is_none")]
-  #[cfg_attr(feature = "typescript", specta(optional))]
-  pub normal_x: Option<u32>,
-  #[serde(default, skip_serializing_if = "Option::is_none")]
-  #[cfg_attr(feature = "typescript", specta(optional))]
-  pub normal_y: Option<u32>,
-  #[serde(default, skip_serializing_if = "Option::is_none")]
-  #[cfg_attr(feature = "typescript", specta(optional))]
-  pub color: Option<Vec<u32>>,
-  #[serde(default, skip_serializing_if = "Option::is_none")]
-  #[cfg_attr(feature = "typescript", specta(optional))]
-  pub scale: Option<u32>,
-  #[serde(default, skip_serializing_if = "Option::is_none")]
-  #[cfg_attr(feature = "typescript", specta(optional))]
-  pub ao: Option<u32>,
+/// The `#[diff(with)]` strategy of `YmapInstancedData::imap_link`, comparing by name hash.
+pub mod imap_link {
+  pub use struct_diff::replace::apply;
+
+  use crate::core::format::ymap::diff::reference_hash;
+
+  pub fn diff<C: ?Sized>(
+    before: &str,
+    after: &str,
+    _ctx: &C,
+  ) -> Option<String> {
+    (reference_hash(before) != reference_hash(after)).then(|| after.to_owned())
+  }
 }
 
-/// Collects `instanced_data` differences, or `None` when there are none.
-pub fn instanced_data_diff(
-  vanilla: &Ymap,
-  modded: &Ymap,
-  tolerances: &MatchTolerances,
-) -> Option<YmapInstancedDataDiff> {
-  let (before, after) = (&vanilla.instanced_data, &modded.instanced_data);
-  let names = |list: &[String]| list.iter().map(|name| Some(reference_hash(name))).collect();
-  let props = pair_by_keys(names(&before.prop_instance_list), names(&after.prop_instance_list));
-  let diff = YmapInstancedDataDiff {
-    imap_link: (reference_hash(&before.imap_link) != reference_hash(&after.imap_link))
-      .then(|| after.imap_link.clone()),
-    prop_instances: YmapItemDiff::unpaired(props, &after.prop_instance_list),
-    grass_batches: grass_batch_diffs(
-      &before.grass_instance_list,
-      &after.grass_instance_list,
-      tolerances.ymap_grass_position,
-    ),
-  };
-  (diff != YmapInstancedDataDiff::default()).then_some(diff)
+/// The `#[diff(with)]` strategy of `YmapInstancedData::prop_instance_list`, comparing names by
+/// hash as a multiset.
+pub mod prop_instances {
+  use struct_diff::ApplyError;
+
+  use super::{YmapItemDiff, YmapPropInstanceDiff, pair_by_keys, reference_hash};
+
+  pub fn diff<C: ?Sized>(
+    before: &[String],
+    after: &[String],
+    _ctx: &C,
+  ) -> Option<Vec<YmapPropInstanceDiff>> {
+    let names = |list: &[String]| list.iter().map(|name| Some(reference_hash(name))).collect();
+    let diffs = YmapItemDiff::unpaired(pair_by_keys(names(before), names(after)), after);
+    (!diffs.is_empty()).then_some(diffs)
+  }
+
+  pub fn apply(
+    items: &mut Vec<String>,
+    diffs: &[YmapPropInstanceDiff],
+  ) -> Result<(), ApplyError> {
+    YmapItemDiff::apply_unpaired(items, diffs)
+  }
+}
+
+/// The `#[diff(with)]` strategy of `YmapInstancedData::grass_instance_list`, given
+/// `tolerance.ymap_grass_position`; see the module docs for how batches and instances pair.
+pub mod grass_batches {
+  use struct_diff::ApplyError;
+
+  use super::{GrassInstanceBatch, YmapGrassBatchDiff, YmapItemDiff, grass_batch_diffs};
+
+  pub fn diff(
+    before: &[GrassInstanceBatch],
+    after: &[GrassInstanceBatch],
+    tolerance: &f32,
+  ) -> Option<Vec<YmapGrassBatchDiff>> {
+    let diffs = grass_batch_diffs(before, after, *tolerance);
+    (!diffs.is_empty()).then_some(diffs)
+  }
+
+  pub fn apply(
+    items: &mut Vec<GrassInstanceBatch>,
+    diffs: &[YmapGrassBatchDiff],
+  ) -> Result<(), ApplyError> {
+    YmapItemDiff::apply_with(items, diffs, |batch, changes| changes.apply_to(batch))
+  }
 }
 
 /// Archetype and render settings shared by batches whose instances can match.
@@ -399,41 +408,14 @@ fn grass_batch_diffs(
     removed: (0..vanilla.len()).filter(|index| !vanilla_paired[*index]).collect(),
     added: (0..modded.len()).filter(|index| !modded_paired[*index]).collect(),
   };
-  YmapItemDiff::collect(pairing, modded, |vanilla_index, modded_index| {
-    YmapGrassBatchFieldDiff::between(
+  YmapItemDiff::collect_with(pairing, modded, |vanilla_index, modded_index| {
+    let changes = YmapGrassBatchFieldDiff::between(
       (&vanilla[vanilla_index], &vanilla_placed[vanilla_index]),
       (&modded[modded_index], &modded_placed[modded_index]),
       tolerance,
-    )
+    );
+    (changes != YmapGrassBatchFieldDiff::default()).then_some(changes)
   })
-}
-
-impl YmapInstancedDataDiff {
-  /// Overwrites the changed fields of `data` and rebuilds its prop instances and grass batches.
-  pub fn apply_to(
-    &self,
-    data: &mut YmapInstancedData,
-  ) -> Result<()> {
-    let Self {
-      imap_link,
-      prop_instances,
-      grass_batches,
-    } = self;
-    set_changed(&mut data.imap_link, imap_link);
-    data.prop_instance_list = YmapItemDiff::apply(
-      "prop instances",
-      &data.prop_instance_list,
-      prop_instances,
-      |item, changes| changes.apply_to(item),
-    )?;
-    data.grass_instance_list = YmapItemDiff::try_apply(
-      "grass batches",
-      &data.grass_instance_list,
-      grass_batches,
-      |batch, changes| changes.apply_to(batch),
-    )?;
-    Ok(())
-  }
 }
 
 impl YmapGrassBatchFieldDiff {
@@ -444,7 +426,7 @@ impl YmapGrassBatchFieldDiff {
   pub fn apply_to(
     &self,
     batch: &mut GrassInstanceBatch,
-  ) -> Result<()> {
+  ) -> Result<(), ApplyError> {
     let Self {
       batch_aabb,
       removed_instances,
@@ -471,15 +453,9 @@ impl YmapGrassBatchFieldDiff {
       modded_index: modified.modded_index,
       changes: &modified.changes,
     });
-    batch.instances = apply_changes(
-      "grass instances",
-      &batch.instances,
-      removed.chain(added).chain(modified),
-      |instance, changes| {
-        changes.apply_to(instance);
-        Ok(())
-      },
-    )?;
+    batch.instances =
+      apply_changes(&batch.instances, removed.chain(added).chain(modified), GrassInstance::apply)
+        .map_err(|error| error.at("instances"))?;
     Ok(())
   }
 
@@ -502,15 +478,16 @@ impl YmapGrassBatchFieldDiff {
         vanilla_index: from,
         modded_index: to,
         world_position: after_placed[to].position.clone().unwrap_or_default(),
-        changes: YmapGrassInstanceFieldDiff::between(
-          before_placed[from].instance,
-          after_placed[to].instance,
-        ),
+        // Pairs found by position alone may still share attributes.
+        changes: before_placed[from]
+          .instance
+          .diff(after_placed[to].instance, &())
+          .unwrap_or_default(),
       })
       .collect::<Vec<_>>();
     modified_instances.sort_by_key(|it| it.vanilla_index);
     Self {
-      batch_aabb: changed(&before.batch_aabb, &after.batch_aabb),
+      batch_aabb: (before.batch_aabb != after.batch_aabb).then(|| after.batch_aabb.clone()),
       removed_instances: (0..before_placed.len()).filter(|index| !before_kept[*index]).collect(),
       added_instances: (0..after_placed.len())
         .filter(|index| !after_kept[*index])
@@ -521,41 +498,6 @@ impl YmapGrassBatchFieldDiff {
         })
         .collect(),
       modified_instances,
-    }
-  }
-}
-
-impl YmapGrassInstanceFieldDiff {
-  /// Overwrites the changed attributes of `instance`.
-  pub fn apply_to(
-    &self,
-    instance: &mut GrassInstance,
-  ) {
-    let Self {
-      normal_x,
-      normal_y,
-      color,
-      scale,
-      ao,
-    } = self;
-    set_changed(&mut instance.normal_x, normal_x);
-    set_changed(&mut instance.normal_y, normal_y);
-    set_changed(&mut instance.color, color);
-    set_changed(&mut instance.scale, scale);
-    set_changed(&mut instance.ao, ao);
-  }
-
-  /// Attributes of `after` changed from `before`, excluding position and `pad`.
-  pub fn between(
-    before: &GrassInstance,
-    after: &GrassInstance,
-  ) -> Self {
-    Self {
-      normal_x: changed(&before.normal_x, &after.normal_x),
-      normal_y: changed(&before.normal_y, &after.normal_y),
-      color: changed(&before.color, &after.color),
-      scale: changed(&before.scale, &after.scale),
-      ao: changed(&before.ao, &after.ao),
     }
   }
 }

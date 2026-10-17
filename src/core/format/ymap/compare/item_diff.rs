@@ -1,14 +1,14 @@
 //! Differences of one item in a YMAP array, shared by every array that pairs its items.
 
 use serde::{Deserialize, Serialize};
+use struct_diff::{ApplyError, Diff};
 
 use super::field::Pairing;
-use crate::common::Result;
 
 /// How one array item of a modded YMAP differs from vanilla.
 ///
-/// `T` is the item and `C` its changed fields; arrays compared as multisets use
-/// [`NoFieldDiff`], so they are never `Modified`.
+/// `T` is the item and `C` its changed fields, usually `T`'s [`Diff::Output`]; arrays compared
+/// as multisets use [`NoFieldDiff`], so they are never `Modified`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "typescript", derive(specta::Type))]
 pub enum YmapItemDiff<T, C> {
@@ -49,19 +49,16 @@ impl<T: Clone, C> YmapItemDiff<T, C> {
     });
     removed.chain(added).collect()
   }
-}
 
-impl<T: Clone, C: Default + PartialEq> YmapItemDiff<T, C> {
-  /// Pairs whose `changes(vanilla_index, modded_index)` are not empty, then the unpaired items.
-  pub(super) fn collect(
+  /// Pairs whose `changes(vanilla_index, modded_index)` are not `None`, then the unpaired items.
+  pub(super) fn collect_with(
     pairing: Pairing,
     modded: &[T],
-    changes: impl Fn(usize, usize) -> C,
+    changes: impl Fn(usize, usize) -> Option<C>,
   ) -> Vec<Self> {
     let mut diffs = Vec::new();
     for &(vanilla_index, modded_index) in &pairing.pairs {
-      let changes = changes(vanilla_index, modded_index);
-      if changes != C::default() {
+      if let Some(changes) = changes(vanilla_index, modded_index) {
         diffs.push(Self::Modified {
           vanilla_index,
           modded_index,
@@ -72,39 +69,14 @@ impl<T: Clone, C: Default + PartialEq> YmapItemDiff<T, C> {
     diffs.extend(Self::unpaired(pairing, modded));
     diffs
   }
-}
 
-impl NoFieldDiff {
-  /// Never runs, since no value of this type exists.
-  pub fn apply_to<T>(
-    &self,
-    _item: &mut T,
-  ) {
-    match *self {}
-  }
-}
-
-impl<T: Clone, C> YmapItemDiff<T, C> {
-  /// The modded array rebuilt from `vanilla` and `diffs`; see [`apply_changes`].
-  pub(super) fn apply(
-    what: &str,
-    vanilla: &[T],
+  /// Rebuilds `items` from these `diffs`, changing modified items with `modify`; see
+  /// [`apply_changes`].
+  pub(super) fn apply_with(
+    items: &mut Vec<T>,
     diffs: &[Self],
-    modify: impl Fn(&mut T, &C),
-  ) -> Result<Vec<T>> {
-    Self::try_apply(what, vanilla, diffs, |item, changes| {
-      modify(item, changes);
-      Ok(())
-    })
-  }
-
-  /// [`Self::apply`] with fallible item changes.
-  pub(super) fn try_apply(
-    what: &str,
-    vanilla: &[T],
-    diffs: &[Self],
-    modify: impl Fn(&mut T, &C) -> Result<()>,
-  ) -> Result<Vec<T>> {
+    modify: impl Fn(&mut T, &C) -> Result<(), ApplyError>,
+  ) -> Result<(), ApplyError> {
     let changes = diffs.iter().map(|diff| match diff {
       Self::Added {
         index,
@@ -128,7 +100,40 @@ impl<T: Clone, C> YmapItemDiff<T, C> {
         changes,
       },
     });
-    apply_changes(what, vanilla, changes, modify)
+    *items = apply_changes(items, changes, modify)?;
+    Ok(())
+  }
+}
+
+impl<T: Diff + Clone> YmapItemDiff<T, T::Output> {
+  /// Pairs that differ under `ctx`, then the unpaired items.
+  pub(super) fn collect(
+    pairing: Pairing,
+    vanilla: &[T],
+    modded: &[T],
+    ctx: &T::Context,
+  ) -> Vec<Self> {
+    Self::collect_with(pairing, modded, |vanilla_index, modded_index| {
+      vanilla[vanilla_index].diff(&modded[modded_index], ctx)
+    })
+  }
+
+  /// Rebuilds `items` from these `diffs`, applying each item's changes with [`Diff::apply`].
+  pub(super) fn apply(
+    items: &mut Vec<T>,
+    diffs: &[Self],
+  ) -> Result<(), ApplyError> {
+    Self::apply_with(items, diffs, T::apply)
+  }
+}
+
+impl<T: Clone> YmapItemDiff<T, NoFieldDiff> {
+  /// Rebuilds `items` from these `diffs`, which only add and remove items.
+  pub(super) fn apply_unpaired(
+    items: &mut Vec<T>,
+    diffs: &[Self],
+  ) -> Result<(), ApplyError> {
+    Self::apply_with(items, diffs, |_, changes| match *changes {})
   }
 }
 
@@ -148,24 +153,22 @@ pub(super) enum ItemChange<'a, T, C> {
   },
 }
 
-/// The modded array rebuilt from `vanilla` and its item `changes`, `what` naming the array in
-/// errors.
+/// The modded array rebuilt from `vanilla` and its item `changes`.
 ///
 /// Added and modified items go to their modded index. Diffs do not record where unchanged items
 /// went, so the untouched vanilla items fill the remaining slots in vanilla order.
 pub(super) fn apply_changes<'a, T: Clone + 'a, C: 'a>(
-  what: &str,
   vanilla: &[T],
   changes: impl IntoIterator<Item = ItemChange<'a, T, C>>,
-  modify: impl Fn(&mut T, &C) -> Result<()>,
-) -> Result<Vec<T>> {
+  modify: impl Fn(&mut T, &C) -> Result<(), ApplyError>,
+) -> Result<Vec<T>, ApplyError> {
   let mut consumed = vec![false; vanilla.len()];
-  let mut consume = |index: usize| -> Result<()> {
+  let mut consume = |index: usize| -> Result<(), ApplyError> {
     match consumed.get_mut(index) {
       None => {
-        Err(format!("{what}: vanilla index {index} is out of {} items", vanilla.len()).into())
+        Err(ApplyError::new(format!("vanilla index {index} is out of {} items", vanilla.len())))
       }
-      Some(true) => Err(format!("{what}: vanilla index {index} is changed twice").into()),
+      Some(true) => Err(ApplyError::new(format!("vanilla index {index} is changed twice"))),
       Some(slot) => {
         *slot = true;
         Ok(())
@@ -199,8 +202,10 @@ pub(super) fn apply_changes<'a, T: Clone + 'a, C: 'a>(
   let mut slots = vec![None; len];
   for (index, item) in placed {
     match slots.get_mut(index) {
-      None => return Err(format!("{what}: modded index {index} is out of {len} items").into()),
-      Some(Some(_)) => return Err(format!("{what}: modded index {index} is filled twice").into()),
+      None => return Err(ApplyError::new(format!("modded index {index} is out of {len} items"))),
+      Some(Some(_)) => {
+        return Err(ApplyError::new(format!("modded index {index} is filled twice")));
+      }
       Some(slot) => *slot = Some(item),
     }
   }

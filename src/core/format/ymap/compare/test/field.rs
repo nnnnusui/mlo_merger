@@ -32,11 +32,11 @@ fn position_changes_below_tolerance_are_dropped() {
     z: 0.0,
   };
   assert_eq!(
-    PositionDiff::between(&before, &after, 0.001),
+    before.diff(&after, &0.001),
     Some(PositionDiff {
       y: Some(1.0),
       ..PositionDiff::default()
     })
   );
-  assert_eq!(PositionDiff::between(&before, &before, 0.001), None);
+  assert_eq!(before.diff(&before, &0.001), None);
 }

@@ -1,70 +1,11 @@
-//! Shared helpers for pairing YMAP array items and thresholding their field changes.
+//! Shared helpers for pairing YMAP array items.
 
 use std::{
   collections::{HashMap, VecDeque},
   hash::Hash,
 };
 
-use super::PositionDiff;
 use crate::common::position::Position;
-
-/// `to` when it differs from `from` by at least `tolerance`.
-pub(super) fn changed_f32(
-  from: f32,
-  to: f32,
-  tolerance: f32,
-) -> Option<f32> {
-  ((from - to).abs() >= tolerance).then_some(to)
-}
-
-/// `to` when it differs from `from`.
-pub(super) fn changed<T: PartialEq + Clone>(
-  from: &T,
-  to: &T,
-) -> Option<T> {
-  (from != to).then(|| to.clone())
-}
-
-/// Overwrites `target` with `value` when it holds one.
-pub(super) fn set_changed<T: Clone>(
-  target: &mut T,
-  value: &Option<T>,
-) {
-  if let Some(value) = value {
-    *target = value.clone();
-  }
-}
-
-impl PositionDiff {
-  /// Overwrites the changed axes of `position`.
-  pub fn apply_to(
-    &self,
-    position: &mut Position,
-  ) {
-    let Self {
-      x,
-      y,
-      z,
-    } = self;
-    set_changed(&mut position.x, x);
-    set_changed(&mut position.y, y);
-    set_changed(&mut position.z, z);
-  }
-
-  /// Axes of `after` differing from `before` by at least `tolerance`, or `None` if none do.
-  pub fn between(
-    before: &Position,
-    after: &Position,
-    tolerance: f32,
-  ) -> Option<Self> {
-    let axes = Self {
-      x: changed_f32(before.x, after.x, tolerance),
-      y: changed_f32(before.y, after.y, tolerance),
-      z: changed_f32(before.z, after.z, tolerance),
-    };
-    (axes != Self::default()).then_some(axes)
-  }
-}
 
 /// Vanilla and modded indices of items judged the same, plus the unpaired ones.
 pub(super) struct Pairing {

@@ -78,8 +78,8 @@ fn the_configured_tolerance_widens_float_comparisons() {
     ymap: 1.0,
     ..Default::default()
   };
-  assert!(diff_with(&vanilla, &modded, &loose).entities.is_empty());
-  assert_eq!(diff(&vanilla, &modded).entities.len(), 1);
+  assert!(diff_with(&vanilla, &modded, &loose).entities.is_none());
+  assert_eq!(diff(&vanilla, &modded).entities.unwrap_or_default().len(), 1);
 }
 
 // Moved from `ymap_entity_diff.rs`: the diff function on its own.
@@ -105,14 +105,8 @@ fn entity_diff(
   vanilla: &Ymap,
   modded: &Ymap,
 ) -> Vec<YmapEntityDiff> {
-  let parent = None;
-  entity_diffs(
-    vanilla,
-    &YmapComparisonData::new(vanilla, parent.clone()),
-    modded,
-    &YmapComparisonData::new(modded, parent),
-    0.001,
-  )
+  compare::entities::diff(&vanilla.entities, &modded.entities, &MatchTolerances::default())
+    .unwrap_or_default()
 }
 
 #[test]

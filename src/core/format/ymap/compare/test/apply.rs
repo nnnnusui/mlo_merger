@@ -1,5 +1,7 @@
-//! Tests for [`YmapDiffFields::apply_to`], mostly as round trips: applying the diff of a modded
+//! Tests for applying [`YmapDiffFields`], mostly as round trips: applying the diff of a modded
 //! YMAP to its vanilla YMAP must rebuild the modded one.
+
+use struct_diff::ApplyError;
 
 use super::*;
 use crate::common::{rotation::Rotation, triangle::Triangle};
@@ -16,7 +18,17 @@ fn apply(
 ) -> Ymap {
   let diff = diff(vanilla, modded);
   let diff: YmapDiffFields = serde_json::from_value(serde_json::to_value(&diff).unwrap()).unwrap();
-  diff.apply_to(vanilla).unwrap()
+  apply_diff(&diff, vanilla).unwrap()
+}
+
+/// `vanilla` with `diff` applied.
+fn apply_diff(
+  diff: &YmapDiffFields,
+  vanilla: &Ymap,
+) -> Result<Ymap, ApplyError> {
+  let mut ymap = vanilla.clone();
+  ymap.apply(diff)?;
+  Ok(ymap)
 }
 
 /// Asserts that applying the diff of `modded` to `vanilla` rebuilds `modded` exactly.
@@ -31,7 +43,7 @@ fn assert_round_trip(
 #[test]
 fn an_empty_diff_leaves_the_ymap_unchanged() {
   let vanilla = sample();
-  assert_eq!(YmapDiffFields::default().apply_to(&vanilla).unwrap(), vanilla);
+  assert_eq!(apply_diff(&YmapDiffFields::default(), &vanilla).unwrap(), vanilla);
 }
 
 #[test]
@@ -169,7 +181,7 @@ fn occlude_models_drop_listed_triangles_and_append_added_ones() {
 }
 
 #[test]
-fn added_triangles_lose_their_position_among_kept_ones() {
+fn added_triangles_keep_their_position_among_kept_ones() {
   let vanilla = Ymap {
     occlude_models: vec![model(0.0, vec![triangle(0.0), triangle(2.0)])],
     ..base()
@@ -178,12 +190,7 @@ fn added_triangles_lose_their_position_among_kept_ones() {
     occlude_models: vec![model(0.0, vec![triangle(8.0), triangle(0.0), triangle(2.0)])],
     ..base()
   };
-  let applied = apply(&vanilla, &modded);
-  assert_eq!(
-    applied.occlude_models[0].triangles,
-    vec![triangle(0.0), triangle(2.0), triangle(8.0)]
-  );
-  assert_eq!(diff(&applied, &modded), YmapDiffFields::default());
+  assert_round_trip(&vanilla, &modded);
 }
 
 fn lod_light(falloff: f32) -> YmapLodLight {
@@ -253,7 +260,7 @@ fn distant_lod_light_positions_are_rewritten_with_their_changed_axes() {
     }),
     rgbi: None,
   };
-  changes.apply_to(&mut light);
+  light.apply(&changes).unwrap();
   assert_eq!(light, distant_light("1 2.25 3", "10"));
 }
 
@@ -468,40 +475,40 @@ fn out_of_range_indices_are_rejected() {
     ..base()
   };
   let removed_twice = YmapDiffFields {
-    box_occluders: vec![
+    box_occluders: Some(vec![
       YmapBoxOccluderDiff::Removed {
         index: 0,
       },
       YmapBoxOccluderDiff::Removed {
         index: 0,
       },
-    ],
+    ]),
     ..Default::default()
   };
-  let error = removed_twice.apply_to(&vanilla).unwrap_err().to_string();
+  let error = apply_diff(&removed_twice, &vanilla).unwrap_err().to_string();
   assert_eq!(error, "box_occluders: vanilla index 0 is changed twice");
 
   let missing_vanilla = YmapDiffFields {
-    box_occluders: vec![YmapBoxOccluderDiff::Removed {
+    box_occluders: Some(vec![YmapBoxOccluderDiff::Removed {
       index: 1,
-    }],
+    }]),
     ..Default::default()
   };
-  let error = missing_vanilla.apply_to(&vanilla).unwrap_err().to_string();
+  let error = apply_diff(&missing_vanilla, &vanilla).unwrap_err().to_string();
   assert_eq!(error, "box_occluders: vanilla index 1 is out of 1 items");
 
   let past_the_end = YmapDiffFields {
-    box_occluders: vec![YmapBoxOccluderDiff::Added {
+    box_occluders: Some(vec![YmapBoxOccluderDiff::Added {
       index: 2,
       item: occluder(100),
-    }],
+    }]),
     ..Default::default()
   };
-  let error = past_the_end.apply_to(&vanilla).unwrap_err().to_string();
+  let error = apply_diff(&past_the_end, &vanilla).unwrap_err().to_string();
   assert_eq!(error, "box_occluders: modded index 2 is out of 2 items");
 
   let duplicate_slot = YmapDiffFields {
-    entities: vec![
+    entities: Some(vec![
       YmapEntityDiff::Added {
         index: 0,
         entity: entity(1),
@@ -510,9 +517,9 @@ fn out_of_range_indices_are_rejected() {
         index: 0,
         entity: entity(2),
       },
-    ],
+    ]),
     ..Default::default()
   };
-  let error = duplicate_slot.apply_to(&base()).unwrap_err().to_string();
+  let error = apply_diff(&duplicate_slot, &base()).unwrap_err().to_string();
   assert_eq!(error, "entities: modded index 0 is filled twice");
 }

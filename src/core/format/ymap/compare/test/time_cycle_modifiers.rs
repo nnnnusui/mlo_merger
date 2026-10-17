@@ -61,7 +61,12 @@ fn pairs_by_either_extent_and_thresholds_floats() {
   modded.time_cycle_modifiers[1].end_hour = 6;
   modded.time_cycle_modifiers.push(modifier(200.0));
 
-  let diffs = time_cycle_modifier_diffs(&vanilla, &modded, &MatchTolerances::default());
+  let diffs = compare::time_cycle_modifiers::diff(
+    &vanilla.time_cycle_modifiers,
+    &modded.time_cycle_modifiers,
+    &MatchTolerances::default(),
+  )
+  .unwrap();
   assert_eq!(
     diffs,
     vec![

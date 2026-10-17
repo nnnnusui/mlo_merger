@@ -50,7 +50,7 @@ fn box_occluders_follow_the_configured_tolerances() {
   modded.box_occluders[0].i_center_x = 2;
   modded.box_occluders[0].i_cos_z += 1;
   // By default the center moved past the pairing tolerance and the rotation is noise.
-  assert_eq!(diff(&vanilla, &modded).box_occluders.len(), 2);
+  assert_eq!(diff(&vanilla, &modded).box_occluders.unwrap_or_default().len(), 2);
   let configured = MatchTolerances {
     ymap_box_occluder: 3,
     ymap_box_occluder_rotation: 0,
@@ -81,7 +81,12 @@ fn pairs_by_center_and_thresholds_rotation() {
   modded.box_occluders.remove(2);
   modded.box_occluders.push(occluder(300));
 
-  let diffs = box_occluder_diffs(&vanilla, &modded, &MatchTolerances::default());
+  let diffs = compare::box_occluders::diff(
+    &vanilla.box_occluders,
+    &modded.box_occluders,
+    &MatchTolerances::default(),
+  )
+  .unwrap();
   assert_eq!(
     diffs,
     vec![
@@ -107,5 +112,10 @@ fn pairs_by_center_and_thresholds_rotation() {
     ymap_box_occluder_rotation: 0,
     ..Default::default()
   };
-  assert_eq!(box_occluder_diffs(&vanilla, &modded, &exact).len(), 4);
+  assert_eq!(
+    compare::box_occluders::diff(&vanilla.box_occluders, &modded.box_occluders, &exact)
+      .unwrap()
+      .len(),
+    4
+  );
 }

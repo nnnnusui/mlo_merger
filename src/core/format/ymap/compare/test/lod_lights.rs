@@ -48,7 +48,7 @@ fn compares_lights_as_a_multiset() {
     ..base()
   };
   assert_eq!(
-    lod_light_diffs(&vanilla, &modded),
+    compare::lod_lights::diff(&vanilla.lod_lights, &modded.lod_lights, &()).unwrap(),
     vec![
       YmapLodLightDiff::Removed {
         index: 0
@@ -65,5 +65,5 @@ fn compares_lights_as_a_multiset() {
       },
     ]
   );
-  assert!(lod_light_diffs(&vanilla, &vanilla).is_empty());
+  assert_eq!(compare::lod_lights::diff(&vanilla.lod_lights, &vanilla.lod_lights, &()), None);
 }

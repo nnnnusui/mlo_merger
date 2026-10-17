@@ -1,15 +1,25 @@
 use structdiff::{Difference, StructDiff};
 
-use crate::common::{position::Position, triangle::Triangle};
+use crate::{
+  common::{position::Position, triangle::Triangle},
+  core::format::ymap::compare::{self, YmapTriangleDiff},
+};
 
 /// Occlude model definition in YMAP
-#[derive(Debug, Clone, PartialEq, Difference)]
+#[derive(Debug, Clone, PartialEq, Difference, struct_diff::Diff)]
 #[difference(expose)]
 #[derive(serde::Serialize, serde::Deserialize)]
 #[cfg_attr(feature = "typescript", derive(specta::Type))]
+#[diff(
+  name = YmapOccludeModelFieldDiff,
+  attr(cfg_attr(feature = "typescript", derive(specta::Type)))
+)]
 pub struct YmapOccludeModel {
+  #[diff(nested, context = 0.0)]
   pub bmin: Position,
+  #[diff(nested, context = 0.0)]
   pub bmax: Position,
+  #[diff(with = compare::occlude_models::triangles, output = Vec<YmapTriangleDiff>)]
   pub triangles: Vec<Triangle>,
   pub flags: u32,
 }

@@ -54,7 +54,7 @@ fn distant_lights_moved_within_the_rounding_report_the_position() {
   let vanilla = with_lights(vec![light("1 2 3", "10")], 0);
   let modded = with_lights(vec![light("1.0002 2 3.25", "10")], 0);
   // 3.25 rounds apart from 3 at three decimals, so the light no longer pairs.
-  assert_eq!(diff(&vanilla, &modded).distant_lod_lights.unwrap().items.len(), 2);
+  assert_eq!(diff(&vanilla, &modded).distant_lod_lights.unwrap().items.unwrap().len(), 2);
   let coarse = MatchTolerances {
     ymap_lod_light_position_decimals: 0,
     ..Default::default()
@@ -93,11 +93,14 @@ fn pairs_by_rounded_position_and_reports_block_fields() {
     with_category(vec![light("1 2 3", "a"), light("4 5 6", "b"), light("7 8 9", "c")], 0);
   let modded =
     with_category(vec![light("4.0002 5 6", "b"), light("1 2 3", "z"), light("10 11 12", "d")], 2);
-  let diff = distant_lod_lights_diff(&vanilla, &modded, &MatchTolerances::default()).unwrap();
+  let diff = vanilla
+    .distant_lod_lights
+    .diff(&modded.distant_lod_lights, &MatchTolerances::default())
+    .unwrap();
   assert_eq!(diff.category, Some(2));
   assert_eq!(diff.num_street_lights, None);
   assert_eq!(
-    diff.items,
+    diff.items.unwrap(),
     vec![
       YmapDistantLodLightDiff::Modified {
         vanilla_index: 0,
@@ -116,5 +119,8 @@ fn pairs_by_rounded_position_and_reports_block_fields() {
       },
     ]
   );
-  assert_eq!(distant_lod_lights_diff(&vanilla, &vanilla, &MatchTolerances::default()), None);
+  assert_eq!(
+    vanilla.distant_lod_lights.diff(&vanilla.distant_lod_lights, &MatchTolerances::default()),
+    None
+  );
 }

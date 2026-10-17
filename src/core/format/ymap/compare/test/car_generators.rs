@@ -57,7 +57,7 @@ fn car_generator_pairing_follows_the_configured_decimals() {
   let vanilla = with_generators(vec![generator(10.0)]);
   let modded = with_generators(vec![generator(10.25)]);
   // Three decimals tell 10.25 from 10.0; none round both to 10.
-  assert_eq!(diff(&vanilla, &modded).car_generators.len(), 2);
+  assert_eq!(diff(&vanilla, &modded).car_generators.unwrap_or_default().len(), 2);
   let coarse = MatchTolerances {
     ymap_car_generator_position_decimals: 0,
     ..Default::default()
@@ -86,7 +86,12 @@ fn pairs_by_rounded_position_and_thresholds_floats() {
   modded.car_generators[1].car_model = "taxi".into();
 
   // Three decimals keep 20.01 apart from 20.0.
-  let diffs = car_generator_diffs(&vanilla, &modded, &MatchTolerances::default());
+  let diffs = compare::car_generators::diff(
+    &vanilla.car_generators,
+    &modded.car_generators,
+    &MatchTolerances::default(),
+  )
+  .unwrap();
   assert_eq!(
     diffs,
     vec![
@@ -105,7 +110,8 @@ fn pairs_by_rounded_position_and_thresholds_floats() {
     ..Default::default()
   };
   assert_eq!(
-    car_generator_diffs(&vanilla, &modded, &coarse),
+    compare::car_generators::diff(&vanilla.car_generators, &modded.car_generators, &coarse)
+      .unwrap(),
     vec![YmapCarGeneratorDiff::Modified {
       vanilla_index: 1,
       modded_index: 1,

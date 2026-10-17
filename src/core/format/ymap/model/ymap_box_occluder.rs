@@ -1,19 +1,41 @@
 use structdiff::{Difference, StructDiff};
 
+use crate::core::config::matching::MatchTolerances;
+
 /// Box occluder definition in YMAP
-#[derive(Debug, Clone, PartialEq, Difference)]
+#[derive(Debug, Clone, PartialEq, Difference, struct_diff::Diff)]
 #[difference(expose)]
 #[derive(serde::Serialize, serde::Deserialize)]
 #[cfg_attr(feature = "typescript", derive(specta::Type))]
+#[diff(
+  name = YmapBoxOccluderFieldDiff,
+  context = MatchTolerances,
+  attr(cfg_attr(feature = "typescript", derive(specta::Type)))
+)]
 pub struct YmapBoxOccluder {
   pub i_center_x: i32,
   pub i_center_y: i32,
   pub i_center_z: i32,
+  #[diff(with = rotation, context = ctx.ymap_box_occluder_rotation)]
   pub i_cos_z: i32,
   pub i_length: u32,
   pub i_width: u32,
   pub i_height: u32,
+  #[diff(with = rotation, context = ctx.ymap_box_occluder_rotation)]
   pub i_sin_z: i32,
+}
+
+/// Compares `i_cos_z`/`i_sin_z`, ignoring changes up to the inclusive tolerance.
+mod rotation {
+  pub use struct_diff::replace::apply;
+
+  pub fn diff(
+    before: &i32,
+    after: &i32,
+    tolerance: &i32,
+  ) -> Option<i32> {
+    ((i64::from(*before) - i64::from(*after)).abs() > i64::from(*tolerance)).then_some(*after)
+  }
 }
 
 impl YmapBoxOccluder {

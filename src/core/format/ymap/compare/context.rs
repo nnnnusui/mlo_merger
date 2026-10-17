@@ -5,9 +5,9 @@ use std::{
   rc::Rc,
 };
 
-use super::{
-  YmapComparisonData, YmapComparisonDiff, YmapComparisonFile, YmapDiffFields, YmapParentRef,
-};
+use struct_diff::Diff;
+
+use super::{YmapComparisonData, YmapComparisonDiff, YmapComparisonFile, YmapParentRef};
 use crate::{
   common::{Result, fingerprint::Fingerprint},
   core::{
@@ -129,17 +129,11 @@ impl YmapComparisonContext {
     };
     let vanilla = self.get_cache(&baseline)?;
     let modded = self.get_cache(file)?;
-    let vanilla_data = self.get_prepared(&baseline)?;
-    let modded_data = self.get_prepared(file)?;
-    let diffs = YmapDiffFields::between(
-      (&vanilla, &vanilla_data),
-      (&modded, &modded_data),
-      &matching::current(),
-    );
     Ok(YmapComparisonDiff {
+      schema_version: YmapComparisonDiff::SCHEMA_VERSION,
+      diffs: vanilla.diff(&modded, &matching::current()).unwrap_or_default(),
       source: self.comparison_file(file, None)?,
       vanilla: self.comparison_file(&baseline, None)?,
-      diffs,
     })
   }
 

@@ -1,49 +1,52 @@
 //! Loads and caches the YMAPs referenced while comparing source resources against vanilla.
+//!
+//! How each YMAP field is compared is declared on the model with `#[derive(Diff)]`; this module
+//! holds the `#[diff(with)]` strategies of the arrays, which pair their items before comparing
+//! them.
 
+pub mod box_occluders;
+pub mod car_generators;
 mod context;
 mod data;
 mod diff;
+pub mod distant_lod_lights;
+pub mod entities;
 mod field;
+pub mod instanced_data;
 mod item_diff;
+pub mod lod_lights;
+pub mod occlude_models;
 #[cfg(test)]
 mod test;
-mod ymap_box_occluder_diff;
-mod ymap_car_generator_diff;
-mod ymap_distant_lod_light_diff;
-mod ymap_entity_diff;
-mod ymap_instanced_data_diff;
-mod ymap_lod_light_diff;
-mod ymap_occlude_model_diff;
-mod ymap_time_cycle_modifier_diff;
+pub mod time_cycle_modifiers;
 
+pub use box_occluders::YmapBoxOccluderDiff;
+pub use car_generators::YmapCarGeneratorDiff;
 pub use context::{StreamFileRef, YmapComparisonContext};
 pub use data::{YmapComparisonData, YmapParentRef};
-pub use diff::{
-  ExtentsDiff, PositionDiff, RotationDiff, YmapBlockDiff, YmapComparisonDiff, YmapComparisonFile,
-  YmapDiffFields, added_physics_dictionaries,
+pub use diff::{YmapComparisonDiff, YmapComparisonFile, physics_dictionaries};
+pub use distant_lod_lights::{YmapDistantLodLightDiff, parse_distant_position};
+pub use entities::YmapEntityDiff;
+pub use instanced_data::{
+  YmapAddedGrassInstance, YmapGrassBatchDiff, YmapGrassBatchFieldDiff, YmapModifiedGrassInstance,
+  YmapPropInstanceDiff, grass_world_position,
 };
 pub use item_diff::{NoFieldDiff, YmapItemDiff};
-pub use ymap_box_occluder_diff::{
-  YmapBoxOccluderDiff, YmapBoxOccluderFieldDiff, box_occluder_diffs,
-};
-pub use ymap_car_generator_diff::{
-  YmapCarGeneratorDiff, YmapCarGeneratorFieldDiff, car_generator_diffs,
-};
-pub use ymap_distant_lod_light_diff::{
-  YmapDistantLodLightDiff, YmapDistantLodLightFieldDiff, YmapDistantLodLightsDiff,
-  distant_lod_lights_diff, parse_distant_position,
-};
-use ymap_entity_diff::apply_entity_diffs;
-pub use ymap_entity_diff::{YmapEntityDiff, YmapEntityFieldDiff, entity_diffs};
-pub use ymap_instanced_data_diff::{
-  YmapAddedGrassInstance, YmapGrassBatchDiff, YmapGrassBatchFieldDiff, YmapGrassInstanceFieldDiff,
-  YmapInstancedDataDiff, YmapModifiedGrassInstance, YmapPropInstanceDiff, grass_world_position,
-  instanced_data_diff,
-};
-pub use ymap_lod_light_diff::{YmapLodLightDiff, lod_light_diffs};
-pub use ymap_occlude_model_diff::{
-  YmapOccludeModelDiff, YmapOccludeModelFieldDiff, occlude_model_diffs,
-};
-pub use ymap_time_cycle_modifier_diff::{
-  YmapTimeCycleModifierDiff, YmapTimeCycleModifierFieldDiff, time_cycle_modifier_diffs,
+pub use lod_lights::YmapLodLightDiff;
+pub use occlude_models::{YmapOccludeModelDiff, triangles::YmapTriangleDiff};
+pub use time_cycle_modifiers::YmapTimeCycleModifierDiff;
+
+pub use crate::{
+  common::{position::PositionDiff, rotation::RotationDiff},
+  core::format::ymap::model::{
+    ymap::YmapDiffFields,
+    ymap_block::YmapBlockDiff,
+    ymap_box_occluder::YmapBoxOccluderFieldDiff,
+    ymap_car_generator::YmapCarGeneratorFieldDiff,
+    ymap_distant_lod_lights::{YmapDistantLodLightFieldDiff, YmapDistantLodLightsDiff},
+    ymap_entity::YmapEntityFieldDiff,
+    ymap_instanced_data::{YmapGrassInstanceFieldDiff, YmapInstancedDataDiff},
+    ymap_occlude_model::YmapOccludeModelFieldDiff,
+    ymap_time_cycle_modifier::YmapTimeCycleModifierFieldDiff,
+  },
 };

@@ -47,8 +47,10 @@ fn occlude_models_list_triangle_changes_by_vanilla_index() {
             "changes": {
               "bmax": { "z": 12.5 },
               "flags": 1,
-              "removed_triangles": [1],
-              "added_triangles": [serde_json::to_value(triangle(4.0)).unwrap()],
+              "triangles": [
+                { "Removed": { "index": 1 } },
+                { "Added": { "index": 1, "item": serde_json::to_value(triangle(4.0)).unwrap() } },
+              ],
             },
           },
         },
@@ -74,7 +76,7 @@ fn occlude_models_pair_within_the_xy_tolerance() {
 // Moved from `ymap_occlude_model_diff.rs`: the diff function on its own.
 
 #[test]
-fn lists_removed_triangle_indices_and_added_triangles() {
+fn lists_removed_triangles_by_vanilla_index_and_added_ones_by_modded_index() {
   let vanilla = Ymap {
     occlude_models: vec![model(0.0, vec![triangle(0.0), triangle(2.0), triangle(0.0)])],
     ..base()
@@ -84,7 +86,12 @@ fn lists_removed_triangle_indices_and_added_triangles() {
   modded.occlude_models[0].bmin.z = 0.5;
   modded.occlude_models[0].flags = 1;
 
-  let diffs = occlude_model_diffs(&vanilla, &modded, &MatchTolerances::default());
+  let diffs = compare::occlude_models::diff(
+    &vanilla.occlude_models,
+    &modded.occlude_models,
+    &MatchTolerances::default(),
+  )
+  .unwrap();
   assert_eq!(
     diffs,
     vec![YmapOccludeModelDiff::Modified {
@@ -96,8 +103,18 @@ fn lists_removed_triangle_indices_and_added_triangles() {
           ..Default::default()
         }),
         flags: Some(1),
-        removed_triangles: vec![1, 2],
-        added_triangles: vec![triangle(4.0)],
+        triangles: Some(vec![
+          YmapTriangleDiff::Removed {
+            index: 1,
+          },
+          YmapTriangleDiff::Removed {
+            index: 2,
+          },
+          YmapTriangleDiff::Added {
+            index: 1,
+            item: triangle(4.0),
+          },
+        ]),
         ..Default::default()
       },
     }]

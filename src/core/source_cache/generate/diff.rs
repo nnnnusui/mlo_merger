@@ -8,7 +8,9 @@ use crate::{
   common::{json::write_json, path::ensure_safe_path},
   core::{
     conversion::load_hash_names_or_empty,
-    format::ymap::compare::{StreamFileRef, YmapComparisonContext, YmapComparisonFile},
+    format::ymap::compare::{
+      StreamFileRef, YmapComparisonContext, YmapComparisonDiff, YmapComparisonFile,
+    },
     source_cache::{layout::stream_relative_path, types::SourceCacheMetadata},
   },
 };
@@ -21,9 +23,11 @@ pub(in crate::core::source_cache) struct YmapDiffCounts {
   pub reused: usize,
 }
 
-/// The fingerprints a diff document was taken from, read without its differences.
+/// The layout and fingerprints of a diff document, read without its differences.
 #[derive(serde::Deserialize)]
 struct DiffInputs {
+  #[serde(default)]
+  schema_version: u32,
   source: YmapComparisonFile,
   vanilla: YmapComparisonFile,
 }
@@ -104,7 +108,8 @@ pub(in crate::core::source_cache) fn write_ymap_diffs(
   Ok(counts)
 }
 
-/// Whether the diff at `path` exists and was taken from the files `file` resolves to now.
+/// Whether the diff at `path` exists in the current layout and was taken from the files `file`
+/// resolves to now.
 ///
 /// Unreadable diffs and files are treated as stale, so they are regenerated.
 fn is_current(
@@ -118,7 +123,8 @@ fn is_current(
   let Ok(inputs) = serde_json::from_reader::<_, DiffInputs>(BufReader::new(reader)) else {
     return false;
   };
-  context.is_diff_current(file, &inputs.source, &inputs.vanilla).unwrap_or(false)
+  inputs.schema_version == YmapComparisonDiff::SCHEMA_VERSION
+    && context.is_diff_current(file, &inputs.source, &inputs.vanilla).unwrap_or(false)
 }
 
 fn remove_dir_if_exists(path: &Path) -> Result<()> {

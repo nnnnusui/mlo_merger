@@ -42,10 +42,9 @@ fn reads_vanilla_and_source_ymaps_once() {
   let data = context.get_prepared(&source).unwrap();
   assert_eq!(data.entity_indices_by_guid.values().map(Vec::len).sum::<usize>(), entity_count);
   assert_eq!(context.prepared_by_ref.len(), 1);
-  // The diff also prepares the vanilla baseline.
+  // The diff also loads the vanilla baseline, from the cache.
   context.get_diff(&source).unwrap();
   assert_eq!(context.cache_by_ref.len(), 2);
-  assert_eq!(context.prepared_by_ref.len(), 2);
 
   // A resource without the requested YMAP falls back to vanilla.
   let missing_in_resource = fs::read_dir(&latest)

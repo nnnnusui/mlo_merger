@@ -1,4 +1,4 @@
-//! Derivation tests for every field of [`YmapDiffFields`], through [`YmapDiffFields::between`].
+//! Derivation tests for every field of [`YmapDiffFields`], through `Ymap`'s [`Diff`].
 //!
 //! Each test changes one kind of data and checks the serialized diff, so it also covers that
 //! unchanged fields are omitted from the JSON.
@@ -19,13 +19,15 @@ mod physics_dictionaries;
 mod time_cycle_modifiers;
 
 use serde_json::Value;
+use struct_diff::Diff;
 
-use super::{YmapComparisonData, YmapDiffFields};
+use super::YmapDiffFields;
 use crate::{
   common::position::Position,
   core::{
     config::matching::MatchTolerances,
     format::ymap::{
+      compare,
       model::{Ymap, YmapDistantLodLights, YmapEntity, YmapInstancedData},
       xml::XmlYmap,
     },
@@ -83,11 +85,7 @@ fn diff_with(
   modded: &Ymap,
   tolerances: &MatchTolerances,
 ) -> YmapDiffFields {
-  YmapDiffFields::between(
-    (vanilla, &YmapComparisonData::new(vanilla, None)),
-    (modded, &YmapComparisonData::new(modded, None)),
-    tolerances,
-  )
+  vanilla.diff(modded, tolerances).unwrap_or_default()
 }
 
 fn diff(

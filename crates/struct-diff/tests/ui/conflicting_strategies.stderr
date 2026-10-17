@@ -1,0 +1,5 @@
+error: a field takes at most one of `nested`, `threshold` and `with`
+ --> tests/ui/conflicting_strategies.rs:3:18
+  |
+3 |   #[diff(nested, threshold = 1.0)]
+  |                  ^^^^^^^^^

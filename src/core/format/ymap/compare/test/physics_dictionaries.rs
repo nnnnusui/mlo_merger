@@ -1,7 +1,6 @@
 use serde_json::json;
 
 use super::*;
-use crate::core::format::ymap::compare::*;
 
 fn with_dictionaries(names: &[&str]) -> Ymap {
   Ymap {
@@ -34,14 +33,13 @@ fn records_only_added_physics_dictionaries() {
     physics_dictionaries: vec!["c".into(), "b".into()],
     ..base()
   };
-  assert_eq!(added_physics_dictionaries(&vanilla, &modded), vec!["c".to_string()]);
-  assert!(
-    added_physics_dictionaries(
-      &modded,
-      &Ymap {
-        ..base()
-      }
-    )
-    .is_empty()
+  assert_eq!(
+    compare::physics_dictionaries::diff(
+      &vanilla.physics_dictionaries,
+      &modded.physics_dictionaries,
+      &()
+    ),
+    Some(vec!["c".to_string()])
   );
+  assert_eq!(compare::physics_dictionaries::diff(&modded.physics_dictionaries, &[], &()), None);
 }

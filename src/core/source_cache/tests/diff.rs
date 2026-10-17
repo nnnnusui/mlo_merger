@@ -1,6 +1,9 @@
 use super::*;
 use crate::common::fingerprint::Fingerprint;
-use crate::core::source_cache::generate::diff::{YmapDiffCounts, write_ymap_diffs};
+use crate::core::{
+  format::ymap::compare::YmapComparisonDiff,
+  source_cache::generate::diff::{YmapDiffCounts, write_ymap_diffs},
+};
 use std::path::{Path, PathBuf};
 
 /// A source cache whose one source YMAP overrides a vanilla YMAP of the same name.
@@ -94,6 +97,15 @@ impl Fixture {
 
   /// Writes a diff document recording the current fingerprints of both YMAPs.
   fn write_current_diff(&self) -> serde_json::Value {
+    self.write_diff(YmapComparisonDiff::SCHEMA_VERSION)
+  }
+
+  /// Writes a diff document of `schema_version` recording the current fingerprints of both
+  /// YMAPs.
+  fn write_diff(
+    &self,
+    schema_version: u32,
+  ) -> serde_json::Value {
     let file = |path: &Path| {
       let fingerprint = Fingerprint::read(path, None, false).unwrap();
       serde_json::json!({
@@ -105,6 +117,7 @@ impl Fixture {
       })
     };
     let document = serde_json::json!({
+      "schema_version": schema_version,
       "source": file(&self.source_ymap),
       "vanilla": file(&self.vanilla_ymap.canonicalize().unwrap()),
       "diffs": { "name": "kept" },
@@ -183,6 +196,14 @@ fn unreadable_ymap_diffs_are_regenerated() {
   let fixture = Fixture::new("ymap_diffs_unreadable");
   fs::create_dir_all(fixture.diff_path().parent().unwrap()).unwrap();
   fs::write(fixture.diff_path(), b"not JSON").unwrap();
+  assert_eq!(fixture.write_diffs(), DROPPED);
+  assert!(!fixture.diff_path().exists());
+}
+
+#[test]
+fn ymap_diffs_of_another_schema_version_are_regenerated() {
+  let fixture = Fixture::new("ymap_diffs_schema_changed");
+  fixture.write_diff(YmapComparisonDiff::SCHEMA_VERSION - 1);
   assert_eq!(fixture.write_diffs(), DROPPED);
   assert!(!fixture.diff_path().exists());
 }

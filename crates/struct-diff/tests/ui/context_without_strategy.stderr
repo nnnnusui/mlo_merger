@@ -1,0 +1,5 @@
+error: `context` requires `nested` or `with`
+ --> tests/ui/context_without_strategy.rs:3:10
+  |
+3 |   #[diff(context = 1.0)]
+  |          ^^^^^^^

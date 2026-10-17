@@ -1,0 +1,5 @@
+error: `Diff` can only be derived for structs with named fields
+ --> tests/ui/enum.rs:2:1
+  |
+2 | enum Shape {
+  | ^^^^

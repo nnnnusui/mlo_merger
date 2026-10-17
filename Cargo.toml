@@ -4,6 +4,9 @@ version = "1.2.0"
 edition = "2024"
 default-run = "mlo_merger"
 
+[workspace]
+members = ["crates/struct-diff", "crates/struct-diff-derive"]
+
 [features]
 typescript = ["dep:specta"]
 
@@ -23,6 +26,7 @@ serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
 sha2 = "0.11.1"
 specta = { version = "1.0.5", optional = true, features = ["export"] }
+struct-diff = { path = "crates/struct-diff" }
 structdiff = { version = "0.7.3", features = ["debug_diffs", "serde"] }
 tracing = "0.1"
 tracing-appender = "0.2"

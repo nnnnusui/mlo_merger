@@ -89,7 +89,7 @@ fn prop_instances_and_the_imap_link_compare_by_name() {
     json!({
       "instanced_data": {
         "imap_link": "other_link",
-        "prop_instances": [
+        "prop_instance_list": [
           { "Removed": { "index": 0 } },
           { "Added": { "index": 1, "item": "c" } },
         ],
@@ -105,13 +105,13 @@ fn grass_batches_compare_instances_in_world_space() {
   let mut modded = with_grass(vec![batch(5.0, 40.0, &[10.0, 20.0, 30.0, 25.0])]);
   modded.instanced_data.grass_instance_list[0].instances[1].scale = 2;
   let diffs = json(&vanilla, &modded);
-  let changes = &diffs["instanced_data"]["grass_batches"][0]["Modified"]["changes"];
+  let changes = &diffs["instanced_data"]["grass_instance_list"][0]["Modified"]["changes"];
   assert_eq!(changes["batch_aabb"], serde_json::to_value(bounds(5.0, 40.0)).unwrap());
   assert_eq!(changes.get("removed_instances"), None);
   assert_eq!(changes["added_instances"][0]["index"], json!(3));
   assert_eq!(changes["modified_instances"][0]["vanilla_index"], json!(1));
   assert_eq!(changes["modified_instances"][0]["changes"], json!({ "scale": 2 }));
-  assert_eq!(diffs["instanced_data"]["grass_batches"].as_array().unwrap().len(), 1);
+  assert_eq!(diffs["instanced_data"]["grass_instance_list"].as_array().unwrap().len(), 1);
 }
 
 #[test]
@@ -119,7 +119,7 @@ fn repainted_grass_pairs_batches_by_overlapping_bounds() {
   let vanilla = with_grass(vec![batch(0.0, 100.0, &[10.0, 20.0])]);
   let modded = with_grass(vec![batch(500.0, 600.0, &[550.0]), batch(5.0, 95.0, &[60.0])]);
   assert_eq!(
-    json(&vanilla, &modded)["instanced_data"]["grass_batches"]
+    json(&vanilla, &modded)["instanced_data"]["grass_instance_list"]
       .as_array()
       .unwrap()
       .iter()
@@ -128,7 +128,7 @@ fn repainted_grass_pairs_batches_by_overlapping_bounds() {
     vec!["Modified", "Added"]
   );
   let diffs = diff(&vanilla, &modded);
-  let grass = &diffs.instanced_data.unwrap().grass_batches;
+  let grass = &diffs.instanced_data.unwrap().grass_instance_list.unwrap();
   assert!(matches!(
     &grass[0],
     crate::core::format::ymap::compare::YmapGrassBatchDiff::Modified { vanilla_index: 0, modded_index: 1, changes }
@@ -154,8 +154,10 @@ fn grass(
   vanilla: &Ymap,
   modded: &Ymap,
 ) -> Vec<YmapGrassBatchDiff> {
-  instanced_data_diff(vanilla, modded, &MatchTolerances::default())
-    .map(|diff| diff.grass_batches)
+  vanilla
+    .instanced_data
+    .diff(&modded.instanced_data, &MatchTolerances::default())
+    .and_then(|diff| diff.grass_instance_list)
     .unwrap_or_default()
 }
 
@@ -232,15 +234,16 @@ fn reports_attribute_changes_and_whole_batches() {
     with_grass(vec![batch(0.0, 100.0, &[10.0, 25.0, 30.0]), batch(400.0, 500.0, &[450.0])]);
   modded.instanced_data.grass_instance_list[0].instances[0].scale = 2;
   modded.instanced_data.prop_instance_list = vec!["prop".into()];
-  let diff = instanced_data_diff(&vanilla, &modded, &MatchTolerances::default()).unwrap();
+  let diff =
+    vanilla.instanced_data.diff(&modded.instanced_data, &MatchTolerances::default()).unwrap();
   assert_eq!(
-    diff.prop_instances,
+    diff.prop_instance_list.unwrap(),
     vec![YmapPropInstanceDiff::Added {
       index: 0,
       item: "prop".into(),
     }]
   );
-  let diffs = diff.grass_batches;
+  let diffs = diff.grass_instance_list.unwrap();
   assert_eq!(diffs.len(), 3, "{diffs:?}");
   let YmapGrassBatchDiff::Modified {
     vanilla_index: 0,
