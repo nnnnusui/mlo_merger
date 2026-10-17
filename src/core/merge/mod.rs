@@ -4,7 +4,6 @@ mod incremental;
 pub mod merge;
 pub mod run;
 pub mod ybn_conflicts;
-mod ymap_parent_cache;
 mod ymap_parent_refs;
 
 pub use cache_inputs::VanillaHistory;

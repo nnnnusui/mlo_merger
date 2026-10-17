@@ -13,10 +13,10 @@ fn bounds_filter_uses_inclusive_sphere_aabb_intersection() {
 
 use crate::core::format::{
   stream_file::StreamFile,
+  xml::{XmlValueAttr, position::XmlPositionAttr, rotation::XmlRotation},
   ymap::{
     binary::ymap_to_model,
     model::{Ymap, YmapEntity},
-    xml::XmlYmapEntity,
   },
 };
 use globset::{GlobBuilder, GlobMatcher};
@@ -228,7 +228,74 @@ struct EntityData {
   #[serde(rename = "@found")]
   found: bool,
   #[serde(rename = "Item")]
-  entities: Vec<XmlYmapEntity>,
+  entities: Vec<FoundEntity>,
+}
+
+/// An entity as CodeWalker writes `CEntityDef` items, without extensions.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct FoundEntity {
+  #[serde(rename = "@type")]
+  entity_type: String,
+  archetype_name: String,
+  flags: XmlValueAttr<u32>,
+  guid: XmlValueAttr<u32>,
+  position: XmlPositionAttr,
+  rotation: XmlRotation,
+  scale_x_y: XmlValueAttr<f32>,
+  scale_z: XmlValueAttr<f32>,
+  parent_index: XmlValueAttr<i32>,
+  lod_dist: XmlValueAttr<f32>,
+  child_lod_dist: XmlValueAttr<f32>,
+  lod_level: String,
+  num_children: XmlValueAttr<u32>,
+  priority_level: String,
+  extensions: Option<()>,
+  ambient_occlusion_multiplier: XmlValueAttr<u8>,
+  artificial_ambient_occlusion: XmlValueAttr<u8>,
+  tint_value: XmlValueAttr<u32>,
+}
+
+impl From<YmapEntity> for FoundEntity {
+  fn from(entity: YmapEntity) -> Self {
+    let value = |value| XmlValueAttr {
+      value,
+    };
+    Self {
+      entity_type: entity.entity_type,
+      archetype_name: entity.archetype_name,
+      flags: value(entity.flags),
+      guid: value(entity.guid),
+      position: entity.position.into(),
+      rotation: entity.rotation.into(),
+      scale_x_y: XmlValueAttr {
+        value: entity.scale_x_y,
+      },
+      scale_z: XmlValueAttr {
+        value: entity.scale_z,
+      },
+      parent_index: XmlValueAttr {
+        value: entity.parent_index,
+      },
+      lod_dist: XmlValueAttr {
+        value: entity.lod_dist,
+      },
+      child_lod_dist: XmlValueAttr {
+        value: entity.child_lod_dist,
+      },
+      lod_level: entity.lod_level,
+      num_children: value(entity.num_children),
+      priority_level: entity.priority_level,
+      extensions: None,
+      ambient_occlusion_multiplier: XmlValueAttr {
+        value: entity.ambient_occlusion_multiplier,
+      },
+      artificial_ambient_occlusion: XmlValueAttr {
+        value: entity.artificial_ambient_occlusion,
+      },
+      tint_value: value(entity.tint_value),
+    }
+  }
 }
 
 impl FindEntityGuid {
@@ -564,7 +631,7 @@ fn entity_data(
   let entities = entities
     .into_iter()
     .filter(|entity| query.contains(entity))
-    .map(XmlYmapEntity::from)
+    .map(FoundEntity::from)
     .collect::<Vec<_>>();
   EntityData {
     stage,
@@ -585,11 +652,8 @@ mod tests {
   #[test]
   fn entity_position_search_includes_the_3d_boundary_and_all_occurrences() {
     use crate::common::position::Position;
-    let xml: crate::core::format::ymap::xml::XmlYmap = quick_xml::de::from_str(include_str!(
-      concat!(env!("CARGO_MANIFEST_DIR"), "/docs/sample/parent_refs/vanilla_parent.ymap.xml")
-    ))
-    .unwrap();
-    let model: crate::core::format::ymap::model::Ymap = xml.into();
+    let model: crate::core::format::ymap::model::Ymap =
+      crate::core::format::gamefile::test_support::sample_ymap("parent_refs/vanilla_parent.ymap");
     let sample = model.entities.first().unwrap();
     let positions = [
       [3.5, 4.2, 0.0],
@@ -680,11 +744,8 @@ mod tests {
 
   #[test]
   fn entity_guid_xml_keeps_unsigned_guids_duplicates_and_stage_context() {
-    let xml: crate::core::format::ymap::xml::XmlYmap = quick_xml::de::from_str(include_str!(
-      concat!(env!("CARGO_MANIFEST_DIR"), "/docs/sample/parent_refs/vanilla_parent.ymap.xml")
-    ))
-    .unwrap();
-    let model: crate::core::format::ymap::model::Ymap = xml.into();
+    let model: crate::core::format::ymap::model::Ymap =
+      crate::core::format::gamefile::test_support::sample_ymap("parent_refs/vanilla_parent.ymap");
     let mut entity = model.entities.first().unwrap().clone();
     entity.guid = 2443198849;
     let data = entity_data(

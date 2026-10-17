@@ -131,11 +131,8 @@ mod tests {
   use super::*;
   #[test]
   fn duplicate_report_keeps_original_guids_and_deletion_decisions() {
-    let xml: crate::core::format::ymap::xml::XmlYmap = quick_xml::de::from_str(include_str!(
-      concat!(env!("CARGO_MANIFEST_DIR"), "/docs/sample/parent_refs/vanilla_parent.ymap.xml")
-    ))
-    .unwrap();
-    let model: crate::core::format::ymap::model::Ymap = xml.into();
+    let model: crate::core::format::ymap::model::Ymap =
+      crate::core::format::gamefile::test_support::sample_ymap("parent_refs/vanilla_parent.ymap");
     let mut entity = model.entities.first().unwrap().clone();
     let guid = entity.guid;
     entity.guid = 1;

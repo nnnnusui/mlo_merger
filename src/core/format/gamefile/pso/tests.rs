@@ -14,23 +14,20 @@ fn parses_four_vanilla_pso_ymaps() {
     assert!(xml.contains("<CMapData>"));
     assert!(xml.contains(&format!("<name>{name}</name>")));
     assert!(!xml.contains("<error"));
-    let model = crate::core::format::ymap::binary::ymap_to_model(&bytes, &HashMap::new()).unwrap();
-    let expected: crate::core::format::ymap::model::Ymap =
-      quick_xml::de::from_str::<crate::core::format::ymap::xml::XmlYmap>(&xml).unwrap().into();
-    assert_eq!(model, expected);
-    let ordered_entities =
-      crate::core::format::ymap::binary::ymap_to_model(&bytes, &HashMap::new()).unwrap().entities;
-    let parsed: crate::core::format::ymap::xml::XmlYmap = quick_xml::de::from_str(&xml).unwrap();
-    let expected_entities: Vec<crate::core::format::ymap::model::YmapEntity> =
-      parsed.entities.items.into_iter().map(Into::into).collect();
-    assert_eq!(ordered_entities, expected_entities);
+    let expected =
+      crate::core::format::ymap::binary::ymap_to_model(&bytes, &HashMap::new()).unwrap();
     assert_eq!(crate::core::vanilla::read_ymap(&path).unwrap(), expected);
     assert_eq!(
       crate::core::vanilla_cache::ymap_parent_hash(&path).unwrap(),
       crate::core::format::ymap::reference_hash(&expected.parent),
     );
+    // The XML export rebuilds the same file, and so the same model.
     let rebuilt = resource.rebuild_xml(&xml).unwrap();
     assert_eq!(PsoResource::parse(&rebuilt).unwrap().to_xml(&HashMap::new()).unwrap(), xml);
+    assert_eq!(
+      crate::core::format::ymap::binary::ymap_to_model(&rebuilt, &HashMap::new()).unwrap(),
+      expected
+    );
   }
 }
 

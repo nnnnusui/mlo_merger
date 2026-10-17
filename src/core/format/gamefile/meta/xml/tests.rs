@@ -85,12 +85,19 @@ fn decodes_ymap_binary_directly_into_the_typed_model() {
   assert_eq!(model.content_flags, 11);
   assert!(model.entities.is_empty());
   assert_eq!(model.block.name, "");
-  let xml = MetaResource::parse(&Rsc7Resource::decode(&bytes).unwrap())
-    .unwrap()
-    .to_xml(&HashMap::new())
-    .unwrap();
-  let xml_model: crate::core::format::ymap::model::Ymap =
-    quick_xml::de::from_str::<crate::core::format::ymap::xml::XmlYmap>(&xml).unwrap().into();
+  // The XML export rebuilds the same model.
+  let parsed = MetaResource::parse(&Rsc7Resource::decode(&bytes).unwrap()).unwrap();
+  let xml = parsed.to_xml(&HashMap::new()).unwrap();
+  let mut catalog = crate::core::format::gamefile::meta::MetaSchemaCatalog::default();
+  catalog.add_resource(&parsed);
+  let rebuilt = crate::core::format::stream_file::StreamFile::encode_xml(
+    crate::core::format::stream_file::FileType::Ymap,
+    &xml,
+    &catalog,
+  )
+  .unwrap();
+  let xml_model =
+    crate::core::format::ymap::binary::ymap_to_model(&rebuilt, &HashMap::new()).unwrap();
   assert_eq!(model, xml_model);
 }
 

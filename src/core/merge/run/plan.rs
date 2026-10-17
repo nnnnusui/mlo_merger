@@ -59,10 +59,10 @@ mod tests {
   #[test]
   fn final_ymap_edit_detection_ignores_internal_keys_but_keeps_repairs() {
     let sample =
-      Path::new(env!("CARGO_MANIFEST_DIR")).join("docs/sample/parent_refs/vanilla_parent.ymap.xml");
+      Path::new(env!("CARGO_MANIFEST_DIR")).join("docs/sample/parent_refs/vanilla_parent.ymap");
     let original = Rc::new(OriginalMap::load(&sample).unwrap());
     let mut output = PlannedMap {
-      name: "parent.ymap.xml".into(),
+      name: "parent.ymap".into(),
       model: original.model.clone(),
       clone_entities: None,
       original: Rc::clone(&original),

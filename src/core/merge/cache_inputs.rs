@@ -57,25 +57,6 @@ impl VanillaHistory {
       .ok_or_else(|| format!("Latest vanilla cache has no {name}").into())
   }
 
-  /// Returns the YMAP basenames present in the latest cumulative cache stage.
-  pub fn ymap_names(&self) -> HashSet<String> {
-    self
-      .latest_files
-      .keys()
-      .filter(|name| name.to_ascii_lowercase().ends_with(".ymap"))
-      .map(|name| name.to_ascii_lowercase())
-      .collect()
-  }
-
-  pub(super) fn ymap_files(&self) -> Vec<(String, CachedFile)> {
-    self
-      .latest_files
-      .iter()
-      .filter(|(name, _)| name.to_ascii_lowercase().ends_with(".ymap"))
-      .map(|(name, file)| (name.clone(), file.clone()))
-      .collect()
-  }
-
   pub(super) fn candidate_files(
     &self,
     name: &str,
@@ -229,8 +210,6 @@ mod tests {
       ["0003-same-content", "0000-base"]
     );
     assert_eq!(history.latest_file("map.ymap").unwrap().sha256, "b");
-    assert_eq!(history.ymap_names().len(), 1);
-    assert!(history.ymap_names().contains("map.ymap"));
     fs::remove_dir_all(root).unwrap();
   }
 }

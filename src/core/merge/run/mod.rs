@@ -1,6 +1,4 @@
-use super::cache_inputs::VanillaHistory;
 use super::duplicates::{Change, Collector, Contribution, DuplicateReport};
-use crate::common::function::collect_files_with_suffix;
 use crate::core::config::blacklist::BlacklistConfig;
 use crate::core::format::ymap::compare::{
   EntityParent, EntityParents, YmapComparisonDiff, YmapDiffContext, YmapDiffFields, YmapEntityDiff,
@@ -10,12 +8,9 @@ use crate::core::format::ymap::model::YmapEntity;
 use crate::core::format::ymap::model::ymap::Ymap;
 use crate::core::format::ymap::reference_hash;
 use crate::core::format::ymap::relation::{EntityParentRef, entity_parent_ref};
-use crate::core::format::ymap::xml::XmlYmap;
-use crate::core::merge::{
-  ymap_parent_cache::VanillaParentCache,
-  ymap_parent_refs::{OriginalMap, ParentReferences, SourceMaps, patch_clone, runtime_entities},
+use crate::core::merge::ymap_parent_refs::{
+  OriginalMap, ParentReferences, SourceMaps, runtime_entities,
 };
-use serde::Serialize;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -28,26 +23,12 @@ pub type SourceYmap = (String, PathBuf, Option<PathBuf>);
 #[derive(Debug, Clone)]
 pub struct MergeYmap {
   pub vanilla_dir: PathBuf,
-  pub mod_dir: PathBuf,
-  pub mod_ymap_dir: PathBuf,
   pub output_dir: PathBuf,
   pub rebuild_all: bool,
   pub blacklist_config: Option<PathBuf>,
 }
 
 impl MergeYmap {
-  pub fn run(&self) -> Result<(), Box<dyn std::error::Error>> {
-    self.run_inner(None, None, None)
-  }
-
-  /// Version-aware YMAP merge API for the planned historical-baseline workflow.
-  pub fn run_with_vanilla_cache(
-    &self,
-    history: &VanillaHistory,
-  ) -> Result<(), Box<dyn std::error::Error>> {
-    self.run_inner(Some(history), None, None)
-  }
-
   /// Merges source maps against the supplied latest vanilla files and emits edited RSC7 binaries.
   ///
   /// Sources given with a source-cache diff document are merged through it, which must have been
@@ -55,9 +36,9 @@ impl MergeYmap {
   pub fn run_with_latest_vanilla_files(
     &self,
     vanilla_files: &[PathBuf],
-    source_files: Option<&[SourceYmap]>,
+    source_files: &[SourceYmap],
   ) -> Result<(), Box<dyn std::error::Error>> {
-    self.run_inner(None, Some(vanilla_files), source_files)
+    self.run_inner(vanilla_files, source_files)
   }
 }
 
@@ -66,7 +47,7 @@ mod inputs;
 mod output;
 mod plan;
 
-use inputs::{ModYmapReference, collect_modded_ymaps_map, latest_ymap_paths};
+use inputs::{ModYmapReference, latest_ymap_paths};
 use plan::PlannedMap;
 
 #[cfg(test)]

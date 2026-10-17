@@ -49,13 +49,11 @@ impl IncrementalMerge<'_> {
         .collect::<Vec<_>>();
       MergeYmap {
         vanilla_dir: self.vanilla_cache.join("latest/ymap"),
-        mod_dir: self.source_dir.to_path_buf(),
-        mod_ymap_dir: self.source_dir.to_path_buf(),
         output_dir: directory.clone(),
         rebuild_all: true,
         blacklist_config: None,
       }
-      .run_with_latest_vanilla_files(&vanilla, Some(&sources))?;
+      .run_with_latest_vanilla_files(&vanilla, &sources)?;
       let duplicate_path = directory.join(".duplicates.json");
       let duplicates: DuplicateReport =
         serde_json::from_reader(BufReader::new(fs::File::open(&duplicate_path)?))?;

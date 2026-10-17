@@ -85,12 +85,8 @@ fn the_configured_tolerance_widens_float_comparisons() {
 // Moved from `ymap_entity_diff.rs`: the diff function on its own.
 
 fn three_entities() -> Ymap {
-  let xml: XmlYmap = quick_xml::de::from_str(include_str!(concat!(
-    env!("CARGO_MANIFEST_DIR"),
-    "/docs/sample/parent_refs/vanilla_parent.ymap.xml"
-  )))
-  .unwrap();
-  let mut ymap: Ymap = xml.into();
+  let mut ymap: Ymap =
+    crate::core::format::gamefile::test_support::sample_ymap("parent_refs/vanilla_parent.ymap");
   let entity = ymap.entities[0].clone();
   ymap.entities = (0..3)
     .map(|guid| YmapEntity {

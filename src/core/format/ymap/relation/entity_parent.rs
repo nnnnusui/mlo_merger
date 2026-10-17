@@ -100,15 +100,9 @@ fn valid_local_pair(
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::core::format::ymap::xml::XmlYmap;
 
   fn sample_map() -> Ymap {
-    let xml: XmlYmap = quick_xml::de::from_str(include_str!(concat!(
-      env!("CARGO_MANIFEST_DIR"),
-      "/docs/sample/parent_refs/vanilla_parent.ymap.xml"
-    )))
-    .unwrap();
-    xml.into()
+    crate::core::format::gamefile::test_support::sample_ymap("parent_refs/vanilla_parent.ymap")
   }
 
   #[test]
@@ -133,26 +127,5 @@ mod tests {
     assert_eq!(entity_parent_ref(&child, &self_ymap, &parent_ymap), EntityParentRef::Parent(200));
     child.parent_index = -1;
     assert_eq!(entity_parent_ref(&child, &self_ymap, &parent_ymap), EntityParentRef::None);
-  }
-
-  #[test]
-  fn xml_model_roundtrip_preserves_duplicate_guid_occurrences() {
-    let mut ymap = sample_map();
-    let mut duplicate = ymap.entities[0].clone();
-    duplicate.position.x += 1.0;
-    let guid = duplicate.guid;
-    ymap.entities.push(duplicate);
-
-    let xml = crate::core::format::ymap::xml::XmlYmap::from(ymap.clone());
-    let serialized = quick_xml::se::to_string(&xml).unwrap();
-    let decoded: XmlYmap = quick_xml::de::from_str(&serialized).unwrap();
-    let roundtrip: Ymap = decoded.into();
-
-    assert_eq!(roundtrip.entities.len(), ymap.entities.len());
-    assert_eq!(roundtrip.entities.last().unwrap().guid, guid);
-    assert_eq!(
-      roundtrip.entities.last().unwrap().position.x,
-      ymap.entities.last().unwrap().position.x
-    );
   }
 }

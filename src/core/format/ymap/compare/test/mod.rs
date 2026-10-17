@@ -30,18 +30,12 @@ use crate::{
     format::ymap::{
       compare,
       model::{Ymap, YmapDistantLodLights, YmapEntity, YmapInstancedData},
-      xml::XmlYmap,
     },
   },
 };
 
 fn sample() -> Ymap {
-  let xml: XmlYmap = quick_xml::de::from_str(include_str!(concat!(
-    env!("CARGO_MANIFEST_DIR"),
-    "/docs/sample/parent_refs/vanilla_parent.ymap.xml"
-  )))
-  .unwrap();
-  xml.into()
+  crate::core::format::gamefile::test_support::sample_ymap("parent_refs/vanilla_parent.ymap")
 }
 
 /// A YMAP with every array cleared, so a test fills in only what it compares.

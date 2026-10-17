@@ -31,50 +31,14 @@ pub(super) fn entity(
   }
 }
 
+/// A map named `map` with `entities`, declaring the parent `external`.
 pub(super) fn original_map(entities: Vec<YmapEntity>) -> OriginalMap {
-  let mut parsed: XmlYmap = quick_xml::de::from_str(
-    r#"<CMapData>
-    <name>map</name><parent>external</parent><flags value="0"/><contentFlags value="0"/>
-    <streamingExtentsMin x="0" y="0" z="0"/><streamingExtentsMax x="0" y="0" z="0"/>
-    <entitiesExtentsMin x="0" y="0" z="0"/><entitiesExtentsMax x="0" y="0" z="0"/>
-    <block><version value="0"/><flags value="0"/><name>map</name><exportedBy>test</exportedBy><owner/><time/></block>
-  </CMapData>"#,
-  )
-  .unwrap();
-  parsed.entities.items = entities.iter().cloned().map(Into::into).collect();
-  let xml = quick_xml::se::to_string(&parsed).unwrap();
-  OriginalMap {
-    model: parsed.into(),
+  OriginalMap::from_model(Ymap {
+    name: "map".into(),
+    parent: "external".into(),
     entities,
-    xml,
-  }
-}
-
-#[test]
-fn clone_patch_preserves_original_order_duplicate_guids_and_payloads() {
-  let mut second = entity(0, "LODTYPES_DEPTH_HD", 198);
-  second.position.x = 10.0;
-  let mut original = original_map(vec![entity(0, "LODTYPES_DEPTH_HD", 198), second]);
-  original.xml = original.xml.replacen(
-    "<extensions/>",
-    "<extensions><Item type=\"test\"><payload>keep</payload></Item></extensions>",
-    1,
-  );
-  let mut entities = original.entities.clone();
-  entities[0].parent_index = 202;
-  entities[0].flags = 8;
-  entities[1].parent_index = -1;
-  entities[1].lod_level = "LODTYPES_DEPTH_ORPHANHD".into();
-  entities[1].num_children = 3;
-  let patched = patch_clone(&original, &entities).unwrap();
-  assert!(patched.contains("<payload>keep</payload>"));
-  let parsed: XmlYmap = quick_xml::de::from_str(&patched).unwrap();
-  let actual = parsed.entities.items.into_iter().map(YmapEntity::from).collect::<Vec<_>>();
-  assert_eq!(actual, entities);
-  assert_eq!(
-    actual.iter().filter(|entity| entity.guid == 0).count(),
-    original.entities.iter().filter(|entity| entity.guid == 0).count()
-  );
+    ..crate::core::format::gamefile::test_support::sample_ymap("parent_refs/vanilla_parent.ymap")
+  })
 }
 
 #[test]
@@ -112,7 +76,7 @@ fn indistinguishable_duplicates_receive_stable_occurrence_ids() {
 }
 
 #[test]
-fn mixed_mlo_arrays_resolve_runtime_indices_without_reordering_clone_xml() {
+fn mixed_mlo_arrays_resolve_runtime_indices_without_reordering_entities() {
   let mut mlo = entity(99, "LODTYPES_DEPTH_HD", -1);
   mlo.entity_type = "CMloInstanceDef".into();
   let original = original_map(vec![
@@ -148,8 +112,7 @@ fn validate_asset_ymap_readability() {
     match entry {
       Ok(entry) if entry.file_type().is_file() => {
         let name = entry.file_name().to_string_lossy().to_ascii_lowercase();
-        if name.ends_with(".ymap") || name.ends_with(".ymap.xml") || name.ends_with(".ymap.pso.xml")
-        {
+        if name.ends_with(".ymap") {
           paths.push(entry.into_path());
         }
       }
@@ -161,31 +124,27 @@ fn validate_asset_ymap_readability() {
   }
   paths.sort();
   let mut counts = std::collections::BTreeMap::<String, [usize; 2]>::new();
-  let mut results = HashMap::<(bool, [u8; 32]), Result<(), String>>::new();
+  let mut results = HashMap::<[u8; 32], Result<(), String>>::new();
   let mut passed = 0;
   for (index, path) in paths.iter().enumerate() {
-    let raw = path.extension().is_some_and(|extension| extension.eq_ignore_ascii_case("ymap"));
     let group = path.strip_prefix(&root).unwrap().components().next().unwrap();
-    let key =
-      format!("{}:{}", group.as_os_str().to_string_lossy(), if raw { "binary" } else { "xml" });
+    let key = group.as_os_str().to_string_lossy().into_owned();
     let result = std::fs::read(path).map_err(|error| error.to_string()).and_then(|bytes| {
       use sha2::Digest;
-      let key = (raw, sha2::Sha256::digest(&bytes).into());
+      let key: [u8; 32] = sha2::Sha256::digest(&bytes).into();
       results
         .entry(key)
         .or_insert_with(|| {
-          std::panic::catch_unwind(|| {
-            if raw { OriginalMap::load_raw(path) } else { OriginalMap::load(path) }
-          })
-          .map_err(|payload| {
-            let message = payload
-              .downcast_ref::<String>()
-              .map(String::as_str)
-              .or_else(|| payload.downcast_ref::<&str>().copied())
-              .unwrap_or("unknown panic");
-            format!("loader panicked: {message}")
-          })
-          .and_then(|result| result.map(|_| ()).map_err(|error| error.to_string()))
+          std::panic::catch_unwind(|| OriginalMap::load(path))
+            .map_err(|payload| {
+              let message = payload
+                .downcast_ref::<String>()
+                .map(String::as_str)
+                .or_else(|| payload.downcast_ref::<&str>().copied())
+                .unwrap_or("unknown panic");
+              format!("loader panicked: {message}")
+            })
+            .and_then(|result| result.map(|_| ()).map_err(|error| error.to_string()))
         })
         .clone()
     });
@@ -197,7 +156,7 @@ fn validate_asset_ymap_readability() {
         totals[1] += 1;
         failures.push(serde_json::json!({
           "path": path, "error": error.to_string(),
-          "kind": if raw { "binary" } else { "xml" }
+          "kind": "binary"
         }));
       }
     }

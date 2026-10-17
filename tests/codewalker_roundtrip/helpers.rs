@@ -4,43 +4,35 @@ pub(super) fn sample_parent_refs_dir() -> std::path::PathBuf {
   Path::new(env!("CARGO_MANIFEST_DIR")).join("docs/sample/parent_refs")
 }
 
-pub(super) fn local_ymap_schema_catalog(base: &Path) -> MetaSchemaCatalog {
-  let mut catalog = MetaSchemaCatalog::default();
-  for entry in ["asset/extracted", "asset/vanilla-cache/latest/ymap"]
-    .into_iter()
-    .flat_map(|directory| walkdir::WalkDir::new(base.join(directory)))
-  {
-    let Ok(entry) = entry else {
-      continue;
-    };
-    if !entry.path().is_file()
-      || entry.path().extension().is_none_or(|extension| extension != "ymap")
-    {
-      continue;
-    }
-    let Ok(bytes) = std::fs::read(entry.path()) else {
-      continue;
-    };
-    let Ok(resource) = Rsc7Resource::decode(&bytes) else {
-      continue;
-    };
-    if let Ok(meta) = MetaResource::parse(&resource) {
-      catalog.add_resource(&meta);
-    }
-  }
-  catalog
+/// Reads a YMAP binary into the model, leaving names unresolved.
+pub(super) fn read_ymap(path: &Path) -> Ymap {
+  ymap_to_model(&std::fs::read(path).unwrap(), &Default::default()).unwrap()
+}
+
+/// Rebuilds the YMAP binary at `input` through CodeWalker's XML and reads the result.
+pub(super) fn codewalker_rebuild(
+  codewalker: &CodeWalker,
+  input: &Path,
+  temp_dir: &Path,
+  name: &str,
+) -> Ymap {
+  let xml = temp_dir.join(format!("{name}.dll.ymap.xml"));
+  let binary = temp_dir.join(format!("{name}.dll.ymap"));
+  codewalker.ymap_to_xml(input, &xml).unwrap();
+  codewalker.xml_to_ymap(&xml, &binary).unwrap();
+  read_ymap(&binary)
 }
 
 pub(super) fn assert_sample_entity_refs(
-  expected: &XmlYmap,
-  actual: &XmlYmap,
+  expected: &Ymap,
+  actual: &Ymap,
   label: &str,
 ) {
-  assert_eq!(actual.entities.items.len(), expected.entities.items.len(), "entity count: {label}");
-  for (expected, actual) in expected.entities.items.iter().zip(&actual.entities.items) {
-    assert_eq!(actual.guid.value, expected.guid.value, "entity GUID: {label}");
-    assert_eq!(actual.parent_index.value, expected.parent_index.value, "parentIndex: {label}");
-    assert_eq!(actual.flags.value & 8, expected.flags.value & 8, "external-parent flag: {label}");
+  assert_eq!(actual.entities.len(), expected.entities.len(), "entity count: {label}");
+  for (expected, actual) in expected.entities.iter().zip(&actual.entities) {
+    assert_eq!(actual.guid, expected.guid, "entity GUID: {label}");
+    assert_eq!(actual.parent_index, expected.parent_index, "parentIndex: {label}");
+    assert_eq!(actual.flags & 8, expected.flags & 8, "external-parent flag: {label}");
   }
 }
 

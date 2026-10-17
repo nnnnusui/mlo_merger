@@ -58,12 +58,8 @@ fn typed_structure_writes_numeric_fields_without_xml() {
 #[test]
 fn direct_ymap_binary_preserves_order_and_duplicate_entity_guids() {
   use crate::core::format::gamefile::rsc7::Rsc7Resource;
-  let xml: super::super::xml::XmlYmap = quick_xml::de::from_str(include_str!(concat!(
-    env!("CARGO_MANIFEST_DIR"),
-    "/docs/sample/parent_refs/vanilla_parent.ymap.xml"
-  )))
-  .unwrap();
-  let model: Ymap = xml.into();
+  let model: Ymap =
+    crate::core::format::gamefile::test_support::sample_ymap("parent_refs/vanilla_parent.ymap");
   let mut entities = model.entities.clone();
   entities.reverse();
   entities.push(entities[0].clone());

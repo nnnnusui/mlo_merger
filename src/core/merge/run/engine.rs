@@ -3,25 +3,23 @@ use super::*;
 impl MergeYmap {
   pub(super) fn run_inner(
     &self,
-    history: Option<&VanillaHistory>,
-    latest_files: Option<&[PathBuf]>,
-    raw_sources: Option<&[SourceYmap]>,
+    latest_files: &[PathBuf],
+    raw_sources: &[SourceYmap],
   ) -> Result<(), Box<dyn std::error::Error>> {
     crate::core::config::matching::with_config(|| {
-      self.run_configured_inner(history, latest_files, raw_sources)
+      self.run_configured_inner(latest_files, raw_sources)
     })?
   }
 
   fn run_configured_inner(
     &self,
-    history: Option<&VanillaHistory>,
-    latest_files: Option<&[PathBuf]>,
-    raw_sources: Option<&[SourceYmap]>,
+    latest_files: &[PathBuf],
+    raw_sources: &[SourceYmap],
   ) -> Result<(), Box<dyn std::error::Error>> {
     tracing::info!(
-      "Merging YMAP files from {} and {} into {}",
+      "Merging {} source YMAP files against {} into {}",
+      raw_sources.len(),
       self.vanilla_dir.display(),
-      self.mod_dir.display(),
       self.output_dir.display()
     );
 
@@ -37,18 +35,13 @@ impl MergeYmap {
     };
     let tolerances = crate::core::config::matching::current();
 
-    let vanilla = if history.is_none() && latest_files.is_none() {
-      Some(VanillaParentCache::update(&self.vanilla_dir)?.0)
-    } else {
-      None
-    };
-    let binary_catalog = if let Some(files) = latest_files {
+    let catalog = {
       use crate::core::format::gamefile::{
         meta::{MetaResource, MetaSchemaCatalog},
         rsc7::Rsc7Resource,
       };
       let mut catalog = MetaSchemaCatalog::default();
-      for path in files.iter().chain(raw_sources.into_iter().flatten().map(|(_, path, _)| path)) {
+      for path in latest_files.iter().chain(raw_sources.iter().map(|(_, path, _)| path)) {
         let bytes = fs::read(path)?;
         if let Ok(resource) = Rsc7Resource::decode(&bytes)
           && let Ok(meta) = MetaResource::parse(&resource)
@@ -56,30 +49,22 @@ impl MergeYmap {
           catalog.add_resource(&meta);
         }
       }
-      Some(catalog)
-    } else {
-      None
+      catalog
     };
-    let mut modded_ymaps_map = if let Some(sources) = raw_sources {
-      let mut maps = BTreeMap::<String, Vec<ModYmapReference>>::new();
-      for (resource, path, diff_path) in sources {
-        let name = path
-          .file_name()
-          .and_then(|name| name.to_str())
-          .ok_or("Source YMAP filename is not UTF-8")?;
-        let reference = ModYmapReference {
-          mod_name: resource.clone(),
-          ymap_name: name.to_string(),
-          mod_ymap_path: path.clone(),
-          diff_path: diff_path.clone(),
-        };
-        maps.entry(format!("{name}.xml")).or_default().push(reference);
-      }
-      maps
-    } else {
-      collect_modded_ymaps_map(&self.mod_dir)?
-    };
-    let vanilla_map_paths = latest_files.map(latest_ymap_paths);
+    let mut modded_ymaps_map = BTreeMap::<String, Vec<ModYmapReference>>::new();
+    for (resource, path, diff_path) in raw_sources {
+      let name = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or("Source YMAP filename is not UTF-8")?;
+      modded_ymaps_map.entry(name.to_string()).or_default().push(ModYmapReference {
+        mod_name: resource.clone(),
+        ymap_name: name.to_string(),
+        mod_ymap_path: path.clone(),
+        diff_path: diff_path.clone(),
+      });
+    }
+    let vanilla_map_paths = latest_ymap_paths(latest_files);
     let mut registered_maps = HashSet::new();
     modded_ymaps_map.retain(|_, references| {
       references.retain(|reference| {
@@ -100,7 +85,7 @@ impl MergeYmap {
           return false;
         };
         let hash = reference_hash(name);
-        if vanilla_map_paths.as_ref().is_some_and(|paths| !paths.contains_key(&hash)) {
+        if !vanilla_map_paths.contains_key(&hash) {
           tracing::warn!(
             "Latest vanilla YMAP {name}.ymap is missing for resource {}; skipping {}",
             reference.mod_name,
@@ -123,52 +108,24 @@ impl MergeYmap {
     tracing::info!("Found {} unique YMAP files across mods", modded_ymaps_map.len());
 
     let mut sources = SourceMaps::default();
-    let vanilla_count = if let Some(history) = history {
-      let files = history.ymap_files();
-      for (name, file) in &files {
-        sources.register_raw(None, name, history.raw_path(file)?)?;
-      }
-      files.len()
-    } else if let Some(files) = latest_files {
-      for path in files {
-        let name = path.file_name().ok_or("Vanilla YMAP filename missing")?;
-        let name = name.to_str().ok_or("non-UTF8 vanilla filename")?;
-        sources.register_raw(None, name, path.clone())?;
-      }
-      files.len()
-    } else {
-      let files = vanilla
-        .as_ref()
-        .expect("legacy merge loads the XML parent cache")
-        .paths(&self.vanilla_dir)
-        .collect::<Vec<_>>();
-      for path in &files {
-        let name = path.file_name().unwrap().to_str().ok_or("non-UTF8 vanilla filename")?;
-        sources.register(None, name, path.clone())?;
-      }
-      files.len()
-    };
-    tracing::info!("Registered {vanilla_count} vanilla YMAP files for merge");
+    for path in latest_files {
+      let name = path.file_name().ok_or("Vanilla YMAP filename missing")?;
+      let name = name.to_str().ok_or("non-UTF8 vanilla filename")?;
+      sources.register(None, name, path.clone())?;
+    }
+    tracing::info!("Registered {} vanilla YMAP files for merge", latest_files.len());
     for references in modded_ymaps_map.values() {
       for reference in references {
-        if raw_sources.is_some() {
-          sources.register_raw(
-            Some(&reference.mod_name),
-            &reference.ymap_name,
-            reference.mod_ymap_path.clone(),
-          )?;
-        } else {
-          sources.register(
-            Some(&reference.mod_name),
-            &reference.ymap_name,
-            reference.mod_ymap_path.clone(),
-          )?;
-        }
+        sources.register(
+          Some(&reference.mod_name),
+          &reference.ymap_name,
+          reference.mod_ymap_path.clone(),
+        )?;
       }
     }
     let mut references = ParentReferences::default();
     for (name, versions) in &modded_ymaps_map {
-      let hash = reference_hash(name.trim_end_matches(".ymap.xml"));
+      let hash = reference_hash(name.trim_end_matches(".ymap"));
       if let Some(original) = sources.get(None, hash)? {
         references.register_entities(hash, &original.entities);
       }
@@ -181,13 +138,10 @@ impl MergeYmap {
     let mut planned = BTreeMap::<u32, PlannedMap>::new();
     let mut duplicate_files = BTreeMap::new();
     for (ymap_name, mod_refs) in &modded_ymaps_map {
-      let hash = reference_hash(ymap_name.trim_end_matches(".ymap.xml"));
-      let vanilla_ymap_path = vanilla_map_paths
-        .as_ref()
-        .and_then(|paths| paths.get(&hash))
-        .cloned()
-        .unwrap_or_else(|| self.vanilla_dir.join(ymap_name));
-      if history.is_none() && !self.rebuild_all && mod_refs.len() <= 1 {
+      let hash = reference_hash(ymap_name.trim_end_matches(".ymap"));
+      let vanilla_ymap_path =
+        vanilla_map_paths.get(&hash).cloned().unwrap_or_else(|| self.vanilla_dir.join(ymap_name));
+      if !self.rebuild_all && mod_refs.len() <= 1 {
         let mod_ref = mod_refs.first().unwrap();
         tracing::info!("Processing YMAP: {}", vanilla_ymap_path.display());
         tracing::info!("  Mod: {} ({})", mod_ref.mod_name, mod_ref.mod_ymap_path.display());
@@ -310,7 +264,7 @@ impl MergeYmap {
 
       let duplicates = duplicates.finish();
       if !duplicates.is_empty() {
-        duplicate_files.insert(ymap_name.trim_end_matches(".xml").to_ascii_lowercase(), duplicates);
+        duplicate_files.insert(ymap_name.to_ascii_lowercase(), duplicates);
       }
       let merged_diff = merge_diffs(vanilla_ymap, &ymap_diffs, blacklist.as_ref());
       let failed =
@@ -346,38 +300,18 @@ impl MergeYmap {
         }
       }
     }
-    let vanilla_children = if let Some(history) = history {
-      let mut children = Vec::new();
-      for name in history.ymap_names() {
-        let hash = reference_hash(name.trim_end_matches(".ymap"));
-        let Some(original) = sources.get(None, hash)? else {
-          continue;
-        };
-        if changed_layouts.contains(&reference_hash(&original.model.parent)) {
-          children.push((hash, PathBuf::from(name)));
-        }
+    let mut vanilla_children = Vec::new();
+    for path in latest_files {
+      let name = path.file_name().ok_or("Vanilla YMAP filename missing")?;
+      let name = name.to_str().ok_or("non-UTF8 vanilla filename")?;
+      let hash = reference_hash(name.trim_end_matches(".ymap"));
+      let Some(original) = sources.get(None, hash)? else {
+        continue;
+      };
+      if changed_layouts.contains(&reference_hash(&original.model.parent)) {
+        vanilla_children.push((hash, PathBuf::from(name)));
       }
-      children
-    } else if let Some(files) = latest_files {
-      let mut children = Vec::new();
-      for path in files {
-        let name = path.file_name().ok_or("Vanilla YMAP filename missing")?;
-        let name = name.to_str().ok_or("non-UTF8 vanilla filename")?;
-        let hash = reference_hash(name.trim_end_matches(".ymap"));
-        let Some(original) = sources.get(None, hash)? else {
-          continue;
-        };
-        if changed_layouts.contains(&reference_hash(&original.model.parent)) {
-          children.push((hash, PathBuf::from(name)));
-        }
-      }
-      children
-    } else {
-      vanilla
-        .as_ref()
-        .expect("legacy merge loads the XML parent cache")
-        .children(&self.vanilla_dir, &changed_layouts)
-    };
+    }
     for (hash, path) in vanilla_children {
       if planned.contains_key(&hash) {
         continue;
@@ -515,7 +449,7 @@ impl MergeYmap {
     tracing::info!(
       "Repaired parent references; promoted {repaired} clone/vanilla child YMAPs for rebuild"
     );
-    self.write_outputs(planned, binary_catalog.as_ref())?;
+    self.write_outputs(planned, &catalog)?;
 
     crate::core::vanilla::write_json(
       &self.output_dir.join(".duplicates.json"),

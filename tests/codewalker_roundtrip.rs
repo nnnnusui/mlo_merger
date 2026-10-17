@@ -19,7 +19,7 @@ use mlo_merger::core::format::gamefile::{
   rsc7::Rsc7Resource,
 };
 use mlo_merger::core::format::stream_file::{FileType, StreamFile};
-use mlo_merger::core::format::ymap::xml::XmlYmap;
+use mlo_merger::core::format::ymap::{binary::ymap_to_model, model::ymap::Ymap};
 use mlo_merger::core::merge::{run::MergeYmap, ybn_conflicts::MergeYbnConflicts};
 
 #[path = "codewalker_roundtrip/archive.rs"]

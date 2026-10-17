@@ -1,77 +1,47 @@
 use super::*;
 use crate::core::format::stream_file::StreamFile;
 
-/// Original model, entity order, and optional XML retained for legacy clone patching.
+/// Original model and entity order.
 pub(in crate::core::merge) struct OriginalMap {
   pub(in crate::core::merge) model: Ymap,
   pub(in crate::core::merge) entities: Vec<YmapEntity>,
-  pub(in crate::core::merge) xml: String,
 }
 
 impl OriginalMap {
-  /// Loads without losing duplicate GUID entries from the original entity array.
+  /// Loads a native YMAP without losing duplicate GUID entries from its entity array.
   pub(in crate::core::merge) fn load(path: &Path) -> io::Result<Self> {
-    let xml = std::fs::read_to_string(path)?;
-    Self::from_xml(xml).map_err(|error| invalid(&format!("{}: {error}", path.display())))
-  }
-
-  pub(in crate::core::merge) fn load_raw(path: &Path) -> io::Result<Self> {
     let StreamFile::Ymap(model) = StreamFile::read(path, &HashMap::new())
       .map_err(|error| invalid(&format!("{}: {error}", path.display())))?
     else {
       return Err(invalid(&format!("{}: not a YMAP", path.display())));
     };
-    let entities = model.entities.clone();
-    Ok(Self {
-      model,
-      entities,
-      xml: String::new(),
-    })
+    Ok(Self::from_model(model))
   }
 
-  pub(in crate::core::merge) fn from_xml(xml: String) -> io::Result<Self> {
-    let mut parsed: XmlYmap =
-      quick_xml::de::from_str(&xml).map_err(|error| invalid(&error.to_string()))?;
-    if let Some(error) =
-      parsed.instanced_data.error.as_ref().filter(|error| !error.trim().is_empty())
-    {
-      return Err(invalid(&format!("instancedData error: {error}")));
-    }
-    let entities = std::mem::take(&mut parsed.entities.items)
-      .into_iter()
-      .map(YmapEntity::from)
-      .collect::<Vec<_>>();
-    let mut model: Ymap = parsed.into();
-    model.entities = entities.clone();
-    Ok(Self {
+  pub(in crate::core::merge) fn from_model(model: Ymap) -> Self {
+    let entities = model.entities.clone();
+    Self {
       model,
       entities,
-      xml,
-    })
+    }
   }
 }
 
 /// Lazy original-map lookup: same-mod parent first, vanilla parent otherwise.
 #[derive(Default)]
 pub(in crate::core::merge) struct SourceMaps {
-  paths: HashMap<(Option<String>, u32), OriginalMapSource>,
+  paths: HashMap<(Option<String>, u32), PathBuf>,
   loaded: HashMap<(Option<String>, u32), Rc<OriginalMap>>,
 }
 
-enum OriginalMapSource {
-  Xml(PathBuf),
-  RawYmap(PathBuf),
-}
-
 impl SourceMaps {
-  /// Registers a map by its stream filename, not its potentially unresolved XML name.
+  /// Registers a native map by its stream filename.
   pub(in crate::core::merge) fn register(
     &mut self,
     namespace: Option<&str>,
     name: &str,
     path: PathBuf,
   ) -> io::Result<()> {
-    let name = name.strip_suffix(".xml").unwrap_or(name);
     let name = name.strip_suffix(".ymap").unwrap_or(name);
     let key = (namespace.map(str::to_string), reference_hash(name));
     if self.paths.contains_key(&key) || self.loaded.contains_key(&key) {
@@ -82,30 +52,7 @@ impl SourceMaps {
       warn_missing_map(namespace, name, &path);
       return Ok(());
     }
-    self.paths.insert(key, OriginalMapSource::Xml(path));
-    Ok(())
-  }
-
-  pub(in crate::core::merge) fn register_raw(
-    &mut self,
-    namespace: Option<&str>,
-    name: &str,
-    path: PathBuf,
-  ) -> io::Result<()> {
-    let name = name.strip_suffix(".xml").unwrap_or(name);
-    let name = name.strip_suffix(".ymap").unwrap_or(name);
-    let key = (namespace.map(str::to_string), reference_hash(name));
-    if self.paths.contains_key(&key) || self.loaded.contains_key(&key) {
-      warn_duplicate_map(namespace, name, &path);
-      return Ok(());
-    }
-    if !path.is_file() {
-      warn_missing_map(namespace, name, &path);
-      return Ok(());
-    }
-    if self.paths.insert(key, OriginalMapSource::RawYmap(path)).is_some() {
-      warn_duplicate_map(namespace, name, Path::new(name));
-    }
+    self.paths.insert(key, path);
     Ok(())
   }
 
@@ -120,11 +67,8 @@ impl SourceMaps {
     if let Some(map) = self.loaded.get(&key) {
       return Ok(Some(Rc::clone(map)));
     }
-    let Some(source) = self.paths.get(&key) else {
+    let Some(path) = self.paths.get(&key) else {
       return Ok(None);
-    };
-    let path = match source {
-      OriginalMapSource::Xml(path) | OriginalMapSource::RawYmap(path) => path,
     };
     if !path.is_file() {
       warn_missing_map(
@@ -135,10 +79,7 @@ impl SourceMaps {
       self.paths.remove(&key);
       return Ok(None);
     }
-    let map = Rc::new(match source {
-      OriginalMapSource::Xml(path) => OriginalMap::load(path)?,
-      OriginalMapSource::RawYmap(path) => OriginalMap::load_raw(path)?,
-    });
+    let map = Rc::new(OriginalMap::load(path)?);
     self.loaded.insert(key, Rc::clone(&map));
     Ok(Some(map))
   }
@@ -244,13 +185,11 @@ mod tests {
     std::fs::write(&first, []).unwrap();
     std::fs::write(&second, []).unwrap();
     let mut sources = SourceMaps::default();
-    sources.register_raw(Some("[gabz]/resource_a"), "map.ymap", first.clone()).unwrap();
-    sources.register_raw(Some("[gabz]/resource_a"), "map.ymap", second).unwrap();
+    sources.register(Some("[gabz]/resource_a"), "map.ymap", first.clone()).unwrap();
+    sources.register(Some("[gabz]/resource_a"), "map.ymap", second).unwrap();
 
     let key = (Some("[gabz]/resource_a".into()), reference_hash("map"));
-    assert!(
-      matches!(sources.paths.get(&key), Some(OriginalMapSource::RawYmap(path)) if path == &first)
-    );
+    assert_eq!(sources.paths.get(&key), Some(&first));
     std::fs::remove_dir_all(root).unwrap();
   }
 
@@ -258,11 +197,7 @@ mod tests {
   fn missing_map_registration_is_skipped() {
     let mut sources = SourceMaps::default();
     sources
-      .register_raw(
-        Some("resource_missing"),
-        "map.ymap",
-        PathBuf::from("missing-resource/map.ymap"),
-      )
+      .register(Some("resource_missing"), "map.ymap", PathBuf::from("missing-resource/map.ymap"))
       .unwrap();
     assert!(sources.paths.is_empty());
   }
@@ -275,7 +210,7 @@ mod tests {
     let path = root.join("map.ymap");
     std::fs::write(&path, []).unwrap();
     let mut sources = SourceMaps::default();
-    sources.register_raw(Some("resource"), "map.ymap", path.clone()).unwrap();
+    sources.register(Some("resource"), "map.ymap", path.clone()).unwrap();
     std::fs::remove_file(&path).unwrap();
     assert!(sources.get(Some("resource"), reference_hash("map")).unwrap().is_none());
     std::fs::remove_dir_all(root).unwrap();
