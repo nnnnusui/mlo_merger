@@ -1,6 +1,7 @@
 use super::*;
 use crate::common::fingerprint::Fingerprint;
 use crate::core::{
+  config::matching::MatchTolerances,
   format::ymap::compare::YmapComparisonDiff,
   source_cache::generate::diff::{YmapDiffCounts, write_ymap_diffs},
 };
@@ -97,7 +98,7 @@ impl Fixture {
 
   /// Writes a diff document recording the current fingerprints of both YMAPs.
   fn write_current_diff(&self) -> serde_json::Value {
-    self.write_diff(YmapComparisonDiff::SCHEMA_VERSION)
+    self.write_diff(YmapComparisonDiff::SCHEMA_VERSION, MatchTolerances::default())
   }
 
   /// Writes a diff document of `schema_version` recording the current fingerprints of both
@@ -105,6 +106,7 @@ impl Fixture {
   fn write_diff(
     &self,
     schema_version: u32,
+    tolerances: MatchTolerances,
   ) -> serde_json::Value {
     let file = |path: &Path| {
       let fingerprint = Fingerprint::read(path, None, false).unwrap();
@@ -118,6 +120,7 @@ impl Fixture {
     };
     let document = serde_json::json!({
       "schema_version": schema_version,
+      "tolerances": tolerances,
       "source": file(&self.source_ymap),
       "vanilla": file(&self.vanilla_ymap.canonicalize().unwrap()),
       "diffs": { "name": "kept" },
@@ -203,7 +206,21 @@ fn unreadable_ymap_diffs_are_regenerated() {
 #[test]
 fn ymap_diffs_of_another_schema_version_are_regenerated() {
   let fixture = Fixture::new("ymap_diffs_schema_changed");
-  fixture.write_diff(YmapComparisonDiff::SCHEMA_VERSION - 1);
+  fixture.write_diff(YmapComparisonDiff::SCHEMA_VERSION - 1, MatchTolerances::default());
+  assert_eq!(fixture.write_diffs(), DROPPED);
+  assert!(!fixture.diff_path().exists());
+}
+
+#[test]
+fn ymap_diffs_taken_with_other_tolerances_are_regenerated() {
+  let fixture = Fixture::new("ymap_diffs_tolerances_changed");
+  fixture.write_diff(
+    YmapComparisonDiff::SCHEMA_VERSION,
+    MatchTolerances {
+      ymap: 0.5,
+      ..Default::default()
+    },
+  );
   assert_eq!(fixture.write_diffs(), DROPPED);
   assert!(!fixture.diff_path().exists());
 }

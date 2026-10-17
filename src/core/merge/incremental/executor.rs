@@ -45,7 +45,7 @@ impl IncrementalMerge<'_> {
       let directory = self.staging.join("ymap");
       let sources = sources
         .iter()
-        .map(|source| (source.resource.clone(), source.path.clone()))
+        .map(|source| (source.resource.clone(), source.path.clone(), source.diff_path.clone()))
         .collect::<Vec<_>>();
       MergeYmap {
         vanilla_dir: self.vanilla_cache.join("latest/ymap"),

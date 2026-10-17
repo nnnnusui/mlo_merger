@@ -24,6 +24,17 @@ type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 pub use restore::restore_source_cache;
 pub(crate) use streams::read_stream_bytes;
 
+/// Where the source cache keeps the diff of a resource's YMAP, relative to its `diff` directory:
+/// `{resource directory name}/{stream-relative path}.diff.json`.
+pub(crate) fn ymap_diff_path(
+  resource_source: &Path,
+  file_path: &str,
+) -> Result<PathBuf> {
+  let resource = resource_source.file_name().ok_or("Resource has no name")?;
+  let relative = layout::stream_relative_path(file_path)?;
+  Ok(Path::new(resource).join(format!("{relative}.diff.json")))
+}
+
 /// One source stream file selected for merge from the current source cache.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct MergeSourceFile {
@@ -35,6 +46,10 @@ pub struct MergeSourceFile {
   pub original_path: PathBuf,
   /// Lowercase stream filename.
   pub file_name: String,
+  /// The source cache's diff document of this YMAP against the latest vanilla; `None` for
+  /// other formats.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub diff_path: Option<PathBuf>,
 }
 
 /// Source inputs and vanilla YMAP closure selected by the source-cache analysis.
@@ -215,11 +230,16 @@ pub fn load_merge_inputs(cache_dir: &Path) -> Result<MergeInputs> {
           _ => false,
         };
         if selected_for_merge {
+          let diff_path = (extension == ".ymap")
+            .then(|| ymap_diff_path(&resource.source, &file.path))
+            .transpose()?
+            .map(|path| cache_dir.join("diff").join(path));
           selected.push(MergeSourceFile {
             resource: resource_id.clone(),
             path: source_path,
             original_path,
             file_name: file.file_name,
+            diff_path,
           });
         }
       }

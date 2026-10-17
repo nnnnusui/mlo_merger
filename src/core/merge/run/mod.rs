@@ -3,8 +3,8 @@ use super::duplicates::{Change, Collector, Contribution, DuplicateReport};
 use crate::common::function::collect_files_with_suffix;
 use crate::core::config::blacklist::BlacklistConfig;
 use crate::core::format::ymap::compare::{
-  EntityParent, EntityParents, YmapDiffContext, YmapDiffFields, YmapEntityDiff, entities,
-  entity_parents, merge_diffs,
+  EntityParent, EntityParents, YmapComparisonDiff, YmapDiffContext, YmapDiffFields, YmapEntityDiff,
+  entities, entity_parents, merge_diffs,
 };
 use crate::core::format::ymap::model::YmapEntity;
 use crate::core::format::ymap::model::ymap::Ymap;
@@ -21,6 +21,9 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use struct_diff::Diff;
+
+/// A source YMAP to merge: its resource, path and source-cache diff document, if any.
+pub type SourceYmap = (String, PathBuf, Option<PathBuf>);
 
 #[derive(Debug, Clone)]
 pub struct MergeYmap {
@@ -46,10 +49,13 @@ impl MergeYmap {
   }
 
   /// Merges source maps against the supplied latest vanilla files and emits edited RSC7 binaries.
+  ///
+  /// Sources given with a source-cache diff document are merged through it, which must have been
+  /// taken from the source and vanilla files as they are now; the others are compared here.
   pub fn run_with_latest_vanilla_files(
     &self,
     vanilla_files: &[PathBuf],
-    source_files: Option<&[(String, PathBuf)]>,
+    source_files: Option<&[SourceYmap]>,
   ) -> Result<(), Box<dyn std::error::Error>> {
     self.run_inner(None, Some(vanilla_files), source_files)
   }

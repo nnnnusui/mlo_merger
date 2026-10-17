@@ -5,7 +5,7 @@ impl MergeYmap {
     &self,
     history: Option<&VanillaHistory>,
     latest_files: Option<&[PathBuf]>,
-    raw_sources: Option<&[(String, PathBuf)]>,
+    raw_sources: Option<&[SourceYmap]>,
   ) -> Result<(), Box<dyn std::error::Error>> {
     crate::core::config::matching::with_config(|| {
       self.run_configured_inner(history, latest_files, raw_sources)
@@ -16,7 +16,7 @@ impl MergeYmap {
     &self,
     history: Option<&VanillaHistory>,
     latest_files: Option<&[PathBuf]>,
-    raw_sources: Option<&[(String, PathBuf)]>,
+    raw_sources: Option<&[SourceYmap]>,
   ) -> Result<(), Box<dyn std::error::Error>> {
     tracing::info!(
       "Merging YMAP files from {} and {} into {}",
@@ -48,7 +48,7 @@ impl MergeYmap {
         rsc7::Rsc7Resource,
       };
       let mut catalog = MetaSchemaCatalog::default();
-      for path in files.iter().chain(raw_sources.into_iter().flatten().map(|(_, path)| path)) {
+      for path in files.iter().chain(raw_sources.into_iter().flatten().map(|(_, path, _)| path)) {
         let bytes = fs::read(path)?;
         if let Ok(resource) = Rsc7Resource::decode(&bytes)
           && let Ok(meta) = MetaResource::parse(&resource)
@@ -62,7 +62,7 @@ impl MergeYmap {
     };
     let mut modded_ymaps_map = if let Some(sources) = raw_sources {
       let mut maps = BTreeMap::<String, Vec<ModYmapReference>>::new();
-      for (resource, path) in sources {
+      for (resource, path, diff_path) in sources {
         let name = path
           .file_name()
           .and_then(|name| name.to_str())
@@ -71,6 +71,7 @@ impl MergeYmap {
           mod_name: resource.clone(),
           ymap_name: name.to_string(),
           mod_ymap_path: path.clone(),
+          diff_path: diff_path.clone(),
         };
         maps.entry(format!("{name}.xml")).or_default().push(reference);
       }
@@ -240,19 +241,38 @@ impl MergeYmap {
           continue;
         };
         references.register_entities(hash, &source.entities);
-        let ctx = YmapDiffContext {
-          tolerances,
-          vanilla_parents: vanilla_parents.clone(),
-          modded_parents: parents_of(
-            &mut sources,
-            &mut references,
-            Some(&mod_info.mod_name),
-            &source.model,
-          )?,
+        let ymap_diff = match &mod_info.diff_path {
+          Some(diff_path) => {
+            YmapComparisonDiff::read_current(
+              diff_path,
+              &mod_info.mod_ymap_path,
+              &vanilla_ymap_path,
+              &tolerances,
+            )?
+            .ok_or_else(|| {
+              format!(
+                "{} is missing or stale for {}; rebuild the source cache",
+                diff_path.display(),
+                mod_info.mod_ymap_path.display()
+              )
+            })?
+            .diffs
+          }
+          // Sources outside a source cache are compared here, against the latest vanilla.
+          None => {
+            let ctx = YmapDiffContext {
+              tolerances,
+              vanilla_parents: vanilla_parents.clone(),
+              modded_parents: parents_of(
+                &mut sources,
+                &mut references,
+                Some(&mod_info.mod_name),
+                &source.model,
+              )?,
+            };
+            vanilla_ymap.diff(&source.model, &ctx).unwrap_or_default()
+          }
         };
-        // Diffs index into the vanilla they were taken from, so every source is compared with
-        // the latest vanilla, also when older vanilla versions are available.
-        let ymap_diff = vanilla_ymap.diff(&source.model, &ctx).unwrap_or_default();
         log_diff_counts(&ymap_diff);
         let source_originals =
           source.entities.iter().map(|entity| (entity.guid, entity)).collect::<HashMap<_, _>>();

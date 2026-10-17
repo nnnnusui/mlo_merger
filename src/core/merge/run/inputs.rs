@@ -16,6 +16,8 @@ pub(super) struct ModYmapReference {
   pub(super) mod_name: String,
   pub(super) ymap_name: String,
   pub(super) mod_ymap_path: PathBuf,
+  /// The source cache's diff document of this YMAP, when it comes from a source cache.
+  pub(super) diff_path: Option<PathBuf>,
 }
 
 pub(super) fn collect_modded_ymaps_map(
@@ -35,6 +37,7 @@ pub(super) fn collect_modded_ymaps_map(
         mod_name: mod_name.to_string(),
         ymap_name: ymap_name.to_string(),
         mod_ymap_path: mod_file.clone(),
+        diff_path: None,
       };
 
       map.entry(ymap_xml_name.to_string()).or_default().push(info);

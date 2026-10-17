@@ -35,6 +35,7 @@ fn ybn_version_change_reuses_current_ymap_groups() {
       path,
       original_path: source.join(&name),
       file_name: name,
+      diff_path: None,
     }
   };
   let ymap = make_source("ymap");
@@ -114,6 +115,7 @@ fn dependency_groups_invalidate_connected_maps_but_not_independent_maps() {
     path: PathBuf::from(name),
     original_path: PathBuf::from(name),
     file_name: name.into(),
+    diff_path: None,
   };
   let parent = source("parent.ymap");
   let independent = source("independent.ymap");

@@ -87,8 +87,12 @@ Merge writes native files under `ymap/` and `ybn/`, plus `_omit.txt` for replace
 source paths and `duplicates.json` for competing YMAP entity changes. It rebuilds
 only changed or invalid groups. Failed merges leave the prior output intact.
 
-Each YMAP is merged by taking every source's difference from the latest vanilla YMAP
-and applying them together to vanilla:
+Each YMAP is merged by reading every source's difference from the latest vanilla YMAP
+from the source cache's `diff/{resource}/{stream-relative-path}.diff.json` and applying
+them together to vanilla. Source-cache generation writes these documents and keeps them
+while their source and vanilla files and the matching tolerances are unchanged; merge
+fails when one is missing or stale, so rebuild the source cache first (`--merge` and the
+pipeline do). The differences of several sources combine as follows:
 
 - Array items are paired as the source cache's YMAP diffs pair them. Removed and
   modified items are named by their vanilla index, and an unpaired source item takes

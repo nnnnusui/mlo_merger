@@ -2,6 +2,10 @@
 
 use std::{fs, path::Path};
 
+use crate::common::fingerprint::Fingerprint;
+use crate::core::config::matching::MatchTolerances;
+use crate::core::format::ymap::compare::{YmapComparisonDiff, YmapComparisonFile};
+
 use serde_json::json;
 
 use crate::core::format::{
@@ -110,5 +114,56 @@ fn get_diff_fingerprints_both_files_and_derives_their_differences() {
     .cloned()
     .collect::<Vec<_>>();
   assert!(unexpected.is_empty(), "unexpected diffs: {unexpected:?}");
+  fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn only_documents_of_the_current_files_and_tolerances_are_read() {
+  let root = std::env::temp_dir().join(format!("ymap_diff_document_{}", std::process::id()));
+  let _ = fs::remove_dir_all(&root);
+  fs::create_dir_all(&root).unwrap();
+  let (source, vanilla, path) =
+    (root.join("source.ymap"), root.join("vanilla.ymap"), root.join("doc.json"));
+  fs::write(&source, b"source bytes").unwrap();
+  fs::write(&vanilla, b"vanilla bytes").unwrap();
+  let file = |path: &Path| {
+    let path = path.canonicalize().unwrap();
+    let fingerprint = Fingerprint::read(&path, None, false).unwrap();
+    YmapComparisonFile {
+      path: path.display().to_string(),
+      sha256: fingerprint.sha256,
+      size: fingerprint.size,
+      modified_seconds: fingerprint.modified_seconds,
+      modified_nanos: fingerprint.modified_nanos,
+    }
+  };
+  let document = YmapComparisonDiff {
+    schema_version: YmapComparisonDiff::SCHEMA_VERSION,
+    source: file(&source),
+    vanilla: file(&vanilla),
+    tolerances: MatchTolerances::default(),
+    diffs: Default::default(),
+  };
+  fs::write(&path, serde_json::to_vec(&document).unwrap()).unwrap();
+  let read = |tolerances: &MatchTolerances| {
+    YmapComparisonDiff::read_current(&path, &source, &vanilla, tolerances).unwrap().is_some()
+  };
+  assert!(read(&MatchTolerances::default()));
+  assert!(!read(&MatchTolerances {
+    ymap: 0.5,
+    ..Default::default()
+  }));
+  fs::write(&source, b"edited source bytes").unwrap();
+  assert!(!read(&MatchTolerances::default()));
+  assert!(
+    YmapComparisonDiff::read_current(
+      &root.join("missing.json"),
+      &source,
+      &vanilla,
+      &Default::default()
+    )
+    .unwrap()
+    .is_none()
+  );
   fs::remove_dir_all(root).unwrap();
 }

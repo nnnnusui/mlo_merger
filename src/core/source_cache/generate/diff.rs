@@ -6,12 +6,13 @@
 use super::Result;
 use crate::{
   common::{json::write_json, path::ensure_safe_path},
+  core::config::matching::{self, MatchTolerances},
   core::{
     conversion::load_hash_names_or_empty,
     format::ymap::compare::{
       StreamFileRef, YmapComparisonContext, YmapComparisonDiff, YmapComparisonFile,
     },
-    source_cache::{layout::stream_relative_path, types::SourceCacheMetadata},
+    source_cache::{types::SourceCacheMetadata, ymap_diff_path},
   },
 };
 use std::{fs, io::BufReader, path::Path};
@@ -23,11 +24,13 @@ pub(in crate::core::source_cache) struct YmapDiffCounts {
   pub reused: usize,
 }
 
-/// The layout and fingerprints of a diff document, read without its differences.
+/// The layout, tolerances and fingerprints of a diff document, read without its differences.
 #[derive(serde::Deserialize)]
 struct DiffInputs {
   #[serde(default)]
   schema_version: u32,
+  #[serde(default)]
+  tolerances: Option<MatchTolerances>,
   source: YmapComparisonFile,
   vanilla: YmapComparisonFile,
 }
@@ -66,13 +69,12 @@ pub(in crate::core::source_cache) fn write_ymap_diffs(
       if file.vanilla.is_none() {
         continue;
       }
-      let relative = stream_relative_path(&file.path)?;
+      let file_path = ymap_diff_path(&resource.source, &file.path)?;
       let stream_file = StreamFileRef {
         resource_name: Some(resource_name.clone()),
         vanilla_version: metadata.latest_vanilla_version.clone(),
         file_name: file.file_name.clone(),
       };
-      let file_path = Path::new(&resource_name).join(format!("{relative}.diff.json"));
       let (previous, path) = (target.join(&file_path), staging.join(&file_path));
       ensure_safe_path(&target, &previous)?;
       ensure_safe_path(&staging, &path)?;
@@ -86,7 +88,7 @@ pub(in crate::core::source_cache) fn write_ymap_diffs(
       let diff = match context.get_diff(&stream_file) {
         Ok(diff) => diff,
         Err(error) => {
-          tracing::warn!("Skipping YMAP diff for {resource_name}/{relative}: {error}");
+          tracing::warn!("Skipping YMAP diff {}: {error}", file_path.display());
           continue;
         }
       };
@@ -108,8 +110,8 @@ pub(in crate::core::source_cache) fn write_ymap_diffs(
   Ok(counts)
 }
 
-/// Whether the diff at `path` exists in the current layout and was taken from the files `file`
-/// resolves to now.
+/// Whether the diff at `path` exists in the current layout, was taken with the active matching
+/// tolerances and from the files `file` resolves to now.
 ///
 /// Unreadable diffs and files are treated as stale, so they are regenerated.
 fn is_current(
@@ -124,6 +126,7 @@ fn is_current(
     return false;
   };
   inputs.schema_version == YmapComparisonDiff::SCHEMA_VERSION
+    && inputs.tolerances == Some(matching::current())
     && context.is_diff_current(file, &inputs.source, &inputs.vanilla).unwrap_or(false)
 }
 

@@ -140,6 +140,7 @@ impl YmapComparisonContext {
     );
     Ok(YmapComparisonDiff {
       schema_version: YmapComparisonDiff::SCHEMA_VERSION,
+      tolerances: ctx.tolerances,
       diffs: vanilla.diff(&modded, &ctx).unwrap_or_default(),
       source: self.comparison_file(file, None)?,
       vanilla: self.comparison_file(&baseline, None)?,

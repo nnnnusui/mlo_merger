@@ -42,7 +42,7 @@ fn latest_ymap_merge_writes_binary_without_xml() {
   merge
     .run_with_latest_vanilla_files(
       std::slice::from_ref(&vanilla),
-      Some(&[("resource".into(), source_path.clone())]),
+      Some(&[("resource".into(), source_path.clone(), None)]),
     )
     .unwrap();
   assert!(!root.join("output").join(name).exists());
@@ -58,7 +58,7 @@ fn latest_ymap_merge_writes_binary_without_xml() {
   merge
     .run_with_latest_vanilla_files(
       std::slice::from_ref(&vanilla),
-      Some(&[("resource".into(), source_path.clone())]),
+      Some(&[("resource".into(), source_path.clone(), None)]),
     )
     .unwrap();
   let output = fs::read(root.join("output").join(name)).unwrap();
@@ -70,7 +70,7 @@ fn latest_ymap_merge_writes_binary_without_xml() {
   assert_eq!(restored_entities, entities);
   fs::write(&source_path, bytes).unwrap();
   merge
-    .run_with_latest_vanilla_files(&[vanilla], Some(&[("resource".into(), source_path)]))
+    .run_with_latest_vanilla_files(&[vanilla], Some(&[("resource".into(), source_path, None)]))
     .unwrap();
   assert!(!root.join("output").join(name).exists());
   fs::remove_dir_all(root).unwrap();
@@ -129,7 +129,7 @@ fn native_ymap_merge_deletion_wins_over_retained_entities_in_both_orders() {
   };
   for reverse in [false, true] {
     let mut sources =
-      vec![("deleted".into(), deleted.clone()), ("retained".into(), retained.clone())];
+      vec![("deleted".into(), deleted.clone(), None), ("retained".into(), retained.clone(), None)];
     if reverse {
       sources.reverse();
     }
@@ -275,4 +275,87 @@ fn parse_ymap_xml(file_path: &Path) -> Result<Ymap, Box<dyn std::error::Error>> 
     );
   }
   Ok(xml_ymap.into())
+}
+
+#[test]
+#[ignore = "requires local vanilla YMAP schemas"]
+fn sources_with_a_diff_document_merge_through_it_and_reject_stale_ones() {
+  use crate::common::fingerprint::Fingerprint;
+  use crate::core::format::gamefile::{
+    meta::{MetaResource, MetaSchemaCatalog},
+    rsc7::Rsc7Resource,
+  };
+  use crate::core::format::ymap::{
+    binary::ymap_to_model,
+    compare::{YmapComparisonDiff, YmapComparisonFile},
+  };
+  let base = Path::new(env!("CARGO_MANIFEST_DIR")).join("asset/vanilla-cache/latest/ymap");
+  let mut files =
+    fs::read_dir(base).unwrap().map(|entry| entry.unwrap().path()).collect::<Vec<_>>();
+  files.sort();
+  let file =
+    files.iter().find(|file| file.file_stem().unwrap().to_string_lossy().contains("occl")).unwrap();
+  let bytes = fs::read(file).unwrap();
+  let mut catalog = MetaSchemaCatalog::default();
+  catalog.add_resource(&MetaResource::parse(&Rsc7Resource::decode(&bytes).unwrap()).unwrap());
+  let model = ymap_to_model(&bytes, &catalog.hash_names).unwrap();
+
+  let root = std::env::temp_dir().join(format!("ymap_document_merge_{}", std::process::id()));
+  let _ = fs::remove_dir_all(&root);
+  fs::create_dir_all(root.join("vanilla")).unwrap();
+  fs::create_dir_all(root.join("source")).unwrap();
+  let name = file.file_name().unwrap();
+  let (vanilla, source) = (root.join("vanilla").join(name), root.join("source").join(name));
+  fs::write(&vanilla, &bytes).unwrap();
+  fs::write(&source, &bytes).unwrap();
+  // The document records a change the source file does not have, so the result shows which
+  // was merged.
+  let bit = (!model.content_flags).trailing_zeros();
+  let flags = model.content_flags | 1u32 << bit;
+  let recorded = |path: &Path| {
+    let path = path.canonicalize().unwrap();
+    let fingerprint = Fingerprint::read(&path, None, false).unwrap();
+    YmapComparisonFile {
+      path: path.display().to_string(),
+      sha256: fingerprint.sha256,
+      size: fingerprint.size,
+      modified_seconds: fingerprint.modified_seconds,
+      modified_nanos: fingerprint.modified_nanos,
+    }
+  };
+  let document = root.join("map.diff.json");
+  fs::write(
+    &document,
+    serde_json::to_vec(&YmapComparisonDiff {
+      schema_version: YmapComparisonDiff::SCHEMA_VERSION,
+      source: recorded(&source),
+      vanilla: recorded(&vanilla),
+      tolerances: Default::default(),
+      diffs: crate::core::format::ymap::compare::YmapDiffFields {
+        content_flags: Some(flags),
+        ..Default::default()
+      },
+    })
+    .unwrap(),
+  )
+  .unwrap();
+  let merge = MergeYmap {
+    vanilla_dir: root.join("vanilla"),
+    mod_dir: root.join("source"),
+    mod_ymap_dir: root.join("source"),
+    output_dir: root.join("output"),
+    rebuild_all: true,
+    blacklist_config: None,
+  };
+  let sources = [("resource".to_string(), source.clone(), Some(document.clone()))];
+  merge.run_with_latest_vanilla_files(std::slice::from_ref(&vanilla), Some(&sources)).unwrap();
+  let output = fs::read(root.join("output").join(name)).unwrap();
+  assert_eq!(ymap_to_model(&output, &catalog.hash_names).unwrap().content_flags, flags);
+
+  fs::write(&source, [bytes.as_slice(), &[0]].concat()).unwrap();
+  let error = merge
+    .run_with_latest_vanilla_files(std::slice::from_ref(&vanilla), Some(&sources))
+    .unwrap_err();
+  assert!(error.to_string().contains("rebuild the source cache"), "{error}");
+  fs::remove_dir_all(root).unwrap();
 }
