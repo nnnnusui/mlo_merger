@@ -83,6 +83,7 @@ fn incremental_merge_preserves_and_restores_duplicate_reports() {
       source_cache_dir: source_cache.clone(),
       output_dir: output.clone(),
       force: false,
+      overwrite_dir: None,
     }
     .run_after_caches(&vanilla)
     .unwrap()

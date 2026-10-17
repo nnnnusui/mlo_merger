@@ -36,6 +36,7 @@ fn ybn_version_change_reuses_current_ymap_groups() {
       original_path: source.join(&name),
       file_name: name,
       diff_path: None,
+      stream_path: String::new(),
     }
   };
   let ymap = make_source("ymap");
@@ -48,6 +49,7 @@ fn ybn_version_change_reuses_current_ymap_groups() {
         resource: Some(input.resource.clone()),
         original_path: Some(input.original_path.clone()),
         fingerprint: Fingerprint::read(&input.path, None, false).unwrap(),
+        overwrite: None,
       }],
       vanilla: None,
       dependencies: BTreeSet::new(),
@@ -89,6 +91,7 @@ fn ybn_version_change_reuses_current_ymap_groups() {
       ymap: &[],
       inputs: &inputs,
       force: false,
+      overwrites: &Default::default(),
     }
     .run()
     .unwrap()
@@ -116,6 +119,7 @@ fn dependency_groups_invalidate_connected_maps_but_not_independent_maps() {
     original_path: PathBuf::from(name),
     file_name: name.into(),
     diff_path: None,
+    stream_path: String::new(),
   };
   let parent = source("parent.ymap");
   let independent = source("independent.ymap");
@@ -141,6 +145,7 @@ fn dependency_groups_invalidate_connected_maps_but_not_independent_maps() {
         modified_seconds: 20,
         modified_nanos: 0,
       },
+      overwrite: None,
     }),
     dependencies: graph[name].clone(),
     dependency_fingerprint: String::new(),

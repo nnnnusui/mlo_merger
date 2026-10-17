@@ -80,6 +80,7 @@ fn incremental_ymap_merge_caches_noop_results_and_removes_obsolete_outputs() {
     source_cache_dir: source_cache.clone(),
     output_dir: output.clone(),
     force: false,
+    overwrite_dir: None,
   }
   .run_after_caches(&vanilla)
   .unwrap();
@@ -92,6 +93,7 @@ fn incremental_ymap_merge_caches_noop_results_and_removes_obsolete_outputs() {
     source_cache_dir: source_cache.clone(),
     output_dir: output.clone(),
     force: false,
+    overwrite_dir: None,
   }
   .run_after_caches(&vanilla)
   .unwrap();
@@ -107,6 +109,7 @@ fn incremental_ymap_merge_caches_noop_results_and_removes_obsolete_outputs() {
     source_cache_dir: source_cache.clone(),
     output_dir: output.clone(),
     force: false,
+    overwrite_dir: None,
   }
   .run_after_caches(&vanilla)
   .unwrap();
@@ -124,6 +127,7 @@ fn incremental_ymap_merge_caches_noop_results_and_removes_obsolete_outputs() {
     source_cache_dir: source_cache.clone(),
     output_dir: output.clone(),
     force: false,
+    overwrite_dir: None,
   }
   .run_after_caches(&vanilla)
   .unwrap();
@@ -135,6 +139,7 @@ fn incremental_ymap_merge_caches_noop_results_and_removes_obsolete_outputs() {
     source_cache_dir: source_cache.clone(),
     output_dir: output.clone(),
     force: false,
+    overwrite_dir: None,
   }
   .run_after_caches(&vanilla)
   .unwrap();

@@ -6,6 +6,7 @@ pub mod find;
 pub mod format;
 pub mod get_diff;
 pub mod merge;
+pub mod overwrite;
 pub mod pipeline;
 #[path = "source_cache/mod.rs"]
 pub mod source_cache;

@@ -47,6 +47,7 @@ impl IncrementalMerge<'_> {
                 previous_inputs.get(&source.path).copied(),
                 self.force,
               )?,
+              overwrite: self.overwrite(source).map(StreamFileOverwrite::digest),
             })
           })
           .collect::<Result<Vec<_>>>()?;
@@ -62,6 +63,7 @@ impl IncrementalMerge<'_> {
                 previous_inputs.get(*path).copied(),
                 self.force,
               )?,
+              overwrite: None,
             })
           })
           .transpose()?;

@@ -195,9 +195,9 @@ impl MergeYmap {
           continue;
         };
         references.register_entities(hash, &source.entities);
-        let ymap_diff = match &mod_info.diff_path {
+        let (mut ymap_diff, fingerprints) = match &mod_info.diff_path {
           Some(diff_path) => {
-            YmapComparisonDiff::read_current(
+            let document = YmapComparisonDiff::read_current(
               diff_path,
               &mod_info.mod_ymap_path,
               &vanilla_ymap_path,
@@ -209,8 +209,15 @@ impl MergeYmap {
                 diff_path.display(),
                 mod_info.mod_ymap_path.display()
               )
-            })?
-            .diffs
+            })?;
+            let fingerprint = |file: &crate::core::format::ymap::compare::YmapComparisonFile| {
+              OverwriteFingerprint {
+                sha256: file.sha256.clone(),
+                size: file.size,
+              }
+            };
+            let fingerprints = (fingerprint(&document.source), fingerprint(&document.vanilla));
+            (document.diffs, Some(fingerprints))
           }
           // Sources outside a source cache are compared here, against the latest vanilla.
           None => {
@@ -224,9 +231,19 @@ impl MergeYmap {
                 &source.model,
               )?,
             };
-            vanilla_ymap.diff(&source.model, &ctx).unwrap_or_default()
+            (vanilla_ymap.diff(&source.model, &ctx).unwrap_or_default(), None)
           }
         };
+        if let Some(overwrite) = self.overwrites.get(&mod_info.mod_ymap_path) {
+          let (source, vanilla) = match fingerprints {
+            Some(fingerprints) => fingerprints,
+            None => {
+              (file_fingerprint(&mod_info.mod_ymap_path)?, file_fingerprint(&vanilla_ymap_path)?)
+            }
+          };
+          let label = format!("{} ({})", ymap_name, mod_info.mod_name);
+          overwrite.apply(&mut ymap_diff, &source, &vanilla, &label)?;
+        }
         log_diff_counts(&ymap_diff);
         let source_originals =
           source.entities.iter().map(|entity| (entity.guid, entity)).collect::<HashMap<_, _>>();
@@ -460,4 +477,13 @@ impl MergeYmap {
     )?;
     Ok(())
   }
+}
+
+/// The content of the file at `path`, as an overwrite records it.
+fn file_fingerprint(path: &Path) -> Result<OverwriteFingerprint, Box<dyn std::error::Error>> {
+  let fingerprint = crate::common::fingerprint::Fingerprint::read(path, None, false)?;
+  Ok(OverwriteFingerprint {
+    sha256: fingerprint.sha256,
+    size: fingerprint.size,
+  })
 }

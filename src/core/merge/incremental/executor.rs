@@ -43,17 +43,22 @@ impl IncrementalMerge<'_> {
       }
     } else if !sources.is_empty() {
       let directory = self.staging.join("ymap");
-      let sources = sources
+      let ymap_sources = sources
         .iter()
         .map(|source| (source.resource.clone(), source.path.clone(), source.diff_path.clone()))
         .collect::<Vec<_>>();
+      let overwrites = sources
+        .iter()
+        .filter_map(|source| Some((source.path.clone(), self.overwrite(source)?.clone())))
+        .collect();
       MergeYmap {
         vanilla_dir: self.vanilla_cache.join("latest/ymap"),
         output_dir: directory.clone(),
         rebuild_all: true,
         blacklist_config: None,
+        overwrites,
       }
-      .run_with_latest_vanilla_files(&vanilla, &sources)?;
+      .run_with_latest_vanilla_files(&vanilla, &ymap_sources)?;
       let duplicate_path = directory.join(".duplicates.json");
       let duplicates: DuplicateReport =
         serde_json::from_reader(BufReader::new(fs::File::open(&duplicate_path)?))?;

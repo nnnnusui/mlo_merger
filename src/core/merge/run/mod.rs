@@ -11,6 +11,7 @@ use crate::core::format::ymap::relation::{EntityParentRef, entity_parent_ref};
 use crate::core::merge::ymap_parent_refs::{
   OriginalMap, ParentReferences, SourceMaps, runtime_entities,
 };
+use crate::core::overwrite::{OverwriteFingerprint, StreamFileOverwrite};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -26,6 +27,8 @@ pub struct MergeYmap {
   pub output_dir: PathBuf,
   pub rebuild_all: bool,
   pub blacklist_config: Option<PathBuf>,
+  /// The overwrites of the sources, keyed by source path, applied to their diffs.
+  pub overwrites: HashMap<PathBuf, StreamFileOverwrite>,
 }
 
 impl MergeYmap {

@@ -37,6 +37,7 @@ fn sample_parent_relink_survives_native_and_codewalker_rebuild() {
     output_dir: output.clone(),
     rebuild_all: false,
     blacklist_config: None,
+    overwrites: Default::default(),
   }
   .run_with_latest_vanilla_files(&vanilla, &sources)
   .unwrap();

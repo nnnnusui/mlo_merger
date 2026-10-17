@@ -10,6 +10,7 @@ use super::merge::Result;
 use super::{run::MergeYmap, ybn_conflicts::MergeYbnConflicts};
 use crate::core::{
   format::ymap::reference_hash,
+  overwrite::{Overwrites, StreamFileOverwrite},
   source_cache::{MergeInputs, MergeSourceFile},
   vanilla::write_json,
 };
@@ -42,7 +43,23 @@ pub(super) struct IncrementalMerge<'a> {
   pub ybn: &'a [PathBuf],
   pub ymap: &'a [PathBuf],
   pub inputs: &'a MergeInputs,
+  /// The overwrites applied to the source YMAPs' diffs.
+  pub overwrites: &'a Overwrites,
   pub force: bool,
+}
+
+impl IncrementalMerge<'_> {
+  /// The overwrite of a source YMAP, if any.
+  fn overwrite(
+    &self,
+    source: &MergeSourceFile,
+  ) -> Option<&StreamFileOverwrite> {
+    if !source.file_name.to_ascii_lowercase().ends_with(".ymap") {
+      return None;
+    }
+    let resource = Path::new(&source.resource).file_name()?.to_str()?;
+    self.overwrites.stream_file(resource, &source.stream_path)
+  }
 }
 
 mod cache;

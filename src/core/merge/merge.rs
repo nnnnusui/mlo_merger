@@ -6,7 +6,8 @@ use std::{
 use walkdir::WalkDir;
 
 use super::incremental::IncrementalMerge;
-use crate::core::source_cache;
+use crate::core::overwrite::Overwrites;
+use crate::core::source_cache::{self, MergeInputs};
 
 pub(super) type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
@@ -34,6 +35,8 @@ pub struct Merge {
   pub source_cache_dir: PathBuf,
   /// Destination for staged merged output.
   pub output_dir: PathBuf,
+  /// User edits of the source diffs (`resources/<resource name>.json`); `None` applies none.
+  pub overwrite_dir: Option<PathBuf>,
   /// Rebuilds merge groups regardless of freshness.
   pub force: bool,
 }
@@ -48,7 +51,7 @@ impl Merge {
   /// mlo_merger::core::merge::Merge {
   ///   source_dir: "asset/source".into(), vanilla_cache_dir: "asset/vanilla-cache".into(),
   ///   source_cache_dir: "asset/source-cache".into(), output_dir: "asset/merged".into(),
-  ///   force: false,
+  ///   overwrite_dir: Some("asset/overwrite".into()), force: false,
   /// }.run()?;
   /// # Ok::<(), Box<dyn std::error::Error>>(())
   /// ```
@@ -61,6 +64,11 @@ impl Merge {
     let vanilla_cache_dir = self.vanilla_cache_dir.canonicalize()?;
     let source_cache_dir = self.source_cache_dir.canonicalize()?;
     let merge_inputs = source_cache::load_merge_inputs(&source_cache_dir)?;
+    let overwrites = match &self.overwrite_dir {
+      Some(directory) => Overwrites::load(directory)?,
+      None => Overwrites::default(),
+    };
+    warn_unused_overwrites(&overwrites, &merge_inputs);
     let latest_files = dispatch_vanilla_stream_files(&vanilla_cache_dir.join("latest"))?;
     let output_dir = prepare_output_path(&self.output_dir)?;
     let staging = Staging(create_staging_directory(&output_dir)?);
@@ -73,6 +81,7 @@ impl Merge {
       ybn: &latest_files.ybn,
       ymap: &latest_files.ymap,
       inputs: &merge_inputs,
+      overwrites: &overwrites,
       force: self.force,
     }
     .run()?;
@@ -82,6 +91,26 @@ impl Merge {
     publish_directory(&staging.0, &output_dir)?;
     tracing::info!("Published merged stream files to {}", output_dir.display());
     Ok(())
+  }
+}
+
+/// Warns of overwrites naming a stream file that is not merged.
+fn warn_unused_overwrites(
+  overwrites: &Overwrites,
+  inputs: &MergeInputs,
+) {
+  let merged = inputs
+    .ymap
+    .iter()
+    .filter_map(|source| {
+      let resource = Path::new(&source.resource).file_name()?.to_str()?.to_ascii_lowercase();
+      Some((resource, source.stream_path.replace('\\', "/").to_ascii_lowercase()))
+    })
+    .collect::<std::collections::BTreeSet<_>>();
+  for (resource, stream_path) in overwrites.keys() {
+    if !merged.contains(&(resource.to_string(), stream_path.to_string())) {
+      tracing::warn!("Overwrite of {stream_path} ({resource}) names no merged source YMAP");
+    }
   }
 }
 

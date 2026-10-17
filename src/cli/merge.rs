@@ -11,6 +11,8 @@ pub struct Merge {
   pub source_dir: PathBuf,
   /// Resource exclusions applied only to this execution.
   pub exclusions: Option<Vec<String>>,
+  /// Overwrites applied to source diffs before merging.
+  pub overwrite_dir: PathBuf,
   /// Shared execution options.
   pub common: CommonOptions,
 }
@@ -23,15 +25,20 @@ pub fn parser() -> impl Parser<Merge> {
     .help("Source resource directory (default: asset/source)")
     .argument::<PathBuf>("DIR")
     .fallback(PathBuf::from("asset/source"));
+  let overwrite_dir = long("overwrite")
+    .help("Overwrites applied to source diffs before merging (default: asset/overwrite)")
+    .argument::<PathBuf>("DIR")
+    .fallback(PathBuf::from("asset/overwrite"));
   let common = common::parser(PathBuf::from("asset/merged"));
   let exclusions = super::generate_source_cache::exclusions_parser();
-  construct!(command, source_dir, common, exclusions).map(|(_, source_dir, common, exclusions)| {
-    Merge {
+  construct!(command, source_dir, overwrite_dir, common, exclusions).map(
+    |(_, source_dir, overwrite_dir, common, exclusions)| Merge {
       source_dir,
       common,
       exclusions,
-    }
-  })
+      overwrite_dir,
+    },
+  )
 }
 
 /// Updates the vanilla and source caches, then merges supported source changes into the latest
@@ -55,6 +62,7 @@ pub fn run(command: Merge) -> Result<(), Box<dyn std::error::Error>> {
     vanilla_cache_dir: command.common.vanilla_cache,
     source_cache_dir: command.common.source_cache,
     output_dir: command.common.output,
+    overwrite_dir: Some(command.overwrite_dir),
     force: command.common.force,
   }
   .run()

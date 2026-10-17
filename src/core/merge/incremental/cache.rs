@@ -59,6 +59,10 @@ pub(in crate::core::merge) struct InputFile {
   pub resource: Option<String>,
   pub original_path: Option<PathBuf>,
   pub fingerprint: Fingerprint,
+  /// Digest of the overwrite applied to this source's diff.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  #[cfg_attr(feature = "typescript", specta(optional))]
+  pub overwrite: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -146,10 +150,14 @@ pub(super) fn signature(
         .iter()
         .chain(record.vanilla.iter())
         .map(|input| {
-          serde_json::json!({
+          let mut value = serde_json::json!({
             "path": input.path, "resource": input.resource, "original_path": input.original_path,
             "sha256": input.fingerprint.sha256, "size": input.fingerprint.size,
-          })
+          });
+          if let Some(overwrite) = &input.overwrite {
+            value["overwrite"] = overwrite.as_str().into();
+          }
+          value
         })
         .collect::<Vec<_>>();
       (name, serde_json::json!({"dependencies": record.dependencies, "inputs": inputs}))

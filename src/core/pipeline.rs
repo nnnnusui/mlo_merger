@@ -25,6 +25,8 @@ pub struct Pipeline {
   pub exclusions: Option<Vec<String>>,
   /// Intermediate merged artifact directory.
   pub merged_dir: PathBuf,
+  /// Overwrites applied to source diffs before merging; `None` applies none.
+  pub overwrite_dir: Option<PathBuf>,
   /// Final deployment directory.
   pub output_dir: PathBuf,
   /// Forces the derived stages without re-extracting an existing raw archive.
@@ -42,7 +44,7 @@ impl Pipeline {
   ///   source_dir: "asset/source".into(), game_dir: "/mnt/gtav".into(),
   ///   vanilla_dir: "asset/vanilla".into(), vanilla_cache_dir: "asset/vanilla-cache".into(),
   ///   source_cache_dir: "asset/source-cache".into(), merged_dir: "asset/merged".into(),
-  ///   exclusions: None,
+  ///   exclusions: None, overwrite_dir: Some("asset/overwrite".into()),
   ///   output_dir: "merged_mlo".into(), force: false,
   /// }.run()?;
   /// # Ok::<(), Box<dyn std::error::Error>>(())
@@ -96,6 +98,7 @@ impl Pipeline {
       vanilla_cache_dir: self.vanilla_cache_dir.clone(),
       source_cache_dir: self.source_cache_dir.clone(),
       output_dir: self.merged_dir.clone(),
+      overwrite_dir: self.overwrite_dir.clone(),
       force: self.force,
     }
     .run()?;
@@ -163,6 +166,7 @@ mod tests {
       merged_dir: root.join("merged"),
       output_dir: root.join("merged_mlo"),
       force: false,
+      overwrite_dir: None,
     };
     let bytes = crate::core::format::ybn::xml::xml_to_ybn(include_str!(concat!(
       env!("CARGO_MANIFEST_DIR"),
@@ -254,6 +258,7 @@ mod tests {
       merged_dir: root.join("merged"),
       output_dir: root.join("output"),
       force: false,
+      overwrite_dir: None,
     };
     fs::create_dir_all(pipeline.source_dir.join("resource")).unwrap();
     fs::write(pipeline.source_dir.join("resource/fxmanifest.lua"), []).unwrap();
@@ -317,6 +322,7 @@ mod tests {
       merged_dir: root.join("merged"),
       output_dir: root.join("output"),
       force: false,
+      overwrite_dir: None,
     };
     fs::create_dir_all(&pipeline.source_dir).unwrap();
     assert!(pipeline.run().unwrap_err().to_string().contains("specify --game-dir"));

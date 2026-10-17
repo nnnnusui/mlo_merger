@@ -82,6 +82,7 @@ fn merge_dispatches_latest_vanilla_ybn_and_writes_omit_list() {
     source_cache_dir: source_cache_dir.clone(),
     output_dir: output_dir.clone(),
     force: false,
+    overwrite_dir: None,
   }
   .run_after_caches(&vanilla_dir)
   .unwrap();
@@ -137,6 +138,7 @@ fn merge_dispatches_latest_vanilla_ybn_and_writes_omit_list() {
     source_cache_dir: source_cache_dir.clone(),
     output_dir: output_dir.clone(),
     force: false,
+    overwrite_dir: None,
   }
   .run_after_caches(&vanilla_dir)
   .unwrap();
@@ -158,6 +160,7 @@ fn merge_dispatches_latest_vanilla_ybn_and_writes_omit_list() {
     source_cache_dir: source_cache_dir.clone(),
     output_dir: output_dir.clone(),
     force: false,
+    overwrite_dir: None,
   }
   .run_after_caches(&vanilla_dir)
   .unwrap();
@@ -177,6 +180,7 @@ fn merge_dispatches_latest_vanilla_ybn_and_writes_omit_list() {
     source_cache_dir: source_cache_dir.clone(),
     output_dir: output_dir.clone(),
     force: false,
+    overwrite_dir: None,
   }
   .run_after_caches(&vanilla_dir)
   .unwrap();
@@ -194,6 +198,7 @@ fn merge_dispatches_latest_vanilla_ybn_and_writes_omit_list() {
     source_cache_dir: source_cache_dir.clone(),
     output_dir: output_dir.clone(),
     force: false,
+    overwrite_dir: None,
   }
   .run_after_caches(&vanilla_dir)
   .unwrap();
@@ -216,6 +221,7 @@ fn merge_dispatches_latest_vanilla_ybn_and_writes_omit_list() {
     source_cache_dir: source_cache_dir.clone(),
     output_dir: output_dir.clone(),
     force: false,
+    overwrite_dir: None,
   }
   .run_after_caches(&vanilla_dir)
   .unwrap();
@@ -235,6 +241,7 @@ fn merge_dispatches_latest_vanilla_ybn_and_writes_omit_list() {
     source_cache_dir: source_cache_dir.clone(),
     output_dir: output_dir.clone(),
     force: false,
+    overwrite_dir: None,
   }
   .run_after_caches(&vanilla_dir)
   .unwrap();
@@ -246,6 +253,7 @@ fn merge_dispatches_latest_vanilla_ybn_and_writes_omit_list() {
     source_cache_dir: source_cache_dir.clone(),
     output_dir: output_dir.clone(),
     force: true,
+    overwrite_dir: None,
   }
   .run_after_caches(&vanilla_dir)
   .unwrap();
@@ -265,7 +273,8 @@ fn merge_dispatches_latest_vanilla_ybn_and_writes_omit_list() {
       vanilla_cache_dir: vanilla_cache_dir.clone(),
       source_cache_dir: source_cache_dir.clone(),
       output_dir: output_dir.clone(),
-      force: false
+      overwrite_dir: None,
+      force: false,
     }
     .run_after_caches(&vanilla_dir)
     .is_err()
@@ -280,6 +289,7 @@ fn merge_dispatches_latest_vanilla_ybn_and_writes_omit_list() {
     source_cache_dir: source_cache_dir.clone(),
     output_dir: output_dir.clone(),
     force: false,
+    overwrite_dir: None,
   }
   .run_after_caches(&vanilla_dir)
   .unwrap();

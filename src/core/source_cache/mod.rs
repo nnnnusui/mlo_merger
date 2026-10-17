@@ -46,6 +46,9 @@ pub struct MergeSourceFile {
   pub original_path: PathBuf,
   /// Lowercase stream filename.
   pub file_name: String,
+  /// Path below the resource's `stream` directory, such as `vanilla/hei_ch1_11.ymap`.
+  #[serde(default)]
+  pub stream_path: String,
   /// The source cache's diff document of this YMAP against the latest vanilla; `None` for
   /// other formats.
   #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -239,6 +242,7 @@ pub fn load_merge_inputs(cache_dir: &Path) -> Result<MergeInputs> {
             path: source_path,
             original_path,
             file_name: file.file_name,
+            stream_path: layout::stream_relative_path(&file.path).unwrap_or(&file.path).to_string(),
             diff_path,
           });
         }

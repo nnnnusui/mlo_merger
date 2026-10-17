@@ -22,6 +22,8 @@ pub fn export_types(output: &Path) -> Result<(), Box<dyn std::error::Error>> {
     path,
     &ExportConfiguration::new().bigint(BigIntExportBehavior::Number),
   )?;
+  let mut file = fs::OpenOptions::new().append(true).open(output)?;
+  std::io::Write::write_all(&mut file, crate::core::overwrite::YMAP_DIFF_SKIP_TS.as_bytes())?;
   Ok(())
 }
 
@@ -57,6 +59,10 @@ mod tests {
       "YmapDiffFields",
       "YmapEntityDiff",
       "YmapEntityFieldDiff",
+      "ResourceOverwrite",
+      "StreamFileOverwrite",
+      "OverwriteFingerprint",
+      "YmapDiffSkip",
     ] {
       assert!(actual.contains(&format!("export type {name} =")), "Missing {name}");
     }
@@ -72,6 +78,7 @@ mod tests {
     assert!(actual.contains("modified_seconds: number"));
     assert!(actual.contains("algorithm_versions?: { [key: string]: number }"));
     assert!(actual.contains("entities?: YmapEntityDiff[]"));
+    assert!(actual.contains("skip: YmapDiffSkip"));
     assert!(!actual.contains(": bigint"));
     fs::remove_file(path).unwrap();
   }
