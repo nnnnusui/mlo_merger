@@ -54,6 +54,7 @@ impl YmapDistantLodLight {
   context = MatchTolerances,
   attr(cfg_attr(feature = "typescript", derive(specta::Type)))
 )]
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 pub struct YmapDistantLodLights {
   #[diff(nested)]
   pub items: Vec<YmapDistantLodLight>,

@@ -8,6 +8,7 @@ pub mod get_diff;
 pub mod merge;
 pub mod overwrite;
 pub mod pipeline;
+pub mod read;
 #[path = "source_cache/mod.rs"]
 pub mod source_cache;
 pub mod stream_conflicts;

@@ -11,6 +11,7 @@ use super::{
 };
 
 #[derive(Debug, Clone, PartialEq, struct_diff::Diff, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[diff(
   name = YmapDiffFields,
   context = YmapDiffContext,

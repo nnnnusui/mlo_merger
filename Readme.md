@@ -199,6 +199,38 @@ fingerprint causes an error requiring a fresh merge. This is a snapshot
 comparison, not a computed semantic diff. YBN indices are input-local and may
 change on rebuild.
 
+### Read Stream File Models
+
+```bash
+mlo_merger --read --resource brofx_mansion_06 apa_ch2_occl_05.ymap
+mlo_merger --read --resource '[gabz]/cfx-gabz-247'
+mlo_merger --read --vanilla apa_ch2_occl_05.ymap
+mlo_merger --read --vanilla mpheist hei_ch1_11.ymap
+mlo_merger --read apa_ch2_occl_05.ymap
+```
+
+`--read` writes each YMAP's model as minified JSON (`YmapReadDocument`), with
+the path and fingerprint of the file it was read from and of the
+`hash_names.json` that named its hashes. A resource's file is written to
+`asset/read-cache/resources/{resourceName}/{stream-relative-path}.json` and a
+vanilla file to `asset/read-cache/vanilla/{version}/ymap/{fileName}.json`.
+A JSON still describing its file is not written again; `-f` writes it anyway.
+
+- `--resource NAME [FILE]` reads one resource, by name or source-relative ID,
+  from the existing source cache. Without a file it reads all of the resource's
+  YMAPs. A file name matching several of the resource's files is an error;
+  give its stream-relative path instead.
+- `--vanilla [VERSION] [FILE]` reads a version of the vanilla archive, the latest
+  without one. A version is its ID or the name after the number, such as
+  `mpheist`. Without a file it reads all of the version's YMAPs.
+- A file alone is read from every resource holding it and from the latest
+  vanilla. If any resource holds several files of that name, nothing is written.
+
+The source cache and vanilla archive default to `asset/source-cache` and
+`asset/vanilla` (`--source-cache`, `--vanilla-dir`); `-o` changes the output root.
+The command prints a `ReadResult` JSON line listing each input, its output and
+whether it was written.
+
 ### Convert Files
 
 ```bash
@@ -216,7 +248,8 @@ or template inputs. YBN conversion does not require an external schema directory
 The release archives contain `asset/gen_mlo_merger.ts`, generated from the Rust
 Serde models for merge diagnostics, vanilla/source/merge/deploy caches, stream
 conflicts, diff-cache reports, source-cache YMAP diff documents
-(`YmapComparisonDiff`), version listings and matching/blacklist configuration. It
+(`YmapComparisonDiff`), overwrite documents (`ResourceOverwrite`), `--read`
+documents and results (`YmapReadDocument`, `ReadResult`), version listings and matching/blacklist configuration. It
 does not include YBN difference payloads or JSON Schema documents. The release workflow regenerates it before packaging; it is not
 checked into the repository.
 

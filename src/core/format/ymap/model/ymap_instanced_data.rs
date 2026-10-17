@@ -11,6 +11,7 @@ use crate::core::{
   context = MatchTolerances,
   attr(cfg_attr(feature = "typescript", derive(specta::Type)))
 )]
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 pub struct YmapInstancedData {
   #[diff(with = compare::instanced_data::imap_link)]
   pub imap_link: String,

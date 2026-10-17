@@ -3,6 +3,7 @@
 /// CodeWalker reads no relationship from these and drops them on save; what `parent_index`
 /// refers to is unknown.
 #[derive(Clone, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 pub struct YmapContainerLod {
   pub name: String,
   pub parent_index: u32,

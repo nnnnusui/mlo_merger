@@ -63,6 +63,12 @@ mod tests {
       "StreamFileOverwrite",
       "OverwriteFingerprint",
       "YmapDiffSkip",
+      "ReadResult",
+      "ReadFileResult",
+      "ReadOrigin",
+      "YmapReadDocument",
+      "ReadFingerprint",
+      "Ymap",
     ] {
       assert!(actual.contains(&format!("export type {name} =")), "Missing {name}");
     }

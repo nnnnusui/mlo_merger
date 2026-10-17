@@ -11,6 +11,7 @@ use super::{
   get_diff::{self, GetDiff},
   merge::{self, Merge},
   pipeline::{self, Pipeline},
+  read,
   restore_source_cache::{self, RestoreSourceCache},
   to_xml::{self, ToXml},
 };
@@ -36,13 +37,14 @@ pub enum Command {
   Deploy(Deploy),
   /// Convert native files to XML.
   ToXml(ToXml),
-  /// Export cached, resource-local light editing JSON.
   /// Convert XML files to native files.
   FromXml(FromXml),
   /// Search generated merge data and optionally its recorded inputs.
   Find(Find),
   /// Compare two stream files.
   GetDiff(GetDiff),
+  /// Write stream file models as JSON.
+  Read(crate::core::read::Read),
 }
 
 fn parser() -> impl Parser<Command> {
@@ -56,6 +58,7 @@ fn parser() -> impl Parser<Command> {
   let to_xml = to_xml::parser().map(Command::ToXml);
   let from_xml = from_xml::parser().map(Command::FromXml);
   let get_diff = get_diff::parser().map(Command::GetDiff);
+  let read = read::parser().map(Command::Read);
   let find = find::parser().map(Command::Find);
   let pipeline = pipeline::parser().map(Command::Pipeline);
   construct!([
@@ -70,6 +73,7 @@ fn parser() -> impl Parser<Command> {
     from_xml,
     get_diff,
     find,
+    read,
     pipeline,
   ])
 }
@@ -94,6 +98,7 @@ pub fn run(command: Command) -> Result<(), Box<dyn std::error::Error>> {
     Command::FromXml(command) => from_xml::run(command)?,
     Command::Find(command) => find::run(command)?,
     Command::GetDiff(command) => get_diff::run(command)?,
+    Command::Read(command) => read::run(command)?,
   }
   Ok(())
 }

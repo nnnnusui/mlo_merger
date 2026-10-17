@@ -155,6 +155,51 @@ pub(crate) fn load_source_ymap_index(cache_dir: &Path) -> Result<SourceYmapIndex
   })
 }
 
+/// A stream file of a resource, as the source cache recorded it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InventoriedFile {
+  /// Resource identifier relative to the source root, including bracket groups.
+  pub resource: String,
+  /// Resource directory name.
+  pub resource_name: String,
+  /// Path below the resource's `stream` directory.
+  pub stream_path: String,
+  /// Stream filename.
+  pub file_name: String,
+  /// Where the file is now: in the cache when it was moved there, otherwise in the resource.
+  pub path: PathBuf,
+}
+
+/// Lists every stream file the source cache inventoried, without rescanning source streams.
+pub fn inventoried_files(cache_dir: &Path) -> Result<Vec<InventoriedFile>> {
+  let path = cache_dir.join("source_cache_info.json");
+  let metadata: SourceCacheMetadata = serde_json::from_reader(BufReader::new(
+    std::fs::File::open(&path)
+      .map_err(|error| format!("Cannot open {}: {error}", path.display()))?,
+  ))?;
+  if !matches!(metadata.format_version, 2 | 3) {
+    return Err(format!("Unsupported source cache schema {}", metadata.format_version).into());
+  }
+  let mut files = Vec::new();
+  for (resource, inventory) in metadata.resources {
+    let resource_name =
+      inventory.source.file_name().and_then(|name| name.to_str()).unwrap_or(&resource).to_string();
+    for file in inventory.files_by_format.into_values().flatten() {
+      files.push(InventoriedFile {
+        resource: resource.clone(),
+        resource_name: resource_name.clone(),
+        stream_path: layout::stream_relative_path(&file.path).unwrap_or(&file.path).to_string(),
+        path: file
+          .cached_path
+          .as_ref()
+          .map_or_else(|| inventory.source.join(&file.path), |path| cache_dir.join(path)),
+        file_name: file.file_name,
+      });
+    }
+  }
+  Ok(files)
+}
+
 /// Loads merge inputs from a generated source cache without rescanning source streams.
 pub fn load_merge_inputs(cache_dir: &Path) -> Result<MergeInputs> {
   let metadata: SourceCacheMetadata = serde_json::from_reader(BufReader::new(
