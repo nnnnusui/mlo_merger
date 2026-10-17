@@ -1,8 +1,14 @@
 use crate::common::position::Position;
 
 /// LOD lights structure of array in YMAP
-#[derive(Debug, Clone, PartialEq, Default, serde::Serialize, serde::Deserialize)]
+#[derive(
+  Debug, Clone, PartialEq, Default, serde::Serialize, serde::Deserialize, struct_diff::Diff,
+)]
 #[cfg_attr(feature = "typescript", derive(specta::Type))]
+#[diff(
+  name = YmapLodLightFieldDiff,
+  attr(cfg_attr(feature = "typescript", derive(specta::Type)))
+)]
 pub struct YmapLodLight {
   pub direction: Position,
   pub falloff: f32,

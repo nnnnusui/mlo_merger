@@ -25,7 +25,7 @@ fn model(
 }
 
 #[test]
-fn occlude_models_list_triangle_changes_by_vanilla_index() {
+fn occlude_models_list_triangle_changes_by_before_index() {
   let vanilla = Ymap {
     occlude_models: vec![model(0.0, vec![triangle(0.0), triangle(2.0)]), model(100.0, vec![])],
     ..base()
@@ -42,8 +42,8 @@ fn occlude_models_list_triangle_changes_by_vanilla_index() {
       "occlude_models": [
         {
           "Modified": {
-            "vanilla_index": 0,
-            "modded_index": 0,
+            "before_index": 0,
+            "after_index": 0,
             "changes": {
               "bmax": { "z": 12.5 },
               "flags": 1,
@@ -75,7 +75,7 @@ fn occlude_models_pair_within_the_xy_tolerance() {
 // Moved from `ymap_occlude_model_diff.rs`: the diff function on its own.
 
 #[test]
-fn lists_removed_and_replaced_triangles_by_vanilla_index() {
+fn lists_removed_and_replaced_triangles_by_before_index() {
   let vanilla = Ymap {
     occlude_models: vec![model(0.0, vec![triangle(0.0), triangle(2.0), triangle(0.0)])],
     ..base()
@@ -85,17 +85,13 @@ fn lists_removed_and_replaced_triangles_by_vanilla_index() {
   modded.occlude_models[0].bmin.z = 0.5;
   modded.occlude_models[0].flags = 1;
 
-  let diffs = compare::occlude_models::diff(
-    &vanilla.occlude_models,
-    &modded.occlude_models,
-    &MatchTolerances::default(),
-  )
-  .unwrap();
+  let diffs =
+    vanilla.occlude_models.diff(&modded.occlude_models, &MatchTolerances::default()).unwrap();
   assert_eq!(
     diffs,
     vec![YmapOccludeModelDiff::Modified {
-      vanilla_index: 0,
-      modded_index: 0,
+      before_index: 0,
+      after_index: 0,
       changes: YmapOccludeModelFieldDiff {
         bmin: Some(PositionDiff {
           z: Some(0.5),

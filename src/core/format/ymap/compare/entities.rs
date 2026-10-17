@@ -9,10 +9,11 @@ use std::collections::{HashMap, HashSet};
 use serde::{Deserialize, Serialize};
 use struct_diff::{ApplyError, Diff};
 
+use struct_diff::vec::{ItemChange, ItemDiff, anchors, apply_changes};
+
 use super::{
   entity_parent::{EntityParent, YmapDiffContext},
-  field::anchors,
-  item_diff::{ItemChange, MergedChange, MergedItems, apply_changes},
+  merged_items::MergedItems,
 };
 use crate::core::format::ymap::model::{YmapEntity, ymap_entity::YmapEntityFieldDiff};
 
@@ -35,8 +36,8 @@ pub enum YmapEntityDiff {
   /// Paired by GUID and differing beyond the tolerance, or pointing at another parent.
   Modified {
     guid: u32,
-    vanilla_index: usize,
-    modded_index: usize,
+    before_index: usize,
+    after_index: usize,
     changes: YmapEntityFieldDiff,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[cfg_attr(feature = "typescript", specta(optional))]
@@ -107,16 +108,16 @@ pub fn diff(
   let anchors = anchors(&pairs, modded.len());
   let mut diffs = Vec::new();
   for (guid, vanilla_indices, modded_indices) in guids {
-    for (&vanilla_index, &modded_index) in vanilla_indices.iter().zip(&modded_indices) {
-      let changes = vanilla[vanilla_index].diff(&modded[modded_index], &ctx.tolerances);
-      let parent = parent_of(&ctx.modded_parents, modded, modded_index);
+    for (&before_index, &after_index) in vanilla_indices.iter().zip(&modded_indices) {
+      let changes = vanilla[before_index].diff(&modded[after_index], &ctx.tolerances);
+      let parent = parent_of(&ctx.modded_parents, modded, after_index);
       let parent =
-        (parent != parent_of(&ctx.vanilla_parents, vanilla, vanilla_index)).then_some(parent);
+        (parent != parent_of(&ctx.vanilla_parents, vanilla, before_index)).then_some(parent);
       if changes.is_some() || parent.is_some() {
         diffs.push(YmapEntityDiff::Modified {
           guid,
-          vanilla_index,
-          modded_index,
+          before_index,
+          after_index,
           changes: changes.unwrap_or_default(),
           parent,
         });
@@ -198,9 +199,10 @@ pub(super) fn merge(
   merged.retain_new(|(entity, _)| !removed.contains(&entity));
   let guid = |index: usize| vanilla.get(index).map_or(0, |entity| entity.guid);
   merged
-    .into_changes(vanilla.len())
+    .into_diffs(vanilla.len())
+    .into_iter()
     .flat_map(|change| match change {
-      MergedChange::Added {
+      ItemDiff::Added {
         after,
         item: (entity, parent),
       } => vec![YmapEntityDiff::Added {
@@ -208,14 +210,14 @@ pub(super) fn merge(
         entity,
         parent,
       }],
-      MergedChange::Removed {
+      ItemDiff::Removed {
         index,
       } => vec![YmapEntityDiff::Removed {
         index,
         guid: guid(index),
       }],
       // Entity diffs never replace, since entities pair by GUID; spelled out for completeness.
-      MergedChange::Replaced {
+      ItemDiff::Replaced {
         index,
         item: (entity, parent),
       } => vec![
@@ -229,14 +231,14 @@ pub(super) fn merge(
           parent,
         },
       ],
-      MergedChange::Modified {
-        vanilla_index,
-        modded_index,
+      ItemDiff::Modified {
+        before_index,
+        after_index,
         changes: (changes, parent),
       } => vec![YmapEntityDiff::Modified {
-        guid: guid(vanilla_index),
-        vanilla_index,
-        modded_index,
+        guid: guid(before_index),
+        before_index,
+        after_index,
         changes,
         parent,
       }],
@@ -281,14 +283,14 @@ impl YmapEntityDiff {
         index: *index,
       },
       Self::Modified {
-        vanilla_index,
-        modded_index,
+        before_index,
+        after_index,
         changes,
         parent,
         ..
       } => Change::Modified {
-        vanilla_index: *vanilla_index,
-        modded_index: *modded_index,
+        before_index: *before_index,
+        after_index: *after_index,
         changes: (changes.clone(), parent.clone()),
       },
     }
@@ -305,8 +307,8 @@ enum Change {
     index: usize,
   },
   Modified {
-    vanilla_index: usize,
-    modded_index: usize,
+    before_index: usize,
+    after_index: usize,
     changes: EntityChanges,
   },
 }
@@ -327,12 +329,12 @@ impl Change {
         index: *index,
       },
       Self::Modified {
-        vanilla_index,
-        modded_index,
+        before_index,
+        after_index,
         changes,
       } => ItemChange::Modified {
-        vanilla_index: *vanilla_index,
-        modded_index: *modded_index,
+        before_index: *before_index,
+        after_index: *after_index,
         changes,
       },
     }

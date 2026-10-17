@@ -14,8 +14,9 @@
 use std::collections::HashSet;
 
 use super::{
-  PositionDiff, YmapDiffFields, YmapDistantLodLightsDiff, YmapInstancedDataDiff, YmapItemDiff,
-  YmapOccludeModelDiff, YmapOccludeModelFieldDiff, entities, item_diff::MergedItems,
+  ItemDiff, PositionDiff, YmapDiffFields, YmapDistantLodLightsDiff, YmapInstancedDataDiff,
+  YmapOccludeModelDiff, YmapOccludeModelFieldDiff, entities,
+  merged_items::{MergedItems, merged, merged_with},
 };
 use crate::core::{
   config::blacklist::BlacklistConfig,
@@ -92,7 +93,7 @@ pub fn merge_diffs(
         imap_link: first_reference("imap_link", instanced_data.clone().map(|diff| &diff.imap_link)),
         prop_instance_list: {
           let props = &vanilla.instanced_data.prop_instance_list;
-          let mut merged = YmapItemDiff::merged(
+          let mut merged = merged(
             "prop_instance_list",
             &lists(instanced_data.clone().map(|diff| &diff.prop_instance_list)),
           );
@@ -101,7 +102,7 @@ pub fn merge_diffs(
             .map(|index| reference_hash(&props[index]))
             .collect::<HashSet<_>>();
           merged.retain_new(|name| seen.insert(reference_hash(name)));
-          non_empty(YmapItemDiff::from_merged(merged, props.len()))
+          non_empty(merged.into_diffs(props.len()))
         },
         grass_instance_list: merge_items(
           "grass_instance_list",
@@ -168,13 +169,13 @@ fn non_empty<T>(items: Vec<T>) -> Option<Vec<T>> {
 fn merge_items<'a, T: Clone + 'a, C: Clone + 'a>(
   what: &str,
   vanilla_len: usize,
-  sources: impl Iterator<Item = Option<&'a Vec<YmapItemDiff<T, C>>>>,
+  sources: impl Iterator<Item = Option<&'a Vec<ItemDiff<T, C>>>>,
   keep: impl FnMut(&T) -> bool,
-) -> Option<Vec<YmapItemDiff<T, C>>> {
+) -> Option<Vec<ItemDiff<T, C>>> {
   let sources = sources.flatten().map(Vec::as_slice).collect::<Vec<_>>();
-  let mut merged: MergedItems<T, C> = YmapItemDiff::merged(what, &sources);
+  let mut merged: MergedItems<T, C> = merged(what, &sources);
   merged.retain_new(keep);
-  non_empty(YmapItemDiff::from_merged(merged, vanilla_len))
+  non_empty(merged.into_diffs(vanilla_len))
 }
 
 /// [`merge_items`] for occlude models, combining the changes of a model that several sources
@@ -185,12 +186,12 @@ fn merge_occlude_models<'a>(
   keep: impl FnMut(&YmapOccludeModel) -> bool,
 ) -> Option<Vec<YmapOccludeModelDiff>> {
   let sources = sources.flatten().map(Vec::as_slice).collect::<Vec<_>>();
-  let mut merged = YmapItemDiff::merged_with(&sources, |index, earlier, later| {
+  let mut merged = merged_with(&sources, |index, earlier, later| {
     tracing::info!("    occlude_models: combining changes of vanilla model {index}");
     combine_occlude_model(&vanilla[index], earlier, later);
   });
   merged.retain_new(keep);
-  non_empty(YmapItemDiff::from_merged(merged, vanilla.len()))
+  non_empty(merged.into_diffs(vanilla.len()))
 }
 
 /// Folds the `later` changes of `vanilla` into the `earlier` ones: each field keeps its earlier
@@ -207,8 +208,8 @@ fn combine_occlude_model(
     .into_iter()
     .filter_map(Option::as_deref)
     .collect::<Vec<_>>();
-  let triangles = YmapItemDiff::merged("triangles", &triangles);
-  earlier.triangles = non_empty(YmapItemDiff::from_merged(triangles, vanilla.triangles.len()));
+  let triangles = merged("triangles", &triangles);
+  earlier.triangles = non_empty(triangles.into_diffs(vanilla.triangles.len()));
 }
 
 /// Fills the axes `earlier` leaves unchanged with those `later` changes.

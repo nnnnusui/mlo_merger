@@ -6,6 +6,7 @@ use crate::{common::position::Position, core::config::matching::MatchTolerances}
 #[diff(
   name = YmapTimeCycleModifierFieldDiff,
   context = MatchTolerances,
+  matching = YmapTimeCycleModifier::matches,
   attr(cfg_attr(feature = "typescript", derive(specta::Type)))
 )]
 pub struct YmapTimeCycleModifier {
@@ -20,4 +21,15 @@ pub struct YmapTimeCycleModifier {
   pub range: f32,
   pub start_hour: u32,
   pub end_hour: u32,
+}
+
+impl YmapTimeCycleModifier {
+  /// Whether `other` is the same modifier: equal minimum or maximum extents.
+  pub fn matches(
+    &self,
+    other: &YmapTimeCycleModifier,
+    _tolerances: &MatchTolerances,
+  ) -> bool {
+    self.min_extents == other.min_extents || self.max_extents == other.max_extents
+  }
 }

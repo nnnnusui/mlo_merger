@@ -18,8 +18,18 @@ pub fn derive_diff(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 struct ContainerAttrs {
   name: Option<Ident>,
   context: Option<Type>,
+  pairing: Pairing,
   attrs: Vec<Meta>,
   field_attrs: Vec<Meta>,
+}
+
+/// How the items of arrays of the struct pair up.
+#[derive(Default)]
+enum Pairing {
+  #[default]
+  Equal,
+  Key(Path),
+  Matching(Path),
 }
 
 /// How a field is compared.
@@ -125,6 +135,27 @@ fn expand(input: &DeriveInput) -> syn::Result<TokenStream> {
   }
 
   let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
+  let pair = match &container.pairing {
+    Pairing::Equal => quote!(::struct_diff::vec::pair_equal(before, after)),
+    Pairing::Key(path) => quote! {
+      ::struct_diff::vec::pair_by_keys(
+        before.iter().map(|item| #path(item, ctx)),
+        after.iter().map(|item| #path(item, ctx)),
+      )
+    },
+    Pairing::Matching(path) => quote! {
+      ::struct_diff::vec::pair_in_order(before, after, |before, after| #path(before, after, ctx))
+    },
+  };
+  let mut pair_generics = generics.clone();
+  if matches!(container.pairing, Pairing::Equal) {
+    // Higher-ranked, so a type without `PartialEq` gets no `Pair` instead of an error.
+    pair_generics
+      .make_where_clause()
+      .predicates
+      .push(syn::parse_quote!(for<'__pair> #ident #ty_generics: ::core::cmp::PartialEq));
+  }
+  let pair_where_clause = &pair_generics.where_clause;
   Ok(quote! {
     // No `#[doc]`: derives that register `doc` as a helper attribute, such as specta's, make
     // it ambiguous.
@@ -172,6 +203,17 @@ fn expand(input: &DeriveInput) -> syn::Result<TokenStream> {
         ::core::result::Result::Ok(())
       }
     }
+
+    impl #impl_generics ::struct_diff::vec::Pair for #ident #ty_generics #pair_where_clause {
+      #[allow(unused_variables)]
+      fn pair(
+        before: &[Self],
+        after: &[Self],
+        ctx: &Self::Context,
+      ) -> ::struct_diff::vec::Pairing {
+        #pair
+      }
+    }
   })
 }
 
@@ -187,13 +229,21 @@ fn parse_container_attrs(attrs: &[Attribute]) -> syn::Result<ContainerAttrs> {
         parsed.name = Some(meta.value()?.parse()?);
       } else if meta.path.is_ident("context") {
         parsed.context = Some(meta.value()?.parse()?);
+      } else if meta.path.is_ident("key") || meta.path.is_ident("matching") {
+        if !matches!(parsed.pairing, Pairing::Equal) {
+          return Err(meta.error("a struct takes at most one of `key` and `matching`"));
+        }
+        let path = meta.value()?.parse()?;
+        parsed.pairing =
+          if meta.path.is_ident("key") { Pairing::Key(path) } else { Pairing::Matching(path) };
       } else if meta.path.is_ident("attr") {
         parsed.attrs.extend(parse_metas(&meta)?);
       } else if meta.path.is_ident("field_attr") {
         parsed.field_attrs.extend(parse_metas(&meta)?);
       } else {
         return Err(meta.error(
-          "unknown `diff` struct attribute; expected `name`, `context`, `attr` or `field_attr`",
+          "unknown `diff` struct attribute; expected `name`, `context`, `key`, `matching`, `attr` \
+           or `field_attr`",
         ));
       }
       Ok(())

@@ -109,7 +109,7 @@ fn grass_batches_compare_instances_in_world_space() {
   assert_eq!(changes["batch_aabb"], serde_json::to_value(bounds(5.0, 40.0)).unwrap());
   assert_eq!(changes.get("removed_instances"), None);
   assert_eq!(changes["added_instances"][0]["after"], json!(2));
-  assert_eq!(changes["modified_instances"][0]["vanilla_index"], json!(1));
+  assert_eq!(changes["modified_instances"][0]["before_index"], json!(1));
   assert_eq!(changes["modified_instances"][0]["changes"], json!({ "scale": 2 }));
   assert_eq!(diffs["instanced_data"]["grass_instance_list"].as_array().unwrap().len(), 1);
 }
@@ -131,7 +131,7 @@ fn repainted_grass_pairs_batches_by_overlapping_bounds() {
   let grass = &diffs.instanced_data.unwrap().grass_instance_list.unwrap();
   assert!(matches!(
     &grass[0],
-    crate::core::format::ymap::compare::YmapGrassBatchDiff::Modified { vanilla_index: 0, modded_index: 1, changes }
+    crate::core::format::ymap::compare::YmapGrassBatchDiff::Modified { before_index: 0, after_index: 1, changes }
       if changes.removed_instances == vec![0, 1] && changes.added_instances.len() == 1
   ));
 }
@@ -168,8 +168,8 @@ fn rebounded_batches_report_only_their_bounds() {
   assert_eq!(
     grass(&vanilla, &modded),
     vec![YmapGrassBatchDiff::Modified {
-      vanilla_index: 0,
-      modded_index: 0,
+      before_index: 0,
+      after_index: 0,
       changes: YmapGrassBatchFieldDiff {
         batch_aabb: Some(bounds(5.0, 40.0)),
         ..Default::default()
@@ -185,7 +185,7 @@ fn split_batches_keep_the_larger_share_and_add_the_rest() {
   let diffs = grass(&vanilla, &modded);
   assert_eq!(diffs.len(), 2, "{diffs:?}");
   let YmapGrassBatchDiff::Modified {
-    modded_index: 1,
+    after_index: 1,
     changes,
     ..
   } = &diffs[0]
@@ -211,12 +211,12 @@ fn repainted_batches_pair_by_overlapping_bounds() {
     .iter()
     .map(|diff| match diff {
       YmapGrassBatchDiff::Modified {
-        vanilla_index,
-        modded_index,
+        before_index,
+        after_index,
         changes,
       } => (
-        *vanilla_index,
-        *modded_index,
+        *before_index,
+        *after_index,
         changes.removed_instances.len(),
         changes.added_instances.len(),
       ),
@@ -246,8 +246,8 @@ fn reports_attribute_changes_and_whole_batches() {
   let diffs = diff.grass_instance_list.unwrap();
   assert_eq!(diffs.len(), 2, "{diffs:?}");
   let YmapGrassBatchDiff::Modified {
-    vanilla_index: 0,
-    modded_index: 0,
+    before_index: 0,
+    after_index: 0,
     changes,
   } = &diffs[0]
   else {
@@ -260,8 +260,8 @@ fn reports_attribute_changes_and_whole_batches() {
   assert_eq!(
     changes.modified_instances,
     vec![YmapModifiedGrassInstance {
-      vanilla_index: 0,
-      modded_index: 0,
+      before_index: 0,
+      after_index: 0,
       world_position: changes.modified_instances[0].world_position.clone(),
       changes: YmapGrassInstanceFieldDiff {
         scale: Some(2),

@@ -15,6 +15,18 @@ pub struct Position {
   pub z: f32,
 }
 
+impl Position {
+  /// The position scaled by `10^decimals` and rounded, identifying items at one spot.
+  pub(crate) fn rounded_key(
+    &self,
+    decimals: u32,
+  ) -> (i64, i64, i64) {
+    let scale = 10f64.powi(decimals as i32);
+    let round = |value: f32| (f64::from(value) * scale).round() as i64;
+    (round(self.x), round(self.y), round(self.z))
+  }
+}
+
 #[cfg(test)]
 mod tests {
   use super::*;

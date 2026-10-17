@@ -6,6 +6,7 @@ use crate::core::config::matching::MatchTolerances;
 #[diff(
   name = YmapBoxOccluderFieldDiff,
   context = MatchTolerances,
+  matching = YmapBoxOccluder::matches,
   attr(cfg_attr(feature = "typescript", derive(specta::Type)))
 )]
 pub struct YmapBoxOccluder {
@@ -35,11 +36,14 @@ mod rotation {
 }
 
 impl YmapBoxOccluder {
-  pub fn is_same(
+  /// Whether `other` is the same occluder: centers within `tolerance.ymap_box_occluder` on every
+  /// axis, in stored units.
+  pub fn matches(
     &self,
     other: &YmapBoxOccluder,
+    tolerances: &MatchTolerances,
   ) -> bool {
-    let tolerance = crate::core::config::matching::current().ymap_box_occluder;
+    let tolerance = tolerances.ymap_box_occluder;
     (self.i_center_x - other.i_center_x).abs() < tolerance
       && (self.i_center_y - other.i_center_y).abs() < tolerance
       && (self.i_center_z - other.i_center_z).abs() < tolerance
@@ -49,7 +53,6 @@ impl YmapBoxOccluder {
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::core::config::matching::{MatchTolerances, with_tolerances};
 
   #[test]
   fn configured_box_occluder_tolerance_uses_stored_integer_units() {
@@ -65,17 +68,13 @@ mod tests {
     };
     let mut changed = original.clone();
     changed.i_center_x = 1;
-    assert!(!original.is_same(&changed));
-    with_tolerances(
-      MatchTolerances {
-        ymap_box_occluder: 2,
-        ..Default::default()
-      },
-      || {
-        assert!(original.is_same(&changed));
-        changed.i_center_x = 2;
-        assert!(!original.is_same(&changed));
-      },
-    );
+    assert!(!original.matches(&changed, &MatchTolerances::default()));
+    let wider = MatchTolerances {
+      ymap_box_occluder: 2,
+      ..Default::default()
+    };
+    assert!(original.matches(&changed, &wider));
+    changed.i_center_x = 2;
+    assert!(!original.matches(&changed, &wider));
   }
 }

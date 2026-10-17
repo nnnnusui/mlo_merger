@@ -36,8 +36,8 @@ fn time_cycle_modifiers_pair_by_either_extent() {
       "time_cycle_modifiers": [
         {
           "Modified": {
-            "vanilla_index": 1,
-            "modded_index": 1,
+            "before_index": 1,
+            "after_index": 1,
             "changes": { "name": "night", "max_extents": { "z": 30.5 } },
           },
         },
@@ -61,18 +61,16 @@ fn pairs_by_either_extent_and_thresholds_floats() {
   modded.time_cycle_modifiers[1].end_hour = 6;
   modded.time_cycle_modifiers.push(modifier(200.0));
 
-  let diffs = compare::time_cycle_modifiers::diff(
-    &vanilla.time_cycle_modifiers,
-    &modded.time_cycle_modifiers,
-    &MatchTolerances::default(),
-  )
-  .unwrap();
+  let diffs = vanilla
+    .time_cycle_modifiers
+    .diff(&modded.time_cycle_modifiers, &MatchTolerances::default())
+    .unwrap();
   assert_eq!(
     diffs,
     vec![
       YmapTimeCycleModifierDiff::Modified {
-        vanilla_index: 1,
-        modded_index: 1,
+        before_index: 1,
+        after_index: 1,
         changes: YmapTimeCycleModifierFieldDiff {
           max_extents: Some(PositionDiff {
             z: Some(30.0),

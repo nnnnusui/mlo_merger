@@ -40,7 +40,7 @@ fn distant_lights_pair_by_position_and_report_block_fields() {
       "distant_lod_lights": {
         "num_street_lights": 3,
         "items": [
-          { "Modified": { "vanilla_index": 0, "modded_index": 1, "changes": { "rgbi": "11" } } },
+          { "Modified": { "before_index": 0, "after_index": 1, "changes": { "rgbi": "11" } } },
           { "Removed": { "index": 2 } },
           { "Added": { "after": 0, "item": { "position": "10 11 12", "rgbi": "40" } } },
         ],
@@ -70,7 +70,7 @@ fn distant_lights_moved_within_the_rounding_report_the_position() {
     json!({
       "distant_lod_lights": {
         "items": [{
-          "Modified": { "vanilla_index": 0, "modded_index": 0, "changes": { "position": { "z": 3.25 } } },
+          "Modified": { "before_index": 0, "after_index": 0, "changes": { "position": { "z": 3.25 } } },
         }],
       },
     })
@@ -109,8 +109,8 @@ fn pairs_by_rounded_position_and_reports_block_fields() {
     diff.items.unwrap(),
     vec![
       YmapDistantLodLightDiff::Modified {
-        vanilla_index: 0,
-        modded_index: 1,
+        before_index: 0,
+        after_index: 1,
         changes: YmapDistantLodLightFieldDiff {
           rgbi: Some("z".into()),
           ..Default::default()

@@ -38,6 +38,8 @@
 //! - `#[diff(name = Ident)]` names the generated struct instead of `<Name>Diff`.
 //! - `#[diff(context = Type)]` sets [`Diff::Context`], `()` by default. Field attribute
 //!   expressions see it as `ctx: &Type`.
+//! - `#[diff(key = path)]` or `#[diff(matching = path)]` sets how items pair up in arrays; see
+//!   [Arrays](#arrays).
 //! - `#[diff(attr(...))]` adds `#[...]` to the generated struct, and
 //!   `#[diff(field_attr(...))]` adds `#[...]` to each of its fields.
 //!
@@ -60,8 +62,23 @@
 //!
 //! `nested` and `with` receive `ctx` unless `context = expr` gives the value they receive
 //! instead, and `#[diff(attr(...))]` adds `#[...]` to the generated field.
+//!
+//! # Arrays
+//!
+//! `Vec<T>` implements [`Diff`] for every derived `T`, so `#[diff(nested)]` on a `Vec` field
+//! records items added, removed, replaced or modified; see [`vec`]. How items pair up is set on
+//! `T`:
+//!
+//! - no attribute: equal items pair ([`vec::pair_equal`]), which needs `T: PartialEq`, so changed
+//!   items are replaced rather than modified.
+//! - `#[diff(key = path)]`: items with equal `path(&item, ctx) -> Option<K>` keys pair, in order;
+//!   items without a key never pair.
+//! - `#[diff(matching = path)]`: each earlier item pairs with the first unpaired later item for
+//!   which `path(&before, &after, ctx)` holds.
 
 pub use struct_diff_derive::Diff;
+
+pub mod vec;
 
 use std::fmt;
 

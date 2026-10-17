@@ -18,11 +18,9 @@ use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 use struct_diff::{ApplyError, Diff};
 
-use super::{
-  NoFieldDiff, YmapItemDiff,
-  field::{Pairing, anchors, pair_by_keys},
-  item_diff::{ItemChange, apply_changes},
-};
+use struct_diff::vec::{ItemChange, ItemDiff, Pairing, anchors, apply_changes, pair_by_keys};
+
+use super::NoFieldDiff;
 use crate::{
   common::position::Position,
   core::format::ymap::{
@@ -38,10 +36,10 @@ use crate::{
 const BATCH_VERT_MULTIPLIER: f64 = 0.00001525878;
 
 /// How one prop instance name of a modded YMAP differs from vanilla.
-pub type YmapPropInstanceDiff = YmapItemDiff<String, NoFieldDiff>;
+pub type YmapPropInstanceDiff = ItemDiff<String, NoFieldDiff>;
 
 /// How one grass batch of a modded YMAP differs from vanilla.
-pub type YmapGrassBatchDiff = YmapItemDiff<GrassInstanceBatch, YmapGrassBatchFieldDiff>;
+pub type YmapGrassBatchDiff = ItemDiff<GrassInstanceBatch, YmapGrassBatchFieldDiff>;
 
 /// Changes of a paired grass batch.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -76,9 +74,9 @@ pub struct YmapAddedGrassInstance {
 #[cfg_attr(feature = "typescript", derive(specta::Type))]
 pub struct YmapModifiedGrassInstance {
   /// Index of the instance within the vanilla batch.
-  pub vanilla_index: usize,
+  pub before_index: usize,
   /// Index of the instance within the modded batch.
-  pub modded_index: usize,
+  pub after_index: usize,
   pub world_position: Position,
   pub changes: YmapGrassInstanceFieldDiff,
 }
@@ -103,15 +101,16 @@ pub mod imap_link {
 pub mod prop_instances {
   use struct_diff::ApplyError;
 
-  use super::{YmapItemDiff, YmapPropInstanceDiff, pair_by_keys, reference_hash};
+  use super::{ItemDiff, YmapPropInstanceDiff, pair_by_keys, reference_hash};
 
   pub fn diff<C: ?Sized>(
     before: &[String],
     after: &[String],
     _ctx: &C,
   ) -> Option<Vec<YmapPropInstanceDiff>> {
-    let names = |list: &[String]| list.iter().map(|name| Some(reference_hash(name))).collect();
-    let diffs = YmapItemDiff::unpaired(pair_by_keys(names(before), names(after)), after);
+    let names =
+      |list: &[String]| list.iter().map(|name| Some(reference_hash(name))).collect::<Vec<_>>();
+    let diffs = ItemDiff::unpaired(pair_by_keys(names(before), names(after)), after);
     (!diffs.is_empty()).then_some(diffs)
   }
 
@@ -119,7 +118,7 @@ pub mod prop_instances {
     items: &mut Vec<String>,
     diffs: &[YmapPropInstanceDiff],
   ) -> Result<(), ApplyError> {
-    YmapItemDiff::apply_unpaired(items, diffs)
+    ItemDiff::apply_with(items, diffs, |_, changes| match *changes {})
   }
 }
 
@@ -128,7 +127,7 @@ pub mod prop_instances {
 pub mod grass_batches {
   use struct_diff::ApplyError;
 
-  use super::{GrassInstanceBatch, YmapGrassBatchDiff, YmapItemDiff, grass_batch_diffs};
+  use super::{GrassInstanceBatch, ItemDiff, YmapGrassBatchDiff, grass_batch_diffs};
 
   pub fn diff(
     before: &[GrassInstanceBatch],
@@ -143,7 +142,7 @@ pub mod grass_batches {
     items: &mut Vec<GrassInstanceBatch>,
     diffs: &[YmapGrassBatchDiff],
   ) -> Result<(), ApplyError> {
-    YmapItemDiff::apply_with(items, diffs, |batch, changes| changes.apply_to(batch))
+    ItemDiff::apply_with(items, diffs, |batch, changes| changes.apply_to(batch))
   }
 }
 
@@ -408,7 +407,7 @@ fn grass_batch_diffs(
     removed: (0..vanilla.len()).filter(|index| !vanilla_paired[*index]).collect(),
     added: (0..modded.len()).filter(|index| !modded_paired[*index]).collect(),
   };
-  YmapItemDiff::collect_with(pairing, modded, |vanilla_index, modded_index| {
+  ItemDiff::collect_with(pairing, modded, |vanilla_index, modded_index| {
     let changes = YmapGrassBatchFieldDiff::between(
       (&vanilla[vanilla_index], &vanilla_placed[vanilla_index]),
       (&modded[modded_index], &modded_placed[modded_index]),
@@ -449,8 +448,8 @@ impl YmapGrassBatchFieldDiff {
       item: &added.instance,
     });
     let modified = modified_instances.iter().map(|modified| ItemChange::Modified {
-      vanilla_index: modified.vanilla_index,
-      modded_index: modified.modded_index,
+      before_index: modified.before_index,
+      after_index: modified.after_index,
       changes: &modified.changes,
     });
     batch.instances =
@@ -477,8 +476,8 @@ impl YmapGrassBatchFieldDiff {
     let mut modified_instances = modified
       .into_iter()
       .map(|(from, to)| YmapModifiedGrassInstance {
-        vanilla_index: from,
-        modded_index: to,
+        before_index: from,
+        after_index: to,
         world_position: after_placed[to].position.clone().unwrap_or_default(),
         // Pairs found by position alone may still share attributes.
         changes: before_placed[from]
@@ -487,7 +486,7 @@ impl YmapGrassBatchFieldDiff {
           .unwrap_or_default(),
       })
       .collect::<Vec<_>>();
-    modified_instances.sort_by_key(|it| it.vanilla_index);
+    modified_instances.sort_by_key(|it| it.before_index);
     Self {
       batch_aabb: (before.batch_aabb != after.batch_aabb).then(|| after.batch_aabb.clone()),
       removed_instances: (0..before_placed.len()).filter(|index| !before_kept[*index]).collect(),

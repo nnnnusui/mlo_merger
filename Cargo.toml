@@ -8,7 +8,7 @@ default-run = "mlo_merger"
 members = ["crates/struct-diff", "crates/struct-diff-derive"]
 
 [features]
-typescript = ["dep:specta"]
+typescript = ["dep:specta", "struct-diff/specta"]
 
 [dependencies]
 bpaf = "0.9.28"

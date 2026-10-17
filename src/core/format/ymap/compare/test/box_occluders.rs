@@ -35,7 +35,7 @@ fn box_occluders_derive_modified_removed_and_added() {
     json(&vanilla, &modded),
     json!({
       "box_occluders": [
-        { "Modified": { "vanilla_index": 1, "modded_index": 1, "changes": { "i_width": 8, "i_sin_z": 5 } } },
+        { "Modified": { "before_index": 1, "after_index": 1, "changes": { "i_width": 8, "i_sin_z": 5 } } },
         { "Replaced": { "index": 2, "item": serde_json::to_value(occluder(300)).unwrap() } },
       ],
     })
@@ -65,7 +65,7 @@ fn box_occluders_follow_the_configured_tolerances() {
     serde_json::to_value(diff_with(&vanilla, &modded, &configured)).unwrap(),
     json!({
       "box_occluders": [{
-        "Modified": { "vanilla_index": 0, "modded_index": 0, "changes": { "i_center_x": 2, "i_cos_z": 101 } },
+        "Modified": { "before_index": 0, "after_index": 0, "changes": { "i_center_x": 2, "i_cos_z": 101 } },
       }],
     })
   );
@@ -86,18 +86,14 @@ fn pairs_by_center_and_thresholds_rotation() {
   modded.box_occluders.remove(2);
   modded.box_occluders.push(occluder(300));
 
-  let diffs = compare::box_occluders::diff(
-    &vanilla.box_occluders,
-    &modded.box_occluders,
-    &MatchTolerances::default(),
-  )
-  .unwrap();
+  let diffs =
+    vanilla.box_occluders.diff(&modded.box_occluders, &MatchTolerances::default()).unwrap();
   assert_eq!(
     diffs,
     vec![
       YmapBoxOccluderDiff::Modified {
-        vanilla_index: 1,
-        modded_index: 1,
+        before_index: 1,
+        after_index: 1,
         changes: YmapBoxOccluderFieldDiff {
           i_cos_z: Some(102),
           i_height: Some(8),
@@ -115,9 +111,7 @@ fn pairs_by_center_and_thresholds_rotation() {
     ..Default::default()
   };
   assert_eq!(
-    compare::box_occluders::diff(&vanilla.box_occluders, &modded.box_occluders, &exact)
-      .unwrap()
-      .len(),
+    vanilla.box_occluders.diff(&modded.box_occluders, &exact).unwrap().len(),
     3,
     "both occluders modified, and the third replaced"
   );

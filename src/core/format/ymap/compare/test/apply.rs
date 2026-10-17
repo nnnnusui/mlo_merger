@@ -505,7 +505,7 @@ fn out_of_range_indices_are_rejected() {
     ..Default::default()
   };
   let error = apply_diff(&removed_twice, &vanilla).unwrap_err().to_string();
-  assert_eq!(error, "box_occluders: vanilla index 0 is changed twice");
+  assert_eq!(error, "box_occluders: index 0 is changed twice");
 
   let missing_vanilla = YmapDiffFields {
     box_occluders: Some(vec![YmapBoxOccluderDiff::Removed {
@@ -514,7 +514,7 @@ fn out_of_range_indices_are_rejected() {
     ..Default::default()
   };
   let error = apply_diff(&missing_vanilla, &vanilla).unwrap_err().to_string();
-  assert_eq!(error, "box_occluders: vanilla index 1 is out of 1 items");
+  assert_eq!(error, "box_occluders: index 1 is out of 1 items");
 
   let past_the_end = YmapDiffFields {
     box_occluders: Some(vec![YmapBoxOccluderDiff::Added {
@@ -524,7 +524,7 @@ fn out_of_range_indices_are_rejected() {
     ..Default::default()
   };
   let error = apply_diff(&past_the_end, &vanilla).unwrap_err().to_string();
-  assert_eq!(error, "box_occluders: vanilla index 1 is out of 1 items");
+  assert_eq!(error, "box_occluders: index 1 is out of 1 items");
 }
 
 #[test]

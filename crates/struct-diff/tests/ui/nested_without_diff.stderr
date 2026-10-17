@@ -9,11 +9,16 @@ help: the trait `Diff` is not implemented for `Plain`
   |
 2 | struct Plain {
   | ^^^^^^^^^^^^
-help: the trait `Diff` is implemented for `Holder`
+help: the following other types implement trait `Diff`
  --> tests/ui/nested_without_diff.rs:6:10
   |
 6 | #[derive(struct_diff::Diff)]
-  |          ^^^^^^^^^^^^^^^^^
+  |          ^^^^^^^^^^^^^^^^^ `Holder`
+  |
+ ::: src/vec.rs
+  |
+  | impl<T: Pair + Clone> Diff for Vec<T> {
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `Vec<T>`
   = note: this error originates in the derive macro `struct_diff::Diff` (in Nightly builds, run with -Z macro-backtrace for more info)
 
 error[E0277]: the trait bound `Plain: Diff` is not satisfied
@@ -27,11 +32,16 @@ help: the trait `Diff` is not implemented for `Plain`
   |
 2 | struct Plain {
   | ^^^^^^^^^^^^
-help: the trait `Diff` is implemented for `Holder`
+help: the following other types implement trait `Diff`
  --> tests/ui/nested_without_diff.rs:6:10
   |
 6 | #[derive(struct_diff::Diff)]
-  |          ^^^^^^^^^^^^^^^^^
+  |          ^^^^^^^^^^^^^^^^^ `Holder`
+  |
+ ::: src/vec.rs
+  |
+  | impl<T: Pair + Clone> Diff for Vec<T> {
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `Vec<T>`
   = note: this error originates in the derive macro `::core::fmt::Debug` which comes from the expansion of the derive macro `struct_diff::Diff` (in Nightly builds, run with -Z macro-backtrace for more info)
 
 error[E0277]: the trait bound `Plain: Diff` is not satisfied
@@ -45,11 +55,16 @@ help: the trait `Diff` is not implemented for `Plain`
   |
 2 | struct Plain {
   | ^^^^^^^^^^^^
-help: the trait `Diff` is implemented for `Holder`
+help: the following other types implement trait `Diff`
  --> tests/ui/nested_without_diff.rs:6:10
   |
 6 | #[derive(struct_diff::Diff)]
-  |          ^^^^^^^^^^^^^^^^^
+  |          ^^^^^^^^^^^^^^^^^ `Holder`
+  |
+ ::: src/vec.rs
+  |
+  | impl<T: Pair + Clone> Diff for Vec<T> {
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `Vec<T>`
   = note: this error originates in the derive macro `::core::clone::Clone` which comes from the expansion of the derive macro `struct_diff::Diff` (in Nightly builds, run with -Z macro-backtrace for more info)
 
 error[E0277]: the trait bound `Plain: Diff` is not satisfied
@@ -63,11 +78,16 @@ help: the trait `Diff` is not implemented for `Plain`
   |
 2 | struct Plain {
   | ^^^^^^^^^^^^
-help: the trait `Diff` is implemented for `Holder`
+help: the following other types implement trait `Diff`
  --> tests/ui/nested_without_diff.rs:6:10
   |
 6 | #[derive(struct_diff::Diff)]
-  |          ^^^^^^^^^^^^^^^^^
+  |          ^^^^^^^^^^^^^^^^^ `Holder`
+  |
+ ::: src/vec.rs
+  |
+  | impl<T: Pair + Clone> Diff for Vec<T> {
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `Vec<T>`
   = note: this error originates in the derive macro `::core::default::Default` which comes from the expansion of the derive macro `struct_diff::Diff` (in Nightly builds, run with -Z macro-backtrace for more info)
 
 error[E0277]: the trait bound `Plain: Diff` is not satisfied
@@ -81,11 +101,16 @@ help: the trait `Diff` is not implemented for `Plain`
   |
 2 | struct Plain {
   | ^^^^^^^^^^^^
-help: the trait `Diff` is implemented for `Holder`
+help: the following other types implement trait `Diff`
  --> tests/ui/nested_without_diff.rs:6:10
   |
 6 | #[derive(struct_diff::Diff)]
-  |          ^^^^^^^^^^^^^^^^^
+  |          ^^^^^^^^^^^^^^^^^ `Holder`
+  |
+ ::: src/vec.rs
+  |
+  | impl<T: Pair + Clone> Diff for Vec<T> {
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `Vec<T>`
   = note: this error originates in the derive macro `::core::cmp::PartialEq` which comes from the expansion of the derive macro `struct_diff::Diff` (in Nightly builds, run with -Z macro-backtrace for more info)
 
 error[E0277]: the trait bound `Plain: Diff` is not satisfied
@@ -99,11 +124,16 @@ help: the trait `Diff` is not implemented for `Plain`
   |
 2 | struct Plain {
   | ^^^^^^^^^^^^
-help: the trait `Diff` is implemented for `Holder`
+help: the following other types implement trait `Diff`
  --> tests/ui/nested_without_diff.rs:6:10
   |
 6 | #[derive(struct_diff::Diff)]
-  |          ^^^^^^^^^^^^^^^^^
+  |          ^^^^^^^^^^^^^^^^^ `Holder`
+  |
+ ::: src/vec.rs
+  |
+  | impl<T: Pair + Clone> Diff for Vec<T> {
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `Vec<T>`
   = note: this error originates in the derive macro `::struct_diff::__private::serde::Serialize` which comes from the expansion of the derive macro `struct_diff::Diff` (in Nightly builds, run with -Z macro-backtrace for more info)
 
 error[E0277]: the trait bound `Plain: Diff` is not satisfied
@@ -117,11 +147,16 @@ help: the trait `Diff` is not implemented for `Plain`
   |
 2 | struct Plain {
   | ^^^^^^^^^^^^
-help: the trait `Diff` is implemented for `Holder`
+help: the following other types implement trait `Diff`
  --> tests/ui/nested_without_diff.rs:6:10
   |
 6 | #[derive(struct_diff::Diff)]
-  |          ^^^^^^^^^^^^^^^^^
+  |          ^^^^^^^^^^^^^^^^^ `Holder`
+  |
+ ::: src/vec.rs
+  |
+  | impl<T: Pair + Clone> Diff for Vec<T> {
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `Vec<T>`
   = note: this error originates in the derive macro `struct_diff::Diff` (in Nightly builds, run with -Z macro-backtrace for more info)
 
 error[E0277]: the trait bound `Plain: Diff` is not satisfied
@@ -135,11 +170,16 @@ help: the trait `Diff` is not implemented for `Plain`
   |
 2 | struct Plain {
   | ^^^^^^^^^^^^
-help: the trait `Diff` is implemented for `Holder`
+help: the following other types implement trait `Diff`
  --> tests/ui/nested_without_diff.rs:6:10
   |
 6 | #[derive(struct_diff::Diff)]
-  |          ^^^^^^^^^^^^^^^^^
+  |          ^^^^^^^^^^^^^^^^^ `Holder`
+  |
+ ::: src/vec.rs
+  |
+  | impl<T: Pair + Clone> Diff for Vec<T> {
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `Vec<T>`
   = note: this error originates in the derive macro `::struct_diff::__private::serde::Deserialize` which comes from the expansion of the derive macro `struct_diff::Diff` (in Nightly builds, run with -Z macro-backtrace for more info)
 
 error[E0277]: the trait bound `Plain: Diff` is not satisfied
@@ -153,9 +193,14 @@ help: the trait `Diff` is not implemented for `Plain`
   |
 2 | struct Plain {
   | ^^^^^^^^^^^^
-help: the trait `Diff` is implemented for `Holder`
+help: the following other types implement trait `Diff`
  --> tests/ui/nested_without_diff.rs:6:10
   |
 6 | #[derive(struct_diff::Diff)]
-  |          ^^^^^^^^^^^^^^^^^
+  |          ^^^^^^^^^^^^^^^^^ `Holder`
+  |
+ ::: src/vec.rs
+  |
+  | impl<T: Pair + Clone> Diff for Vec<T> {
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `Vec<T>`
   = note: this error originates in the derive macro `struct_diff::Diff` (in Nightly builds, run with -Z macro-backtrace for more info)

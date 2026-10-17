@@ -6,6 +6,7 @@ use crate::{common::position::Position, core::config::matching::MatchTolerances}
 #[diff(
   name = YmapCarGeneratorFieldDiff,
   context = MatchTolerances,
+  key = YmapCarGenerator::pairing_key,
   attr(cfg_attr(feature = "typescript", derive(specta::Type)))
 )]
 pub struct YmapCarGenerator {
@@ -25,4 +26,15 @@ pub struct YmapCarGenerator {
   pub body_color_remap_4: i32,
   pub pop_group: String,
   pub livery: i32,
+}
+
+impl YmapCarGenerator {
+  /// Identifies a generator by its position rounded to
+  /// `tolerance.ymap_car_generator_position_decimals` decimal places.
+  pub fn pairing_key(
+    &self,
+    tolerances: &MatchTolerances,
+  ) -> Option<(i64, i64, i64)> {
+    Some(self.position.rounded_key(tolerances.ymap_car_generator_position_decimals))
+  }
 }

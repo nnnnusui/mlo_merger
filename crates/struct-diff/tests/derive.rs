@@ -342,3 +342,129 @@ fn generic_structs_diff_their_parameters() {
 fn compile_errors() {
   trybuild::TestCases::new().compile_fail("tests/ui/*.rs");
 }
+
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, Diff)]
+struct Tag {
+  name: String,
+}
+
+fn tag(name: &str) -> Tag {
+  Tag {
+    name: name.into(),
+  }
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, Diff)]
+#[diff(key = Light::id)]
+struct Light {
+  id: u32,
+  power: u32,
+}
+
+impl Light {
+  fn id(
+    &self,
+    _ctx: &(),
+  ) -> Option<u32> {
+    Some(self.id)
+  }
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, Diff)]
+#[diff(context = i32, matching = Marker::close)]
+struct Marker {
+  #[diff(threshold = *ctx)]
+  at: i32,
+  label: String,
+}
+
+impl Marker {
+  fn close(
+    &self,
+    other: &Self,
+    reach: &i32,
+  ) -> bool {
+    (self.at - other.at).abs() <= *reach
+  }
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, Diff)]
+struct Scene {
+  #[diff(nested)]
+  tags: Vec<Tag>,
+  #[diff(nested)]
+  lights: Vec<Light>,
+  #[diff(nested, context = 2)]
+  markers: Vec<Marker>,
+}
+
+fn marker(
+  at: i32,
+  label: &str,
+) -> Marker {
+  Marker {
+    at,
+    label: label.into(),
+  }
+}
+
+#[test]
+fn arrays_record_added_removed_replaced_and_modified_items() {
+  let before = Scene {
+    tags: vec![tag("a"), tag("b"), tag("c")],
+    lights: vec![
+      Light {
+        id: 1,
+        power: 10,
+      },
+      Light {
+        id: 2,
+        power: 20,
+      },
+    ],
+    markers: vec![marker(0, "x"), marker(10, "y")],
+  };
+  let after = Scene {
+    // `b` becomes `B`, which equality pairing reads as a replacement; `d` is added after `c`.
+    tags: vec![tag("a"), tag("B"), tag("c"), tag("d")],
+    // Light 2 changes power, light 1 is removed and light 3 added.
+    lights: vec![
+      Light {
+        id: 2,
+        power: 25,
+      },
+      Light {
+        id: 3,
+        power: 30,
+      },
+    ],
+    // The first marker moves within reach and is relabelled; the second moves out of reach.
+    markers: vec![marker(1, "z"), marker(20, "y")],
+  };
+  let diff = before.diff(&after, &()).unwrap();
+  assert_eq!(
+    serde_json::to_value(&diff).unwrap(),
+    json!({
+      "tags": [
+        { "Replaced": { "index": 1, "item": { "name": "B" } } },
+        { "Added": { "after": 2, "item": { "name": "d" } } },
+      ],
+      "lights": [
+        { "Modified": { "before_index": 1, "after_index": 0, "changes": { "power": 25 } } },
+        { "Removed": { "index": 0 } },
+        { "Added": { "after": 1, "item": { "id": 3, "power": 30 } } },
+      ],
+      "markers": [
+        { "Modified": { "before_index": 0, "after_index": 0, "changes": { "label": "z" } } },
+        { "Replaced": { "index": 1, "item": { "at": 20, "label": "y" } } },
+      ],
+    })
+  );
+  let mut applied = before.clone();
+  applied.apply(&diff).unwrap();
+  // Kept items stay in their earlier order, and the marker's move within reach is not a change.
+  assert_eq!(applied.tags, after.tags);
+  assert_eq!(applied.lights, after.lights);
+  assert_eq!(applied.markers, vec![marker(0, "z"), marker(20, "y")]);
+  assert_eq!(before.diff(&before, &()), None);
+}

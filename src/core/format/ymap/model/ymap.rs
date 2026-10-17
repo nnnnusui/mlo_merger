@@ -1,9 +1,6 @@
 use crate::{
   common::position::Position,
-  core::format::ymap::compare::{
-    self, YmapBoxOccluderDiff, YmapCarGeneratorDiff, YmapDiffContext, YmapEntityDiff,
-    YmapLodLightDiff, YmapOccludeModelDiff, YmapTimeCycleModifierDiff,
-  },
+  core::format::ymap::compare::{self, YmapDiffContext, YmapEntityDiff},
 };
 
 use super::{
@@ -36,11 +33,11 @@ pub struct Ymap {
   pub block: YmapBlock,
   #[diff(with = compare::entities, output = Vec<YmapEntityDiff>)]
   pub entities: Vec<YmapEntity>,
-  #[diff(with = compare::box_occluders, context = ctx.tolerances, output = Vec<YmapBoxOccluderDiff>)]
+  #[diff(nested, context = ctx.tolerances)]
   pub box_occluders: Vec<YmapBoxOccluder>,
-  #[diff(with = compare::occlude_models, context = ctx.tolerances, output = Vec<YmapOccludeModelDiff>)]
+  #[diff(nested, context = ctx.tolerances)]
   pub occlude_models: Vec<YmapOccludeModel>,
-  #[diff(with = compare::lod_lights, output = Vec<YmapLodLightDiff>)]
+  #[diff(nested, context = ())]
   pub lod_lights: Vec<YmapLodLight>,
   #[diff(nested, context = ctx.tolerances)]
   pub distant_lod_lights: YmapDistantLodLights,
@@ -48,9 +45,9 @@ pub struct Ymap {
   pub physics_dictionaries: Vec<String>,
   #[diff(nested, context = ctx.tolerances)]
   pub instanced_data: YmapInstancedData,
-  #[diff(with = compare::time_cycle_modifiers, context = ctx.tolerances, output = Vec<YmapTimeCycleModifierDiff>)]
+  #[diff(nested, context = ctx.tolerances)]
   pub time_cycle_modifiers: Vec<YmapTimeCycleModifier>,
-  #[diff(with = compare::car_generators, context = ctx.tolerances, output = Vec<YmapCarGeneratorDiff>)]
+  #[diff(nested, context = ctx.tolerances)]
   pub car_generators: Vec<YmapCarGenerator>,
   /// Unused by every vanilla YMAP (0/12,584 across all vanilla versions) and every local
   /// source YMAP (0/700) as of 2026-10-16.
