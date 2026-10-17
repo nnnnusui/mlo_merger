@@ -21,8 +21,6 @@ pub struct Pipeline {
   pub vanilla_cache_dir: PathBuf,
   /// Derived source artifact directory.
   pub source_cache_dir: PathBuf,
-  /// Resource-local edit documents consumed by merge.
-  pub overwrite_dir: PathBuf,
   /// Resource exclusions for this run; absent or empty means no exclusions.
   pub exclusions: Option<Vec<String>>,
   /// Intermediate merged artifact directory.
@@ -44,7 +42,7 @@ impl Pipeline {
   ///   source_dir: "asset/source".into(), game_dir: "/mnt/gtav".into(),
   ///   vanilla_dir: "asset/vanilla".into(), vanilla_cache_dir: "asset/vanilla-cache".into(),
   ///   source_cache_dir: "asset/source-cache".into(), merged_dir: "asset/merged".into(),
-  ///   overwrite_dir: "asset/overwrite".into(), exclusions: None,
+  ///   exclusions: None,
   ///   output_dir: "merged_mlo".into(), force: false,
   /// }.run()?;
   /// # Ok::<(), Box<dyn std::error::Error>>(())
@@ -98,7 +96,6 @@ impl Pipeline {
       vanilla_cache_dir: self.vanilla_cache_dir.clone(),
       source_cache_dir: self.source_cache_dir.clone(),
       output_dir: self.merged_dir.clone(),
-      overwrite_dir: self.overwrite_dir.clone(),
       force: self.force,
     }
     .run()?;
@@ -114,7 +111,7 @@ impl Pipeline {
   }
 
   /// Source nesting is intentional: source can be `resources` while execution and
-  /// generated artifacts live under `resources/mlo_merged`. Only artifact/edit
+  /// generated artifacts live under `resources/mlo_merged`. Only artifact
   /// paths are checked for overlap; the source root is excluded from this list.
   fn validate_paths(&self) -> Result<(), Box<dyn std::error::Error>> {
     let paths = [
@@ -123,7 +120,6 @@ impl Pipeline {
       ("source-cache", &self.source_cache_dir),
       ("merged", &self.merged_dir),
       ("deployment", &self.output_dir),
-      ("overwrite", &self.overwrite_dir),
     ]
     .into_iter()
     .map(|(name, path)| Ok((name, absolute_path(path)?)))
@@ -163,7 +159,6 @@ mod tests {
       vanilla_dir: root.join("vanilla"),
       vanilla_cache_dir: root.join("vanilla-cache"),
       source_cache_dir: root.join("source-cache"),
-      overwrite_dir: root.join("overwrite"),
       exclusions: None,
       merged_dir: root.join("merged"),
       output_dir: root.join("merged_mlo"),
@@ -255,7 +250,6 @@ mod tests {
       vanilla_dir: root.join("vanilla"),
       vanilla_cache_dir: root.join("vanilla-cache"),
       source_cache_dir: root.join("source-cache"),
-      overwrite_dir: root.join("overwrite"),
       exclusions: Some(vec!["unused-resource".into()]),
       merged_dir: root.join("merged"),
       output_dir: root.join("output"),
@@ -285,9 +279,6 @@ mod tests {
     .unwrap();
     pipeline.run().unwrap();
     assert!(pipeline.output_dir.join("deploy_cache_info.json").is_file());
-    let mut overlapping = pipeline.clone();
-    overlapping.overwrite_dir = pipeline.merged_dir.join("edits");
-    assert!(overlapping.run().unwrap_err().to_string().contains("Pipeline paths overlap"));
     pipeline.run().unwrap();
     let exclusions_path = pipeline.source_cache_dir.join("source_exclusions.json");
     assert!(!exclusions_path.exists());
@@ -322,7 +313,6 @@ mod tests {
       vanilla_dir: root.join("vanilla"),
       vanilla_cache_dir: root.join("vanilla-cache"),
       source_cache_dir: root.join("source-cache"),
-      overwrite_dir: root.join("overwrite"),
       exclusions: None,
       merged_dir: root.join("merged"),
       output_dir: root.join("output"),
@@ -342,21 +332,6 @@ mod tests {
     let mut nested = pipeline.clone();
     nested.source_dir = root.clone();
     assert!(nested.validate_paths().is_ok());
-    for artifact in [
-      &pipeline.vanilla_dir,
-      &pipeline.vanilla_cache_dir,
-      &pipeline.source_cache_dir,
-      &pipeline.merged_dir,
-      &pipeline.output_dir,
-    ] {
-      for overwrite in [artifact.clone(), artifact.join("edits"), root.clone()] {
-        let mut overlapping = pipeline.clone();
-        overlapping.overwrite_dir = overwrite;
-        assert!(
-          overlapping.validate_paths().unwrap_err().to_string().contains("Pipeline paths overlap")
-        );
-      }
-    }
     assert!(!pipeline.vanilla_cache_dir.exists());
     let mut overlapping = pipeline.clone();
     overlapping.merged_dir = pipeline.source_cache_dir.join("nested");

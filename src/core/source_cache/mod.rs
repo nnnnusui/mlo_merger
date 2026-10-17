@@ -7,8 +7,6 @@ mod inventory;
 mod layout;
 mod publication;
 mod restore;
-mod stream_discovery;
-mod stream_io;
 mod streams;
 mod types;
 mod ymap_plan;
@@ -24,15 +22,7 @@ use self::types::{SourceCacheConflictReport, SourceCacheMetadata};
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
 pub use restore::restore_source_cache;
-#[cfg(test)]
-pub(crate) use stream_discovery::discover_inventory as discover_stream_inventory;
-pub(crate) use stream_discovery::inventory_for as stream_inventory_for;
-pub(crate) use stream_io::{read_cache_entry, write_cache_entry};
-#[cfg(test)]
-pub(crate) use streams::record_test_inventory;
-pub(crate) use streams::{
-  StreamFile, StreamInventory, load_stream_inventory, read_stream_bytes, resolve_template_file,
-};
+pub(crate) use streams::read_stream_bytes;
 
 /// One source stream file selected for merge from the current source cache.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]

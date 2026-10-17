@@ -82,7 +82,6 @@ fn incremental_merge_preserves_and_restores_duplicate_reports() {
       vanilla_cache_dir: cache.clone(),
       source_cache_dir: source_cache.clone(),
       output_dir: output.clone(),
-      overwrite_dir: root.join("overwrite"),
       force: false,
     }
     .run_after_caches(&vanilla)

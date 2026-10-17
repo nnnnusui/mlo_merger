@@ -31,7 +31,7 @@ the vanilla and source caches, merges, then deploys. Unchanged stages are reused
 **Source-cache generation moves vanilla-named YMAP/YBN files out of resource
 stream directories.** They remain available in the source cache; unmatched files
 stay in the original resources. Resource names must be unique across groups.
-Overlapping artifact and overwrite directories are rejected. The source root
+Overlapping artifact directories are rejected. The source root
 can contain them: for example, use `resources` as source while running the tool
 from `resources/mlo_merged`.
 
@@ -65,8 +65,7 @@ are normalized to `/`; entries are literal text, not globs. Excluded resources
 are not inventoried, fingerprinted, moved, or included in source conflict reports.
 Exclusions apply only to the current execution and are not saved or inherited.
 Omitting `--exclude` or passing `--exclude ''` means no exclusions. Pipeline and
-merge pass the current exclusions to their source-cache prerequisite updates;
-additional light edits use only resources recorded by that source cache. Legacy
+merge pass the current exclusions to their source-cache prerequisite updates. Legacy
 `source_exclusions.json` files are ignored and removed after successful source-cache
 updates. Previously cached excluded resources are removed
 from the active JSON indexes and their cache directories are archived under
@@ -113,7 +112,7 @@ Deploy consumes existing merge and source-cache data without regenerating them:
 
 - Merged files: `stream/{extension}/merged/{filename}`.
 - Remaining cached files: `stream/{extension}/clone/{resourceName}/{stream-relative-path}`.
-- `files.txt`: original source-relative paths of active moved files and custom files replaced by light edits.
+- `files.txt`: original source-relative paths of active moved files.
 
 Deploy skips unchanged copies, repairs missing/changed outputs, and removes stale
 managed files. Unrelated files are preserved; locally modified stale files are
@@ -125,63 +124,6 @@ Run `mlo_merger --help` for options and per-command output defaults. To extract
 a limited vanilla archive, use the explicit generator's `--gamebuild` stage
 selector; numeric GTA build-ID mapping is not implemented. Convenience aliases
 are in [.cargo/config.toml](.cargo/config.toml).
-
-### Export And Remove LOD Lights
-
-```bash
-mlo_merger --to-json 'asset/source/[group]/resource_name/stream/nested/map_lodlights.ymap' --resource 'resource_name'
-mlo_merger --merge --overwrite-dir asset/overwrite
-```
-
-`--to-json` exports a light-only view, not the complete YMAP. Use paths and
-resource IDs from the R-tree `source` entries; active source-cache paths also
-work. `--resource` also accepts a unique resource name without bracket groups;
-ambiguous names require the full source-relative ID. JSON identity and output
-paths always retain the full resource ID. Output defaults to
-`asset/read_cache/ymap/<resource>/<stream-relative-path>.json`.
-The sidecar caches input/output mtime, size, SHA-256 and light relationships;
-unchanged exports skip native parsing and JSON writing. `-f` forces verification
-and export. Do not run source-cache moves or restoration concurrently with exports.
-
-The JSON joins child LOD arrays to parent distant arrays by their original index
-within the same resource. Each logical light has explicit file references and
-precomputed world-space OBB/AABB data. OBBs conservatively enclose the influence
-volume; they are not exact rendered lighting. Unresolved relationships are
-diagnosed and cannot be removed. No vanilla or other-resource parent fallback
-is performed. The stream R-tree retains file bounds; light influence OBB/AABBs
-are available separately in the on-demand light JSON.
-
-The external editor writes
-`asset/overwrite/<resource>/<stream-relative-path>.diff.json` with
-`format: "mlo_lod_light_edits"`, `schemaVersion: 1`, the export's `resource`,
-`path` and `files`, and `operations: [{"op":"remove","lightId":"..."}]`.
-Copy IDs from editable exported lights; do not construct them from direction,
-position or hash. Types are in [asset/gen_mlo_merger.ts](asset/gen_mlo_merger.ts).
-
-Merge and the default pipeline accept `--overwrite-dir`. Edits change only the
-selected resource's light contribution: another resource retaining the light
-can keep it in the result. Linked arrays are compacted together; original source
-and cached bytes are untouched. Changed dependencies require a fresh export and
-diff. Unsupported edits, ambiguous relationships and custom non-light conflicts
-fail before merged output publication. Removing a diff withdraws the edit on the
-next merge/deploy. Applying native light edits currently requires RSC7 YMAPs;
-PSO inputs can be inspected but are not edited.
-
-Overwrite resolves resource and file identities exclusively from the active
-source-cache inventory. Recorded custom YMAPs are read from their original
-source paths; moved YMAPs are read from their recorded cached paths. Unrecorded
-resources and files are not rediscovered, and diffs for inactive resources are
-ignored. Rebuild source-cache to add or relocate inputs before applying edits.
-
-Merge saves validated overwrite preparation in
-`<source-cache>/overwrite_cache_info.json`. Unchanged mtime/size reuse stored
-SHA-256 values; unchanged diff contents, source contents and resource membership
-reuse prepared edits without parsing diffs or decoding related YMAPs again.
-Timestamp-only changes refresh fingerprints without rebuilding. Diff additions,
-removals, changed recorded inputs or cache resource/file membership invalidate preparation; `-f`
-bypasses reuse. The cache is updated only after a successful merge, and a missing
-or unreadable preparation cache is rebuilt. Diff enumeration and recorded-input
-stat checks still run; overwrite does not scan source stream directories.
 
 ### Matching Configuration
 
@@ -269,9 +211,9 @@ or template inputs. YBN conversion does not require an external schema directory
 
 The release archives contain `asset/gen_mlo_merger.ts`, generated from the Rust
 Serde models for merge diagnostics, vanilla/source/merge/deploy caches, stream
-conflicts, diff-cache reports, version listings and matching/blacklist
-configuration. It does not include YMAP/YBN difference payloads or JSON Schema
-documents. The release workflow regenerates it before packaging; it is not
+conflicts, diff-cache reports, source-cache YMAP diff documents
+(`YmapComparisonDiff`), version listings and matching/blacklist configuration. It
+does not include YBN difference payloads or JSON Schema documents. The release workflow regenerates it before packaging; it is not
 checked into the repository.
 
 When generating it locally, import it from its output path:

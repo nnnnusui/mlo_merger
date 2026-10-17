@@ -9,8 +9,6 @@ use super::common::{self, CommonOptions};
 pub struct Merge {
   /// Source resource directory.
   pub source_dir: PathBuf,
-  /// Resource-local light edit directory.
-  pub overwrite_dir: PathBuf,
   /// Resource exclusions applied only to this execution.
   pub exclusions: Option<Vec<String>>,
   /// Shared execution options.
@@ -26,17 +24,14 @@ pub fn parser() -> impl Parser<Merge> {
     .argument::<PathBuf>("DIR")
     .fallback(PathBuf::from("asset/source"));
   let common = common::parser(PathBuf::from("asset/merged"));
-  let overwrite_dir =
-    long("overwrite-dir").argument::<PathBuf>("DIR").fallback("asset/overwrite".into());
   let exclusions = super::generate_source_cache::exclusions_parser();
-  construct!(command, source_dir, common, overwrite_dir, exclusions).map(
-    |(_, source_dir, common, overwrite_dir, exclusions)| Merge {
+  construct!(command, source_dir, common, exclusions).map(|(_, source_dir, common, exclusions)| {
+    Merge {
       source_dir,
       common,
-      overwrite_dir,
       exclusions,
-    },
-  )
+    }
+  })
 }
 
 /// Updates the vanilla and source caches, then merges supported source changes into the latest
@@ -60,7 +55,6 @@ pub fn run(command: Merge) -> Result<(), Box<dyn std::error::Error>> {
     vanilla_cache_dir: command.common.vanilla_cache,
     source_cache_dir: command.common.source_cache,
     output_dir: command.common.output,
-    overwrite_dir: command.overwrite_dir,
     force: command.common.force,
   }
   .run()

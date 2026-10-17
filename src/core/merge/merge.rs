@@ -23,7 +23,7 @@ impl Drop for Staging {
   }
 }
 
-/// Merges supported source changes and resource-local edits into latest vanilla files.
+/// Merges supported source changes into latest vanilla files.
 #[derive(Debug, Clone)]
 pub struct Merge {
   /// Root containing source resources.
@@ -34,9 +34,7 @@ pub struct Merge {
   pub source_cache_dir: PathBuf,
   /// Destination for staged merged output.
   pub output_dir: PathBuf,
-  /// Resource-local edit documents.
-  pub overwrite_dir: PathBuf,
-  /// Rebuilds merge groups and overwrite preparation regardless of freshness.
+  /// Rebuilds merge groups regardless of freshness.
   pub force: bool,
 }
 
@@ -50,53 +48,19 @@ impl Merge {
   /// mlo_merger::core::merge::Merge {
   ///   source_dir: "asset/source".into(), vanilla_cache_dir: "asset/vanilla-cache".into(),
   ///   source_cache_dir: "asset/source-cache".into(), output_dir: "asset/merged".into(),
-  ///   overwrite_dir: "asset/overwrite".into(), force: false,
+  ///   force: false,
   /// }.run()?;
   /// # Ok::<(), Box<dyn std::error::Error>>(())
   /// ```
   pub fn run(&self) -> Result<()> {
-    self.validate_paths()?;
     crate::core::config::matching::with_config(|| self.run_inner())?
-  }
-
-  fn validate_paths(&self) -> Result<()> {
-    let paths = [
-      ("vanilla-cache", &self.vanilla_cache_dir),
-      ("source-cache", &self.source_cache_dir),
-      ("merged", &self.output_dir),
-      ("overwrite", &self.overwrite_dir),
-    ]
-    .into_iter()
-    .map(|(name, path)| Ok((name, crate::common::path::absolute_path(path)?)))
-    .collect::<std::result::Result<Vec<_>, std::io::Error>>()?;
-    for (index, (name, path)) in paths.iter().enumerate() {
-      for (other_name, other) in paths.iter().skip(index + 1) {
-        if (*name == "overwrite" || *other_name == "overwrite")
-          && (path.starts_with(other) || other.starts_with(path))
-        {
-          return Err("Overwrite directory overlaps a merge artifact directory".into());
-        }
-      }
-    }
-    Ok(())
   }
 
   fn run_inner(&self) -> Result<()> {
     let source_dir = self.source_dir.canonicalize()?;
     let vanilla_cache_dir = self.vanilla_cache_dir.canonicalize()?;
     let source_cache_dir = self.source_cache_dir.canonicalize()?;
-    let mut merge_inputs = source_cache::load_merge_inputs(&source_cache_dir)?;
-    let (edits, overwrite_cache) = crate::core::lod_light::PreparedEdits::load_cached(
-      &source_dir,
-      &source_cache_dir,
-      &self.overwrite_dir,
-      self.force,
-    )?;
-    for source in &edits.sources {
-      if !merge_inputs.ymap.iter().any(|existing| existing.path == source.path) {
-        merge_inputs.ymap.push(source.clone());
-      }
-    }
+    let merge_inputs = source_cache::load_merge_inputs(&source_cache_dir)?;
     let latest_files = dispatch_vanilla_stream_files(&vanilla_cache_dir.join("latest"))?;
     let output_dir = prepare_output_path(&self.output_dir)?;
     let staging = Staging(create_staging_directory(&output_dir)?);
@@ -111,13 +75,11 @@ impl Merge {
       inputs: &merge_inputs,
       force: self.force,
     }
-    .run_with_edits(&edits)?;
+    .run()?;
     if !changed {
-      overwrite_cache.save(&source_cache_dir)?;
       return Ok(());
     }
     publish_directory(&staging.0, &output_dir)?;
-    overwrite_cache.save(&source_cache_dir)?;
     tracing::info!("Published merged stream files to {}", output_dir.display());
     Ok(())
   }

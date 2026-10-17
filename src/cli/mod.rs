@@ -11,5 +11,4 @@ pub mod get_diff;
 pub mod merge;
 pub mod pipeline;
 pub mod restore_source_cache;
-pub mod to_json;
 pub mod to_xml;

@@ -4,17 +4,6 @@ use std::{
   path::{Component, Path, PathBuf},
 };
 
-pub(crate) fn safe_relative(value: &str) -> Result<()> {
-  if value.is_empty()
-    || value.contains(['\\', '\r', '\n', ':'])
-    || Path::new(value).components().any(|part| !matches!(part, Component::Normal(_)))
-    || value.split('/').any(|part| part.is_empty() || part == "." || part == "..")
-  {
-    return Err(format!("Unsafe relative path: {value}").into());
-  }
-  Ok(())
-}
-
 pub(crate) fn reject_symlinks(path: &Path) -> Result<()> {
   for ancestor in path.ancestors() {
     if fs::symlink_metadata(ancestor).is_ok_and(|metadata| metadata.file_type().is_symlink()) {

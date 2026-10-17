@@ -31,10 +31,11 @@ mod tests {
     fs::create_dir_all(&root).unwrap();
     let _cleanup = TemporaryDirectory(root.clone());
     let source = root.join("input.json");
-    assert!(json::read_optional::<serde_json::Value>(&source).unwrap().is_none());
+    let read =
+      |path: &PathBuf| serde_json::from_slice::<serde_json::Value>(&fs::read(path).unwrap());
     let value = serde_json::json!({"resource": "maps", "files": ["map.ymap"]});
-    json::atomic_json(&source, &value).unwrap();
-    assert_eq!(json::read_optional::<serde_json::Value>(&source).unwrap(), Some(value.clone()));
+    json::write_json(&source, &value).unwrap();
+    assert_eq!(read(&source).unwrap(), value);
     let before = fingerprint::Fingerprint::read(&source, None, false).unwrap();
     assert_eq!(fingerprint::Fingerprint::read(&source, Some(&before), false).unwrap(), before);
     assert_eq!(
@@ -56,32 +57,17 @@ mod tests {
     filesystem::move_file(&source, &destination).unwrap();
     assert!(!source.exists());
     assert_eq!(fs::metadata(&destination).unwrap().modified().unwrap(), changed_time);
-    assert_eq!(json::read_optional::<serde_json::Value>(&destination).unwrap(), Some(value));
+    assert_eq!(read(&destination).unwrap(), value);
     fs::write(&destination, b"changed and malformed JSON").unwrap();
     assert_ne!(
       fingerprint::Fingerprint::read(&destination, Some(&touched), false).unwrap().sha256,
       touched.sha256
     );
-    assert!(json::read_optional::<serde_json::Value>(&destination).unwrap().is_none());
+    assert!(read(&destination).is_err());
   }
 
   #[test]
   fn path_validation_rejects_traversal_and_symlinks() {
-    for relative in ["maps/map.ymap", "[group]/maps", "cache_info.json"] {
-      path::safe_relative(relative).unwrap();
-    }
-    for relative in [
-      "",
-      "../escape",
-      "/absolute",
-      "maps/./file",
-      "maps//file",
-      "maps\\file",
-      "C:/file",
-      "maps\nfile",
-    ] {
-      assert!(path::safe_relative(relative).is_err(), "{relative:?}");
-    }
     let root = std::env::temp_dir().join(format!("common_paths_{}", std::process::id()));
     fs::create_dir_all(&root).unwrap();
     let _cleanup = TemporaryDirectory(root.clone());
@@ -101,7 +87,6 @@ mod tests {
       assert!(path::ensure_safe_path(&root, &link).is_err());
       assert!(filesystem::read_bytes(&link).is_err());
       assert!(fingerprint::Fingerprint::read(&link, None, false).is_err());
-      assert!(json::atomic_json(&link, &serde_json::json!({})).is_err());
       assert_eq!(fs::read(&file).unwrap(), b"data");
     }
   }

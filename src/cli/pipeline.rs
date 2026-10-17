@@ -11,8 +11,6 @@ pub struct Pipeline {
   pub game_dir: PathBuf,
   /// Intermediate merged artifact directory.
   pub merged_dir: PathBuf,
-  /// Resource-local light edit directory.
-  pub overwrite_dir: PathBuf,
   /// Source resource exclusions for this execution only.
   pub exclusions: Option<Vec<String>>,
   /// Shared artifact paths and deployment output options.
@@ -36,16 +34,13 @@ pub fn parser() -> impl Parser<Pipeline> {
     .fallback(PathBuf::from("asset/merged"));
   let common = common::parser(PathBuf::from("asset/merged_mlo"));
   let exclusions = super::generate_source_cache::exclusions_parser();
-  let overwrite_dir =
-    long("overwrite-dir").argument::<PathBuf>("DIR").fallback("asset/overwrite".into());
-  construct!(source_dir, game_dir, merged_dir, common, exclusions, overwrite_dir).map(
-    |(source_dir, game_dir, merged_dir, common, exclusions, overwrite_dir)| Pipeline {
+  construct!(source_dir, game_dir, merged_dir, common, exclusions).map(
+    |(source_dir, game_dir, merged_dir, common, exclusions)| Pipeline {
       source_dir,
       game_dir,
       merged_dir,
       common,
       exclusions,
-      overwrite_dir,
     },
   )
 }
@@ -64,7 +59,6 @@ pub fn run(command: Pipeline) -> Result<(), Box<dyn std::error::Error>> {
     vanilla_dir: command.common.vanilla,
     vanilla_cache_dir: command.common.vanilla_cache,
     source_cache_dir: command.common.source_cache,
-    overwrite_dir: command.overwrite_dir,
     exclusions: command.exclusions,
     merged_dir: command.merged_dir,
     output_dir: command.common.output,

@@ -2,17 +2,8 @@ use super::*;
 
 impl IncrementalMerge<'_> {
   /// Rebuilds dependency groups while retaining unchanged outputs and negative results.
-  #[cfg(test)]
   pub(in crate::core::merge) fn run(&self) -> Result<bool> {
-    self.run_with_edits(&crate::core::lod_light::PreparedEdits::default())
-  }
-
-  pub(in crate::core::merge) fn run_with_edits(
-    &self,
-    edits: &crate::core::lod_light::PreparedEdits,
-  ) -> Result<bool> {
     let previous = MergeMetadata::load(self.output)?;
-    edits.verify()?;
     let mut previous_inputs = BTreeMap::new();
     if let Some(metadata) = &previous {
       for record in metadata.files.values() {
@@ -31,8 +22,7 @@ impl IncrementalMerge<'_> {
     for source in self.inputs.ybn.iter().chain(&self.inputs.ymap) {
       sources.entry(source.file_name.to_ascii_lowercase()).or_default().push(source);
     }
-    let mut graph = self.ymap_graph()?;
-    edits.connect(&mut graph);
+    let graph = self.ymap_graph()?;
     let groups = groups(&sources, &graph);
     let mut files = BTreeMap::new();
     let mut omitted = BTreeSet::new();
@@ -88,15 +78,7 @@ impl IncrementalMerge<'_> {
           },
         );
       }
-      let mut signature = signature(group.extension, &planned)?;
-      let edit_inputs = edits
-        .dependencies_for(&group.names)
-        .into_iter()
-        .map(|path| Ok((path.clone(), edits.dependency_hash(&path)?)))
-        .collect::<Result<BTreeMap<_, _>>>()?;
-      if !edit_inputs.is_empty() {
-        signature = hex::encode(Sha256::digest(serde_json::to_vec(&(signature, edit_inputs))?));
-      }
+      let signature = signature(group.extension, &planned)?;
       let mut current = !self.force
         && previous
           .as_ref()
@@ -144,9 +126,6 @@ impl IncrementalMerge<'_> {
         rebuilt += 1;
         tracing::info!("Updating {} merge group ({} files)", group.extension, group.names.len());
         let duplicates = self.merge_group(&group, &sources, &baselines)?;
-        if group.extension == "ymap" {
-          edits.patch(&group.names, &self.staging.join("ymap"), &baselines)?;
-        }
         for (name, entries) in duplicates.files {
           if let Some(record) = planned.get_mut(&name) {
             record.duplicates = entries;
@@ -182,31 +161,7 @@ impl IncrementalMerge<'_> {
       }
       files.extend(planned);
     }
-    edits.verify()?;
     let omit_text = omitted.into_iter().collect::<Vec<_>>().join("\n");
-    let light_omitted = edits
-      .omitted
-      .iter()
-      .map(|path| Ok(path.strip_prefix(self.source_dir)?.to_string_lossy().replace('\\', "/")))
-      .collect::<Result<BTreeSet<_>>>()?;
-    let light_report = crate::core::lod_light::LightEditProvenance {
-      format_version: 1,
-      omitted: light_omitted,
-    };
-    let report_path = self.output.join("light_edit_provenance.json");
-    let light_report_current = if light_report.omitted.is_empty() {
-      !report_path.exists()
-    } else {
-      fs::File::open(&report_path)
-        .ok()
-        .and_then(|file| {
-          serde_json::from_reader::<_, crate::core::lod_light::LightEditProvenance>(BufReader::new(
-            file,
-          ))
-          .ok()
-        })
-        .is_some_and(|previous| previous == light_report)
-    };
     let duplicates = DuplicateReport {
       format_version: 1,
       files: files
@@ -227,7 +182,6 @@ impl IncrementalMerge<'_> {
         previous.algorithm_version.is_none() && previous.algorithm_versions == algorithm_versions()
       })
       && duplicate_current
-      && light_report_current
       && fs::read_to_string(self.output.join("_omit.txt")).ok().as_deref() == Some(&omit_text)
     {
       tracing::info!("Merge output is current; nothing to do");
@@ -237,9 +191,6 @@ impl IncrementalMerge<'_> {
       retain_file(&from, &to)?;
     }
     fs::write(self.staging.join("_omit.txt"), omit_text)?;
-    if !light_report.omitted.is_empty() {
-      write_json(&self.staging.join("light_edit_provenance.json"), &light_report)?;
-    }
     write_json(&self.staging.join("duplicates.json"), &duplicates)?;
     write_json(
       &self.staging.join("merge_cache_info.json"),

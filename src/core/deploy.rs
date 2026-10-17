@@ -79,29 +79,7 @@ impl Deploy {
     let cache = self.source_cache_dir.canonicalize()?;
     let output = prepare_output(&self.output_dir, &[&merged, &cache])?;
     let planned = plan(&merged, &cache)?;
-    let mut omitted_files = crate::core::source_cache::load_moved_source_paths(&cache)?;
-    let light_provenance = merged.join("light_edit_provenance.json");
-    if light_provenance.is_file() {
-      let provenance: crate::core::lod_light::LightEditProvenance =
-        serde_json::from_reader(BufReader::new(fs::File::open(light_provenance)?))?;
-      if provenance.format_version != 1 {
-        return Err("Unsupported light edit provenance version".into());
-      }
-      for path in provenance.omitted {
-        if path.is_empty()
-          || Path::new(&path)
-            .components()
-            .any(|component| !matches!(component, Component::Normal(_)))
-          || path
-            .split('/')
-            .any(|component| component.is_empty() || component == "." || component == "..")
-          || path.contains(['\\', '\r', '\n', ':'])
-        {
-          return Err("Unsafe light edit omission path".into());
-        }
-        omitted_files.insert(path);
-      }
-    }
+    let omitted_files = crate::core::source_cache::load_moved_source_paths(&cache)?;
     let moved_files = omitted_files.into_iter().collect::<Vec<_>>().join("\n");
     let moved_files_path = destination(&output, "files.txt")?;
     let metadata_path = destination(&output, "deploy_cache_info.json")?;
