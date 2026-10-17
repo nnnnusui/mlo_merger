@@ -629,7 +629,7 @@ mod tests {
     else {
       panic!("Expected R-tree JSON command")
     };
-    assert_eq!(command.output_dir, PathBuf::from("asset/read_cache"));
+    assert_eq!(command.output_dir, PathBuf::from("asset/read-cache"));
     let Command::GenerateRTreeJson(command) =
       parser().to_options().run_inner(&["--generate-rtree-json", "-o", "custom-output"]).unwrap()
     else {

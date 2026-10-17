@@ -12,7 +12,7 @@ pub fn parser() -> impl Parser<GenerateRTreeJson> {
     .long("output")
     .help("Directory for stream_file_rtree-ymap.json and stream_file_rtree-ybn.json")
     .argument::<PathBuf>("DIR")
-    .fallback(PathBuf::from("asset/read_cache"));
+    .fallback(PathBuf::from("asset/read-cache"));
   construct!(command, output_dir).map(|(_, output_dir)| GenerateRTreeJson {
     output_dir,
   })
