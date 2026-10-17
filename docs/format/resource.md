@@ -33,7 +33,7 @@ flowchart TD
 | `resource` | バイナリの magic 判定と RSC7 / PSO の読込入口 | 拡張子からの内容解釈、XML 入力、ファイル探索 |
 | `rsc7` | ヘッダ検証、DEFLATE、page flags、system / graphics 領域、仮想アドレス | META schema、YMAP の配置、Bounds の形状 |
 | `meta` | RSC7 の領域から META を読むこと、schema とデータブロックの構築 | 圧縮処理、ファイル種別ごとの業務処理 |
-| `meta::xml` | 汎用 META の値表現と CodeWalker XML の相互変換 | YMAP モデルへの変換、光源編集用の検証 |
+| `meta::xml` | 汎用 META の値表現と CodeWalker XML の相互変換 | YMAP モデルへの変換 |
 | `pso` | section・mapping・schema の解釈、XML 表現、template 更新 | RSC7 の展開、META の参照解決 |
 | `format/ymap` 等 | 配置・光源・衝突等の型付きモデルへの変換と検証 | ファイル探索やバッチ処理 |
 | `stream_file` | 拡張子による種別（`FileType`）判定、1ファイル単位の型付きモデル・XML・binary 変換 | 保存形式固有の低レベル処理、バッチ処理 |
@@ -71,7 +71,7 @@ RSC7 から別の形式へ自動変換したり、すべての RSC7 に META を
 ### PSO
 
 PSO は RSC7 や META を経由せず、PSO reader が直接読みます。
-現在の YMAP reader は PSO の XML 表現を共通の配置モデルへ変換します。
+YMAP reader は PSO に埋め込まれた schema でフィールドを読み、XML を経由せず共通の配置モデルへ変換します。
 RSC7/META と同じ配置を扱えても、byte order、参照、layout は共有しません。
 
 PSO の書出しは現実装では既存 template の更新です。META からの新規 PSO 生成ではありません。

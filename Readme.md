@@ -36,8 +36,8 @@ can contain them: for example, use `resources` as source while running the tool
 from `resources/mlo_merged`.
 
 Pipeline `-f` forces the derived caches, merge and deployment, but reuses an
-existing raw vanilla archive. Pipeline-wide `--gamebuild` and `--step-name`
-selection are not implemented.
+existing raw vanilla archive. Pipeline-wide `--gamebuild` is not implemented; run
+a single stage with its own operation below.
 
 ### Run Individual Operations
 
@@ -111,6 +111,26 @@ pipeline do). The differences of several sources combine as follows:
   from the source resource's parent YMAP or else vanilla's, and written back as indices
   into the final entity arrays. Unmodified child YMAPs whose parent's entity order
   changed are rebuilt with relinked indices.
+
+### Overwrite Source Differences
+
+Merge and the default pipeline read overwrites from `--overwrite` (default:
+`asset/overwrite`). `resources/{resourceName}.json` (`ResourceOverwrite`) lists,
+per stream-relative path of that resource, the differences of its source-cache diff
+document to leave out of the merge:
+
+- In an object, `true` leaves out the whole field's difference; a nested selector
+  only the parts it names.
+- In an array, each selector leaves out the items whose written fields all match,
+  such as `{"Removed": {"index": 0}}` or an entity's `guid`; its `changes` leaves out
+  only the changes it names.
+
+An overwrite applies only while the source and vanilla files match its `source` and
+`vanilla` fingerprints (the diff document's `sha256` and `size`); otherwise it is
+skipped with a warning. Overwrites currently only remove source differences and only
+apply to YMAPs. See [docs/sample/overwrite](docs/sample/overwrite/README.md).
+
+### Deploy
 
 Deploy consumes existing merge and source-cache data without regenerating them:
 

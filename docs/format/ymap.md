@@ -371,7 +371,7 @@ PMAP の block offset・長さと PSCH の schema を使って、PSIN 内の実�
 | 操作 | RSC7/META | PSO |
 | --- | --- | --- |
 | 内容の読込 | META の schema とブロックを解釈 | PSO の section・schema・mapping を解釈 |
-| YMAP モデルへの変換 | META から typed model へ変換 | PSO を XML 表現へ変換し、共通 YMAP モデルへ変換 |
+| YMAP モデルへの変換 | META から typed model へ変換 | PSO の schema でフィールドを読み、共通 YMAP モデルへ変換 |
 | native 出力 | 互換 schema を使ってブロック・配列を構築 | 元の PSO を template として既存領域を更新 |
 | 主な編集制約 | 必要な schema・型・参照・配列構造を正しく再構築する必要がある | 現実装では構造型・配列長・確保済み文字列容量を変更できない |
 
