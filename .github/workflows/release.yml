@@ -124,6 +124,47 @@ jobs:
           path: dist
           merge-multiple: true
 
+      - name: Package all platforms
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import shutil
+          import tempfile
+
+          platforms = {
+              "x86_64-pc-windows-msvc": "windows",
+              "x86_64-unknown-linux-gnu": "linux",
+              "x86_64-apple-darwin": "macos-x86_64",
+              "aarch64-apple-darwin": "macos-arm64",
+          }
+          dist = Path("dist")
+          archives = sorted(dist.glob("mlo_merger-*.zip")) + sorted(dist.glob("mlo_merger-*.tar.gz"))
+          if not archives:
+              raise SystemExit("No platform archives to combine")
+          name = "mlo_merger-all"
+          with tempfile.TemporaryDirectory() as temporary:
+              package = Path(temporary) / name
+              package.mkdir()
+              for archive in archives:
+                  extracted = Path(temporary) / "extracted" / archive.name
+                  shutil.unpack_archive(archive, extracted)
+                  (root,) = extracted.iterdir()
+                  platform = platforms[root.name.removeprefix("mlo_merger-")]
+                  for path in sorted(root.rglob("*")):
+                      if not path.is_file():
+                          continue
+                      relative = path.relative_to(root)
+                      if relative.name in ("mlo_merger", "mlo_merger.exe") and len(relative.parts) == 1:
+                          destination = package / f"mlo_merger-{platform}{relative.suffix}"
+                      else:
+                          destination = package / relative
+                          if destination.exists():
+                              continue
+                      destination.parent.mkdir(parents=True, exist_ok=True)
+                      shutil.copy2(path, destination)
+              shutil.make_archive(str(dist / name), "zip", root_dir=temporary, base_dir=name)
+          PY
+
       - name: Generate checksums
         run: |
           cd dist
