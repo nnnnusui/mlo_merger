@@ -86,7 +86,7 @@ jobs:
           package.mkdir(parents=True)
           shutil.copy2(Path("target") / target / "release" / os.environ["EXECUTABLE"], package)
           for filename in ("Readme.md", "LICENSE.md", "asset/config.toml",
-                           "docs/ARCHITECTURE.md", "docs/TODO.md",
+                           "docs/ARCHITECTURE.md", "docs/TODO.md", "docs/usage.md",
                            ".cargo/config.toml", "asset/gen_mlo_merger.ts"):
               destination = package / filename
               destination.parent.mkdir(parents=True, exist_ok=True)
