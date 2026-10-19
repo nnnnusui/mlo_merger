@@ -91,11 +91,11 @@ impl Fixture {
   fn read(
     &self,
     target: ReadTarget,
-    file: Option<&str>,
+    files: &[&str],
   ) -> Result<ReadResult> {
     Read {
       target,
-      file: file.map(Into::into),
+      files: files.iter().map(|file| file.to_string()).collect(),
       source_cache_dir: self.root.join("source-cache"),
       vanilla_dir: self.root.join("vanilla"),
       output_dir: self.root.join("read-cache"),
@@ -123,7 +123,7 @@ fn relative(path: &Path) -> String {
 #[test]
 fn resource_files_are_written_once_as_minified_models_with_their_source() {
   let fixture = Fixture::new("resource");
-  let result = fixture.read(ReadTarget::Resource("alpha".into()), Some("child.ymap")).unwrap();
+  let result = fixture.read(ReadTarget::Resource("alpha".into()), &["child.ymap"]).unwrap();
   assert_eq!(Fixture::outputs(&result), ["resources/alpha/child.ymap.json"]);
   let file = &result.files[0];
   assert!(file.updated);
@@ -144,14 +144,13 @@ fn resource_files_are_written_once_as_minified_models_with_their_source() {
   assert_eq!(document.model.entities[0].guid, 300);
   assert_eq!(document.model.parent, "parent");
 
-  let again =
-    fixture.read(ReadTarget::Resource("[maps]/alpha".into()), Some("child.ymap")).unwrap();
+  let again = fixture.read(ReadTarget::Resource("[maps]/alpha".into()), &["child.ymap"]).unwrap();
   assert!(!again.files[0].updated);
   let forced = Read {
     force: true,
     ..Read {
       target: ReadTarget::Resource("alpha".into()),
-      file: Some("child.ymap".into()),
+      files: vec!["child.ymap".into()],
       source_cache_dir: fixture.root.join("source-cache"),
       vanilla_dir: fixture.root.join("vanilla"),
       output_dir: fixture.root.join("read-cache"),
@@ -166,7 +165,7 @@ fn resource_files_are_written_once_as_minified_models_with_their_source() {
   let source = &file.input;
   fs::write(source, fs::read(fixture.root.join("source/beta/stream/parent.ymap")).unwrap())
     .unwrap();
-  let changed = fixture.read(ReadTarget::Resource("alpha".into()), Some("child.ymap")).unwrap();
+  let changed = fixture.read(ReadTarget::Resource("alpha".into()), &["child.ymap"]).unwrap();
   assert!(changed.files[0].updated);
   let document: YmapReadDocument =
     serde_json::from_str(&fs::read_to_string(&changed.files[0].output).unwrap()).unwrap();
@@ -176,7 +175,7 @@ fn resource_files_are_written_once_as_minified_models_with_their_source() {
 #[test]
 fn a_resource_reads_every_ymap_and_rejects_ambiguous_names() {
   let fixture = Fixture::new("ambiguous");
-  let all = fixture.read(ReadTarget::Resource("alpha".into()), None).unwrap();
+  let all = fixture.read(ReadTarget::Resource("alpha".into()), &[]).unwrap();
   assert_eq!(
     Fixture::outputs(&all),
     [
@@ -185,24 +184,24 @@ fn a_resource_reads_every_ymap_and_rejects_ambiguous_names() {
       "resources/alpha/child.ymap.json"
     ]
   );
-  let error = fixture.read(ReadTarget::Resource("alpha".into()), Some("PARENT.ymap")).unwrap_err();
+  let error = fixture.read(ReadTarget::Resource("alpha".into()), &["PARENT.ymap"]).unwrap_err();
   assert!(error.to_string().contains("a/parent.ymap, b/parent.ymap"), "{error}");
-  let by_path = fixture.read(ReadTarget::Resource("alpha".into()), Some("b/parent.ymap")).unwrap();
+  let by_path = fixture.read(ReadTarget::Resource("alpha".into()), &["b/parent.ymap"]).unwrap();
   assert_eq!(Fixture::outputs(&by_path), ["resources/alpha/b/parent.ymap.json"]);
-  assert!(fixture.read(ReadTarget::Resource("gamma".into()), None).is_err());
-  assert!(fixture.read(ReadTarget::Resource("alpha".into()), Some("missing.ymap")).is_err());
-  assert!(fixture.read(ReadTarget::Resource("alpha".into()), Some("collision.ybn")).is_err());
+  assert!(fixture.read(ReadTarget::Resource("gamma".into()), &[]).is_err());
+  assert!(fixture.read(ReadTarget::Resource("alpha".into()), &["missing.ymap"]).is_err());
+  assert!(fixture.read(ReadTarget::Resource("alpha".into()), &["collision.ybn"]).is_err());
 }
 
 #[test]
 fn vanilla_files_are_read_from_the_named_or_latest_version() {
   let fixture = Fixture::new("vanilla");
-  let latest = fixture.read(ReadTarget::Vanilla(None), None).unwrap();
+  let latest = fixture.read(ReadTarget::Vanilla(None), &[]).unwrap();
   assert_eq!(
     Fixture::outputs(&latest),
     ["vanilla/0001-update/ymap/child.ymap.json", "vanilla/0001-update/ymap/parent.ymap.json"]
   );
-  let base = fixture.read(ReadTarget::Vanilla(Some("base".into())), Some("parent.ymap")).unwrap();
+  let base = fixture.read(ReadTarget::Vanilla(Some("base".into())), &["parent.ymap"]).unwrap();
   assert_eq!(Fixture::outputs(&base), ["vanilla/0000-base/ymap/parent.ymap.json"]);
   assert_eq!(
     base.files[0].origin,
@@ -211,20 +210,51 @@ fn vanilla_files_are_read_from_the_named_or_latest_version() {
       file_name: "parent.ymap".into(),
     }
   );
-  assert!(fixture.read(ReadTarget::Vanilla(Some("base".into())), Some("child.ymap")).is_err());
-  assert!(fixture.read(ReadTarget::Vanilla(Some("9999".into())), None).is_err());
+  assert!(fixture.read(ReadTarget::Vanilla(Some("base".into())), &["child.ymap"]).is_err());
+  assert!(fixture.read(ReadTarget::Vanilla(Some("9999".into())), &[]).is_err());
 }
 
 #[test]
 fn a_file_alone_is_read_from_every_resource_and_the_latest_vanilla() {
   let fixture = Fixture::new("everywhere");
-  let result = fixture.read(ReadTarget::Everywhere, Some("child.ymap")).unwrap();
+  let result = fixture.read(ReadTarget::Everywhere, &["child.ymap"]).unwrap();
   assert_eq!(
     Fixture::outputs(&result),
     ["resources/alpha/child.ymap.json", "vanilla/0001-update/ymap/child.ymap.json"]
   );
   // alpha holds two parent.ymap files, so nothing is written.
-  assert!(fixture.read(ReadTarget::Everywhere, Some("parent.ymap")).is_err());
+  assert!(fixture.read(ReadTarget::Everywhere, &["parent.ymap"]).is_err());
   assert!(!fixture.root.join("read-cache/resources/beta").exists());
-  assert!(fixture.read(ReadTarget::Everywhere, None).is_err());
+  assert!(fixture.read(ReadTarget::Everywhere, &[]).is_err());
+}
+
+#[test]
+fn several_files_are_read_together_and_each_must_match() {
+  let fixture = Fixture::new("several");
+  let result = fixture
+    .read(ReadTarget::Resource("alpha".into()), &["child.ymap", "b/parent.ymap", "CHILD.ymap"])
+    .unwrap();
+  assert_eq!(
+    Fixture::outputs(&result),
+    ["resources/alpha/child.ymap.json", "resources/alpha/b/parent.ymap.json"]
+  );
+  let everywhere = fixture.read(ReadTarget::Everywhere, &["child.ymap", "b/parent.ymap"]).unwrap();
+  assert_eq!(
+    Fixture::outputs(&everywhere),
+    [
+      "resources/alpha/child.ymap.json",
+      "resources/alpha/b/parent.ymap.json",
+      "vanilla/0001-update/ymap/child.ymap.json"
+    ]
+  );
+  let vanilla = fixture.read(ReadTarget::Vanilla(None), &["parent.ymap", "child.ymap"]).unwrap();
+  assert_eq!(Fixture::outputs(&vanilla).len(), 2);
+
+  // A name matching nothing fails the whole read before anything is written.
+  fs::remove_dir_all(fixture.root.join("read-cache")).unwrap();
+  let error = fixture
+    .read(ReadTarget::Resource("alpha".into()), &["child.ymap", "missing.ymap"])
+    .unwrap_err();
+  assert!(error.to_string().contains("missing.ymap"), "{error}");
+  assert!(!fixture.root.join("read-cache/resources").exists());
 }

@@ -4,10 +4,10 @@ use bpaf::*;
 
 use crate::core::read::{Read, ReadTarget};
 
-/// Parses `--read [--resource NAME | --vanilla [VERSION]] [FILE]`.
+/// Parses `--read [--resource NAME | --vanilla [VERSION]] [FILE...]`.
 ///
 /// `--vanilla` takes an optional version, so `--vanilla map.ymap` reads `map.ymap` of the
-/// latest version: a value naming a file is taken as the file.
+/// latest version: a value naming a file is taken as the first file.
 pub fn parser() -> impl Parser<Read> {
   let command = long("read")
     .help("Write stream file models as JSON under read-cache, skipping current ones")
@@ -25,7 +25,7 @@ pub fn parser() -> impl Parser<Read> {
   let resource = resource.map(|resource| resource.map(ReadTarget::Resource));
   let vanilla = vanilla.map(|version| version.map(ReadTarget::Vanilla));
   let target = construct!([resource, vanilla]).fallback(None);
-  let file = positional::<String>("FILE").optional();
+  let files = positional::<String>("FILE").many();
   let source_cache_dir = long("source-cache")
     .help("Source cache directory (default: asset/source-cache)")
     .argument::<PathBuf>("DIR")
@@ -40,29 +40,25 @@ pub fn parser() -> impl Parser<Read> {
     .argument::<PathBuf>("DIR")
     .fallback(PathBuf::from("asset/read-cache"));
   let force = short('f').long("force").help("Write every JSON again").switch();
-  construct!(command, target, source_cache_dir, vanilla_dir, output_dir, force, file)
-    .guard(
-      |(_, target, .., file)| {
-        !matches!(target, Some(ReadTarget::Vanilla(Some(version))) if file.is_some() && names_file(version))
-      },
-      "--vanilla takes a version or a file name, not two files",
-    )
-    .map(|(_, target, source_cache_dir, vanilla_dir, output_dir, force, file)| {
-      let (target, file) = match target {
-        Some(ReadTarget::Vanilla(Some(version))) if file.is_none() && names_file(&version) => {
-          (ReadTarget::Vanilla(None), Some(version))
+  construct!(command, target, source_cache_dir, vanilla_dir, output_dir, force, files).map(
+    |(_, target, source_cache_dir, vanilla_dir, output_dir, force, mut files)| {
+      let target = match target {
+        Some(ReadTarget::Vanilla(Some(version))) if names_file(&version) => {
+          files.insert(0, version);
+          ReadTarget::Vanilla(None)
         }
-        target => (target.unwrap_or(ReadTarget::Everywhere), file),
+        target => target.unwrap_or(ReadTarget::Everywhere),
       };
       Read {
         target,
-        file,
+        files,
         source_cache_dir,
         vanilla_dir,
         output_dir,
         force,
       }
-    })
+    },
+  )
 }
 
 /// Whether a `--vanilla` value names a file rather than a version.
@@ -89,33 +85,38 @@ mod tests {
   fn targets_resources_vanilla_versions_or_everything() {
     let read = parse(&["--read", "--resource", "[maps]/alpha", "map.ymap"]);
     assert_eq!(read.target, ReadTarget::Resource("[maps]/alpha".into()));
-    assert_eq!(read.file.as_deref(), Some("map.ymap"));
+    assert_eq!(read.files, ["map.ymap"]);
     assert_eq!(read.output_dir, PathBuf::from("asset/read-cache"));
     assert!(!read.force);
-    assert_eq!(parse(&["--read", "--resource", "alpha"]).file, None);
+    assert!(parse(&["--read", "--resource", "alpha"]).files.is_empty());
 
     let read = parse(&["--read", "--vanilla", "map.ymap"]);
     assert_eq!(read.target, ReadTarget::Vanilla(None));
-    assert_eq!(read.file.as_deref(), Some("map.ymap"));
+    assert_eq!(read.files, ["map.ymap"]);
     let read = parse(&["--read", "--vanilla", "0012-mpheist", "map.ymap", "-f"]);
     assert_eq!(read.target, ReadTarget::Vanilla(Some("0012-mpheist".into())));
-    assert_eq!(read.file.as_deref(), Some("map.ymap"));
+    assert_eq!(read.files, ["map.ymap"]);
     assert!(read.force);
     assert_eq!(parse(&["--read", "--vanilla"]).target, ReadTarget::Vanilla(None));
     let read = parse(&["--read", "--vanilla", "mpheist"]);
     assert_eq!(read.target, ReadTarget::Vanilla(Some("mpheist".into())));
-    assert_eq!(read.file, None);
+    assert!(read.files.is_empty());
 
     let read = parse(&["--read", "map.ymap", "-o", "out", "--vanilla-dir", "v"]);
     assert_eq!(read.target, ReadTarget::Everywhere);
     assert_eq!(read.output_dir, PathBuf::from("out"));
     assert_eq!(read.vanilla_dir, PathBuf::from("v"));
 
-    for args in [
-      &["--read", "--resource", "a", "--vanilla"][..],
-      &["--read", "--vanilla", "a.ymap", "b.ymap"],
-    ] {
-      assert!(parser().to_options().run_inner(args).is_err(), "{args:?}");
-    }
+    let read = parse(&["--read", "a.ymap", "b/c.ymap", "-f"]);
+    assert_eq!(read.target, ReadTarget::Everywhere);
+    assert_eq!(read.files, ["a.ymap", "b/c.ymap"]);
+    assert!(read.force);
+    let read = parse(&["--read", "--vanilla", "a.ymap", "b.ymap"]);
+    assert_eq!(read.target, ReadTarget::Vanilla(None));
+    assert_eq!(read.files, ["a.ymap", "b.ymap"]);
+    let read = parse(&["--read", "--resource", "alpha", "a.ymap", "b.ymap"]);
+    assert_eq!(read.files, ["a.ymap", "b.ymap"]);
+
+    assert!(parser().to_options().run_inner(&["--read", "--resource", "a", "--vanilla"]).is_err());
   }
 }

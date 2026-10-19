@@ -233,6 +233,7 @@ mlo_merger --read --resource '[gabz]/cfx-gabz-247'
 mlo_merger --read --vanilla apa_ch2_occl_05.ymap
 mlo_merger --read --vanilla mpheist hei_ch1_11.ymap
 mlo_merger --read apa_ch2_occl_05.ymap
+mlo_merger --read apa_ch2_occl_05.ymap hei_ch1_11.ymap
 ```
 
 `--read` writes each YMAP's model as minified JSON (`YmapReadDocument`), with
@@ -242,15 +243,17 @@ the path and fingerprint of the file it was read from and of the
 vanilla file to `asset/read-cache/vanilla/{version}/ymap/{fileName}.json`.
 A JSON still describing its file is not written again; `-f` writes it anyway.
 
-- `--resource NAME [FILE]` reads one resource, by name or source-relative ID,
+- `--resource NAME [FILE...]` reads one resource, by name or source-relative ID,
   from the existing source cache. Without a file it reads all of the resource's
   YMAPs. A file name matching several of the resource's files is an error;
   give its stream-relative path instead.
-- `--vanilla [VERSION] [FILE]` reads a version of the vanilla archive, the latest
+- `--vanilla [VERSION] [FILE...]` reads a version of the vanilla archive, the latest
   without one. A version is its ID or the name after the number, such as
   `mpheist`. Without a file it reads all of the version's YMAPs.
-- A file alone is read from every resource holding it and from the latest
-  vanilla. If any resource holds several files of that name, nothing is written.
+- Files alone are read from every resource holding them and from the latest
+  vanilla. If any resource holds several files of one name, nothing is written.
+- Several files are read together in the order given; a file named twice is read
+  once. If any name matches no file, nothing is written.
 
 The source cache and vanilla archive default to `asset/source-cache` and
 `asset/vanilla` (`--source-cache`, `--vanilla-dir`); `-o` changes the output root.

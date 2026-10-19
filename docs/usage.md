@@ -93,9 +93,10 @@ Load the result into RBush, or filter it directly, to find the files at a positi
 
 ```bash
 mlo_merger --read hei_ch1_11.ymap
+mlo_merger --read hei_ch1_11.ymap hei_ch1_12.ymap
 ```
 
-Given only a file name, `--read` reads that file from every resource holding it and from the
+Given only file names, `--read` reads each file from every resource holding it and from the
 latest vanilla version. The last stdout line is a `ReadResult`:
 
 ```json
@@ -116,6 +117,9 @@ latest vanilla version. The last stdout line is a `ReadResult`:
   (the path below `stream/`) also key the diff document and the overwrite.
 - If a resource holds several files with that name, the command fails and writes nothing.
   Read them individually with `--resource NAME stream/relative/path.ymap`.
+- Several names are read in one run, in the order given. If any name matches no file or is
+  ambiguous, the whole command fails and writes nothing, so read names one at a time when
+  some may be missing.
 
 ### Diff Documents
 

@@ -25,7 +25,7 @@ pub enum ReadTarget {
   Resource(String),
   /// A vanilla version's files; `None` is the latest.
   Vanilla(Option<String>),
-  /// The named file in every resource and in the latest vanilla version.
+  /// The named files in every resource and in the latest vanilla version.
   Everywhere,
 }
 
@@ -33,9 +33,9 @@ pub enum ReadTarget {
 #[derive(Debug, Clone)]
 pub struct Read {
   pub target: ReadTarget,
-  /// File name, or a resource's stream path, to read; `None` reads every supported file of the
+  /// File names, or resources' stream paths, to read; none reads every supported file of the
   /// target. Required for [`ReadTarget::Everywhere`].
-  pub file: Option<String>,
+  pub files: Vec<String>,
   /// Source cache whose inventory locates the resources' files.
   pub source_cache_dir: PathBuf,
   /// Raw vanilla archive holding the versions and `hash_names.json`.
@@ -163,8 +163,8 @@ const SUPPORTED_EXTENSIONS: [&str; 1] = ["ymap"];
 impl Read {
   /// Writes the JSON of each selected file whose JSON is missing or describes another file.
   ///
-  /// Fails before writing anything when the target selects no file, or when a resource holds
-  /// more than one file of the requested name.
+  /// Fails before writing anything when the target selects no file, when a requested name
+  /// matches no file, or when a resource holds more than one file of a requested name.
   pub fn run(&self) -> Result<ReadResult> {
     // Absolute paths keep the recorded fingerprints valid from any working directory.
     fs::create_dir_all(&self.output_dir)?;
@@ -181,27 +181,38 @@ impl Read {
   }
 
   fn run_absolute(&self) -> Result<ReadResult> {
-    if let Some(file) = &self.file {
+    for file in &self.files {
       supported(file)?;
     }
-    let selected = match &self.target {
-      ReadTarget::Resource(resource) => self.resource_files(Some(resource))?,
-      ReadTarget::Vanilla(version) => self.vanilla_files(version.as_deref())?,
+    let mut matched = vec![false; self.files.len()];
+    let mut selected = match &self.target {
+      ReadTarget::Resource(resource) => self.resource_files(Some(resource), &mut matched)?,
+      ReadTarget::Vanilla(version) => self.vanilla_files(version.as_deref(), &mut matched)?,
       ReadTarget::Everywhere => {
-        if self.file.is_none() {
+        if self.files.is_empty() {
           return Err("--read without --resource or --vanilla needs a file name".into());
         }
-        let mut files = self.resource_files(None)?;
-        files.extend(self.vanilla_files(None)?);
+        let mut files = self.resource_files(None, &mut matched)?;
+        files.extend(self.vanilla_files(None, &mut matched)?);
         files
       }
     };
-    if selected.is_empty() {
-      return Err(match &self.file {
-        Some(file) => format!("No stream file matches {file}").into(),
-        None => "The target has no supported stream file".into(),
-      });
+    let unmatched = self
+      .files
+      .iter()
+      .zip(&matched)
+      .filter(|(_, matched)| !**matched)
+      .map(|(file, _)| file.as_str())
+      .collect::<Vec<_>>();
+    if !unmatched.is_empty() {
+      return Err(format!("No stream file matches {}", unmatched.join(", ")).into());
     }
+    if selected.is_empty() {
+      return Err("The target has no supported stream file".into());
+    }
+    // A file named twice, by its name and by its stream path, is read once.
+    let mut outputs = std::collections::HashSet::new();
+    selected.retain(|selected| outputs.insert(selected.output.clone()));
     let names_path = self.vanilla_dir.join("hash_names.json");
     let mut names: Option<HashMap<u32, String>> = None;
     let mut files = Vec::with_capacity(selected.len());
@@ -259,10 +270,12 @@ impl Read {
     })
   }
 
-  /// The resources' files matching [`Self::file`]; every resource's when `resource` is `None`.
+  /// The resources' files matching [`Self::files`], marking in `matched` the names that match;
+  /// every resource's when `resource` is `None`.
   fn resource_files(
     &self,
     resource: Option<&str>,
+    matched: &mut [bool],
   ) -> Result<Vec<Selected>> {
     let inventory = inventoried_files(&self.source_cache_dir)?;
     let inventory = match resource {
@@ -272,24 +285,31 @@ impl Read {
       }
       None => inventory,
     };
-    let mut by_resource = BTreeMap::<&str, Vec<&InventoriedFile>>::new();
+    // Files keyed by resource and the index of the name they match, in that order.
+    let mut by_name = BTreeMap::<(&str, Option<usize>), Vec<&InventoriedFile>>::new();
     for file in &inventory {
-      let selected = match &self.file {
-        Some(name) => matches_file(file, name),
-        None => supported(&file.file_name).is_ok(),
-      };
-      if selected {
-        by_resource.entry(&file.resource).or_default().push(file);
+      if self.files.is_empty() {
+        if supported(&file.file_name).is_ok() {
+          by_name.entry((&file.resource, None)).or_default().push(file);
+        }
+        continue;
+      }
+      for (index, name) in self.files.iter().enumerate() {
+        if matches_file(file, name) {
+          matched[index] = true;
+          by_name.entry((&file.resource, Some(index))).or_default().push(file);
+        }
       }
     }
     let mut selected = Vec::new();
-    for (resource, files) in by_resource {
-      if let Some(name) = &self.file
+    for ((resource, index), files) in by_name {
+      if let Some(index) = index
         && files.len() > 1
       {
         return Err(
           format!(
-            "{name} matches {} files of resource {resource}; name one by its stream path: {}",
+            "{} matches {} files of resource {resource}; name one by its stream path: {}",
+            self.files[index],
             files.len(),
             files.iter().map(|file| file.stream_path.as_str()).collect::<Vec<_>>().join(", ")
           )
@@ -315,10 +335,11 @@ impl Read {
   }
 
   /// The files of a vanilla version, the latest when `version` is `None`, matching
-  /// [`Self::file`].
+  /// [`Self::files`], marking in `matched` the names that match.
   fn vanilla_files(
     &self,
     version: Option<&str>,
+    matched: &mut [bool],
   ) -> Result<Vec<Selected>> {
     let manifest = load_manifest(&self.vanilla_dir)?;
     let version = match version {
@@ -345,9 +366,17 @@ impl Read {
     let files = manifest.resolve_version(&version)?;
     let mut selected = Vec::new();
     for (file_name, file) in files {
-      let wanted = match &self.file {
-        Some(name) => file_name.eq_ignore_ascii_case(name),
-        None => supported(&file_name).is_ok(),
+      let wanted = if self.files.is_empty() {
+        supported(&file_name).is_ok()
+      } else {
+        let mut wanted = false;
+        for (index, name) in self.files.iter().enumerate() {
+          if file_name.eq_ignore_ascii_case(name) {
+            matched[index] = true;
+            wanted = true;
+          }
+        }
+        wanted
       };
       if !wanted {
         continue;
