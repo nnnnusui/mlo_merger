@@ -22,5 +22,6 @@ impl BuildSourceCache {
 mod diff;
 mod inventory;
 mod migration;
+mod restore;
 mod selection;
 mod timestamps;

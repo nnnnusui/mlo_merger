@@ -9,9 +9,11 @@ pub struct RestoreSourceCache {
   pub source_dir: PathBuf,
   /// Source cache holding the recorded original paths.
   pub cache_dir: PathBuf,
+  /// Resource names or source-relative resource paths to restore; none restores every resource.
+  pub resources: Vec<String>,
 }
 
-/// Parses `--restore-source-cache` arguments.
+/// Parses `--restore-source-cache [RESOURCE...]` arguments.
 pub fn parser() -> impl Parser<RestoreSourceCache> {
   let command = long("restore-source-cache")
     .help(
@@ -28,18 +30,39 @@ pub fn parser() -> impl Parser<RestoreSourceCache> {
     .argument::<PathBuf>("DIR")
     .fallback(PathBuf::from("asset/source-cache"));
   let yes = short('y').long("yes").help("Accepted for non-interactive execution").switch();
-  construct!(command, source_dir, cache_dir, yes).map(|(_, source_dir, cache_dir, _)| {
-    RestoreSourceCache {
+  let resources = positional::<String>("RESOURCE")
+    .help("Restore only these resources (names or source-relative paths)")
+    .many();
+  construct!(command, source_dir, cache_dir, yes, resources).map(
+    |(_, source_dir, cache_dir, _, resources)| RestoreSourceCache {
       source_dir,
       cache_dir,
-    }
-  })
+      resources,
+    },
+  )
 }
 
 /// Restores source files without generating caches, merging or deploying.
 pub fn run(command: RestoreSourceCache) -> Result<(), Box<dyn std::error::Error>> {
-  let restored =
-    crate::core::source_cache::restore_source_cache(&command.cache_dir, &command.source_dir)?;
+  let restored = crate::core::source_cache::restore_source_cache(
+    &command.cache_dir,
+    &command.source_dir,
+    &command.resources,
+  )?;
   println!("Restored {restored} source files.");
   Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn restores_every_resource_or_the_named_ones() {
+    let parse = |args: &[&str]| parser().to_options().run_inner(args).unwrap();
+    assert!(parse(&["--restore-source-cache"]).resources.is_empty());
+    let restore = parse(&["--restore-source-cache", "-y", "alpha", "[maps]/beta"]);
+    assert_eq!(restore.resources, ["alpha", "[maps]/beta"]);
+    assert_eq!(restore.source_dir, PathBuf::from("asset/source"));
+  }
 }

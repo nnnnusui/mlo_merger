@@ -154,7 +154,10 @@ to their original resource-relative paths under the selected source root. It
 checks all paths and destination conflicts before moving files, preserves file
 modification times, and does not restore archived history or unrecorded files.
 Successful restoration invalidates source-cache indexes without modifying merge
-or deployment output. The next source-cache generation inventories the restored
+or deployment output. Restoring selected resources keeps the inventory, recording
+their files as in source again, so the other resources' cached files stay indexed;
+only the derived reports are invalidated, which keeps merges from running on an
+inventory whose conflicts and load plan describe the cached layout. The next source-cache generation inventories the restored
 resources and applies normal extraction again. Cache generation and restoration
 must not run concurrently.
 

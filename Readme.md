@@ -50,6 +50,7 @@ mlo_merger --merge --vanilla-cache asset/vanilla-cache --source-cache asset/sour
 mlo_merger --deploy -i asset/merged --source-cache asset/source-cache -o asset/merged_mlo
 
 mlo_merger --restore-source-cache -i asset/source --source-cache asset/source-cache
+mlo_merger --restore-source-cache resourceName '[gabz]/cfx-gabz-247'
 ```
 
 Source-cache selection accepts a resource name or input-relative resource path;
@@ -82,6 +83,13 @@ untouched and invalidates source-cache indexes after success. Run it while no
 other cache or pipeline operation is active. A subsequent source-cache or pipeline
 run will index the resources again and move vanilla-named files back into the cache.
 It does not change merged or deployed output.
+
+Given resource names or input-relative resource paths, `--restore-source-cache`
+restores only those resources. Every name is checked before any file moves; an
+unknown or ambiguous name is an error. The other resources stay cached and indexed,
+and `--read` still finds every file, but `stream_conflicts.json` and
+`vanilla_ymaps_to_read.json` are removed, so merges fail until the next
+source-cache or pipeline run caches the restored resources again.
 
 Merge writes native files under `ymap/` and `ybn/`, plus `_omit.txt` for replaced
 source paths and `duplicates.json` for competing YMAP entity changes. It rebuilds
