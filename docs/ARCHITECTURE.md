@@ -61,8 +61,9 @@ merge must read: the parents and children related to changed files.
 1. Ensure the derived vanilla and source caches are current.
 2. Dispatch latest vanilla `.ybn` and `.ymap` files to separate merge handlers.
 3. For YMAPs, read each source's diff document, leave out the differences its
-   resource overwrite selects, combine the sources' differences and apply them to
-   the latest vanilla file. YBNs apply supported source changes directly.
+   resource overwrite selects, append the vanilla overwrite as the last source,
+   combine the differences and apply them to the latest vanilla file. YBNs apply
+   supported source changes directly.
 4. Write merged native stream files under extension subdirectories (`ymap/`, `ybn/`),
    `_omit.txt` and `duplicates.json` at the selected output root.
 
@@ -95,9 +96,13 @@ Array items are selected by content rather than position. An entry applies only
 while the source and vanilla files match the fingerprints it was written against;
 otherwise it is skipped with a warning, as are selectors that match no difference.
 
-Vanilla overwrites are planned under `overwrite/vanilla/{version}/{fileType}/`,
-applied before resource merges. Overwrites that add data and YBN overwrites are
-not yet supported.
+`overwrite/vanilla/latest/ymap/{fileName}.diff.json` holds differences written
+directly against a latest vanilla YMAP. Only `latest` is read: merges compare
+sources with the latest vanilla files, and recent game updates rarely replace
+existing YMAPs. The differences join the merge as the last source rather than
+overriding its result, so the merge policy applies to them unchanged; a file with
+one is merged even when no resource replaces it. It applies only while the latest
+vanilla file matches its fingerprint. YBN overwrites are not yet supported.
 
 ## Inspection
 

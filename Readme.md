@@ -127,8 +127,14 @@ document to leave out of the merge:
 
 An overwrite applies only while the source and vanilla files match its `source` and
 `vanilla` fingerprints (the diff document's `sha256` and `size`); otherwise it is
-skipped with a warning. Overwrites currently only remove source differences and only
-apply to YMAPs. See [docs/sample/overwrite](docs/sample/overwrite/README.md).
+skipped with a warning. See [docs/sample/overwrite](docs/sample/overwrite/README.md).
+
+`vanilla/latest/ymap/{fileName}.diff.json` (`VanillaOverwrite`) holds differences
+written directly against a latest vanilla YMAP, in the shape of a diff document's
+`diffs`. They are merged as one more source after every resource's (with their
+resource overwrites applied), under the same merge policy, and also into vanilla
+YMAPs no resource replaces. One applies only while the latest vanilla file matches
+its `vanilla` fingerprint. Overwrites currently only apply to YMAPs.
 
 ### Deploy
 

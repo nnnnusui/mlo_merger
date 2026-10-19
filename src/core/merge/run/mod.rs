@@ -11,7 +11,7 @@ use crate::core::format::ymap::relation::{EntityParentRef, entity_parent_ref};
 use crate::core::merge::ymap_parent_refs::{
   OriginalMap, ParentReferences, SourceMaps, runtime_entities,
 };
-use crate::core::overwrite::{OverwriteFingerprint, StreamFileOverwrite};
+use crate::core::overwrite::{OverwriteFingerprint, StreamFileOverwrite, VanillaOverwrite};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -29,6 +29,9 @@ pub struct MergeYmap {
   pub blacklist_config: Option<PathBuf>,
   /// The overwrites of the sources, keyed by source path, applied to their diffs.
   pub overwrites: HashMap<PathBuf, StreamFileOverwrite>,
+  /// The overwrites of the latest vanilla files, keyed by lowercase file name, merged after the
+  /// sources' diffs. A vanilla file with one is merged even when no source replaces it.
+  pub vanilla_overwrites: HashMap<String, VanillaOverwrite>,
 }
 
 impl MergeYmap {

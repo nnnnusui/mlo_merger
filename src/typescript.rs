@@ -48,8 +48,6 @@ mod tests {
       "DerivedManifest",
       "VanillaCacheManifest",
       "DeployMetadata",
-      "GenerationReport",
-      "ResourceReport",
       "MatchingConfig",
       "BlacklistConfig",
       "RTreeIndex",
@@ -62,6 +60,7 @@ mod tests {
       "ResourceOverwrite",
       "StreamFileOverwrite",
       "OverwriteFingerprint",
+      "VanillaOverwrite",
       "YmapDiffSkip",
       "ReadResult",
       "ReadFileResult",
@@ -78,7 +77,6 @@ mod tests {
     assert!(actual.contains("originalPath?: string"));
     assert!(actual.contains("export type Change = \"Added\" | \"Modified\" | \"Removed\""));
     assert!(actual.contains("bmin?: [number, number, number] | null"));
-    assert!(actual.contains("unsupported_files?: string[]"));
     assert!(actual.contains("tolerance?: MatchTolerances"));
     assert!(actual.contains("source_conflicts?:"));
     assert!(actual.contains("modified_seconds: number"));

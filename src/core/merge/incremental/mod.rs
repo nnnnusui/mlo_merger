@@ -10,7 +10,7 @@ use super::merge::Result;
 use super::{run::MergeYmap, ybn_conflicts::MergeYbnConflicts};
 use crate::core::{
   format::ymap::reference_hash,
-  overwrite::{Overwrites, StreamFileOverwrite},
+  overwrite::{Overwrites, StreamFileOverwrite, VanillaOverwrite},
   source_cache::{MergeInputs, MergeSourceFile},
   vanilla::write_json,
 };
@@ -59,6 +59,17 @@ impl IncrementalMerge<'_> {
     }
     let resource = Path::new(&source.resource).file_name()?.to_str()?;
     self.overwrites.stream_file(resource, &source.stream_path)
+  }
+
+  /// The overwrite of the latest vanilla file `name` (lowercase), if it is a merged YMAP.
+  fn vanilla_overwrite(
+    &self,
+    name: &str,
+  ) -> Option<&VanillaOverwrite> {
+    if !name.ends_with(".ymap") {
+      return None;
+    }
+    self.overwrites.vanilla_file(name)
   }
 }
 

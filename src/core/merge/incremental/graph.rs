@@ -28,7 +28,7 @@ struct ParentFile {
 
 impl IncrementalMerge<'_> {
   pub(super) fn ymap_graph(&self) -> Result<BTreeMap<String, BTreeSet<String>>> {
-    if self.inputs.ymap.is_empty() {
+    if self.inputs.ymap.is_empty() && self.overwrites.vanilla_files().is_empty() {
       return Ok(BTreeMap::new());
     }
     let mut hashes = BTreeMap::new();

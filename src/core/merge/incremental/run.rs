@@ -22,6 +22,14 @@ impl IncrementalMerge<'_> {
     for source in self.inputs.ybn.iter().chain(&self.inputs.ymap) {
       sources.entry(source.file_name.to_ascii_lowercase()).or_default().push(source);
     }
+    // A vanilla overwrite is merged like a source, even into a file no resource replaces.
+    for name in self.overwrites.vanilla_files().keys() {
+      if self.vanilla_overwrite(name).is_some() && baselines.contains_key(name) {
+        sources.entry(name.clone()).or_default();
+      } else {
+        tracing::warn!("Vanilla overwrite of {name} names no latest vanilla YMAP; not applied");
+      }
+    }
     let graph = self.ymap_graph()?;
     let groups = groups(&sources, &graph);
     let mut files = BTreeMap::new();
@@ -63,7 +71,7 @@ impl IncrementalMerge<'_> {
                 previous_inputs.get(*path).copied(),
                 self.force,
               )?,
-              overwrite: None,
+              overwrite: self.vanilla_overwrite(name).map(VanillaOverwrite::digest),
             })
           })
           .transpose()?;

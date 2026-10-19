@@ -16,7 +16,7 @@ It is included in release archives; in a checkout, generate it with `cargo expor
 | `--read` stdout | `ReadResult`, `ReadFileResult`, `ReadOrigin` |
 | `--read` JSON documents | `YmapReadDocument`, `ReadFingerprint`, `Ymap`, `YmapEntity`, `Position`, `Rotation` |
 | Source-cache diff documents | `YmapComparisonDiff`, `YmapComparisonFile`, `YmapDiffFields`, `YmapEntityDiff`, `YmapEntityFieldDiff` |
-| Overwrite documents | `ResourceOverwrite`, `StreamFileOverwrite`, `OverwriteFingerprint`, `YmapDiffSkip` |
+| Overwrite documents | `ResourceOverwrite`, `StreamFileOverwrite`, `OverwriteFingerprint`, `YmapDiffSkip`, `VanillaOverwrite` |
 | Merge diagnostics | `DuplicateReport` |
 
 ```typescript
@@ -172,6 +172,32 @@ asset/overwrite/resources/{resource}.json
 
 See [docs/sample/overwrite](sample/overwrite/README.md) for complete examples.
 
+### Vanilla Overwrite Documents
+
+```text
+asset/overwrite/vanilla/latest/ymap/{file_name}.diff.json
+```
+
+```json
+{
+  "schema_version": 1,
+  "vanilla": { "sha256": "<latest vanilla file sha256>", "size": 5675 },
+  "diffs": {
+    "entities": [{ "Removed": { "index": 3, "guid": 3592082822 } }]
+  }
+}
+```
+
+- `diffs` is written in the same shape as a diff document's `diffs`, against the latest vanilla
+  model (`--read` returns it with its fingerprint): `Removed.index` and `Modified.before_index`
+  index the vanilla model.
+- It is merged as the last source, after every resource's diff with its resource overwrite
+  applied. The merge policy still decides: a removal wins, and otherwise a resource's earlier
+  change to the same item wins over the overwrite.
+- A vanilla YMAP with an overwrite is merged even when no resource replaces it.
+- An overwrite whose `vanilla` no longer matches the latest vanilla file is skipped with a
+  warning (`Vanilla overwrite of ...`). Rewrite it after a vanilla update.
+
 ### Applying Overwrites
 
 ```bash
@@ -180,7 +206,8 @@ mlo_merger -y -i <resources directory> -o <deployed resource>
 
 The pipeline updates the source cache, merges and deploys only what changed. Overwrites are
 part of merge freshness, so `-f` is not needed. Use `--merge` alone to update only
-`asset/merged`. Overwrites that were not applied are logged on stderr as `Overwrite of ...`.
+`asset/merged`. Overwrites that were not applied are logged on stderr as `Overwrite of ...` or
+`Vanilla overwrite of ...`.
 
 ## Example: From Player Position To Overwrite
 

@@ -1,4 +1,5 @@
 use super::*;
+use std::collections::HashMap;
 
 impl IncrementalMerge<'_> {
   pub(super) fn merge_group(
@@ -41,7 +42,18 @@ impl IncrementalMerge<'_> {
           fs::rename(&path, directory.join(path.file_name().ok_or("Merged file name missing")?))?;
         }
       }
-    } else if !sources.is_empty() {
+    } else {
+      let vanilla_overwrites = group
+        .names
+        .iter()
+        .filter_map(|name| Some((name.clone(), self.vanilla_overwrite(name)?.clone())))
+        .collect::<HashMap<_, _>>();
+      if sources.is_empty() && vanilla_overwrites.is_empty() {
+        return Ok(DuplicateReport {
+          format_version: 1,
+          files: BTreeMap::new(),
+        });
+      }
       let directory = self.staging.join("ymap");
       let ymap_sources = sources
         .iter()
@@ -57,6 +69,7 @@ impl IncrementalMerge<'_> {
         rebuild_all: true,
         blacklist_config: None,
         overwrites,
+        vanilla_overwrites,
       }
       .run_with_latest_vanilla_files(&vanilla, &ymap_sources)?;
       let duplicate_path = directory.join(".duplicates.json");

@@ -1,12 +1,17 @@
-//! User edits applied to the source cache's diffs before they are merged.
+//! User edits applied to merge inputs without changing source or cache files.
 //!
 //! `<overwrite>/resources/<resource name>.json` holds a [`ResourceOverwrite`]: for each stream file
 //! of that resource, the differences to leave out of the merge. An entry applies only while the
 //! source and vanilla files are those it was written against.
+//!
+//! `<overwrite>/vanilla/latest/ymap/<file name>.diff.json` holds a [`VanillaOverwrite`]:
+//! differences from a latest vanilla YMAP, merged after every resource's. It applies only while
+//! that vanilla file is the one it was written against.
 
 mod skip;
 #[cfg(test)]
 mod test;
+mod vanilla;
 
 use crate::common::Result;
 use crate::core::format::ymap::compare::YmapDiffFields;
@@ -18,6 +23,7 @@ use std::io::BufReader;
 use std::path::Path;
 
 pub use skip::skip_diffs;
+pub use vanilla::VanillaOverwrite;
 
 /// The overwrites of one resource, read from `resources/<resource name>.json`.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -92,66 +98,20 @@ impl StreamFileOverwrite {
   }
 }
 
-/// Every resource's overwrites, keyed by resource name.
+/// Every resource's overwrites, keyed by resource name, and the latest vanilla files'.
 #[derive(Debug, Clone, Default)]
 pub struct Overwrites {
   resources: BTreeMap<String, ResourceOverwrite>,
+  vanilla: BTreeMap<String, VanillaOverwrite>,
 }
 
 impl Overwrites {
-  /// Reads `<directory>/resources/*.json`; a missing directory has no overwrites.
+  /// Reads `<directory>/resources/*.json` and `<directory>/vanilla/latest/ymap/*.diff.json`; a
+  /// missing directory has no overwrites.
   pub fn load(directory: &Path) -> Result<Self> {
-    let resources_dir = directory.join("resources");
-    let mut resources = BTreeMap::new();
-    if !resources_dir.is_dir() {
-      return Ok(Self {
-        resources,
-      });
-    }
-    for entry in fs::read_dir(&resources_dir)? {
-      let path = entry?.path();
-      if !path.is_file() || path.extension().is_none_or(|extension| extension != "json") {
-        continue;
-      }
-      let name = path
-        .file_stem()
-        .and_then(|name| name.to_str())
-        .ok_or_else(|| format!("Overwrite file name is not UTF-8: {}", path.display()))?;
-      let overwrite: ResourceOverwrite =
-        serde_json::from_reader(BufReader::new(fs::File::open(&path)?))
-          .map_err(|error| format!("Cannot read {}: {error}", path.display()))?;
-      if overwrite.schema_version != ResourceOverwrite::SCHEMA_VERSION {
-        return Err(
-          format!(
-            "{} has schema version {}; expected {}",
-            path.display(),
-            overwrite.schema_version,
-            ResourceOverwrite::SCHEMA_VERSION
-          )
-          .into(),
-        );
-      }
-      let files = overwrite
-        .files
-        .into_iter()
-        .map(|(stream_path, file)| (normalize(&stream_path), file))
-        .collect();
-      resources.insert(
-        name.to_ascii_lowercase(),
-        ResourceOverwrite {
-          files,
-          ..overwrite
-        },
-      );
-    }
-    tracing::info!(
-      "Loaded overwrites of {} stream files in {} resources from {}",
-      resources.values().map(|resource| resource.files.len()).sum::<usize>(),
-      resources.len(),
-      resources_dir.display()
-    );
     Ok(Self {
-      resources,
+      resources: load_resources(directory)?,
+      vanilla: vanilla::load(directory)?,
     })
   }
 
@@ -171,6 +131,71 @@ impl Overwrites {
       overwrite.files.keys().map(move |path| (resource.as_str(), path.as_str()))
     })
   }
+
+  /// The overwrite of the latest vanilla file named `file_name`, matched case-insensitively.
+  pub fn vanilla_file(
+    &self,
+    file_name: &str,
+  ) -> Option<&VanillaOverwrite> {
+    self.vanilla.get(&file_name.to_ascii_lowercase())
+  }
+
+  /// Every latest vanilla file's overwrite, keyed by lowercase file name.
+  pub fn vanilla_files(&self) -> &BTreeMap<String, VanillaOverwrite> {
+    &self.vanilla
+  }
+}
+
+/// Reads `<directory>/resources/*.json`, keyed by lowercase resource name.
+fn load_resources(directory: &Path) -> Result<BTreeMap<String, ResourceOverwrite>> {
+  let resources_dir = directory.join("resources");
+  let mut resources = BTreeMap::new();
+  if !resources_dir.is_dir() {
+    return Ok(resources);
+  }
+  for entry in fs::read_dir(&resources_dir)? {
+    let path = entry?.path();
+    if !path.is_file() || path.extension().is_none_or(|extension| extension != "json") {
+      continue;
+    }
+    let name = path
+      .file_stem()
+      .and_then(|name| name.to_str())
+      .ok_or_else(|| format!("Overwrite file name is not UTF-8: {}", path.display()))?;
+    let overwrite: ResourceOverwrite =
+      serde_json::from_reader(BufReader::new(fs::File::open(&path)?))
+        .map_err(|error| format!("Cannot read {}: {error}", path.display()))?;
+    if overwrite.schema_version != ResourceOverwrite::SCHEMA_VERSION {
+      return Err(
+        format!(
+          "{} has schema version {}; expected {}",
+          path.display(),
+          overwrite.schema_version,
+          ResourceOverwrite::SCHEMA_VERSION
+        )
+        .into(),
+      );
+    }
+    let files = overwrite
+      .files
+      .into_iter()
+      .map(|(stream_path, file)| (normalize(&stream_path), file))
+      .collect();
+    resources.insert(
+      name.to_ascii_lowercase(),
+      ResourceOverwrite {
+        files,
+        ..overwrite
+      },
+    );
+  }
+  tracing::info!(
+    "Loaded overwrites of {} stream files in {} resources from {}",
+    resources.values().map(|resource| resource.files.len()).sum::<usize>(),
+    resources.len(),
+    resources_dir.display()
+  );
+  Ok(resources)
 }
 
 fn normalize(stream_path: &str) -> String {

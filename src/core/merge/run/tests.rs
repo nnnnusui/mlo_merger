@@ -36,6 +36,7 @@ fn latest_ymap_merge_writes_binary_without_xml() {
     rebuild_all: true,
     blacklist_config: None,
     overwrites: Default::default(),
+    vanilla_overwrites: Default::default(),
   };
   merge
     .run_with_latest_vanilla_files(
@@ -123,6 +124,7 @@ fn native_ymap_merge_deletion_wins_over_retained_entities_in_both_orders() {
     rebuild_all: true,
     blacklist_config: None,
     overwrites: Default::default(),
+    vanilla_overwrites: Default::default(),
   };
   for reverse in [false, true] {
     let mut sources =
@@ -189,6 +191,7 @@ fn merge_emits_only_edited_ymaps_when_rebuilding() {
     rebuild_all: true,
     blacklist_config: None,
     overwrites: Default::default(),
+    vanilla_overwrites: Default::default(),
   };
   let run = |sources: &[SourceYmap]| {
     merge.run_with_latest_vanilla_files(std::slice::from_ref(&vanilla), sources).unwrap()
@@ -244,6 +247,7 @@ fn merge_deletes_omitted_entities_and_detaches_dependent_children() {
     rebuild_all: false,
     blacklist_config: None,
     overwrites: Default::default(),
+    vanilla_overwrites: Default::default(),
   }
   .run_with_latest_vanilla_files(
     &vanilla,
@@ -336,6 +340,7 @@ fn sources_with_a_diff_document_merge_through_it_and_reject_stale_ones() {
     rebuild_all: true,
     blacklist_config: None,
     overwrites: Default::default(),
+    vanilla_overwrites: Default::default(),
   };
   let sources = [("resource".to_string(), source.clone(), Some(document.clone()))];
   merge.run_with_latest_vanilla_files(std::slice::from_ref(&vanilla), &sources).unwrap();

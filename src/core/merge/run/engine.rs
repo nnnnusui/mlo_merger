@@ -106,6 +106,26 @@ impl MergeYmap {
       !references.is_empty()
     });
     tracing::info!("Found {} unique YMAP files across mods", modded_ymaps_map.len());
+    let mut vanilla_overwrites = HashMap::new();
+    for (name, overwrite) in &self.vanilla_overwrites {
+      let hash = reference_hash(name.trim_end_matches(".ymap"));
+      if !vanilla_map_paths.contains_key(&hash) {
+        tracing::warn!("Vanilla overwrite of {name} names no latest vanilla YMAP; not applied");
+        continue;
+      }
+      vanilla_overwrites.insert(hash, overwrite);
+    }
+    let mut overwritten = vanilla_overwrites.keys().copied().collect::<HashSet<_>>();
+    for name in modded_ymaps_map.keys() {
+      overwritten.remove(&reference_hash(name.trim_end_matches(".ymap")));
+    }
+    for hash in overwritten {
+      let name = vanilla_map_paths[&hash]
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or("non-UTF8 vanilla filename")?;
+      modded_ymaps_map.entry(name.to_string()).or_default();
+    }
 
     let mut sources = SourceMaps::default();
     for path in latest_files {
@@ -141,8 +161,11 @@ impl MergeYmap {
       let hash = reference_hash(ymap_name.trim_end_matches(".ymap"));
       let vanilla_ymap_path =
         vanilla_map_paths.get(&hash).cloned().unwrap_or_else(|| self.vanilla_dir.join(ymap_name));
-      if !self.rebuild_all && mod_refs.len() <= 1 {
-        let mod_ref = mod_refs.first().unwrap();
+      let vanilla_overwrite = vanilla_overwrites.get(&hash).copied();
+      if !self.rebuild_all
+        && vanilla_overwrite.is_none()
+        && let [mod_ref] = mod_refs.as_slice()
+      {
         tracing::info!("Processing YMAP: {}", vanilla_ymap_path.display());
         tracing::info!("  Mod: {} ({})", mod_ref.mod_name, mod_ref.mod_ymap_path.display());
         let Some(original) = sources.get(Some(&mod_ref.mod_name), hash)? else {
@@ -273,6 +296,54 @@ impl MergeYmap {
           );
         }
         ymap_diffs.push(ymap_diff);
+      }
+      // Merged as the last source, so the merge policy weighs it against the resources'.
+      if let Some(overwrite) = vanilla_overwrite
+        && let Some(ymap_diff) =
+          overwrite.diffs_for(&file_fingerprint(&vanilla_ymap_path)?, ymap_name)
+      {
+        tracing::info!("  Vanilla overwrite of {ymap_name}");
+        log_diff_counts(ymap_diff);
+        let added = ymap_diff
+          .entities
+          .iter()
+          .flatten()
+          .filter_map(|diff| match diff {
+            YmapEntityDiff::Added {
+              entity,
+              ..
+            } => Some(entity.clone()),
+            _ => None,
+          })
+          .collect::<Vec<_>>();
+        references.register_entities(hash, &added);
+        for diff in ymap_diff.entities.iter().flatten() {
+          let (change, entity) = match diff {
+            YmapEntityDiff::Added {
+              entity,
+              ..
+            } => (Change::Added, Some(entity.clone())),
+            YmapEntityDiff::Removed {
+              ..
+            } => (Change::Removed, None),
+            YmapEntityDiff::Modified {
+              ..
+            } => (Change::Modified, None),
+          };
+          let key = diff.guid();
+          duplicates.add(
+            diff,
+            key,
+            vanilla_originals.get(&key).map(|entity| (*entity).clone()),
+            Contribution {
+              resource: VANILLA_OVERWRITE_SOURCE.into(),
+              path: vanilla_ymap_path.clone(),
+              change,
+              entity,
+            },
+          );
+        }
+        ymap_diffs.push(ymap_diff.clone());
       }
 
       if ymap_diffs.is_empty() {
@@ -479,9 +550,14 @@ impl MergeYmap {
   }
 }
 
-/// The content of the file at `path`, as an overwrite records it.
+/// The resource a vanilla overwrite's contributions are reported under in duplicate reports.
+const VANILLA_OVERWRITE_SOURCE: &str = "overwrite/vanilla/latest";
+
+/// The content of the file at `path` (after resolving links, as latest vanilla files are), as an
+/// overwrite records it.
 fn file_fingerprint(path: &Path) -> Result<OverwriteFingerprint, Box<dyn std::error::Error>> {
-  let fingerprint = crate::common::fingerprint::Fingerprint::read(path, None, false)?;
+  let fingerprint =
+    crate::common::fingerprint::Fingerprint::read(&path.canonicalize()?, None, false)?;
   Ok(OverwriteFingerprint {
     sha256: fingerprint.sha256,
     size: fingerprint.size,
