@@ -10,6 +10,23 @@ of the merge. See the [Readme](../Readme.md) for every option and
 The JSON files and outputs below have TypeScript types in `asset/gen_mlo_merger.ts`.
 It is included in release archives; in a checkout, generate it with `cargo export-types`.
 
+Release archives also contain `release.json`, naming the build they hold:
+
+```json
+{
+  "name": "mlo_merger",
+  "version": "2.0.0",
+  "tag": "v2.0.0",
+  "commit": "<commit SHA>",
+  "repository": "https://github.com/nnnnusui/mlo_merger",
+  "release_url": "https://github.com/nnnnusui/mlo_merger/releases/tag/v2.0.0",
+  "targets": ["aarch64-apple-darwin", "x86_64-apple-darwin", "x86_64-pc-windows-msvc", "x86_64-unknown-linux-gnu"]
+}
+```
+
+`targets` lists the platforms whose executables the archive holds: one in a platform
+archive, every one in `mlo_merger-all.zip`.
+
 | Data | Type |
 |---|---|
 | Stream-file bounds index | `RTreeIndex`, `RTreeItem` |

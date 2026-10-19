@@ -75,7 +75,9 @@ jobs:
           if [[ "$RUNNER_OS" == "Windows" ]]; then
             python_command=python
           fi
+          cargo metadata --locked --no-deps --format-version 1 > cargo-metadata.json
           "$python_command" - <<'PY'
+          import json
           import os
           from pathlib import Path
           import shutil
@@ -85,6 +87,22 @@ jobs:
           package = Path("package") / name
           package.mkdir(parents=True)
           shutil.copy2(Path("target") / target / "release" / os.environ["EXECUTABLE"], package)
+          metadata = json.loads(Path("cargo-metadata.json").read_text(encoding="utf-8"))
+          (crate,) = (crate for crate in metadata["packages"] if crate["name"] == "mlo_merger")
+          tag = os.environ["GITHUB_REF_NAME"]
+          if tag != f"v{crate['version']}":
+              raise SystemExit(f"Tag {tag} does not match Cargo.toml version {crate['version']}")
+          repository = f"{os.environ['GITHUB_SERVER_URL']}/{os.environ['GITHUB_REPOSITORY']}"
+          release = {
+              "name": crate["name"],
+              "version": crate["version"],
+              "tag": tag,
+              "commit": os.environ["GITHUB_SHA"],
+              "repository": repository,
+              "release_url": f"{repository}/releases/tag/{tag}",
+              "targets": [target],
+          }
+          (package / "release.json").write_text(json.dumps(release, indent=2) + "\n", encoding="utf-8")
           for filename in ("Readme.md", "LICENSE.md", "asset/config.toml",
                            "docs/ARCHITECTURE.md", "docs/TODO.md", "docs/usage.md",
                            ".cargo/config.toml", "asset/gen_mlo_merger.ts"):
@@ -127,6 +145,7 @@ jobs:
       - name: Package all platforms
         run: |
           python3 - <<'PY'
+          import json
           from pathlib import Path
           import shutil
           import tempfile
@@ -145,15 +164,26 @@ jobs:
           with tempfile.TemporaryDirectory() as temporary:
               package = Path(temporary) / name
               package.mkdir()
+              release = None
+              targets = []
               for archive in archives:
                   extracted = Path(temporary) / "extracted" / archive.name
                   shutil.unpack_archive(archive, extracted)
                   (root,) = extracted.iterdir()
                   platform = platforms[root.name.removeprefix("mlo_merger-")]
+                  # Every platform's release.json describes the same build but its own target.
+                  own = json.loads((root / "release.json").read_text(encoding="utf-8"))
+                  targets += own.pop("targets")
+                  if release is None:
+                      release = own
+                  elif own != release:
+                      raise SystemExit(f"{archive.name} was built from another release")
                   for path in sorted(root.rglob("*")):
                       if not path.is_file():
                           continue
                       relative = path.relative_to(root)
+                      if relative == Path("release.json"):
+                          continue
                       if relative.name in ("mlo_merger", "mlo_merger.exe") and len(relative.parts) == 1:
                           destination = package / f"mlo_merger-{platform}{relative.suffix}"
                       else:
@@ -162,6 +192,8 @@ jobs:
                               continue
                       destination.parent.mkdir(parents=True, exist_ok=True)
                       shutil.copy2(path, destination)
+              release["targets"] = sorted(targets)
+              (package / "release.json").write_text(json.dumps(release, indent=2) + "\n", encoding="utf-8")
               shutil.make_archive(str(dist / name), "zip", root_dir=temporary, base_dir=name)
           PY
 
