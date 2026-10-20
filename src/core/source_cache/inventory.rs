@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use rayon::prelude::*;
 use sha2::{Digest, Sha256};
 use walkdir::WalkDir;
 
@@ -25,17 +26,16 @@ pub(super) fn source_fingerprints(
   resources: &[PathBuf],
   cached: &BTreeMap<String, FileFingerprint>,
 ) -> Result<BTreeMap<String, FileFingerprint>> {
-  let mut files = BTreeMap::new();
-  let total = resources.len();
-  for (index, resource) in resources.iter().enumerate() {
+  // The inputs are listed first and hashed in parallel; hashing dominates for new files.
+  let mut inputs = Vec::new();
+  let mut ids = Vec::with_capacity(resources.len());
+  for resource in resources {
     let id = resource_id(source_dir, resource)?;
-    let before = files.len();
-    files.insert(input_key(&id, ""), fingerprint(resource, None)?);
+    inputs.push((input_key(&id, ""), resource.clone(), false));
     for manifest in ["fxmanifest.lua", "__resource.lua"] {
       let path = resource.join(manifest);
       if path.is_file() {
-        let key = input_key(&id, manifest);
-        files.insert(key.clone(), fingerprint(&path, cached.get(&key))?);
+        inputs.push((input_key(&id, manifest), path, true));
       }
     }
     for stream_name in ["stream", "streams"] {
@@ -49,13 +49,28 @@ pub(super) fn source_fingerprints(
           continue;
         }
         let relative = entry.path().strip_prefix(resource)?.to_string_lossy().replace('\\', "/");
-        let key = input_key(&id, &relative);
-        files.insert(key.clone(), fingerprint(entry.path(), cached.get(&key))?);
+        inputs.push((input_key(&id, &relative), entry.path().to_path_buf(), true));
       }
     }
-    if resource_fingerprints_changed(&id, &files, cached) {
+    ids.push(id);
+  }
+  let files = inputs
+    .par_iter()
+    .map(|(key, path, reuse)| {
+      let previous = if *reuse { cached.get(key) } else { None };
+      fingerprint(path, previous)
+        .map(|fingerprint| (key.clone(), fingerprint))
+        .map_err(|error| format!("{}: {error}", path.display()))
+    })
+    .collect::<std::result::Result<BTreeMap<_, _>, String>>()?;
+  let total = ids.len();
+  for (index, id) in ids.iter().enumerate() {
+    if resource_fingerprints_changed(id, &files, cached) {
+      let prefix = input_key(id, "");
+      let count =
+        files.range(prefix.clone()..).take_while(|(key, _)| key.starts_with(&prefix)).count();
       tracing::info!("Fingerprinting source resource {}/{}: {id}", index + 1, total);
-      tracing::info!("Fingerprint complete for {id}: {} files", files.len() - before);
+      tracing::info!("Fingerprint complete for {id}: {count} files");
     }
   }
   Ok(files)

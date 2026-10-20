@@ -15,6 +15,7 @@ use crate::{
     source_cache::{types::SourceCacheMetadata, ymap_diff_path},
   },
 };
+use rayon::prelude::*;
 use std::{fs, io::BufReader, path::Path};
 
 /// How many diff documents [`write_ymap_diffs`] wrote and kept.
@@ -50,7 +51,7 @@ pub(in crate::core::source_cache) fn write_ymap_diffs(
     crate::core::source_cache::cache_info_path(output),
   )?))?;
   let hash_names = load_hash_names_or_empty(&vanilla_dir.join("hash_names.json"));
-  let mut context = YmapComparisonContext::new(output, vanilla_cache_dir, hash_names)?;
+  let context = YmapComparisonContext::new(output, vanilla_cache_dir, hash_names)?;
 
   let staging = output.join("diff.tmp");
   let target = output.join("diff");
@@ -62,6 +63,9 @@ pub(in crate::core::source_cache) fn write_ymap_diffs(
     written: 0,
     reused: 0,
   };
+  // Current diffs are moved to staging as they are found; the others are taken afterwards in
+  // parallel, each from its own source and vanilla YMAPs.
+  let mut stale = Vec::new();
   for resource in metadata.resources.values() {
     let resource_name =
       resource.source.file_name().ok_or("Resource has no name")?.to_string_lossy().into_owned();
@@ -85,18 +89,29 @@ pub(in crate::core::source_cache) fn write_ymap_diffs(
         counts.reused += 1;
         continue;
       }
-      let diff = match context.get_diff(&stream_file) {
+      stale.push((stream_file, file_path, path));
+    }
+  }
+  // Worker threads do not inherit the active matching tolerances, so each is handed them.
+  let tolerances = matching::current();
+  let results = stale
+    .par_iter()
+    .map(|(stream_file, file_path, path)| {
+      let diff = match matching::with_tolerances(tolerances, || context.get_diff(stream_file)) {
         Ok(diff) => diff,
         Err(error) => {
           tracing::warn!("Skipping YMAP diff {}: {error}", file_path.display());
-          continue;
+          return Ok(false);
         }
       };
-      fs::create_dir_all(parent)?;
-      write_json(&path, &diff)?;
-      counts.written += 1;
-    }
-  }
+      let written = (|| {
+        fs::create_dir_all(path.parent().ok_or("Diff path has no parent")?)?;
+        write_json(path, &diff)
+      })();
+      written.map(|()| true).map_err(|error| format!("{}: {error}", path.display()))
+    })
+    .collect::<std::result::Result<Vec<_>, String>>()?;
+  counts.written = results.into_iter().filter(|written| *written).count();
 
   fs::create_dir_all(&staging)?;
   remove_dir_if_exists(&target)?;

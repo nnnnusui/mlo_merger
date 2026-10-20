@@ -1,6 +1,6 @@
 //! Loading, caching and parent resolution of [`YmapComparisonContext`] over the local caches.
 
-use std::{collections::HashMap, fs, path::Path, rc::Rc};
+use std::{collections::HashMap, fs, path::Path, sync::Arc};
 
 use crate::core::format::ymap::{
   compare::{StreamFileRef, YmapComparisonContext, YmapParentRef},
@@ -11,7 +11,7 @@ use crate::core::format::ymap::{
 #[ignore = "requires local asset/source-cache and asset/vanilla-cache"]
 fn reads_vanilla_and_source_ymaps_once() {
   let asset = Path::new(env!("CARGO_MANIFEST_DIR")).join("asset");
-  let mut context = YmapComparisonContext::new(
+  let context = YmapComparisonContext::new(
     &asset.join("source-cache"),
     &asset.join("vanilla-cache"),
     HashMap::new(),
@@ -37,15 +37,15 @@ fn reads_vanilla_and_source_ymaps_once() {
   };
 
   let first = context.get_cache(&vanilla).unwrap();
-  assert!(Rc::ptr_eq(&context.get_cache(&vanilla).unwrap(), &first));
+  assert!(Arc::ptr_eq(&context.get_cache(&vanilla).unwrap(), &first));
   let entity_count = context.get_cache(&source).unwrap().entities.len();
   assert!(entity_count > 0);
   // The diff also loads the vanilla baseline, and the parent YMAPs of both, from the cache.
   context.get_diff(&source).unwrap();
-  assert!(
-    context.cache_by_ref.contains_key(&vanilla) && context.cache_by_ref.contains_key(&source)
-  );
-  assert!(Rc::ptr_eq(&context.get_cache(&vanilla).unwrap(), &first));
+  let cache = context.cache();
+  assert!(cache.contains_key(&vanilla) && cache.contains_key(&source));
+  drop(cache);
+  assert!(Arc::ptr_eq(&context.get_cache(&vanilla).unwrap(), &first));
 
   // A resource without the requested YMAP falls back to vanilla.
   let missing_in_resource = fs::read_dir(&latest)
@@ -82,7 +82,7 @@ fn reads_vanilla_and_source_ymaps_once() {
 #[ignore = "requires local asset/source-cache and asset/vanilla-cache"]
 fn resolves_parents_of_every_source_ymap() {
   let asset = Path::new(env!("CARGO_MANIFEST_DIR")).join("asset");
-  let mut context = YmapComparisonContext::new(
+  let context = YmapComparisonContext::new(
     &asset.join("source-cache"),
     &asset.join("vanilla-cache"),
     HashMap::new(),
@@ -158,7 +158,7 @@ struct ParentChangeReport {
 fn dump_source_ymaps_with_changed_parents() {
   let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
   let asset = manifest.join("asset");
-  let mut context = YmapComparisonContext::new(
+  let context = YmapComparisonContext::new(
     &asset.join("source-cache"),
     &asset.join("vanilla-cache"),
     HashMap::new(),
@@ -184,7 +184,7 @@ fn dump_source_ymaps_with_changed_parents() {
       resource_name: Some(resource_name.clone()),
       ..vanilla.clone()
     };
-    let mut side = |file: &StreamFileRef| {
+    let side = |file: &StreamFileRef| {
       let hash = reference_hash(&context.get_cache(file).unwrap().parent);
       ParentSide {
         parent_hash: (hash != 0).then(|| format!("hash_{hash:08X}")),

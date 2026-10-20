@@ -1,8 +1,8 @@
 use std::{
-  collections::{BTreeSet, HashMap, HashSet, hash_map::Entry},
+  collections::{BTreeSet, HashMap, HashSet},
   fs,
   path::{Path, PathBuf},
-  rc::Rc,
+  sync::{Arc, Mutex},
 };
 
 use struct_diff::Diff;
@@ -43,6 +43,9 @@ struct VanillaCacheInfo {
 }
 
 /// Reads YMAPs from the vanilla and source caches on first use and keeps them for reuse.
+///
+/// Shared between threads: diffs of several files can be taken at once, and a YMAP two of them
+/// read is decoded at most once per thread that reaches it first.
 pub struct YmapComparisonContext {
   vanilla_cache_dir: PathBuf,
   pub(super) vanilla_version: String,
@@ -53,7 +56,7 @@ pub struct YmapComparisonContext {
   file_names_by_hash: HashMap<u32, BTreeSet<String>>,
   /// Names used to resolve hashes while decoding, e.g. vanilla `hash_names.json`.
   hash_names: HashMap<u32, String>,
-  pub(super) cache_by_ref: HashMap<StreamFileRef, Rc<Ymap>>,
+  pub(super) cache_by_ref: Mutex<HashMap<StreamFileRef, Arc<Ymap>>>,
 }
 
 impl YmapComparisonContext {
@@ -82,7 +85,7 @@ impl YmapComparisonContext {
       vanilla_file_names,
       file_names_by_hash,
       hash_names,
-      cache_by_ref: HashMap::new(),
+      cache_by_ref: Mutex::new(HashMap::new()),
     })
   }
 
@@ -90,28 +93,33 @@ impl YmapComparisonContext {
   ///
   /// The YMAP is shared with the cache, so callers can hold several at once.
   pub fn get_cache(
-    &mut self,
+    &self,
     file: &StreamFileRef,
-  ) -> Result<Rc<Ymap>> {
-    match self.cache_by_ref.entry(file.clone()) {
-      Entry::Occupied(entry) => Ok(entry.get().clone()),
-      Entry::Vacant(entry) => {
-        let path = resolve_stream_file(
-          &self.vanilla_cache_dir,
-          &self.vanilla_version,
-          &self.source_index,
-          file,
-        )?;
-        let ymap = ymap_to_model(&read_stream_bytes(&path)?, &self.hash_names)?;
-        Ok(entry.insert(Rc::new(ymap)).clone())
-      }
+  ) -> Result<Arc<Ymap>> {
+    if let Some(ymap) = self.cache().get(file) {
+      return Ok(ymap.clone());
     }
+    // Decoded without holding the lock, so other threads keep reading their own YMAPs.
+    let path = resolve_stream_file(
+      &self.vanilla_cache_dir,
+      &self.vanilla_version,
+      &self.source_index,
+      file,
+    )?;
+    let ymap = Arc::new(ymap_to_model(&read_stream_bytes(&path)?, &self.hash_names)?);
+    Ok(self.cache().entry(file.clone()).or_insert(ymap).clone())
+  }
+
+  /// The decoded YMAPs, keyed by the stream file they were read from.
+  pub(super) fn cache(&self) -> std::sync::MutexGuard<'_, HashMap<StreamFileRef, Arc<Ymap>>> {
+    // A thread that panicked while holding the lock left the map itself intact.
+    self.cache_by_ref.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
   }
 
   /// The parent YMAP that `file` declares; see [`Self::parent_ref`].
   #[cfg(test)]
   pub(super) fn parent_of(
-    &mut self,
+    &self,
     file: &StreamFileRef,
   ) -> Result<Option<YmapParentRef>> {
     let ymap = self.get_cache(file)?;
@@ -122,7 +130,7 @@ impl YmapComparisonContext {
   ///
   /// Tolerances come from the active matching config (`asset/config.toml`).
   pub fn get_diff(
-    &mut self,
+    &self,
     file: &StreamFileRef,
   ) -> Result<YmapComparisonDiff> {
     let baseline = StreamFileRef {
@@ -151,10 +159,10 @@ impl YmapComparisonContext {
   /// does: from `file`'s resource when it has one of that name, from vanilla otherwise; `None`
   /// when it declares none or none is found.
   fn parent_map(
-    &mut self,
+    &self,
     file: &StreamFileRef,
     ymap: &Ymap,
-  ) -> Result<Option<Rc<Ymap>>> {
+  ) -> Result<Option<Arc<Ymap>>> {
     match self.parent_ref(file, &ymap.parent)? {
       Some(YmapParentRef::Resolved(parent)) => Ok(Some(self.get_cache(&parent)?)),
       Some(YmapParentRef::Unresolved(_)) | None => Ok(None),

@@ -13,6 +13,7 @@ use crate::common::fingerprint::Fingerprint;
 #[cfg(not(test))]
 use indicatif::ProgressDrawTarget;
 use indicatif::{ProgressBar, ProgressStyle};
+use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 #[cfg(not(test))]
 use std::io::IsTerminal;
@@ -266,28 +267,33 @@ fn index_store(
   if log_progress {
     tracing::info!("Indexing the bounds of {total} {name} stream files");
   }
+  // Each file's bounds are read independently; results keep the candidates' order.
+  let results = candidates
+    .par_iter()
+    .map(|candidate| {
+      let result = index_item(candidate).map_err(|error| error.to_string());
+      progress.inc(1);
+      if log_progress && progress.position().is_multiple_of(1000) {
+        tracing::info!("Indexed {}/{total} {name} stream files", progress.position());
+      }
+      result
+    })
+    .collect::<Vec<_>>();
+  progress.finish_and_clear();
   let mut ymap = Vec::new();
   let mut ybn = Vec::new();
   let mut skipped = 0usize;
-  for candidate in candidates {
-    progress.set_message(candidate.path.display().to_string());
+  for (candidate, result) in candidates.iter().zip(results) {
     let items = if candidate.extension == "ymap" { &mut ymap } else { &mut ybn };
-    match index_item(&candidate) {
+    match result {
       Ok(Some(item)) => items.push(item),
       Ok(None) => skipped += 1,
       Err(error) => {
         skipped += 1;
-        progress.suspend(|| {
-          tracing::warn!("Left {} out of the {name} index: {error}", candidate.path.display())
-        });
+        tracing::warn!("Left {} out of the {name} index: {error}", candidate.path.display());
       }
     }
-    progress.inc(1);
-    if log_progress && progress.position().is_multiple_of(1000) {
-      tracing::info!("Indexed {}/{total} {name} stream files", progress.position());
-    }
   }
-  progress.finish_and_clear();
   tracing::info!(
     "Indexed the bounds of {} {name} stream files ({} YMAP, {} YBN), left out {skipped}",
     ymap.len() + ybn.len(),
