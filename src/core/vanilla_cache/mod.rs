@@ -109,6 +109,7 @@ mod source;
 use filesystem::*;
 use freshness::cache_is_current;
 pub(crate) use read::{DerivedVanillaFile, LoadedCache, load_cache};
+pub use read::{VanillaLatestFile, cache_info_path, latest_files};
 use relationships::children_by_parent;
 pub(crate) use relationships::ymap_parent_hash;
 use source::*;

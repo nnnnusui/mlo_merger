@@ -467,22 +467,24 @@ impl SeenPaths {
     }
   }
 
-  /// The path `path` resolves to, relative to the working directory when it is inside it;
-  /// `path` itself when it cannot be resolved.
   fn resolve(
     &self,
     path: &Path,
   ) -> PathBuf {
-    let Ok(resolved) = path.canonicalize() else {
-      return path.to_path_buf();
-    };
-    match &self.working_dir {
-      Some(directory) => match resolved.strip_prefix(directory) {
-        Ok(relative) => relative.to_path_buf(),
-        Err(_) => resolved,
-      },
-      None => resolved,
-    }
+    display_path(path, self.working_dir.as_deref())
+  }
+}
+
+/// The path `path` resolves to, relative to `working_dir` (canonical) when it is inside it;
+/// `path` itself, made relative the same way, when it cannot be resolved.
+pub(super) fn display_path(
+  path: &Path,
+  working_dir: Option<&Path>,
+) -> PathBuf {
+  let resolved = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+  match working_dir.and_then(|directory| resolved.strip_prefix(directory).ok()) {
+    Some(relative) => relative.to_path_buf(),
+    None => resolved,
   }
 }
 
@@ -505,7 +507,7 @@ fn push_candidate(
   candidates.push(candidate);
 }
 
-fn stream_name(path: &Path) -> Option<(String, &'static str)> {
+pub(super) fn stream_name(path: &Path) -> Option<(String, &'static str)> {
   let name = path.file_name()?.to_str()?.to_ascii_lowercase();
   let extension = path.extension()?.to_str()?.to_ascii_lowercase();
   let extension = match extension.as_str() {

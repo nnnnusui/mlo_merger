@@ -168,11 +168,20 @@ pub struct InventoriedFile {
   pub file_name: String,
   /// Where the file is now: in the cache when it was moved there, otherwise in the resource.
   pub path: PathBuf,
+  /// Where the file belongs in its resource, which differs from [`Self::path`] when it was
+  /// moved into the cache.
+  pub original_path: PathBuf,
+}
+
+/// The source cache's inventory, written whenever the cache is generated, so it changes with
+/// every update of the cached or inventoried files.
+pub fn cache_info_path(cache_dir: &Path) -> PathBuf {
+  cache_dir.join("source_cache_info.json")
 }
 
 /// Lists every stream file the source cache inventoried, without rescanning source streams.
 pub fn inventoried_files(cache_dir: &Path) -> Result<Vec<InventoriedFile>> {
-  let path = cache_dir.join("source_cache_info.json");
+  let path = cache_info_path(cache_dir);
   let metadata: SourceCacheMetadata = serde_json::from_reader(BufReader::new(
     std::fs::File::open(&path)
       .map_err(|error| format!("Cannot open {}: {error}", path.display()))?,
@@ -193,6 +202,7 @@ pub fn inventoried_files(cache_dir: &Path) -> Result<Vec<InventoriedFile>> {
           .cached_path
           .as_ref()
           .map_or_else(|| inventory.source.join(&file.path), |path| cache_dir.join(path)),
+        original_path: inventory.source.join(&file.path),
         file_name: file.file_name,
       });
     }

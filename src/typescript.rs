@@ -72,7 +72,8 @@ mod tests {
       assert!(actual.contains(&format!("export type {name} =")), "Missing {name}");
     }
     assert!(actual.contains("schemaVersion: number"));
-    assert!(actual.contains("mergedFileCount: number"));
+    assert!(actual.contains("fileCount: number"));
+    assert!(actual.contains("ymap: RTreeItem[]"));
     assert!(actual.contains("minX: number"));
     assert!(actual.contains("originalPath?: string"));
     assert!(actual.contains("export type Change = \"Added\" | \"Modified\" | \"Removed\""));

@@ -3,7 +3,11 @@
 use super::{CACHE_SCHEMA, Result, YmapRelationshipIndex};
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
-use std::{collections::BTreeMap, fs, path::Path};
+use std::{
+  collections::BTreeMap,
+  fs,
+  path::{Path, PathBuf},
+};
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct DerivedVanillaFile {
@@ -18,6 +22,52 @@ struct Metadata {
   vanilla_manifest_sha256: String,
   latest_version: String,
   files: BTreeMap<String, DerivedVanillaFile>,
+}
+
+/// The derived cache's metadata, written whenever the cache is rebuilt, so it changes with every
+/// update of the latest files.
+pub fn cache_info_path(cache_dir: &Path) -> PathBuf {
+  cache_dir.join("cache_info.json")
+}
+
+/// One latest vanilla stream file of the derived cache.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VanillaLatestFile {
+  /// Stream file name, such as `hei_ch1_11.ymap`.
+  pub name: String,
+  /// The vanilla version the file comes from.
+  pub version: String,
+  /// The cached file, below the cache directory.
+  pub path: PathBuf,
+}
+
+/// Lists the latest vanilla stream files recorded in the derived cache's metadata, without
+/// checking it against the raw archive.
+pub fn latest_files(cache_dir: &Path) -> Result<Vec<VanillaLatestFile>> {
+  let path = cache_info_path(cache_dir);
+  let metadata: Metadata = serde_json::from_slice(
+    &fs::read(&path).map_err(|error| format!("Cannot open {}: {error}", path.display()))?,
+  )?;
+  if metadata.format_version != CACHE_SCHEMA {
+    return Err(format!("Unsupported vanilla-cache schema {}", metadata.format_version).into());
+  }
+  metadata
+    .files
+    .into_iter()
+    .map(|(name, file)| {
+      let object = Path::new(&file.object);
+      if object.is_absolute()
+        || object.components().any(|part| !matches!(part, std::path::Component::Normal(_)))
+      {
+        return Err(format!("Unsafe vanilla-cache artifact path: {}", file.object).into());
+      }
+      Ok(VanillaLatestFile {
+        name,
+        version: file.version,
+        path: cache_dir.join(object),
+      })
+    })
+    .collect()
 }
 
 /// Validated metadata and a revision covering the exact manifest/index bytes read.

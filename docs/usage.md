@@ -29,7 +29,7 @@ archive, every one in `mlo_merger-all.zip`.
 
 | Data | Type |
 |---|---|
-| Stream-file bounds index | `RTreeIndex`, `RTreeItem` |
+| Stream-file bounds index | `RTreeIndex`, `RTreeItem`, `RTreeInput` |
 | `--read` stdout | `ReadResult`, `ReadFileResult`, `ReadOrigin` |
 | `--read` JSON documents | `YmapReadDocument`, `ReadFingerprint`, `Ymap`, `YmapEntity`, `Position`, `Rotation` |
 | Source-cache diff documents | `YmapComparisonDiff`, `YmapComparisonFile`, `YmapDiffFields`, `YmapEntityDiff`, `YmapEntityFieldDiff` |
@@ -91,19 +91,34 @@ Paths below are defaults. If you change them with options such as `--source-cach
 
 | Step | Arguments | Result | Files to read afterwards |
 |---|---|---|---|
-| Index file bounds | `--generate-rtree-json` | log lines only | `asset/read-cache/stream_file_rtree-ymap.json` (`RTreeIndex`) |
+| Index file bounds | `--generate-rtree-json` | one line per store | `asset/read-cache/stream_file_rtree-{vanilla,source,merged}.json` (`RTreeIndex`) |
 | Convert YMAPs to JSON | `--read FILE` | `ReadResult` | each `files[].output` (`YmapReadDocument`) |
 | Inspect differences | none; written by source-cache generation | | `asset/source-cache/diff/{resource}/{stream_path}.diff.json` (`YmapComparisonDiff`) |
 | Apply overwrites | no operation flag (pipeline), or `--merge` then `--deploy` | log lines only | `asset/merged/duplicates.json` (`DuplicateReport`) |
 
 ### `--generate-rtree-json`
 
-Writes the bounds of every merged, source and vanilla YMAP to
-`asset/read-cache/stream_file_rtree-ymap.json` (and YBNs to `stream_file_rtree-ybn.json`).
-Each `RTreeItem` has RBush-compatible `minX`/`minY`/`maxX`/`maxY`, plus `minZ`/`maxZ`,
-the file `name`, and the `resource` ID for source files.
+Writes the bounds of the stream files of each store to its own index:
 
-Indexing reads every stream file. Run it after the pipeline has run, not once per query.
+| Index | Files | Listed from | Rebuilt after |
+|---|---|---|---|
+| `asset/read-cache/stream_file_rtree-vanilla.json` | latest vanilla files | `asset/vanilla-cache/cache_info.json` | a vanilla-cache update |
+| `asset/read-cache/stream_file_rtree-source.json` | inventoried source stream files, in source or moved into the cache | `asset/source-cache/source_cache_info.json` | a source-cache update |
+| `asset/read-cache/stream_file_rtree-merged.json` | merged files | `asset/merged/merge_cache_info.json` | a merge that changed output |
+
+Each `RTreeIndex` has `ymap` and `ybn` arrays of `RTreeItem`s with RBush-compatible
+`minX`/`minY`/`maxX`/`maxY`, plus `minZ`/`maxZ`, the file `name` and `path`, the `resource`
+ID (and `originalPath` when moved into the cache) for source files, and the `version` for
+vanilla files. Its `input` records the fingerprint of the metadata it was listed from.
+
+An index whose metadata is unchanged is kept, so running the command after every pipeline
+run is cheap; `-f` rebuilds every index. stdout has one line per store, starting with `Wrote`
+when the index was rebuilt and `Kept current` otherwise, so reload only the indexes that were
+rewritten. Source files outside the inventory, such as YMAPs outside `stream/`, are not
+indexed, and source changes appear only after the source cache is updated. A store without
+metadata is skipped with a warning. The earlier per-file-type indexes
+(`stream_file_rtree-ymap.json`, `stream_file_rtree-ybn.json`) are removed.
+
 Load the result into RBush, or filter it directly, to find the files at a position.
 
 ### `--read`
@@ -317,17 +332,23 @@ import { MERGER_CWD, runMerger } from "./merger";
 
 const readJson = <T>(path: string): T => JSON.parse(readFileSync(resolve(MERGER_CWD, path), "utf8"));
 
-let ymapIndex: RTreeIndex | null = null;
+const stores = ["merged", "source", "vanilla"] as const;
+const indexes: Partial<Record<(typeof stores)[number], RTreeIndex>> = {};
 
-/** Rebuilds the bounds index; call after each pipeline run. */
+/** Updates the bounds indexes of changed stores; call after each pipeline run. */
 export async function refreshIndex(): Promise<void> {
-  await runMerger(["--generate-rtree-json"]);
-  ymapIndex = readJson<RTreeIndex>("asset/read-cache/stream_file_rtree-ymap.json");
+  const { stdout } = await runMerger(["--generate-rtree-json"]);
+  for (const store of stores) {
+    const rewritten = stdout.split("\n").some((line) => line.startsWith(`Wrote ${store} `));
+    if (rewritten || !indexes[store]) {
+      indexes[store] = readJson<RTreeIndex>(`asset/read-cache/stream_file_rtree-${store}.json`);
+    }
+  }
 }
 
 /** Names of YMAPs whose bounds contain the position. Use RBush for large indexes. */
 function ymapsAt(x: number, y: number, z: number): string[] {
-  const items = [...ymapIndex!.merged, ...ymapIndex!.source, ...ymapIndex!.vanilla];
+  const items = stores.flatMap((store) => indexes[store]?.ymap ?? []);
   const hits = items.filter((item) =>
     item.minX <= x && x <= item.maxX && item.minY <= y && y <= item.maxY && item.minZ <= z && z <= item.maxZ
   );
@@ -335,7 +356,7 @@ function ymapsAt(x: number, y: number, z: number): string[] {
 }
 
 async function inspect(x: number, y: number, z: number): Promise<InspectedFile[]> {
-  if (!ymapIndex) await refreshIndex();
+  if (!indexes.vanilla) await refreshIndex();
   const files: InspectedFile[] = [];
   for (const name of ymapsAt(x, y, z)) {
     const { stdout } = await runMerger(["--read", name]);

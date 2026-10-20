@@ -121,7 +121,12 @@ existing native files and return matches as XML, without writing artifacts.
 Filename globs limit reads; position searches use an inclusive 3D radius. YBN
 centers are resolved to world space, and indices are local to each input, not
 persistent IDs. The R-tree export writes file bounds for merged, source and vanilla
-files.
+files, one index per store, since the stores change at different rates. Each index
+lists its files from the metadata of its store (the vanilla cache, the source-cache
+inventory, the merge output), records that metadata's fingerprint and is rebuilt only
+when it changes. Each store module owns reading its metadata. Bounds are read without
+decoding the rest of a file: a YMAP's entity extents, a YBN's bound tree without
+geometry.
 
 Optional pre-merge inspection reads recorded vanilla and source inputs, verifies
 their fingerprints and marks absent matches. Changed inputs are rejected rather
