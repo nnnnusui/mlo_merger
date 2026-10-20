@@ -51,7 +51,7 @@ impl IncrementalMerge<'_> {
       }
     }
     let metadata: SourceParents = serde_json::from_reader(BufReader::new(fs::File::open(
-      self.source_cache.join("source_cache_info.json"),
+      crate::core::source_cache::cache_info_path(self.source_cache),
     )?))?;
     for resource in metadata.resources.values() {
       for source in resource.files_by_format.get(".ymap").into_iter().flatten() {

@@ -48,7 +48,7 @@ fn merge_input_selector_uses_format_conflicts_and_ymap_load_closure() {
     file_name: file_name.into(),
   };
   write_json(
-    &cache_dir.join("source_cache_info.json"),
+    &cache_dir.join("cache_info.json"),
     &SourceCacheMetadata {
       format_version: 2,
       source_dir: source_dir.clone(),

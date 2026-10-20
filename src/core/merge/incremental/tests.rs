@@ -20,7 +20,7 @@ fn ybn_version_change_reuses_current_ymap_groups() {
   )
   .unwrap();
   write_json(
-    &cache.join("source_cache_info.json"),
+    &cache.join("cache_info.json"),
     &serde_json::json!({
       "resources": {}
     }),
@@ -65,7 +65,7 @@ fn ybn_version_change_reuses_current_ymap_groups() {
   let mut versions = algorithm_versions();
   versions.insert("ybn".into(), YBN_ALGORITHM_VERSION - 1);
   write_json(
-    &output.join("merge_cache_info.json"),
+    &output.join("cache_info.json"),
     &MergeMetadata {
       format_version: 1,
       algorithm_version: None,
@@ -101,7 +101,7 @@ fn ybn_version_change_reuses_current_ymap_groups() {
   assert_ne!(result.files["map.ybn"].merged_at, "cached");
   assert_eq!(result.algorithm_versions, algorithm_versions());
   let json: serde_json::Value =
-    serde_json::from_slice(&fs::read(staging.join("merge_cache_info.json")).unwrap()).unwrap();
+    serde_json::from_slice(&fs::read(staging.join("cache_info.json")).unwrap()).unwrap();
   assert!(json.get("algorithm_version").is_none());
   fs::remove_dir_all(root).unwrap();
 }

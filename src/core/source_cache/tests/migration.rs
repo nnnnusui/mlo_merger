@@ -63,7 +63,7 @@ fn moves_vanilla_files_retains_history_and_updates_only_selected_resources() {
   assert!(build.run_after_vanilla_cache().unwrap());
   let read_metadata = || {
     serde_json::from_reader::<_, SourceCacheMetadata>(
-      fs::File::open(output.join("source_cache_info.json")).unwrap(),
+      fs::File::open(output.join("cache_info.json")).unwrap(),
     )
     .unwrap()
   };
@@ -121,7 +121,7 @@ fn moves_vanilla_files_retains_history_and_updates_only_selected_resources() {
       }
     }
   }
-  write_json(&output.join("source_cache_info.json"), &legacy).unwrap();
+  write_json(&output.join("cache_info.json"), &legacy).unwrap();
   let modified = fs::metadata(output.join("resource_a/stream/nested/collision.ybn"))
     .unwrap()
     .modified()
@@ -304,7 +304,7 @@ fn moves_vanilla_files_retains_history_and_updates_only_selected_resources() {
   let history = fs::read_dir(output.join("_old")).unwrap().next().unwrap().unwrap().path();
   assert_eq!(fs::read(history.join("resource_a/nested/collision.ybn")).unwrap(), b"original");
   let old: SourceCacheMetadata =
-    serde_json::from_reader(fs::File::open(history.join("source_cache_info.json")).unwrap())
+    serde_json::from_reader(fs::File::open(history.join("cache_info.json")).unwrap())
       .unwrap();
   assert_eq!(old, before);
   let old_file: FileFingerprint = serde_json::from_reader(
@@ -430,7 +430,7 @@ fn moves_vanilla_files_retains_history_and_updates_only_selected_resources() {
   let mut duplicate = ambiguous.resources["[changed]/resource_a"].clone();
   duplicate.source = source.join("[duplicate]/resource_a");
   ambiguous.resources.insert("[duplicate]/resource_a".into(), duplicate);
-  write_json(&output.join("source_cache_info.json"), &ambiguous).unwrap();
+  write_json(&output.join("cache_info.json"), &ambiguous).unwrap();
   let history_count = fs::read_dir(output.join("_old")).unwrap().count();
   let error = BuildSourceCache {
     resource: Some("resource_a").map(str::to_owned),
@@ -441,7 +441,7 @@ fn moves_vanilla_files_retains_history_and_updates_only_selected_resources() {
   assert!(error.to_string().contains("Ambiguous cached resource name"));
   assert!(output.join("resources/resource_a/nested/collision.ybn").is_file());
   assert_eq!(fs::read_dir(output.join("_old")).unwrap().count(), history_count);
-  write_json(&output.join("source_cache_info.json"), &previous).unwrap();
+  write_json(&output.join("cache_info.json"), &previous).unwrap();
   let duplicate = source.join("[duplicate]/resource_a");
   fs::create_dir_all(&duplicate).unwrap();
   fs::write(duplicate.join("fxmanifest.lua"), []).unwrap();

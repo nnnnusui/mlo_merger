@@ -5,10 +5,13 @@ use std::path::{Path, PathBuf};
 use super::incremental::{MergeMetadata, output_path};
 use super::merge::Result;
 
+/// File name of the merge output's metadata.
+pub(crate) const CACHE_INFO: &str = "cache_info.json";
+
 /// The merge output's metadata, written with every published merge, so it changes whenever the
 /// merged files do.
 pub fn cache_info_path(merged_dir: &Path) -> PathBuf {
-  merged_dir.join("merge_cache_info.json")
+  merged_dir.join(CACHE_INFO)
 }
 
 /// One merged stream file.
@@ -42,3 +45,4 @@ pub fn merged_files(merged_dir: &Path) -> Result<Vec<MergedFile>> {
     })
     .collect()
 }
+

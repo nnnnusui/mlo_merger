@@ -473,7 +473,7 @@ fn search_inputs(
   }
   let cache = if search.diff_all {
     let cache: MergeCache = serde_json::from_reader(BufReader::new(fs::File::open(
-      merged.join("merge_cache_info.json"),
+      crate::core::merge::cache_info_path(&merged),
     )?))?;
     if cache.format_version != 1 {
       return Err("Unsupported merge cache schema for --diff-all".into());
@@ -823,7 +823,7 @@ mod tests {
     let record = serde_json::json!({"format_version": 1, "files": {
       "lr_cs4_10_strm_0.ymap": {"vanilla": input(&vanilla, None), "merge_sources": [input(&source, Some("resource"))]},
     }});
-    crate::core::vanilla::write_json(&merged.join("merge_cache_info.json"), &record).unwrap();
+    crate::core::vanilla::write_json(&merged.join("cache_info.json"), &record).unwrap();
     let query = FindEntityGuid {
       guid: 2443198849,
       merged_dir: merged.clone(),
@@ -885,7 +885,7 @@ mod tests {
         .unwrap()
         .insert(name.into(), record["files"]["lr_cs4_10_strm_0.ymap"].clone());
     }
-    crate::core::vanilla::write_json(&merged.join("merge_cache_info.json"), &expanded).unwrap();
+    crate::core::vanilla::write_json(&merged.join("cache_info.json"), &expanded).unwrap();
     let mut wildcard = query.clone();
     wildcard.filter = Some("*cs4_10_strm_0.ymap".into());
     assert_eq!(wildcard.run().unwrap().matches("<File ").count(), 3);

@@ -194,10 +194,10 @@ pub(super) fn update_selected_resources(
       ensure_safe_path(output, &destination)?;
       if destination.exists() {
         fs::create_dir_all(history.as_path())?;
-        if !history.join("source_cache_info.json").exists()
+        if !history.join(crate::core::source_cache::CACHE_INFO).exists()
           && let Some(previous) = previous
         {
-          write_json(&history.join("source_cache_info.json"), previous)?;
+          write_json(&history.join(crate::core::source_cache::CACHE_INFO), previous)?;
         }
         let archived = history.join(cache_name.as_ref()).join(relative);
         fs::create_dir_all(archived.parent().ok_or("Archive path has no parent")?)?;
@@ -282,7 +282,7 @@ pub(super) fn remove_missing_resources(
         if cached.exists() {
           fs::create_dir_all(history.as_path())?;
           if let Some(previous) = previous {
-            write_json(&history.join("source_cache_info.json"), previous)?;
+            write_json(&history.join(crate::core::source_cache::CACHE_INFO), previous)?;
           }
           ensure_safe_path(output, &cached)?;
           fs::rename(cached, history.join(name))?;

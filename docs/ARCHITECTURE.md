@@ -40,6 +40,8 @@ Each artifact has one owning module (`vanilla`, `vanilla_cache`, `source_cache`,
 freshness and exposes the data other stages need; consumers do not walk another
 stage's directories or parse its records. Overwrite application is likewise
 exposed by the overwrite module, and merge reads overwrite data only through it.
+The vanilla archive, vanilla cache, source cache and merge output each record their
+metadata in `cache_info.json`.
 Format codecs (`format/*`) stay independent of artifact layout and batch processing.
 
 ## Source Cache

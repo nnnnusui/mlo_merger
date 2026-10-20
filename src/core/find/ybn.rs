@@ -674,7 +674,7 @@ mod tests {
     };
     let record = serde_json::json!({"vanilla": input(&vanilla, None), "merge_sources": [input(&source, Some("retains")), input(&missing, Some("removes"))]});
     let cache = serde_json::json!({"format_version": 1, "files": {"collision.ybn": record.clone(), "hei_collision.ybn": record}});
-    crate::core::vanilla::write_json(&merged.join("merge_cache_info.json"), &cache).unwrap();
+    crate::core::vanilla::write_json(&merged.join("cache_info.json"), &cache).unwrap();
     let mut query = FindEntity {
       query: EntityQuery::YbnPosition {
         position: [0.0; 3],

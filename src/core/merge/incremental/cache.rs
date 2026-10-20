@@ -99,7 +99,7 @@ pub(in crate::core::merge) struct MergeMetadata {
 
 impl MergeMetadata {
   pub(in crate::core::merge) fn load(output: &Path) -> Result<Option<Self>> {
-    let path = output.join("merge_cache_info.json");
+    let path = crate::core::merge::cache_info_path(output);
     if !path.is_file() {
       return Ok(None);
     }
@@ -181,7 +181,7 @@ mod tests {
     let _ = fs::remove_dir_all(&output);
     fs::create_dir_all(&output).unwrap();
     fs::write(
-      output.join("merge_cache_info.json"),
+      output.join("cache_info.json"),
       serde_json::to_vec(&serde_json::json!({
         "format_version": 1,
         "algorithm_versions": {"ymap": YMAP_ALGORITHM_VERSION, "ybn": YBN_ALGORITHM_VERSION - 1},
@@ -215,7 +215,7 @@ mod tests {
     assert!(metadata.version_matches("unsupported").is_err());
 
     fs::write(
-      output.join("merge_cache_info.json"),
+      output.join("cache_info.json"),
       serde_json::to_vec(&serde_json::json!({
         "format_version": 1,
         "algorithm_version": YMAP_ALGORITHM_VERSION,

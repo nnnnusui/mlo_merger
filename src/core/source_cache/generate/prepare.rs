@@ -53,9 +53,10 @@ pub(super) fn prepare(build: &BuildSourceCache) -> Result<Prepared> {
   }
   let vanilla_dir = build.vanilla_dir.canonicalize()?;
   let vanilla_cache_dir = build.vanilla_cache_dir.canonicalize()?;
-  let previous = if output.join("source_cache_info.json").is_file() {
+  let info = crate::core::source_cache::cache_info_path(&output);
+  let previous = if info.is_file() {
     let metadata: SourceCacheMetadata = serde_json::from_reader(BufReader::new(fs::File::open(
-      output.join("source_cache_info.json"),
+      &info,
     )?))?;
     if metadata.source_dir != source_dir || !matches!(metadata.format_version, 2 | 3) {
       return Err("Source cache belongs to another input directory or unsupported schema".into());
@@ -210,7 +211,7 @@ pub(super) fn archive_excluded_resources(
   if !excluded_cache_paths.is_empty() {
     fs::create_dir_all(history.as_path())?;
     if let Some(previous) = previous {
-      write_json(&history.join("source_cache_info.json"), previous)?;
+      write_json(&history.join(crate::core::source_cache::CACHE_INFO), previous)?;
     }
     for relative in excluded_cache_paths.iter() {
       let archived = history.join(relative);

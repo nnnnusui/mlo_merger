@@ -83,7 +83,7 @@ fn get_diff_fingerprints_both_files_and_derives_their_differences() {
     "ymap_load_plan": { "changed_source_parents": [], "additional_source_children": [] },
     "outputs": [],
   });
-  fs::write(source_cache.join("source_cache_info.json"), metadata.to_string()).unwrap();
+  fs::write(source_cache.join("cache_info.json"), metadata.to_string()).unwrap();
 
   let mut context =
     YmapComparisonContext::new(&source_cache, &vanilla_cache, catalog.hash_names.clone()).unwrap();

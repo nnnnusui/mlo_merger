@@ -93,7 +93,7 @@ fn overwrites_skip_source_diffs_written_against_the_current_files() {
   };
   let merged_at = || {
     serde_json::from_reader::<_, serde_json::Value>(
-      fs::File::open(output.join("merge_cache_info.json")).unwrap(),
+      fs::File::open(output.join("cache_info.json")).unwrap(),
     )
     .unwrap()["files"]["map.ymap"]["merged_at"]
       .clone()
@@ -210,7 +210,7 @@ fn vanilla_overwrites_merge_after_the_sources() {
   };
   let merged_at = || {
     serde_json::from_reader::<_, serde_json::Value>(
-      fs::File::open(output.join("merge_cache_info.json")).unwrap(),
+      fs::File::open(output.join("cache_info.json")).unwrap(),
     )
     .unwrap()["files"]["map.ymap"]["merged_at"]
       .clone()

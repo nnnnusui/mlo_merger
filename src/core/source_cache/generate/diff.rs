@@ -37,7 +37,7 @@ struct DiffInputs {
 
 /// Rebuilds the `diff` directory for every source YMAP that overrides a vanilla YMAP.
 ///
-/// Reads the published `source_cache_info.json`, so it runs after publication. Diffs whose
+/// Reads the published inventory (`cache_info.json`), so it runs after publication. Diffs whose
 /// source and vanilla YMAPs are unchanged are kept; the rest are regenerated, and diffs of YMAPs
 /// no longer overriding vanilla are dropped. YMAPs whose diff cannot be built are logged and
 /// skipped.
@@ -47,7 +47,7 @@ pub(in crate::core::source_cache) fn write_ymap_diffs(
   vanilla_cache_dir: &Path,
 ) -> Result<YmapDiffCounts> {
   let metadata: SourceCacheMetadata = serde_json::from_reader(BufReader::new(fs::File::open(
-    output.join("source_cache_info.json"),
+    crate::core::source_cache::cache_info_path(output),
   )?))?;
   let hash_names = load_hash_names_or_empty(&vanilla_dir.join("hash_names.json"));
   let mut context = YmapComparisonContext::new(output, vanilla_cache_dir, hash_names)?;

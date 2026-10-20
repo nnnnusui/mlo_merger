@@ -49,8 +49,7 @@ fn builds_source_inventory_and_skips_unchanged_inputs_without_diffing() {
   assert!(second_resource.join("stream/unmatched.ymap").is_file());
   assert!(!excluded().run_after_vanilla_cache().unwrap());
   let excluded_info: SourceCacheMetadata =
-    serde_json::from_reader(fs::File::open(output.join("source_cache_info.json")).unwrap())
-      .unwrap();
+    serde_json::from_reader(fs::File::open(output.join("cache_info.json")).unwrap()).unwrap();
   assert_eq!(excluded_info.resources.len(), 1);
   assert!(!excluded_info.resources.contains_key("resource_b"));
   assert!(!excluded_info.source_inputs.keys().any(|key| key.starts_with("resource_b/")));
@@ -71,20 +70,18 @@ fn builds_source_inventory_and_skips_unchanged_inputs_without_diffing() {
   };
   assert!(exclude_all().run_after_vanilla_cache().unwrap());
   let empty_info: SourceCacheMetadata =
-    serde_json::from_reader(fs::File::open(output.join("source_cache_info.json")).unwrap())
-      .unwrap();
+    serde_json::from_reader(fs::File::open(output.join("cache_info.json")).unwrap()).unwrap();
   assert!(empty_info.resources.is_empty());
   assert!(!exclude_all().run_after_vanilla_cache().unwrap());
   fs::write(output.join("source_exclusions.json"), b"not valid JSON").unwrap();
   assert!(build().run_after_vanilla_cache().unwrap());
   assert!(!output.join("source_exclusions.json").exists());
-  assert!(output.join("source_cache_info.json").is_file());
+  assert!(output.join("cache_info.json").is_file());
   assert!(output.join("stream_conflicts.json").is_file());
   assert!(output.join("vanilla_ymaps_to_read.json").is_file());
   assert!(!output.join("diff_cache_info.json").exists());
   let info: SourceCacheMetadata =
-    serde_json::from_reader(fs::File::open(output.join("source_cache_info.json")).unwrap())
-      .unwrap();
+    serde_json::from_reader(fs::File::open(output.join("cache_info.json")).unwrap()).unwrap();
   let resource_info = &info.resources["resource_a"];
   assert_eq!(resource_info.files_by_format[".ymap"].len(), 1);
   assert!(resource_info.files_by_format[".ymap"][0].vanilla.is_none());
@@ -150,3 +147,4 @@ fn builds_source_inventory_and_skips_unchanged_inputs_without_diffing() {
   assert!(build().run_after_vanilla_cache().unwrap());
   fs::remove_dir_all(root).unwrap();
 }
+

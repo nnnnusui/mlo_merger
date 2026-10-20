@@ -96,7 +96,7 @@ fn incremental_merge_preserves_and_restores_duplicate_reports() {
   };
   let read_cache = || {
     serde_json::from_reader::<_, super::super::super::incremental::MergeMetadata>(
-      fs::File::open(output.join("merge_cache_info.json")).unwrap(),
+      fs::File::open(output.join("cache_info.json")).unwrap(),
     )
     .unwrap()
   };

@@ -103,8 +103,8 @@ Writes the bounds of the stream files of each store to its own index:
 | Index | Files | Listed from | Rebuilt after |
 |---|---|---|---|
 | `asset/read-cache/stream_file_rtree-vanilla.json` | latest vanilla files | `asset/vanilla-cache/cache_info.json` | a vanilla-cache update |
-| `asset/read-cache/stream_file_rtree-source.json` | inventoried source stream files, in source or moved into the cache | `asset/source-cache/source_cache_info.json` | a source-cache update |
-| `asset/read-cache/stream_file_rtree-merged.json` | merged files | `asset/merged/merge_cache_info.json` | a merge that changed output |
+| `asset/read-cache/stream_file_rtree-source.json` | inventoried source stream files, in source or moved into the cache | `asset/source-cache/cache_info.json` | a source-cache update |
+| `asset/read-cache/stream_file_rtree-merged.json` | merged files | `asset/merged/cache_info.json` | a merge that changed output |
 
 Each `RTreeIndex` has `ymap` and `ybn` arrays of `RTreeItem`s with RBush-compatible
 `minX`/`minY`/`maxX`/`maxY`, plus `minZ`/`maxZ`, the file `name` and `path`, the `resource`

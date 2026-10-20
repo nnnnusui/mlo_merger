@@ -41,7 +41,7 @@ impl Fixture {
       })
     };
     write(
-      &root.join("source-cache/source_cache_info.json"),
+      &root.join("source-cache/cache_info.json"),
       &serde_json::to_vec(&json!({
         "format_version": 3, "source_dir": root.join("source"), "vanilla_dir": "",
         "vanilla_cache_dir": "", "vanilla_manifest_sha256": "", "vanilla_cache_revision": "",

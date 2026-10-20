@@ -14,7 +14,7 @@ fn source_cache_timestamp_refresh_updates_provenance_without_regeneration() {
   current.modified_seconds += 1;
   current.modified_nanos += 1;
   write_json(
-    &root.join("source_cache_info.json"),
+    &root.join("cache_info.json"),
     &SourceCacheMetadata {
       format_version: 2,
       source_dir: root.join("source"),
@@ -65,7 +65,7 @@ fn source_cache_timestamp_refresh_updates_provenance_without_regeneration() {
   .unwrap();
 
   let refreshed: SourceCacheMetadata =
-    serde_json::from_reader(fs::File::open(root.join("source_cache_info.json")).unwrap()).unwrap();
+    serde_json::from_reader(fs::File::open(root.join("cache_info.json")).unwrap()).unwrap();
   assert_eq!(refreshed.generated_at, "original-generation");
   assert_eq!(refreshed.source_inputs["resource_a/stream/map.ymap"].modified_seconds, 11);
   assert_eq!(refreshed.resources["resource_a"].files_by_format[".ymap"][0].modified_seconds, 11);

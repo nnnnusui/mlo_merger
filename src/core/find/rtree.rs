@@ -449,7 +449,7 @@ mod tests {
       }))
       .unwrap()
     };
-    write(&source_cache.join("source_cache_info.json"), &source_info("first"));
+    write(&source_cache.join("cache_info.json"), &source_info("first"));
     let merged = root.join("merged");
     write(&merged.join("ymap/map.ymap"), &ymap);
     let record = |output: Option<&str>| {
@@ -462,7 +462,7 @@ mod tests {
       })
     };
     write(
-      &merged.join("merge_cache_info.json"),
+      &merged.join("cache_info.json"),
       &serde_json::to_vec(&json!({
         "format_version": 1, "algorithm_versions": {}, "generated_at": "now",
         "files": {"map.ymap": record(Some("ymap/map.ymap")), "other.ymap": record(None)}
@@ -508,12 +508,12 @@ mod tests {
     assert!(merged_index["ymap"][0]["path"].as_str().unwrap().ends_with("merged/ymap/map.ymap"));
 
     assert_eq!(generate(false), [("vanilla", false), ("source", false), ("merged", false)]);
-    write(&source_cache.join("source_cache_info.json"), &source_info("second"));
+    write(&source_cache.join("cache_info.json"), &source_info("second"));
     assert_eq!(generate(false), [("vanilla", false), ("source", true), ("merged", false)]);
     assert_eq!(generate(true), [("vanilla", true), ("source", true), ("merged", true)]);
 
     // A store without metadata keeps its index and is left out.
-    fs::remove_file(merged.join("merge_cache_info.json")).unwrap();
+    fs::remove_file(merged.join("cache_info.json")).unwrap();
     assert_eq!(generate(false), [("vanilla", false), ("source", false)]);
     assert!(output.join("stream_file_rtree-merged.json").is_file());
     fs::remove_dir_all(root).unwrap();

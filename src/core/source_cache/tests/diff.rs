@@ -37,7 +37,7 @@ impl Fixture {
     )
     .unwrap();
     write_json(
-      &output.join("source_cache_info.json"),
+      &output.join("cache_info.json"),
       &SourceCacheMetadata {
         format_version: 2,
         source_dir: root.join("source"),

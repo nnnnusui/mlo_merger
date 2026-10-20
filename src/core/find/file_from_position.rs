@@ -185,7 +185,7 @@ fn collect_candidates_from(
       continue;
     }
     let missing_provenance =
-      search.diff_all && !search.merged_dir.join("merge_cache_info.json").is_file();
+      search.diff_all && !crate::core::merge::cache_info_path(&search.merged_dir).is_file();
     let merged_only;
     let search_config = if missing_provenance {
       merged_only = FindEntity {
@@ -343,7 +343,7 @@ fn collect_source_cache_candidates(
   filter: Option<&globset::GlobMatcher>,
   progress: &ProgressBar,
 ) -> Result<()> {
-  let metadata_path = cache_root.join("source_cache_info.json");
+  let metadata_path = crate::core::source_cache::cache_info_path(cache_root);
   if !metadata_path.is_file() {
     return Ok(());
   }
@@ -622,7 +622,7 @@ mod tests {
     fs::write(source_cache.join("resources/moved/stream/moved.ybn"), b"cached").unwrap();
     fs::write(vanilla_cache.join("latest/ymap/vanilla.ymap"), b"vanilla").unwrap();
     fs::write(
-      source_cache.join("source_cache_info.json"),
+      source_cache.join("cache_info.json"),
       serde_json::to_vec(&serde_json::json!({
         "format_version": 3,
         "source_dir": source,

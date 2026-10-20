@@ -203,7 +203,7 @@ impl IncrementalMerge<'_> {
     fs::write(self.staging.join("_omit.txt"), omit_text)?;
     write_json(&self.staging.join("duplicates.json"), &duplicates)?;
     write_json(
-      &self.staging.join("merge_cache_info.json"),
+      &self.staging.join(crate::core::merge::outputs::CACHE_INFO),
       &MergeMetadata {
         format_version: 1,
         algorithm_version: None,

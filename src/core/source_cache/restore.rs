@@ -40,7 +40,7 @@ pub fn restore_source_cache(
   if cache.starts_with(&source) || source.starts_with(&cache) {
     return Err("Source and source-cache directories overlap".into());
   }
-  let reports = ["source_cache_info.json", "stream_conflicts.json", "vanilla_ymaps_to_read.json"];
+  let reports = [super::CACHE_INFO, "stream_conflicts.json", "vanilla_ymaps_to_read.json"];
   for report in reports {
     ensure_safe_path(&cache, &cache.join(report))?;
     let path = cache.join(report);
@@ -234,7 +234,7 @@ mod tests {
       "ymap_load_plan": {"changed_source_parents": [], "additional_source_children": []},
       "outputs": []
     });
-    let manifest_path = cache.join("source_cache_info.json");
+    let manifest_path = cache.join("cache_info.json");
     let second_cached = cache.join("resources/resource/collision.ybn");
     let second_original = source.join("[group]/resource/stream/nested/collision.ybn");
     fs::create_dir_all(second_original.parent().unwrap()).unwrap();
@@ -317,7 +317,7 @@ mod tests {
       "ymap_load_plan": {"changed_source_parents": [], "additional_source_children": []},
       "outputs": []
     });
-    let manifest_path = cache.join("source_cache_info.json");
+    let manifest_path = cache.join("cache_info.json");
     fs::write(&manifest_path, serde_json::to_vec(&manifest).unwrap()).unwrap();
     fs::write(cache.join("stream_conflicts.json"), b"{}").unwrap();
 

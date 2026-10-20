@@ -76,7 +76,7 @@ pub struct MergeInputs {
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
 pub fn load_moved_source_paths(cache_dir: &Path) -> Result<BTreeSet<String>> {
-  let metadata_path = cache_dir.join("source_cache_info.json");
+  let metadata_path = cache_info_path(cache_dir);
   if !metadata_path.is_file() {
     return Ok(BTreeSet::new());
   }
@@ -129,7 +129,7 @@ pub(crate) struct SourceYmapIndex {
 /// Indexes the YMAPs recorded in a generated source cache by resource name and file name.
 pub(crate) fn load_source_ymap_index(cache_dir: &Path) -> Result<SourceYmapIndex> {
   let metadata: SourceCacheMetadata = serde_json::from_reader(BufReader::new(
-    std::fs::File::open(cache_dir.join("source_cache_info.json"))?,
+    std::fs::File::open(cache_info_path(cache_dir))?,
   ))?;
   if !matches!(metadata.format_version, 2 | 3) {
     return Err(format!("Unsupported source cache schema {}", metadata.format_version).into());
@@ -173,10 +173,13 @@ pub struct InventoriedFile {
   pub original_path: PathBuf,
 }
 
+/// File name of the source cache's inventory.
+pub(crate) const CACHE_INFO: &str = "cache_info.json";
+
 /// The source cache's inventory, written whenever the cache is generated, so it changes with
 /// every update of the cached or inventoried files.
 pub fn cache_info_path(cache_dir: &Path) -> PathBuf {
-  cache_dir.join("source_cache_info.json")
+  cache_dir.join(CACHE_INFO)
 }
 
 /// Lists every stream file the source cache inventoried, without rescanning source streams.
@@ -213,7 +216,7 @@ pub fn inventoried_files(cache_dir: &Path) -> Result<Vec<InventoriedFile>> {
 /// Loads merge inputs from a generated source cache without rescanning source streams.
 pub fn load_merge_inputs(cache_dir: &Path) -> Result<MergeInputs> {
   let metadata: SourceCacheMetadata = serde_json::from_reader(BufReader::new(
-    std::fs::File::open(cache_dir.join("source_cache_info.json"))?,
+    std::fs::File::open(cache_info_path(cache_dir))?,
   ))?;
   if !matches!(metadata.format_version, 2 | 3) {
     return Err(format!("Unsupported source cache schema {}", metadata.format_version).into());

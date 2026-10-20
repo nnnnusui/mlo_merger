@@ -88,7 +88,7 @@ fn merge_dispatches_latest_vanilla_ybn_and_writes_omit_list() {
   .unwrap();
 
   assert!(vanilla_cache_dir.join("latest/ybn/collision.ybn").is_file());
-  assert!(source_cache_dir.join("source_cache_info.json").is_file());
+  assert!(source_cache_dir.join("cache_info.json").is_file());
   let merged =
     crate::core::format::ybn::read_ybn(&fs::read(output_dir.join("ybn/collision.ybn")).unwrap())
       .unwrap();
@@ -122,7 +122,7 @@ fn merge_dispatches_latest_vanilla_ybn_and_writes_omit_list() {
   );
   let read_cache = || {
     serde_json::from_reader::<_, super::super::super::incremental::MergeMetadata>(
-      fs::File::open(output_dir.join("merge_cache_info.json")).unwrap(),
+      fs::File::open(output_dir.join("cache_info.json")).unwrap(),
     )
     .unwrap()
   };
@@ -131,7 +131,7 @@ fn merge_dispatches_latest_vanilla_ybn_and_writes_omit_list() {
   let independent = output_dir.join("ybn/independent.ybn");
   let modified = fs::metadata(&independent).unwrap().modified().unwrap();
   let cache_modified =
-    fs::metadata(output_dir.join("merge_cache_info.json")).unwrap().modified().unwrap();
+    fs::metadata(output_dir.join("cache_info.json")).unwrap().modified().unwrap();
   Merge {
     source_dir: source_dir.clone(),
     vanilla_cache_dir: vanilla_cache_dir.clone(),
@@ -143,7 +143,7 @@ fn merge_dispatches_latest_vanilla_ybn_and_writes_omit_list() {
   .run_after_caches(&vanilla_dir)
   .unwrap();
   assert_eq!(
-    fs::metadata(output_dir.join("merge_cache_info.json")).unwrap().modified().unwrap(),
+    fs::metadata(output_dir.join("cache_info.json")).unwrap().modified().unwrap(),
     cache_modified
   );
   fs::File::options()
@@ -264,7 +264,7 @@ fn merge_dispatches_latest_vanilla_ybn_and_writes_omit_list() {
       .iter()
       .all(|(name, record)| record.merged_at != before_force.files[name].merged_at)
   );
-  let preserved = fs::read(output_dir.join("merge_cache_info.json")).unwrap();
+  let preserved = fs::read(output_dir.join("cache_info.json")).unwrap();
   let preserved_output = fs::read(output_dir.join("ybn/collision.ybn")).unwrap();
   fs::write(&cached_source, b"invalid source file").unwrap();
   assert!(
@@ -279,7 +279,7 @@ fn merge_dispatches_latest_vanilla_ybn_and_writes_omit_list() {
     .run_after_caches(&vanilla_dir)
     .is_err()
   );
-  assert_eq!(fs::read(output_dir.join("merge_cache_info.json")).unwrap(), preserved);
+  assert_eq!(fs::read(output_dir.join("cache_info.json")).unwrap(), preserved);
   assert_eq!(fs::read(output_dir.join("ybn/collision.ybn")).unwrap(), preserved_output);
   fs::write(cached_source, changed_source).unwrap();
   fs::remove_dir_all(&second_resource_dir).unwrap();

@@ -27,7 +27,7 @@ pub(super) fn refresh_source_timestamps(
   output: &Path,
   source_inputs: &BTreeMap<String, FileFingerprint>,
 ) -> Result<()> {
-  let metadata_path = output.join("source_cache_info.json");
+  let metadata_path = super::cache_info_path(output);
   let mut metadata: SourceCacheMetadata =
     serde_json::from_reader(BufReader::new(fs::File::open(&metadata_path)?))?;
   let mut changed = false;

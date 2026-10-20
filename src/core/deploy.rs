@@ -249,7 +249,7 @@ fn plan(
     files.insert(format!("stream/{extension}/merged/{name}"), path.to_path_buf());
   }
   let resources = cache.join("resources");
-  if !resources.is_dir() && !cache.join("source_cache_info.json").is_file() {
+  if !resources.is_dir() && !crate::core::source_cache::cache_info_path(cache).is_file() {
     return Err("Source cache has no resources directory or inventory".into());
   }
   if resources.is_dir() {

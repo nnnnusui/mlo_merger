@@ -218,8 +218,8 @@ mod tests {
     let first = pipeline.run().unwrap();
     assert_eq!(first.copied, 2);
     assert!(pipeline.vanilla_cache_dir.join("cache_info.json").is_file());
-    assert!(pipeline.source_cache_dir.join("source_cache_info.json").is_file());
-    assert!(pipeline.merged_dir.join("merge_cache_info.json").is_file());
+    assert!(pipeline.source_cache_dir.join("cache_info.json").is_file());
+    assert!(pipeline.merged_dir.join("cache_info.json").is_file());
     assert!(pipeline.merged_dir.join("ybn/collision.ybn").is_file());
     assert!(!pipeline.merged_dir.join("ybn/unique.ybn").exists());
     assert_eq!(
@@ -289,7 +289,7 @@ mod tests {
     assert!(!exclusions_path.exists());
     let contains_excluded = || {
       let metadata: serde_json::Value = serde_json::from_reader(
-        fs::File::open(pipeline.source_cache_dir.join("source_cache_info.json")).unwrap(),
+        fs::File::open(pipeline.source_cache_dir.join("cache_info.json")).unwrap(),
       )
       .unwrap();
       metadata["resources"].get("unused-resource").is_some()
