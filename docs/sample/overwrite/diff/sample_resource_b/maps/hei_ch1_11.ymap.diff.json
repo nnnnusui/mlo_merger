@@ -2,8 +2,8 @@
   "schema_version": 6,
   "source": {
     "path": "docs/sample/source/sample_resource_b/stream/maps/hei_ch1_11.ymap",
-    "sha256": "8ffb740820db8690a8e216722f03e2b80decbd15721dcabebe36248f6824b2b7",
-    "size": 5701,
+    "sha256": "b9757ef0a50ee90d636cb09bee65359b44a4a5b1a4ba86cc185bce831a780e51",
+    "size": 5689,
     "modified_seconds": 0,
     "modified_nanos": 0
   },

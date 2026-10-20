@@ -183,7 +183,7 @@ asset/overwrite/resources/{resource}.json
   "schema_version": 1,
   "files": {
     "hei_ch1_11.ymap": {
-      "source":  { "sha256": "<diff document source.sha256>",  "size": 5648 },
+      "source":  { "sha256": "<diff document source.sha256>",  "size": 5638 },
       "vanilla": { "sha256": "<diff document vanilla.sha256>", "size": 5675 },
       "skip": {
         "entities": [

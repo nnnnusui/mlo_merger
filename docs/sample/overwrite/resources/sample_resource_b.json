@@ -3,8 +3,8 @@
   "files": {
     "maps/hei_ch1_11.ymap": {
       "source": {
-        "sha256": "8ffb740820db8690a8e216722f03e2b80decbd15721dcabebe36248f6824b2b7",
-        "size": 5701
+        "sha256": "b9757ef0a50ee90d636cb09bee65359b44a4a5b1a4ba86cc185bce831a780e51",
+        "size": 5689
       },
       "vanilla": {
         "sha256": "5ec1c9f8c018d3773fb30efcbe32bf199d57fac8a9468df49143baa9e52d0d13",

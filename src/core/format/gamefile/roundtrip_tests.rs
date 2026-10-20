@@ -31,6 +31,10 @@ fn sample_ymaps_survive_binary_xml_binary_xml() {
     let rebuilt = StreamFile::encode_xml(FileType::Ymap, &first, &catalog).unwrap();
     let second = StreamFile::decode_to_xml(FileType::Ymap, &rebuilt, &names).unwrap();
     assert_eq!(second, first, "{sample}: XML changed after rebuilding the binary");
+    // The pages and their header are compared rather than the bytes, which depend on the
+    // compressor: any compressor may encode the same pages to other, equally valid bytes.
+    let (rebuilt, source) =
+      (Rsc7Resource::decode(&rebuilt).unwrap(), Rsc7Resource::decode(&source).unwrap());
     assert!(rebuilt == source, "{sample}: rebuilt binary differs from the source");
   }
 }

@@ -1,4 +1,6 @@
-use std::io;
+use std::io::{self, Write};
+
+use flate2::{Compression, write::DeflateEncoder};
 
 use super::helpers::{invalid_data, page_data_size};
 use super::{RSC7_HEADER_SIZE, RSC7_MAGIC, Rsc7Resource};
@@ -12,13 +14,10 @@ impl Rsc7Resource {
       return Err(invalid_data("RSC7 page bytes do not match their encoded flags"));
     }
 
-    // Compressed with miniz_oxide at flate2's default level, as before flate2 decompressed
-    // through zlib-rs, so encoded resources keep the bytes they had; zlib-rs compresses the
-    // same data to other, equally valid bytes.
-    let mut pages = Vec::with_capacity(system_size + graphics_size);
-    pages.extend_from_slice(&self.system_data);
-    pages.extend_from_slice(&self.graphics_data);
-    let compressed = miniz_oxide::deflate::compress_to_vec(&pages, 6);
+    let mut encoder = DeflateEncoder::new(Vec::new(), Compression::default());
+    encoder.write_all(&self.system_data)?;
+    encoder.write_all(&self.graphics_data)?;
+    let compressed = encoder.finish()?;
 
     let mut bytes = Vec::with_capacity(RSC7_HEADER_SIZE + compressed.len());
     bytes.extend_from_slice(&RSC7_MAGIC.to_le_bytes());
