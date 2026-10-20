@@ -180,3 +180,22 @@ fn direct_ymap_writer_rejects_container_lods_without_a_schema() {
   let error = write_ymap(&model, &entities, &catalog).unwrap_err();
   assert!(error.to_string().contains(&format!("{:08X}", jenk_hash("rage__fwContainerLodDef"))));
 }
+
+#[test]
+fn entity_extents_alone_match_the_decoded_model() {
+  let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("docs/sample");
+  for name in [
+    "sample.ymap",
+    "occlusion/occlusion.ymap",
+    "parent_refs/child.ymap",
+    "parent_refs/vanilla_parent.ymap",
+  ] {
+    let bytes = std::fs::read(root.join(name)).unwrap();
+    let names = std::collections::HashMap::new();
+    let model = super::ymap_to_model(&bytes, &names).unwrap();
+    let (minimum, maximum) = super::ymap_entities_extents(&bytes, &names).unwrap();
+    assert_eq!(minimum, model.entities_extents_min, "{name}");
+    assert_eq!(maximum, model.entities_extents_max, "{name}");
+  }
+  assert!(super::ymap_entities_extents(b"not a ymap", &std::collections::HashMap::new()).is_err());
+}

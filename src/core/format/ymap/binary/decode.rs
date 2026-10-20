@@ -17,6 +17,13 @@ use crate::core::format::{
   },
 };
 
+/// Reads only the `entitiesExtentsMin` and `entitiesExtentsMax` of a `CMapData` root structure.
+pub(super) fn entities_extents_from_root<S: StructReader>(
+  root: &S
+) -> io::Result<(Position, Position)> {
+  Ok((position(root, "entitiesExtentsMin")?, position(root, "entitiesExtentsMax")?))
+}
+
 /// Decodes a `CMapData` root structure into a YMAP model.
 pub(super) fn ymap_from_root<S: StructReader>(root: &S) -> io::Result<Ymap> {
   Ok(Ymap {

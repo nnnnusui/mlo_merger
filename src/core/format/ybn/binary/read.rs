@@ -8,10 +8,28 @@ pub fn read_ybn_root(bytes: &[u8]) -> io::Result<Bound> {
   read_bound(&resource, BASE + ROOT_OFFSET as u64, None)
 }
 
+/// Reads the bound tree of a YBN without its geometry: every bound's kind, common header
+/// (with its `BoxMin`/`BoxMax`) and composite children with their transforms and flags, but
+/// no vertices, polygons or materials. Enough for its extents, at a fraction of the cost.
+pub fn read_ybn_bound_tree(bytes: &[u8]) -> io::Result<Bound> {
+  let resource = Rsc7Resource::decode(bytes)?;
+  read_bound_with(&resource, BASE + ROOT_OFFSET as u64, None, false)
+}
+
 pub(in crate::core::format::ybn) fn read_bound(
   resource: &Rsc7Resource,
   address: u64,
   parent_transform: Option<[f32; 16]>,
+) -> io::Result<Bound> {
+  read_bound_with(resource, address, parent_transform, true)
+}
+
+/// Reads the bound at `address`, with the geometry of geometry bounds when `geometry` is set.
+fn read_bound_with(
+  resource: &Rsc7Resource,
+  address: u64,
+  parent_transform: Option<[f32; 16]>,
+  geometry: bool,
 ) -> io::Result<Bound> {
   if address == 0 {
     return Ok(empty_bound(parent_transform));
@@ -66,11 +84,11 @@ pub(in crate::core::format::ybn) fn read_bound(
         if flags1.len() >= (index + 1) * 8 { read_u32(&flags1, index * 8)? } else { 0 },
         if flags1.len() >= (index + 1) * 8 { read_u32(&flags1, index * 8 + 4)? } else { 0 },
       ]);
-      let mut child = read_bound(resource, *child_pointer, Some(transform))?;
+      let mut child = read_bound_with(resource, *child_pointer, Some(transform), geometry)?;
       child.composite_flags = bound.flags[index];
       bound.children.push(child);
     }
-  } else if matches!(kind.as_str(), "Geometry" | "GeometryBVH") {
+  } else if geometry && matches!(kind.as_str(), "Geometry" | "GeometryBVH") {
     bound.geometry = Some(read_geometry(resource, record, &kind)?);
   }
   Ok(bound)

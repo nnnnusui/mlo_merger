@@ -22,6 +22,7 @@ use xml::helpers::*;
 #[cfg(test)]
 use xml::{read_bound_xml, write_bound_xml};
 
+pub use binary::read_ybn_bound_tree;
 pub use binary::read_ybn_root as read_ybn;
 pub use diff::merge_ybn_deltas;
 pub use xml::{xml_to_ybn, ybn_to_xml};

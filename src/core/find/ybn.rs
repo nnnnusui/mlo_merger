@@ -495,6 +495,20 @@ mod tests {
   }
 
   #[test]
+  fn the_bound_tree_alone_has_the_world_bounds_of_the_full_ybn() {
+    let mut root = fixture();
+    root.children[0].transform = Some(translation([10.0, -5.0, 2.0]));
+    let bytes = write_ybn(&root).unwrap();
+    let full = crate::core::format::ybn::read_ybn(&bytes).unwrap();
+    let tree = crate::core::format::ybn::read_ybn_bound_tree(&bytes).unwrap();
+    assert!(full.children[0].geometry.is_some());
+    assert!(tree.children[0].geometry.is_none());
+    assert_eq!(tree.children[0].transform, full.children[0].transform);
+    assert_eq!(world_bounds(&tree).unwrap(), world_bounds(&full).unwrap());
+    assert!(world_bounds(&tree).unwrap().is_some());
+  }
+
+  #[test]
   fn ybn_bounds_filter_applies_nested_composite_transforms() {
     let make_bound = |kind: &str, minimum: [f32; 3], maximum: [f32; 3], transform| {
       let mut common = vec![0; 112];

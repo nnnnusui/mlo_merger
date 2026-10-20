@@ -1,7 +1,7 @@
-use super::{
-  FindEntity, Input, MergeCache, Result, aabb_intersects_radius, read_stream, search_inputs,
+use super::{FindEntity, Input, MergeCache, Result, aabb_intersects_radius, search_inputs};
+use crate::core::format::{
+  ybn::read_ybn_bound_tree, ymap::binary::ymap_entities_extents, ymap::model::Ymap,
 };
-use crate::core::format::{stream_file::StreamFile, ymap::model::Ymap};
 #[cfg(not(test))]
 use indicatif::ProgressDrawTarget;
 use indicatif::{ProgressBar, ProgressStyle};
@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 #[cfg(not(test))]
 use std::io::IsTerminal;
 use std::{
-  collections::{BTreeMap, HashSet},
+  collections::{BTreeMap, HashMap},
   path::{Component, Path, PathBuf},
   time::Duration,
 };
@@ -177,7 +177,7 @@ fn collect_candidates_from(
 ) -> Result<Vec<Candidate>> {
   let filter = super::filename_filter(search.filter.as_deref())?;
   let mut candidates = Vec::new();
-  let mut paths = HashSet::new();
+  let mut paths = SeenPaths::new();
   for extension in ["ymap", "ybn"] {
     if search.diff_all && !search.merged_dir.is_dir() {
       progress
@@ -244,7 +244,7 @@ fn collect_candidates_from(
 
 fn append_cached_candidates(
   candidates: &mut Vec<Candidate>,
-  paths: &mut HashSet<PathBuf>,
+  paths: &mut SeenPaths,
   name: &str,
   extension: &'static str,
   cache: &MergeCache,
@@ -283,7 +283,7 @@ fn provenance_candidate(
 
 fn collect_source_candidates(
   candidates: &mut Vec<Candidate>,
-  paths: &mut HashSet<PathBuf>,
+  paths: &mut SeenPaths,
   source_dir: &Path,
   filter: Option<&globset::GlobMatcher>,
   progress: &ProgressBar,
@@ -338,7 +338,7 @@ fn collect_source_candidates(
 
 fn collect_source_cache_candidates(
   candidates: &mut Vec<Candidate>,
-  paths: &mut HashSet<PathBuf>,
+  paths: &mut SeenPaths,
   cache_root: &Path,
   filter: Option<&globset::GlobMatcher>,
   progress: &ProgressBar,
@@ -400,7 +400,7 @@ fn collect_source_cache_candidates(
 
 fn collect_vanilla_candidates(
   candidates: &mut Vec<Candidate>,
-  paths: &mut HashSet<PathBuf>,
+  paths: &mut SeenPaths,
   cache_root: &Path,
   filter: Option<&globset::GlobMatcher>,
   progress: &ProgressBar,
@@ -448,14 +448,61 @@ fn collect_vanilla_candidates(
   Ok(())
 }
 
+/// The files already collected, by the file each path resolves to.
+///
+/// Merge provenance records absolute paths, and latest vanilla files through `latest/` links,
+/// while the stores are scanned relative to the working directory, so one file reaches the
+/// candidates by several spellings.
+struct SeenPaths {
+  /// The index of each resolved path's candidate.
+  resolved: HashMap<PathBuf, usize>,
+  working_dir: Option<PathBuf>,
+}
+
+impl SeenPaths {
+  fn new() -> Self {
+    Self {
+      resolved: HashMap::new(),
+      working_dir: std::env::current_dir().and_then(|directory| directory.canonicalize()).ok(),
+    }
+  }
+
+  /// The path `path` resolves to, relative to the working directory when it is inside it;
+  /// `path` itself when it cannot be resolved.
+  fn resolve(
+    &self,
+    path: &Path,
+  ) -> PathBuf {
+    let Ok(resolved) = path.canonicalize() else {
+      return path.to_path_buf();
+    };
+    match &self.working_dir {
+      Some(directory) => match resolved.strip_prefix(directory) {
+        Ok(relative) => relative.to_path_buf(),
+        Err(_) => resolved,
+      },
+      None => resolved,
+    }
+  }
+}
+
+/// Adds `candidate` unless its file is already a candidate, whose missing details it then
+/// fills in, such as the vanilla version merge provenance does not record.
 fn push_candidate(
   candidates: &mut Vec<Candidate>,
-  paths: &mut HashSet<PathBuf>,
-  candidate: Candidate,
+  paths: &mut SeenPaths,
+  mut candidate: Candidate,
 ) {
-  if paths.insert(candidate.path.clone()) {
-    candidates.push(candidate);
+  candidate.path = paths.resolve(&candidate.path);
+  if let Some(&index) = paths.resolved.get(&candidate.path) {
+    let existing = &mut candidates[index];
+    existing.resource = existing.resource.take().or(candidate.resource);
+    existing.original_path = existing.original_path.take().or(candidate.original_path);
+    existing.version = existing.version.take().or(candidate.version);
+    return;
   }
+  paths.resolved.insert(candidate.path.clone(), candidates.len());
+  candidates.push(candidate);
 }
 
 fn stream_name(path: &Path) -> Option<(String, &'static str)> {
@@ -512,10 +559,27 @@ pub(super) struct SpatialBounds {
   pub(super) maximum: [f64; 3],
 }
 
+/// The bounds of the candidate's file: a YMAP's stored entity extents, or the world bounds of
+/// every bound of a YBN.
+///
+/// Only what the bounds need is decoded: a YMAP's extents without its entities, a YBN's bound
+/// tree without its geometry. Damage elsewhere in the file is therefore not reported here.
 pub(super) fn spatial_bounds(candidate: &Candidate) -> Result<Option<SpatialBounds>> {
-  let bounds = match read_stream(&candidate.path, candidate.stage)? {
-    StreamFile::Ymap(model) => Some(ymap_extents(&model)),
-    StreamFile::Ybn(root) => super::ybn::world_bounds(&root)?,
+  let failed = |error: std::io::Error| -> Box<dyn std::error::Error> {
+    format!("Cannot read {} resource {}: {error}", candidate.stage, candidate.path.display()).into()
+  };
+  let bytes = std::fs::read(&candidate.path).map_err(failed)?;
+  let bounds = match candidate.extension {
+    "ymap" => {
+      let (minimum, maximum) =
+        ymap_entities_extents(&bytes, &std::collections::HashMap::new()).map_err(failed)?;
+      Some((
+        [minimum.x, minimum.y, minimum.z].map(f64::from),
+        [maximum.x, maximum.y, maximum.z].map(f64::from),
+      ))
+    }
+    "ybn" => super::ybn::world_bounds(&read_ybn_bound_tree(&bytes).map_err(failed)?)?,
+    extension => return Err(format!("No bounds for .{extension} files").into()),
   };
   Ok(bounds.map(|(minimum, maximum)| SpatialBounds {
     minimum,
@@ -626,5 +690,48 @@ mod tests {
     }));
 
     fs::remove_dir_all(root).unwrap();
+  }
+
+  #[test]
+  fn one_file_named_by_several_paths_is_one_candidate_with_every_detail() {
+    let relative = PathBuf::from(format!("target/find_seen_paths_{}", std::process::id()));
+    let _ = fs::remove_dir_all(&relative);
+    fs::create_dir_all(relative.join("objects")).unwrap();
+    fs::create_dir_all(relative.join("latest")).unwrap();
+    let object = relative.join("objects/map.ymap");
+    fs::write(&object, b"vanilla").unwrap();
+    let candidate = |path: PathBuf, stage, version: Option<&str>| Candidate {
+      name: "map.ymap".into(),
+      extension: "ymap",
+      path,
+      stage,
+      resource: None,
+      original_path: None,
+      version: version.map(Into::into),
+      strict: false,
+    };
+    let mut paths = SeenPaths::new();
+    let mut candidates = Vec::new();
+    // Merge provenance names vanilla files absolutely, through the `latest/` link.
+    #[cfg(unix)]
+    let absolute = {
+      let link = relative.join("latest/map.ymap");
+      std::os::unix::fs::symlink(object.canonicalize().unwrap(), &link).unwrap();
+      std::env::current_dir().unwrap().join(link)
+    };
+    #[cfg(not(unix))]
+    let absolute = std::env::current_dir().unwrap().join(&object);
+    push_candidate(&mut candidates, &mut paths, candidate(absolute, "vanilla", None));
+    push_candidate(
+      &mut candidates,
+      &mut paths,
+      candidate(object.clone(), "vanilla-cache", Some("v1")),
+    );
+
+    assert_eq!(candidates.len(), 1);
+    assert_eq!(candidates[0].path, object);
+    assert_eq!(candidates[0].stage, "vanilla");
+    assert_eq!(candidates[0].version.as_deref(), Some("v1"));
+    fs::remove_dir_all(relative).unwrap();
   }
 }

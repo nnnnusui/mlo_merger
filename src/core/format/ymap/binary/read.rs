@@ -1,5 +1,6 @@
 use std::{collections::HashMap, io};
 
+use crate::common::position::Position;
 use crate::core::format::gamefile::{
   meta::MetaResource, pso::PsoResource, resource::Resource, rsc7::Rsc7Resource,
 };
@@ -19,6 +20,26 @@ pub fn ymap_to_model(
   match Resource::decode(bytes)? {
     Resource::Pso(resource) => pso_to_ymap(&resource, shared_hash_names),
     Resource::Rsc7(resource) => rsc7_to_ymap(&resource, shared_hash_names),
+  }
+}
+
+/// Reads only the entity extents (`entitiesExtentsMin`, `entitiesExtentsMax`) of a binary RSC7
+/// or PSO YMAP, the values [`ymap_to_model`] puts in `entities_extents_min` and
+/// `entities_extents_max`, without decoding its entities or other arrays.
+pub fn ymap_entities_extents(
+  bytes: &[u8],
+  shared_hash_names: &HashMap<u32, String>,
+) -> io::Result<(Position, Position)> {
+  match Resource::decode(bytes)? {
+    Resource::Pso(resource) => {
+      let names = resource.names(shared_hash_names);
+      super::decode::entities_extents_from_root(&resource.root_struct(&names)?)
+    }
+    Resource::Rsc7(resource) => {
+      let meta = MetaResource::parse(&resource)?;
+      let names = meta.names(shared_hash_names);
+      super::decode::entities_extents_from_root(&meta.root_struct(&names)?)
+    }
   }
 }
 
