@@ -326,6 +326,7 @@ fn sources_with_a_diff_document_merge_through_it_and_reject_stale_ones() {
       source: recorded(&source),
       vanilla: recorded(&vanilla),
       tolerances: Default::default(),
+      partner: None,
       diffs: crate::core::format::ymap::compare::YmapDiffFields {
         content_flags: Some(flags),
         ..Default::default()
@@ -351,5 +352,85 @@ fn sources_with_a_diff_document_merge_through_it_and_reject_stale_ones() {
   let error =
     merge.run_with_latest_vanilla_files(std::slice::from_ref(&vanilla), &sources).unwrap_err();
   assert!(error.to_string().contains("rebuild the source cache"), "{error}");
+  fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+#[ignore = "requires local vanilla YMAP schemas"]
+fn lod_light_removals_of_either_ymap_of_a_pair_are_made_in_both() {
+  use crate::core::format::gamefile::{
+    meta::{MetaResource, MetaSchemaCatalog},
+    rsc7::Rsc7Resource,
+  };
+  use crate::core::format::ymap::binary::{write_ymap, ymap_to_model};
+  let base = Path::new(env!("CARGO_MANIFEST_DIR")).join("asset/vanilla-cache/latest/ymap");
+  let names = ["vw_lodlights_large000.ymap", "vw_distlodlights_large000.ymap"];
+  let mut catalog = MetaSchemaCatalog::default();
+  let bytes = names.map(|name| fs::read(base.join(name)).unwrap());
+  for bytes in &bytes {
+    catalog.add_resource(&MetaResource::parse(&Rsc7Resource::decode(bytes).unwrap()).unwrap());
+  }
+  let [lods, distants] =
+    bytes.each_ref().map(|bytes| ymap_to_model(bytes, &catalog.hash_names).unwrap());
+  assert_eq!(lods.lod_lights.len(), distants.distant_lod_lights.items.len());
+  let without = |ymap: &Ymap, removed: &[usize]| {
+    let keep = |index: &usize| !removed.contains(index);
+    let mut ymap = ymap.clone();
+    ymap.lod_lights =
+      ymap.lod_lights.into_iter().enumerate().filter(|(i, _)| keep(i)).map(|(_, l)| l).collect();
+    ymap.distant_lod_lights.items = ymap
+      .distant_lod_lights
+      .items
+      .into_iter()
+      .enumerate()
+      .filter(|(i, _)| keep(i))
+      .map(|(_, l)| l)
+      .collect();
+    ymap
+  };
+
+  let root = std::env::temp_dir().join(format!("ymap_lod_light_pairs_{}", std::process::id()));
+  let _ = fs::remove_dir_all(&root);
+  let vanilla = names.map(|name| root.join("vanilla").join(name));
+  for (path, bytes) in vanilla.iter().zip(&bytes) {
+    fs::create_dir_all(path.parent().unwrap()).unwrap();
+    fs::write(path, bytes).unwrap();
+  }
+  let write = |path: &Path, ymap: &Ymap| {
+    fs::create_dir_all(path.parent().unwrap()).unwrap();
+    fs::write(path, write_ymap(ymap, &ymap.entities, &catalog).unwrap()).unwrap();
+  };
+  // `only_distant` ships only the distant lights, leaving the LOD lights vanilla; `both` ships
+  // both, removing a different light from each.
+  let only_distant = root.join("only_distant").join(names[1]);
+  write(&only_distant, &without(&distants, &[1, 3]));
+  let both = names.map(|name| root.join("both").join(name));
+  write(&both[0], &without(&lods, &[5]));
+  write(&both[1], &without(&distants, &[7]));
+
+  let output = root.join("output");
+  MergeYmap {
+    vanilla_dir: root.join("vanilla"),
+    output_dir: output.clone(),
+    rebuild_all: true,
+    blacklist_config: None,
+    overwrites: Default::default(),
+    vanilla_overwrites: Default::default(),
+  }
+  .run_with_latest_vanilla_files(
+    &vanilla,
+    &[
+      ("only_distant".into(), only_distant, None),
+      ("both".into(), both[0].clone(), None),
+      ("both".into(), both[1].clone(), None),
+    ],
+  )
+  .unwrap();
+  let merged = names
+    .map(|name| ymap_to_model(&fs::read(output.join(name)).unwrap(), &catalog.hash_names).unwrap());
+  let expected = without(&lods, &[1, 3, 5, 7]).lod_lights;
+  assert_eq!(merged[0].lod_lights, expected);
+  let expected = without(&distants, &[1, 3, 5, 7]).distant_lod_lights.items;
+  assert_eq!(merged[1].distant_lod_lights.items, expected);
   fs::remove_dir_all(root).unwrap();
 }

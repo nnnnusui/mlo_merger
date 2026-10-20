@@ -51,10 +51,12 @@ fn compares_lights_as_a_multiset() {
     vanilla.lod_lights.diff(&modded.lod_lights, &()).unwrap(),
     vec![
       YmapLodLightDiff::Removed {
-        index: 0
+        index: 0,
+        implied: false,
       },
       YmapLodLightDiff::Removed {
-        index: 3
+        index: 3,
+        implied: false,
       },
       // The edited light takes the place of the first light the source lacks after it.
       YmapLodLightDiff::Replaced {

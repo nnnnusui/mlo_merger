@@ -212,6 +212,7 @@ pub(super) fn merge(
       }],
       ItemDiff::Removed {
         index,
+        ..
       } => vec![YmapEntityDiff::Removed {
         index,
         guid: guid(index),

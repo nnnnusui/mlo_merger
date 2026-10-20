@@ -115,6 +115,13 @@ pipeline do). The differences of several sources combine as follows:
   change. Added physics dictionaries and prop instances skip names already present;
   dictionary removals are not applied. Name, flags, extents, block and the distant LOD
   light counts keep their vanilla values.
+- `[prefix_]lodlights_*.ymap` and `[prefix_]distlodlights_*.ymap` hold the
+  `lodLights` and `distantLodLightsSOA` of the same lights, read by index, so a light
+  removed from either is removed from both. The source cache adds the other YMAP's
+  removals to each one's diff as `{"Removed": {"index": i, "implied": true}}`, and the
+  document's `partner` records the files they were taken from. A resource shipping only
+  one of the two has its removals merged into the other's vanilla YMAP as well. Pairs
+  whose vanilla YMAPs differ in light count are left alone.
 - Entity `parentIndex` values are compared and merged as the entity they point at, read
   from the source resource's parent YMAP or else vanilla's, and written back as indices
   into the final entity arrays. Unmodified child YMAPs whose parent's entity order
@@ -131,7 +138,8 @@ document to leave out of the merge:
   only the parts it names.
 - In an array, each selector leaves out the items whose written fields all match,
   such as `{"Removed": {"index": 0}}` or an entity's `guid`; its `changes` leaves out
-  only the changes it names.
+  only the changes it names. `{"Removed": {"implied": true}}` leaves out every implied
+  LOD light removal.
 
 An overwrite applies only while the source and vanilla files match its `source` and
 `vanilla` fingerprints (the diff document's `sha256` and `size`); otherwise it is

@@ -1,5 +1,6 @@
 use super::duplicates::{Change, Collector, Contribution, DuplicateReport};
 use crate::core::config::blacklist::BlacklistConfig;
+use crate::core::format::ymap::compare::lod_light_pairs::LightSide;
 use crate::core::format::ymap::compare::{
   EntityParent, EntityParents, YmapComparisonDiff, YmapDiffContext, YmapDiffFields, YmapEntityDiff,
   entities, entity_parents, merge_diffs,
@@ -50,6 +51,7 @@ impl MergeYmap {
 
 mod engine;
 mod inputs;
+mod light_pairs;
 mod output;
 mod plan;
 

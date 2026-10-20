@@ -15,6 +15,7 @@ use crate::{
     conversion::load_hash_names_or_empty,
     format::ymap::compare::{
       StreamFileRef, YmapComparisonContext, YmapComparisonDiff, YmapComparisonFile,
+      YmapComparisonPartner,
     },
     source_cache::{
       types::{ResourceInventory, SourceCacheMetadata},
@@ -65,6 +66,8 @@ struct DiffInputs {
   tolerances: Option<MatchTolerances>,
   source: YmapComparisonFile,
   vanilla: YmapComparisonFile,
+  #[serde(default)]
+  partner: Option<YmapComparisonPartner>,
 }
 
 /// Rebuilds the `diff` directory for every source YMAP that overrides a vanilla YMAP.
@@ -252,7 +255,9 @@ fn is_current(
   };
   inputs.schema_version == YmapComparisonDiff::SCHEMA_VERSION
     && inputs.tolerances == Some(matching::current())
-    && context.is_diff_current(file, &inputs.source, &inputs.vanilla).unwrap_or(false)
+    && context
+      .is_diff_current(file, &inputs.source, &inputs.vanilla, inputs.partner.as_ref())
+      .unwrap_or(false)
 }
 
 fn remove_dir_if_exists(path: &Path) -> Result<()> {

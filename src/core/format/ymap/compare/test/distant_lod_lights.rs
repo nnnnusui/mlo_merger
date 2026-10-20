@@ -117,7 +117,8 @@ fn pairs_by_rounded_position_and_reports_block_fields() {
         },
       },
       YmapDistantLodLightDiff::Removed {
-        index: 2
+        index: 2,
+        implied: false,
       },
       // After the light the source puts before it, vanilla's first.
       YmapDistantLodLightDiff::Added {

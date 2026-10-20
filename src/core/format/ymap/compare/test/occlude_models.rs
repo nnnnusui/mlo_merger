@@ -101,6 +101,7 @@ fn lists_removed_and_replaced_triangles_by_before_index() {
         triangles: Some(vec![
           YmapTriangleDiff::Removed {
             index: 2,
+            implied: false,
           },
           YmapTriangleDiff::Replaced {
             index: 1,

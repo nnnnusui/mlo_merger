@@ -164,6 +164,7 @@ impl<T, C> MergedItems<T, C> {
     }
     let removed = self.removed.into_iter().map(|index| ItemDiff::Removed {
       index,
+      implied: false,
     });
     let in_place = self.in_place.into_iter().map(move |(index, change)| match change {
       InPlace::Replaced(item) => ItemDiff::Replaced {

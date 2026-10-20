@@ -22,6 +22,14 @@ pub fn export_types(output: &Path) -> Result<(), Box<dyn std::error::Error>> {
     path,
     &ExportConfiguration::new().bigint(BigIntExportBehavior::Number),
   )?;
+  // Specta 1 makes every field of an enum variant required, but `ItemDiff::Removed` leaves out
+  // `implied` when it is false.
+  let types = fs::read_to_string(output)?;
+  let required = "{ Removed: { index: number; implied: boolean } }";
+  if !types.contains(required) {
+    return Err("Generated ItemDiff no longer spells Removed as expected".into());
+  }
+  fs::write(output, types.replace(required, "{ Removed: { index: number; implied?: boolean } }"))?;
   let mut file = fs::OpenOptions::new().append(true).open(output)?;
   std::io::Write::write_all(&mut file, crate::core::overwrite::YMAP_DIFF_SKIP_TS.as_bytes())?;
   Ok(())
@@ -76,6 +84,8 @@ mod tests {
     assert!(actual.contains("ymap: RTreeItem[]"));
     assert!(actual.contains("minX: number"));
     assert!(actual.contains("originalPath?: string"));
+    assert!(actual.contains("{ Removed: { index: number; implied?: boolean } }"));
+    assert!(actual.contains("partner?: YmapComparisonPartner | null"));
     assert!(actual.contains("export type Change = \"Added\" | \"Modified\" | \"Removed\""));
     assert!(actual.contains("bmin?: [number, number, number] | null"));
     assert!(actual.contains("tolerance?: MatchTolerances"));

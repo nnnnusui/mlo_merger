@@ -24,17 +24,31 @@ pub struct YmapComparisonDiff {
   pub vanilla: YmapComparisonFile,
   /// The matching tolerances the differences were taken with.
   pub tolerances: MatchTolerances,
+  /// For one YMAP of a LOD light pair, the other one, whose removals `diffs` also makes as
+  /// implied removals; see [`super::lod_light_pairs`].
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub partner: Option<YmapComparisonPartner>,
   pub diffs: YmapDiffFields,
+}
+
+/// The other YMAP of a LOD light pair and its vanilla baseline, when the diff was taken.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
+pub struct YmapComparisonPartner {
+  /// The source's own YMAP of that name, or the vanilla one when the source has none.
+  pub source: YmapComparisonFile,
+  pub vanilla: YmapComparisonFile,
 }
 
 impl YmapComparisonDiff {
   /// The current [`Self::schema_version`]. Documents without one predate versioning.
-  pub const SCHEMA_VERSION: u32 = 6;
+  pub const SCHEMA_VERSION: u32 = 7;
 
   /// Reads the document at `path` when it holds the differences of `source` from `vanilla` as
   /// both are now, taken with `tolerances`; `None` when it is missing, of another layout or
   /// stale.
   ///
+  /// The [`Self::partner`] files are not checked; the source cache keeps them current.
   /// Files whose size and modification time match the document are not hashed again.
   pub fn read_current(
     path: &Path,

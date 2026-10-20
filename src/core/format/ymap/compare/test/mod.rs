@@ -12,6 +12,7 @@ mod document;
 mod entities;
 mod field;
 mod instanced_data;
+mod lod_light_pairs;
 mod lod_lights;
 mod merge;
 mod metadata;

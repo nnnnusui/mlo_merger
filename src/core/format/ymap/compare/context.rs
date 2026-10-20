@@ -7,7 +7,10 @@ use std::{
 
 use struct_diff::Diff;
 
-use super::{YmapComparisonDiff, YmapComparisonFile, YmapDiffContext};
+use super::{
+  YmapComparisonDiff, YmapComparisonFile, YmapComparisonPartner, YmapDiffContext,
+  lod_light_pairs::LightSide,
+};
 use crate::{
   common::{Result, fingerprint::Fingerprint},
   core::{
@@ -146,13 +149,75 @@ impl YmapComparisonContext {
       (&vanilla, vanilla_parent.as_ref().map(|parent| parent.entities.as_slice())),
       (&modded, modded_parent.as_ref().map(|parent| parent.entities.as_slice())),
     );
+    let mut diffs = vanilla.diff(&modded, &ctx).unwrap_or_default();
+    let partner = match self.partner_of(file, &vanilla)? {
+      Some((side, partner, partner_baseline)) => {
+        if partner.resource_name.is_some() {
+          let (partner_vanilla, partner_modded) =
+            (self.get_cache(&partner_baseline)?, self.get_cache(&partner)?);
+          let partner_removed =
+            side.other().removed_between(&partner_vanilla, &partner_modded, &ctx.tolerances);
+          let implied = side.imply_removals(&mut diffs, &partner_removed);
+          if implied > 0 {
+            tracing::info!(
+              "{}: {implied} lights removed only from {} are removed here too",
+              file.file_name,
+              partner.file_name
+            );
+          }
+        }
+        Some(YmapComparisonPartner {
+          source: self.comparison_file(&partner, None)?,
+          vanilla: self.comparison_file(&partner_baseline, None)?,
+        })
+      }
+      None => None,
+    };
     Ok(YmapComparisonDiff {
       schema_version: YmapComparisonDiff::SCHEMA_VERSION,
       tolerances: ctx.tolerances,
-      diffs: vanilla.diff(&modded, &ctx).unwrap_or_default(),
+      partner,
+      diffs,
       source: self.comparison_file(file, None)?,
       vanilla: self.comparison_file(&baseline, None)?,
     })
+  }
+
+  /// For `file`, one YMAP of a LOD light pair whose vanilla baseline is `vanilla`, its side and
+  /// the other YMAP of the pair: `file`'s resource's own when it has one, vanilla's otherwise,
+  /// and the vanilla baseline of that. `None` for other YMAPs, and for pairs whose vanilla YMAPs
+  /// do not hold as many lights of each side, which are left as they are.
+  fn partner_of(
+    &self,
+    file: &StreamFileRef,
+    vanilla: &Ymap,
+  ) -> Result<Option<(LightSide, StreamFileRef, StreamFileRef)>> {
+    let (Some(side), Some(name)) =
+      (LightSide::of(&file.file_name), LightSide::partner_name(&file.file_name))
+    else {
+      return Ok(None);
+    };
+    if !self.vanilla_file_names.contains(&name) {
+      return Ok(None);
+    }
+    let baseline = StreamFileRef {
+      resource_name: None,
+      vanilla_version: file.vanilla_version.clone(),
+      file_name: name.clone(),
+    };
+    let partner_vanilla = self.get_cache(&baseline)?;
+    if side.count(vanilla) != side.other().count(&partner_vanilla) {
+      return Ok(None);
+    }
+    let resource_name = file
+      .resource_name
+      .clone()
+      .filter(|resource| self.source_index.paths.contains_key(&(resource.clone(), name.clone())));
+    let partner = StreamFileRef {
+      resource_name,
+      ..baseline.clone()
+    };
+    Ok(Some((side, partner, baseline)))
   }
 
   /// The parent YMAP `ymap` (loaded from `file`) declares, resolved as [`Self::parent_ref`]
@@ -178,15 +243,32 @@ impl YmapComparisonContext {
     file: &StreamFileRef,
     source: &YmapComparisonFile,
     vanilla: &YmapComparisonFile,
+    partner: Option<&YmapComparisonPartner>,
   ) -> Result<bool> {
     let baseline = StreamFileRef {
       resource_name: None,
       ..file.clone()
     };
-    Ok(
-      self.comparison_file(file, Some(source))? == *source
-        && self.comparison_file(&baseline, Some(vanilla))? == *vanilla,
-    )
+    if self.comparison_file(file, Some(source))? != *source
+      || self.comparison_file(&baseline, Some(vanilla))? != *vanilla
+    {
+      return Ok(false);
+    }
+    if LightSide::of(&file.file_name).is_none() {
+      return Ok(partner.is_none());
+    }
+    // Which partner applies depends on the files, so it is found again; its YMAPs are decoded
+    // only for pairs, a few hundred small files at most.
+    let vanilla_ymap = self.get_cache(&baseline)?;
+    let current = self.partner_of(file, &vanilla_ymap)?;
+    Ok(match (current, partner) {
+      (None, None) => true,
+      (Some((_, current, current_baseline)), Some(partner)) => {
+        self.comparison_file(&current, Some(&partner.source))? == partner.source
+          && self.comparison_file(&current_baseline, Some(&partner.vanilla))? == partner.vanilla
+      }
+      _ => false,
+    })
   }
 
   /// Fingerprints the file that `file` resolves to, reusing `previous` when its path, size and

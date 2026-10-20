@@ -33,7 +33,6 @@ impl MergeYmap {
     } else {
       None
     };
-    let tolerances = crate::core::config::matching::current();
 
     let catalog = {
       use crate::core::format::gamefile::{
@@ -155,6 +154,28 @@ impl MergeYmap {
         }
       }
     }
+    let mut implied = self.implied_diffs(
+      &modded_ymaps_map,
+      &vanilla_map_paths,
+      &mut sources,
+      &mut references,
+      &registered_maps,
+    )?;
+    for hash in implied.keys() {
+      let merged =
+        modded_ymaps_map.keys().any(|name| reference_hash(name.trim_end_matches(".ymap")) == *hash);
+      if merged {
+        continue;
+      }
+      let name = vanilla_map_paths[hash]
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or("non-UTF8 vanilla filename")?;
+      if let Some(original) = sources.get(None, *hash)? {
+        references.register_entities(*hash, &original.entities);
+      }
+      modded_ymaps_map.entry(name.to_string()).or_default();
+    }
     let mut planned = BTreeMap::<u32, PlannedMap>::new();
     let mut duplicate_files = BTreeMap::new();
     for (ymap_name, mod_refs) in &modded_ymaps_map {
@@ -162,8 +183,10 @@ impl MergeYmap {
       let vanilla_ymap_path =
         vanilla_map_paths.get(&hash).cloned().unwrap_or_else(|| self.vanilla_dir.join(ymap_name));
       let vanilla_overwrite = vanilla_overwrites.get(&hash).copied();
+      // A YMAP of a LOD light pair may take removals from the other, so it is merged.
       if !self.rebuild_all
         && vanilla_overwrite.is_none()
+        && LightSide::of(ymap_name).is_none()
         && let [mod_ref] = mod_refs.as_slice()
       {
         tracing::info!("Processing YMAP: {}", vanilla_ymap_path.display());
@@ -218,55 +241,14 @@ impl MergeYmap {
           continue;
         };
         references.register_entities(hash, &source.entities);
-        let (mut ymap_diff, fingerprints) = match &mod_info.diff_path {
-          Some(diff_path) => {
-            let document = YmapComparisonDiff::read_current(
-              diff_path,
-              &mod_info.mod_ymap_path,
-              &vanilla_ymap_path,
-              &tolerances,
-            )?
-            .ok_or_else(|| {
-              format!(
-                "{} is missing or stale for {}; rebuild the source cache",
-                diff_path.display(),
-                mod_info.mod_ymap_path.display()
-              )
-            })?;
-            let fingerprint = |file: &crate::core::format::ymap::compare::YmapComparisonFile| {
-              OverwriteFingerprint {
-                sha256: file.sha256.clone(),
-                size: file.size,
-              }
-            };
-            let fingerprints = (fingerprint(&document.source), fingerprint(&document.vanilla));
-            (document.diffs, Some(fingerprints))
-          }
-          // Sources outside a source cache are compared here, against the latest vanilla.
-          None => {
-            let ctx = YmapDiffContext {
-              tolerances,
-              vanilla_parents: vanilla_parents.clone(),
-              modded_parents: parents_of(
-                &mut sources,
-                &mut references,
-                Some(&mod_info.mod_name),
-                &source.model,
-              )?,
-            };
-            (vanilla_ymap.diff(&source.model, &ctx).unwrap_or_default(), None)
-          }
-        };
-        if let Some(overwrite) = self.overwrites.get(&mod_info.mod_ymap_path) {
-          let (source, vanilla) = match fingerprints {
-            Some(fingerprints) => fingerprints,
-            None => {
-              (file_fingerprint(&mod_info.mod_ymap_path)?, file_fingerprint(&vanilla_ymap_path)?)
-            }
-          };
-          let label = format!("{} ({})", ymap_name, mod_info.mod_name);
-          overwrite.apply(&mut ymap_diff, &source, &vanilla, &label)?;
-        }
+        let ymap_diff = self.source_diff(
+          mod_info,
+          &source,
+          (&vanilla_ymap_path, vanilla_ymap, &vanilla_parents),
+          &mut sources,
+          &mut references,
+          &registered_maps,
+        )?;
         log_diff_counts(&ymap_diff);
         let source_originals =
           source.entities.iter().map(|entity| (entity.guid, entity)).collect::<HashMap<_, _>>();
@@ -295,6 +277,13 @@ impl MergeYmap {
             },
           );
         }
+        ymap_diffs.push(ymap_diff);
+      }
+      for (resource, ymap_diff) in implied.remove(&hash).into_iter().flatten() {
+        tracing::info!(
+          "  LOD light removals {resource} makes only in the other YMAP of the pair (implied)"
+        );
+        log_diff_counts(&ymap_diff);
         ymap_diffs.push(ymap_diff);
       }
       // Merged as the last source, so the merge policy weighs it against the resources'.
@@ -555,7 +544,9 @@ const VANILLA_OVERWRITE_SOURCE: &str = "overwrite/vanilla/latest";
 
 /// The content of the file at `path` (after resolving links, as latest vanilla files are), as an
 /// overwrite records it.
-fn file_fingerprint(path: &Path) -> Result<OverwriteFingerprint, Box<dyn std::error::Error>> {
+pub(super) fn file_fingerprint(
+  path: &Path
+) -> Result<OverwriteFingerprint, Box<dyn std::error::Error>> {
   let fingerprint =
     crate::common::fingerprint::Fingerprint::read(&path.canonicalize()?, None, false)?;
   Ok(OverwriteFingerprint {

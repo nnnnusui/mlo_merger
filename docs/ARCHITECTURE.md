@@ -59,7 +59,10 @@ and regenerated otherwise. Checking reads every document, so `diff/inputs.json`
 records the diff layout, tolerances and vanilla cache revision the diffs were taken
 under, with a digest of each resource's inventoried YMAPs. While those match, a
 resource's existing diffs are kept unread; changed resources are checked file by file,
-and every diff is when the rest changed. The source cache also records which vanilla YMAPs a
+and every diff is when the rest changed. A diff of one YMAP of a LOD light pair also
+carries the other's removals, marked implied, so its document records the other YMAP
+(the resource's own, or vanilla's) and its baseline as `partner`, checked the same way.
+The source cache also records which vanilla YMAPs a
 merge must read: the parents and children related to changed files.
 
 ## Merge
@@ -67,7 +70,8 @@ merge must read: the parents and children related to changed files.
 1. Ensure the derived vanilla and source caches are current.
 2. Dispatch latest vanilla `.ybn` and `.ymap` files to separate merge handlers.
 3. For YMAPs, read each source's diff document, leave out the differences its
-   resource overwrite selects, append the vanilla overwrite as the last source,
+   resource overwrite selects, add the LOD light removals of resources shipping only
+   the other YMAP of a light pair, append the vanilla overwrite as the last source,
    combine the differences and apply them to the latest vanilla file. YBNs apply
    supported source changes directly.
 4. Write merged native stream files under extension subdirectories (`ymap/`, `ybn/`),

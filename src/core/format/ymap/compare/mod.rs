@@ -4,7 +4,8 @@
 //! array items pair up on their types, with `#[diff(key)]` or `#[diff(matching)]` next to the
 //! function they name, and by equality otherwise. This module holds the comparisons the derive
 //! cannot express: entities, grass and prop instances, distant LOD light positions and
-//! physics dictionaries, and how the diffs of several sources combine.
+//! physics dictionaries, LOD lights kept in step with their distant LOD lights, and how the
+//! diffs of several sources combine.
 
 mod context;
 mod diff;
@@ -12,13 +13,16 @@ pub mod distant_lod_lights;
 pub mod entities;
 mod entity_parent;
 pub mod instanced_data;
+pub mod lod_light_pairs;
 mod merge;
 mod merged_items;
 #[cfg(test)]
 mod test;
 
 pub use context::{StreamFileRef, YmapComparisonContext, YmapParentRef};
-pub use diff::{YmapComparisonDiff, YmapComparisonFile, physics_dictionaries};
+pub use diff::{
+  YmapComparisonDiff, YmapComparisonFile, YmapComparisonPartner, physics_dictionaries,
+};
 pub use entities::YmapEntityDiff;
 pub use entity_parent::{EntityParent, EntityParents, YmapDiffContext, entity_parents};
 pub use instanced_data::{

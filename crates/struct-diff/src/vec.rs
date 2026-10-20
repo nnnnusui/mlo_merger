@@ -34,8 +34,13 @@ pub enum ItemDiff<T, C> {
     item: T,
   },
   /// Present only in the earlier array, at `index`.
+  ///
+  /// `implied` marks a removal the later array does not show but another difference calls for,
+  /// such as the removal of the item at the same index of an array kept parallel to this one.
   Removed {
     index: usize,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    implied: bool,
   },
   /// Earlier item `index` is unpaired, and the later array has `item`, also unpaired, in its
   /// place.
@@ -206,6 +211,7 @@ impl<T: Clone, C> ItemDiff<T, C> {
       }));
       removals.extend(removed[replaced..].iter().map(|&index| Self::Removed {
         index,
+        implied: false,
       }));
       let after_anchor = replaced.checked_sub(1).map_or(anchor, |last| Some(removed[last]));
       additions.extend(added[replaced..].iter().map(|&index| Self::Added {
@@ -261,6 +267,7 @@ impl<T, C> ItemDiff<T, C> {
       },
       Self::Removed {
         index,
+        ..
       } => ItemChange::Removed {
         index: *index,
       },
@@ -430,6 +437,7 @@ mod tests {
     let diffs = [
       ItemDiff::Removed {
         index: 1,
+        implied: false,
       },
       ItemDiff::Added {
         after: Some(1),
@@ -450,9 +458,11 @@ mod tests {
     let twice = [
       ItemDiff::<i32, ()>::Removed {
         index: 0,
+        implied: false,
       },
       ItemDiff::Removed {
         index: 0,
+        implied: true,
       },
     ];
     let error = ItemDiff::apply_with(&mut vec![0], &twice, |_, _| Ok(())).unwrap_err();
