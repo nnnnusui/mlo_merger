@@ -1,7 +1,11 @@
 //! Writes each source YMAP's differences from vanilla as `diff/{resource}/{path}.diff.json`.
 //!
 //! A diff is rewritten only when the source or vanilla YMAP it was taken from changed; the
-//! document records both files' fingerprints for that check.
+//! document records both files' fingerprints for that check. Checking reads every document, so
+//! `diff/inputs.json` records what the diffs were taken under: the diff layout, the matching
+//! tolerances, the vanilla cache revision and a digest of each resource's inventoried YMAPs.
+//! While those match, a resource's diffs are kept without being read; only resources whose
+//! inventory changed, or every resource when the rest changed, are checked file by file.
 
 use super::Result;
 use crate::{
@@ -12,11 +16,38 @@ use crate::{
     format::ymap::compare::{
       StreamFileRef, YmapComparisonContext, YmapComparisonDiff, YmapComparisonFile,
     },
-    source_cache::{types::SourceCacheMetadata, ymap_diff_path},
+    source_cache::{
+      types::{ResourceInventory, SourceCacheMetadata},
+      ymap_diff_path,
+    },
   },
 };
 use rayon::prelude::*;
-use std::{fs, io::BufReader, path::Path};
+use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
+use std::{collections::BTreeMap, fs, io::BufReader, path::Path};
+
+/// File name of the record of what the diffs were taken under, in the `diff` directory.
+const INPUTS_FILE: &str = "inputs.json";
+/// Bump when [`DiffRecord`] or what its digests cover changes.
+const RECORD_VERSION: u32 = 1;
+
+/// What the diffs in a `diff` directory were taken under; see the module docs.
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+struct DiffRecord {
+  record_version: u32,
+  prerequisites: Prerequisites,
+  /// A digest of each resource's inventoried YMAPs, keyed by resource ID.
+  resources: BTreeMap<String, String>,
+}
+
+/// What every diff depends on beyond its own resource.
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+struct Prerequisites {
+  diff_schema_version: u32,
+  tolerances: MatchTolerances,
+  vanilla_cache_revision: String,
+}
 
 /// How many diff documents [`write_ymap_diffs`] wrote and kept.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -50,9 +81,6 @@ pub(in crate::core::source_cache) fn write_ymap_diffs(
   let metadata: SourceCacheMetadata = serde_json::from_reader(BufReader::new(fs::File::open(
     crate::core::source_cache::cache_info_path(output),
   )?))?;
-  let hash_names = load_hash_names_or_empty(&vanilla_dir.join("hash_names.json"));
-  let context = YmapComparisonContext::new(output, vanilla_cache_dir, hash_names)?;
-
   let staging = output.join("diff.tmp");
   let target = output.join("diff");
   ensure_safe_path(output, &staging)?;
@@ -63,10 +91,26 @@ pub(in crate::core::source_cache) fn write_ymap_diffs(
     written: 0,
     reused: 0,
   };
-  // Current diffs are moved to staging as they are found; the others are taken afterwards in
-  // parallel, each from its own source and vanilla YMAPs.
-  let mut stale = Vec::new();
-  for resource in metadata.resources.values() {
+  // Diffs of resources the record vouches for are kept as they are. The others are checked in
+  // parallel, since a check reads its whole document; current ones are then moved to staging
+  // in order, and the rest are taken in parallel, each from its own source and vanilla YMAPs.
+  // Worker threads do not inherit the active matching tolerances, so each is handed them.
+  let tolerances = matching::current();
+  let prerequisites = Prerequisites {
+    diff_schema_version: YmapComparisonDiff::SCHEMA_VERSION,
+    tolerances,
+    vanilla_cache_revision: metadata.vanilla_cache_revision.clone(),
+  };
+  let record = read_record(&target.join(INPUTS_FILE))
+    .filter(|record| record.record_version == RECORD_VERSION)
+    .filter(|record| record.prerequisites == prerequisites);
+  let mut digests = BTreeMap::new();
+  let mut entries = Vec::new();
+  for (resource_id, resource) in &metadata.resources {
+    let digest = resource_digest(resource)?;
+    let vouched =
+      record.as_ref().is_some_and(|record| record.resources.get(resource_id) == Some(&digest));
+    digests.insert(resource_id.clone(), digest);
     let resource_name =
       resource.source.file_name().ok_or("Resource has no name")?.to_string_lossy().into_owned();
     for file in resource.files_by_format.get(".ymap").into_iter().flatten() {
@@ -82,18 +126,68 @@ pub(in crate::core::source_cache) fn write_ymap_diffs(
       let (previous, path) = (target.join(&file_path), staging.join(&file_path));
       ensure_safe_path(&target, &previous)?;
       ensure_safe_path(&staging, &path)?;
-      let parent = path.parent().ok_or("Diff path has no parent")?;
-      if is_current(&context, &stream_file, &previous) {
-        fs::create_dir_all(parent)?;
-        fs::rename(&previous, &path)?;
-        counts.reused += 1;
-        continue;
-      }
+      let kept = vouched && previous.is_file();
+      entries.push((stream_file, file_path, previous, path, kept));
+    }
+  }
+  // Checks need no hash names, which only decoding YMAPs for new diffs does; loading them is
+  // most of a run in which every diff is current.
+  let unchecked = entries.iter().any(|(.., kept)| !kept);
+  let context = unchecked
+    .then(|| YmapComparisonContext::new(output, vanilla_cache_dir, Default::default()))
+    .transpose()?;
+  let current = entries
+    .par_iter()
+    .map(|(stream_file, _, previous, _, kept)| {
+      *kept
+        || context.as_ref().is_some_and(|context| {
+          matching::with_tolerances(tolerances, || is_current(context, stream_file, previous))
+        })
+    })
+    .collect::<Vec<_>>();
+  let mut stale = Vec::new();
+  for ((stream_file, file_path, previous, path, _), current) in entries.into_iter().zip(current) {
+    if current {
+      fs::create_dir_all(path.parent().ok_or("Diff path has no parent")?)?;
+      fs::rename(&previous, &path)?;
+      counts.reused += 1;
+    } else {
       stale.push((stream_file, file_path, path));
     }
   }
-  // Worker threads do not inherit the active matching tolerances, so each is handed them.
-  let tolerances = matching::current();
+  if !stale.is_empty() {
+    let hash_names = load_hash_names_or_empty(&vanilla_dir.join("hash_names.json"));
+    let context = YmapComparisonContext::new(output, vanilla_cache_dir, hash_names)?;
+    counts.written = take_diffs(&context, &stale, tolerances)?;
+  }
+
+  fs::create_dir_all(&staging)?;
+  write_json(
+    &staging.join(INPUTS_FILE),
+    &DiffRecord {
+      record_version: RECORD_VERSION,
+      prerequisites,
+      resources: digests,
+    },
+  )?;
+  remove_dir_if_exists(&target)?;
+  fs::rename(&staging, &target)?;
+  tracing::info!(
+    "Wrote {} and kept {} YMAP diffs in {}",
+    counts.written,
+    counts.reused,
+    target.display()
+  );
+  Ok(counts)
+}
+
+/// Takes the diff of each of `stale` in parallel and writes it to its staging path; returns how
+/// many were written. A diff that cannot be taken is logged and skipped.
+fn take_diffs(
+  context: &YmapComparisonContext,
+  stale: &[(StreamFileRef, std::path::PathBuf, std::path::PathBuf)],
+  tolerances: MatchTolerances,
+) -> Result<usize> {
   let results = stale
     .par_iter()
     .map(|(stream_file, file_path, path)| {
@@ -111,18 +205,34 @@ pub(in crate::core::source_cache) fn write_ymap_diffs(
       written.map(|()| true).map_err(|error| format!("{}: {error}", path.display()))
     })
     .collect::<std::result::Result<Vec<_>, String>>()?;
-  counts.written = results.into_iter().filter(|written| *written).count();
+  Ok(results.into_iter().filter(|written| *written).count())
+}
 
-  fs::create_dir_all(&staging)?;
-  remove_dir_if_exists(&target)?;
-  fs::rename(&staging, &target)?;
-  tracing::info!(
-    "Wrote {} and kept {} YMAP diffs in {}",
-    counts.written,
-    counts.reused,
-    target.display()
-  );
-  Ok(counts)
+fn read_record(path: &Path) -> Option<DiffRecord> {
+  serde_json::from_reader(BufReader::new(fs::File::open(path).ok()?)).ok()
+}
+
+/// A digest of what `resource`'s diffs are taken from in its inventory: each YMAP's path,
+/// content, cached location, vanilla match and parent. Modification times are left out, so a
+/// touched but unchanged YMAP keeps its diffs.
+fn resource_digest(resource: &ResourceInventory) -> Result<String> {
+  let ymaps = resource
+    .files_by_format
+    .get(".ymap")
+    .into_iter()
+    .flatten()
+    .map(|file| {
+      (
+        &file.path,
+        &file.sha256,
+        file.size,
+        &file.cached_path,
+        &file.vanilla,
+        &file.ymap_parent_hash,
+      )
+    })
+    .collect::<Vec<_>>();
+  Ok(hex::encode(Sha256::digest(serde_json::to_vec(&(&resource.source, ymaps))?)))
 }
 
 /// Whether the diff at `path` exists in the current layout, was taken with the active matching

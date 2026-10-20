@@ -224,3 +224,67 @@ fn ymap_diffs_taken_with_other_tolerances_are_regenerated() {
   assert_eq!(fixture.write_diffs(), DROPPED);
   assert!(!fixture.diff_path().exists());
 }
+
+impl Fixture {
+  /// Rewrites the published inventory with `edit` applied.
+  fn edit_metadata(
+    &self,
+    edit: impl FnOnce(&mut serde_json::Value),
+  ) {
+    let path = self.output.join("cache_info.json");
+    let mut metadata: serde_json::Value =
+      serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+    edit(&mut metadata);
+    write_json(&path, &metadata).unwrap();
+  }
+
+  /// Leaves a document a check would reject, so keeping it shows that it was not read.
+  fn break_diff(&self) {
+    fs::write(self.diff_path(), b"not JSON").unwrap();
+  }
+}
+
+#[test]
+fn recorded_resources_keep_their_diffs_without_reading_them() {
+  let fixture = Fixture::new("ymap_diffs_recorded");
+  fixture.write_current_diff();
+  assert_eq!(fixture.write_diffs(), KEPT);
+  assert!(fixture.output.join("diff/inputs.json").is_file());
+  fixture.break_diff();
+  assert_eq!(fixture.write_diffs(), KEPT);
+  assert_eq!(fs::read(fixture.diff_path()).unwrap(), b"not JSON");
+}
+
+#[test]
+fn a_resource_whose_inventory_changed_has_its_diffs_checked() {
+  let fixture = Fixture::new("ymap_diffs_inventory_changed");
+  fixture.write_current_diff();
+  assert_eq!(fixture.write_diffs(), KEPT);
+  fixture.break_diff();
+  fixture.edit_metadata(|metadata| {
+    metadata["resources"]["resource_a"]["files_by_format"][".ymap"][0]["sha256"] = "edited".into();
+  });
+  assert_eq!(fixture.write_diffs(), DROPPED);
+  assert!(!fixture.diff_path().exists());
+}
+
+#[test]
+fn every_diff_is_checked_when_the_vanilla_cache_changed() {
+  let fixture = Fixture::new("ymap_diffs_vanilla_revision_changed");
+  fixture.write_current_diff();
+  assert_eq!(fixture.write_diffs(), KEPT);
+  fixture.break_diff();
+  fixture.edit_metadata(|metadata| metadata["vanilla_cache_revision"] = "rebuilt".into());
+  assert_eq!(fixture.write_diffs(), DROPPED);
+}
+
+#[test]
+fn a_missing_diff_of_a_recorded_resource_is_taken_again() {
+  let fixture = Fixture::new("ymap_diffs_recorded_missing");
+  fixture.write_current_diff();
+  assert_eq!(fixture.write_diffs(), KEPT);
+  fs::remove_file(fixture.diff_path()).unwrap();
+  // The YMAPs cannot be decoded, so taking the diff again fails and leaves none.
+  assert_eq!(fixture.write_diffs(), DROPPED);
+  assert!(!fixture.diff_path().exists());
+}

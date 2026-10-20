@@ -55,7 +55,11 @@ and relationship analysis. Missing cached inputs are errors, not silent deletion
 For each cached YMAP that overrides a vanilla YMAP, the source cache writes a diff
 document against the latest vanilla file. The document records both files'
 fingerprints and the matching tolerances; it is reused while they are unchanged
-and regenerated otherwise. The source cache also records which vanilla YMAPs a
+and regenerated otherwise. Checking reads every document, so `diff/inputs.json`
+records the diff layout, tolerances and vanilla cache revision the diffs were taken
+under, with a digest of each resource's inventoried YMAPs. While those match, a
+resource's existing diffs are kept unread; changed resources are checked file by file,
+and every diff is when the rest changed. The source cache also records which vanilla YMAPs a
 merge must read: the parents and children related to changed files.
 
 ## Merge
