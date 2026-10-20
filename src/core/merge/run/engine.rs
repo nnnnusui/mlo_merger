@@ -378,10 +378,16 @@ impl MergeYmap {
       }
     }
     let mut vanilla_children = Vec::new();
-    for path in latest_files {
+    // Only children of a map whose entity order changed need relinking, and planned maps are
+    // relinked already, so the other vanilla maps are not read.
+    let candidates = if changed_layouts.is_empty() { &[][..] } else { latest_files };
+    for path in candidates {
       let name = path.file_name().ok_or("Vanilla YMAP filename missing")?;
       let name = name.to_str().ok_or("non-UTF8 vanilla filename")?;
       let hash = reference_hash(name.trim_end_matches(".ymap"));
+      if planned.contains_key(&hash) {
+        continue;
+      }
       let Some(original) = sources.get(None, hash)? else {
         continue;
       };
@@ -478,17 +484,22 @@ impl MergeYmap {
         entity.parent_index = index;
       }
     }
+    // Each map is assembled once, however many of its entities link within it.
+    let mut final_maps = HashMap::<u32, Ymap>::new();
     for (hash, index, target) in resolved_links {
       if target.map != hash {
         continue;
       }
       let map = &planned[&hash];
       let child = map.entity_at(index).ok_or("final child entity missing")?;
-      let mut final_map = map.model.clone();
-      if let Some(entities) = &map.clone_entities {
-        final_map.entities.clone_from(entities);
-      }
-      if entity_parent_ref(child, &final_map, &final_map) != EntityParentRef::SelfMap(target.guid) {
+      let final_map = final_maps.entry(hash).or_insert_with(|| {
+        let mut final_map = map.model.clone();
+        if let Some(entities) = &map.clone_entities {
+          final_map.entities.clone_from(entities);
+        }
+        final_map
+      });
+      if entity_parent_ref(child, final_map, final_map) != EntityParentRef::SelfMap(target.guid) {
         return Err(
           format!(
             "invalid final local LOD hierarchy for entity {} and parent {}",

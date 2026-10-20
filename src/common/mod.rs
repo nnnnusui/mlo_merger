@@ -1,9 +1,10 @@
-//! Shared geometry types, filesystem, path, JSON and fingerprint primitives.
+//! Shared geometry types, filesystem, path, JSON, fingerprint and logging primitives.
 
 pub(crate) mod filesystem;
 pub(crate) mod fingerprint;
 pub(crate) mod function;
 pub(crate) mod json;
+pub(crate) mod log_block;
 mod r#macro;
 pub(crate) mod path;
 pub mod position;

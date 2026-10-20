@@ -168,7 +168,11 @@ impl MergeYbnConflicts {
       }
     }
     let mut omitted = Vec::new();
-    let temporary = std::env::temp_dir().join(format!("mlo_ybn_merge_{}", std::process::id()));
+    // Groups merge in parallel, so each run has a directory of its own.
+    static RUNS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+    let run = RUNS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let temporary =
+      std::env::temp_dir().join(format!("mlo_ybn_merge_{}_{run}", std::process::id()));
     fs::create_dir_all(&temporary)?;
     for (name, paths) in &conflicts {
       let (vanilla_bytes, output_name) = if let Some(history) = history {
