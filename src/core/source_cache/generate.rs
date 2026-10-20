@@ -80,5 +80,6 @@ pub(super) fn run(build: &BuildSourceCache) -> Result<bool> {
   crate::core::config::matching::with_config(|| {
     diff::write_ymap_diffs(&output, &vanilla_dir, &vanilla_cache_dir)
   })??;
+  crate::core::find::rtree::update_store_index(crate::core::find::rtree::Store::Source, &output)?;
   Ok(published)
 }

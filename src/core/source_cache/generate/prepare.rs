@@ -55,9 +55,8 @@ pub(super) fn prepare(build: &BuildSourceCache) -> Result<Prepared> {
   let vanilla_cache_dir = build.vanilla_cache_dir.canonicalize()?;
   let info = crate::core::source_cache::cache_info_path(&output);
   let previous = if info.is_file() {
-    let metadata: SourceCacheMetadata = serde_json::from_reader(BufReader::new(fs::File::open(
-      &info,
-    )?))?;
+    let metadata: SourceCacheMetadata =
+      serde_json::from_reader(BufReader::new(fs::File::open(&info)?))?;
     if metadata.source_dir != source_dir || !matches!(metadata.format_version, 2 | 3) {
       return Err("Source cache belongs to another input directory or unsupported schema".into());
     }

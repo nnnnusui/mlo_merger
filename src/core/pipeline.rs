@@ -220,6 +220,10 @@ mod tests {
     assert!(pipeline.vanilla_cache_dir.join("cache_info.json").is_file());
     assert!(pipeline.source_cache_dir.join("cache_info.json").is_file());
     assert!(pipeline.merged_dir.join("cache_info.json").is_file());
+    for store in [&pipeline.vanilla_cache_dir, &pipeline.source_cache_dir, &pipeline.merged_dir] {
+      assert!(store.join("stream_file_rtree.json").is_file(), "{}", store.display());
+    }
+    assert!(!pipeline.output_dir.join("stream/stream_file_rtree.json").exists());
     assert!(pipeline.merged_dir.join("ybn/collision.ybn").is_file());
     assert!(!pipeline.merged_dir.join("ybn/unique.ybn").exists());
     assert_eq!(

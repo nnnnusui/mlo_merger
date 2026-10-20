@@ -1,8 +1,18 @@
 use super::*;
 
 impl BuildVanillaCache {
-  /// Builds the requested vanilla-cache prefix and publishes it atomically.
+  /// Builds the requested vanilla-cache prefix and publishes it atomically, then brings its
+  /// stream-file bounds index (`stream_file_rtree.json`) up to date.
   pub fn run(&self) -> Result<VanillaCacheResult> {
+    let result = self.run_cache()?;
+    crate::core::find::rtree::update_store_index(
+      crate::core::find::rtree::Store::Vanilla,
+      &self.output_dir,
+    )?;
+    Ok(result)
+  }
+
+  fn run_cache(&self) -> Result<VanillaCacheResult> {
     let vanilla_dir = self.vanilla_dir.canonicalize()?;
     let (manifest, revision) = crate::core::vanilla::load_manifest_with_revision(&vanilla_dir)?;
     let through_index = resolve_through_version(&manifest, self.through_version.as_deref())?;

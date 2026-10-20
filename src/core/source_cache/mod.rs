@@ -340,7 +340,8 @@ pub struct BuildSourceCache {
 }
 
 impl BuildSourceCache {
-  /// Updates configured resources and exclusions, skipping unchanged inputs.
+  /// Updates configured resources and exclusions, skipping unchanged inputs, then brings the
+  /// cache's stream-file bounds index (`stream_file_rtree.json`) up to date.
   ///
   /// Exclusions match case-insensitive substrings of source-relative resource paths.
   /// Exclusions are not persisted; absent or empty means no exclusions. Excluded active

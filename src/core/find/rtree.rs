@@ -1,8 +1,9 @@
-//! Bounds indexes of the vanilla, source and merged stream files, one per store.
+//! Bounds indexes of the vanilla, source and merged stream files, one in each store.
 //!
-//! The stores change at different rates, so each has its own index, rebuilt only when the
-//! metadata its files are listed from changes: the vanilla cache's after a game update, the
-//! source cache's after a source-cache update, the merge output's after a merge.
+//! Each store writes its own `stream_file_rtree.json` when it is built: the vanilla cache, the
+//! source cache and the merge output. An index records the fingerprint of the metadata its
+//! files were listed from and is rebuilt only when that metadata changed, so a step that reuses
+//! its store also restores a missing or outdated index.
 
 use super::{
   Result,
@@ -17,16 +18,16 @@ use serde::{Deserialize, Serialize};
 use std::io::IsTerminal;
 use std::{
   fs,
-  io::BufReader,
+  io::{BufReader, BufWriter, Write},
   path::{Path, PathBuf},
   time::Duration,
 };
 
 /// Bump when the indexed files, their bounds or the index layout change.
-const SCHEMA_VERSION: u32 = 2;
+const SCHEMA_VERSION: u32 = 3;
 
-/// Index files of an earlier layout, one per file type, removed once the store indexes exist.
-const LEGACY_OUTPUTS: [&str; 2] = ["stream_file_rtree-ymap.json", "stream_file_rtree-ybn.json"];
+/// File name of the index in each store directory.
+pub(crate) const INDEX_FILE: &str = "stream_file_rtree.json";
 
 #[derive(Serialize, Deserialize)]
 #[cfg_attr(feature = "typescript", derive(specta::Type))]
@@ -95,14 +96,15 @@ struct RTreeItem {
 /// A store of stream files with its own index.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Store {
+  /// The derived vanilla cache's latest files.
   Vanilla,
+  /// The source cache's inventoried files, where they are now.
   Source,
+  /// The merge output's merged files.
   Merged,
 }
 
 impl Store {
-  const ALL: [Self; 3] = [Self::Vanilla, Self::Source, Self::Merged];
-
   pub(crate) fn name(self) -> &'static str {
     match self {
       Self::Vanilla => "vanilla",
@@ -110,118 +112,23 @@ impl Store {
       Self::Merged => "merged",
     }
   }
-}
 
-/// Writes `stream_file_rtree-{vanilla,source,merged}.json`: RBush-compatible 2D boxes with
-/// retained Z bounds for each store's YMAP and YBN files.
-#[derive(Debug, Clone)]
-pub(crate) struct GenerateRTree {
-  /// Derived vanilla cache whose latest files are indexed.
-  pub(crate) vanilla_cache_dir: PathBuf,
-  /// Source cache whose inventoried files are indexed, where they are now.
-  pub(crate) source_cache_dir: PathBuf,
-  /// Merge output whose merged files are indexed.
-  pub(crate) merged_dir: PathBuf,
-  /// Where the indexes are written.
-  pub(crate) output_dir: PathBuf,
-  /// Rebuilds every index, even one whose store metadata is unchanged.
-  pub(crate) force: bool,
-}
-
-/// What [`GenerateRTree::run`] did for one store.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct StoreOutcome {
-  pub(crate) store: Store,
-  pub(crate) output: PathBuf,
-  /// `true` when the index was written, `false` when it was already current.
-  pub(crate) updated: bool,
-}
-
-impl GenerateRTree {
-  /// Rebuilds the index of each store whose metadata changed since its index was written.
-  ///
-  /// A store without metadata is skipped with a warning, keeping any index it has.
-  pub(crate) fn run(&self) -> Result<Vec<StoreOutcome>> {
-    fs::create_dir_all(&self.output_dir)?;
-    let working_dir = std::env::current_dir().and_then(|directory| directory.canonicalize()).ok();
-    let mut outcomes = Vec::new();
-    for store in Store::ALL {
-      let info = self.cache_info_path(store);
-      if !info.is_file() {
-        eprintln!(
-          "generate-rtree-json: {} metadata is missing; skipping {}",
-          store.name(),
-          info.display()
-        );
-        continue;
-      }
-      let output = self.output_dir.join(format!("stream_file_rtree-{}.json", store.name()));
-      let input_path =
-        display_path(&info, working_dir.as_deref()).to_string_lossy().replace('\\', "/");
-      let previous = read_header(&output).filter(|header| header.input.path == input_path);
-      let fingerprint = Fingerprint::read(
-        &info,
-        previous.as_ref().map(|header| fingerprint_of(&header.input)).as_ref(),
-        false,
-      )?;
-      let input = RTreeInput {
-        path: input_path,
-        sha256: fingerprint.sha256,
-        size: fingerprint.size,
-        modified_seconds: fingerprint.modified_seconds,
-        modified_nanos: fingerprint.modified_nanos,
-      };
-      let current = previous.is_some_and(|header| {
-        header.schema_version == SCHEMA_VERSION
-          && header.input.sha256 == input.sha256
-          && header.input.size == input.size
-      });
-      if current && !self.force {
-        eprintln!("generate-rtree-json: {} index is current", store.name());
-        outcomes.push(StoreOutcome {
-          store,
-          output,
-          updated: false,
-        });
-        continue;
-      }
-      let candidates = self.candidates(store, working_dir.as_deref())?;
-      let index = index_store(store, input, candidates)?;
-      crate::core::vanilla::write_json(&output, &index)?;
-      outcomes.push(StoreOutcome {
-        store,
-        output,
-        updated: true,
-      });
-    }
-    if outcomes.len() == Store::ALL.len() {
-      for legacy in LEGACY_OUTPUTS {
-        let path = self.output_dir.join(legacy);
-        if path.is_file() {
-          fs::remove_file(&path)?;
-          eprintln!("generate-rtree-json: removed index of the earlier layout {}", path.display());
-        }
-      }
-    }
-    Ok(outcomes)
-  }
-
-  /// The metadata of `store`, owned by the module that writes it.
+  /// The metadata of the store at `directory`, owned by the module that writes it.
   fn cache_info_path(
-    &self,
-    store: Store,
+    self,
+    directory: &Path,
   ) -> PathBuf {
-    match store {
-      Store::Vanilla => crate::core::vanilla_cache::cache_info_path(&self.vanilla_cache_dir),
-      Store::Source => crate::core::source_cache::cache_info_path(&self.source_cache_dir),
-      Store::Merged => crate::core::merge::cache_info_path(&self.merged_dir),
+    match self {
+      Self::Vanilla => crate::core::vanilla_cache::cache_info_path(directory),
+      Self::Source => crate::core::source_cache::cache_info_path(directory),
+      Self::Merged => crate::core::merge::cache_info_path(directory),
     }
   }
 
-  /// The YMAP and YBN files of `store`, as its metadata lists them.
+  /// The YMAP and YBN files of the store at `directory`, as its metadata lists them.
   fn candidates(
-    &self,
-    store: Store,
+    self,
+    directory: &Path,
     working_dir: Option<&Path>,
   ) -> Result<Vec<Candidate>> {
     let display = |path: &Path| display_path(path, working_dir);
@@ -239,17 +146,17 @@ impl GenerateRTree {
       })
     };
     let mut candidates = Vec::new();
-    match store {
-      Store::Vanilla => {
-        for file in crate::core::vanilla_cache::latest_files(&self.vanilla_cache_dir)? {
+    match self {
+      Self::Vanilla => {
+        for file in crate::core::vanilla_cache::latest_files(directory)? {
           if let Some(mut found) = candidate(&file.name, display(&file.path), "vanilla-cache") {
             found.version = Some(file.version);
             candidates.push(found);
           }
         }
       }
-      Store::Source => {
-        for file in crate::core::source_cache::inventoried_files(&self.source_cache_dir)? {
+      Self::Source => {
+        for file in crate::core::source_cache::inventoried_files(directory)? {
           let moved = file.path != file.original_path;
           let stage = if moved { "source-cache" } else { "source" };
           if let Some(mut found) = candidate(&file.file_name, display(&file.path), stage) {
@@ -260,19 +167,63 @@ impl GenerateRTree {
           }
         }
       }
-      Store::Merged => {
-        for file in crate::core::merge::merged_files(&self.merged_dir)? {
-          if let Some(mut found) = candidate(&file.name, display(&file.path), "merged") {
-            // Merged files are this tool's own output; one it cannot read is an error.
-            found.strict = true;
-            candidates.push(found);
-          }
+      Self::Merged => {
+        for file in crate::core::merge::merged_files(directory)? {
+          candidates.extend(candidate(&file.name, display(&file.path), "merged"));
         }
       }
     }
     candidates.sort_by(|left, right| left.path.cmp(&right.path));
     Ok(candidates)
   }
+}
+
+/// Writes the index of the store at `directory` to its `stream_file_rtree.json`, unless the
+/// index already describes the store's current metadata; returns whether it was written.
+///
+/// Files whose bounds cannot be read are left out with a warning, so a store that was built
+/// still gets an index. A store without metadata has no index to write.
+pub(crate) fn update_store_index(
+  store: Store,
+  directory: &Path,
+) -> Result<bool> {
+  let info = store.cache_info_path(directory);
+  if !info.is_file() {
+    return Ok(false);
+  }
+  let output = directory.join(INDEX_FILE);
+  let working_dir = std::env::current_dir().and_then(|directory| directory.canonicalize()).ok();
+  let input_path = display_path(&info, working_dir.as_deref()).to_string_lossy().replace('\\', "/");
+  let previous = read_header(&output).filter(|header| header.input.path == input_path);
+  let fingerprint = Fingerprint::read(
+    &info,
+    previous.as_ref().map(|header| fingerprint_of(&header.input)).as_ref(),
+    false,
+  )?;
+  let current = previous.is_some_and(|header| {
+    header.schema_version == SCHEMA_VERSION
+      && header.input.sha256 == fingerprint.sha256
+      && header.input.size == fingerprint.size
+  });
+  if current {
+    return Ok(false);
+  }
+  let input = RTreeInput {
+    path: input_path,
+    sha256: fingerprint.sha256,
+    size: fingerprint.size,
+    modified_seconds: fingerprint.modified_seconds,
+    modified_nanos: fingerprint.modified_nanos,
+  };
+  let index = index_store(store, input, store.candidates(directory, working_dir.as_deref())?)?;
+  let partial = directory.join(format!("{INDEX_FILE}.partial"));
+  let mut writer = BufWriter::new(fs::File::create(&partial)?);
+  serde_json::to_writer_pretty(&mut writer, &index)?;
+  writer.flush()?;
+  drop(writer);
+  fs::rename(&partial, &output)?;
+  tracing::info!("Wrote the {} stream-file R-tree index to {}", store.name(), output.display());
+  Ok(true)
 }
 
 fn read_header(path: &Path) -> Option<Header> {
@@ -313,7 +264,7 @@ fn index_store(
   progress.enable_steady_tick(Duration::from_millis(100));
   let name = store.name();
   if log_progress {
-    eprintln!("generate-rtree-json: indexing {total} {name} stream files");
+    tracing::info!("Indexing the bounds of {total} {name} stream files");
   }
   let mut ymap = Vec::new();
   let mut ybn = Vec::new();
@@ -324,20 +275,21 @@ fn index_store(
     match index_item(&candidate) {
       Ok(Some(item)) => items.push(item),
       Ok(None) => skipped += 1,
-      Err(error) if candidate.strict => return Err(error),
       Err(error) => {
         skipped += 1;
-        progress.println(format!("Warning: skipped {}: {error}", candidate.path.display()));
+        progress.suspend(|| {
+          tracing::warn!("Left {} out of the {name} index: {error}", candidate.path.display())
+        });
       }
     }
     progress.inc(1);
     if log_progress && progress.position().is_multiple_of(1000) {
-      eprintln!("generate-rtree-json: indexed {}/{total} {name} files", progress.position());
+      tracing::info!("Indexed {}/{total} {name} stream files", progress.position());
     }
   }
   progress.finish_and_clear();
-  eprintln!(
-    "generate-rtree-json: indexed {} {name} files ({} YMAP, {} YBN), skipped {skipped}",
+  tracing::info!(
+    "Indexed the bounds of {} {name} stream files ({} YMAP, {} YBN), left out {skipped}",
     ymap.len() + ybn.len(),
     ymap.len(),
     ybn.len()
@@ -469,32 +421,24 @@ mod tests {
       }))
       .unwrap(),
     );
-    let output = root.join("read-cache");
-    write(&output.join(LEGACY_OUTPUTS[0]), b"{}");
-    let generate = |force| {
-      GenerateRTree {
-        vanilla_cache_dir: vanilla.clone(),
-        source_cache_dir: source_cache.clone(),
-        merged_dir: merged.clone(),
-        output_dir: output.clone(),
-        force,
-      }
-      .run()
-      .unwrap()
-      .into_iter()
-      .map(|outcome| (outcome.store.name(), outcome.updated))
-      .collect::<Vec<_>>()
+    let stores =
+      [(Store::Vanilla, &vanilla), (Store::Source, &source_cache), (Store::Merged, &merged)];
+    let update = || {
+      stores
+        .iter()
+        .map(|(store, directory)| (store.name(), update_store_index(*store, directory).unwrap()))
+        .collect::<Vec<_>>()
     };
 
-    assert_eq!(generate(false), [("vanilla", true), ("source", true), ("merged", true)]);
-    assert!(!output.join(LEGACY_OUTPUTS[0]).exists());
-    let index = |store: &str| read(&output.join(format!("stream_file_rtree-{store}.json")));
-    let vanilla_index = index("vanilla");
+    assert_eq!(update(), [("vanilla", true), ("source", true), ("merged", true)]);
+    let index = |directory: &Path| read(&directory.join(INDEX_FILE));
+    let vanilla_index = index(&vanilla);
     assert_eq!(vanilla_index["schemaVersion"], SCHEMA_VERSION);
+    assert_eq!(vanilla_index["store"], "vanilla");
     assert_eq!(vanilla_index["ymap"][0]["name"], "map.ymap");
     assert_eq!(vanilla_index["ymap"][0]["version"], "0001-update");
     assert_eq!(vanilla_index["ybn"][0]["name"], "collision.ybn");
-    let source_index = index("source");
+    let source_index = index(&source_cache);
     let items = source_index["ymap"].as_array().unwrap();
     assert_eq!(items.len(), 2);
     assert!(items.iter().all(|item| item["resource"] == "[maps]/resource"));
@@ -503,19 +447,21 @@ mod tests {
     assert!(moved["originalPath"].as_str().unwrap().ends_with("resource/stream/map.ymap"));
     let live = items.iter().find(|item| item["name"] == "custom.ymap").unwrap();
     assert!(live.get("originalPath").is_none());
-    let merged_index = index("merged");
+    let merged_index = index(&merged);
     assert_eq!(merged_index["fileCount"], 1);
     assert!(merged_index["ymap"][0]["path"].as_str().unwrap().ends_with("merged/ymap/map.ymap"));
 
-    assert_eq!(generate(false), [("vanilla", false), ("source", false), ("merged", false)]);
+    // Only a store whose metadata changed, or whose index is missing, is indexed again.
+    assert_eq!(update(), [("vanilla", false), ("source", false), ("merged", false)]);
     write(&source_cache.join("cache_info.json"), &source_info("second"));
-    assert_eq!(generate(false), [("vanilla", false), ("source", true), ("merged", false)]);
-    assert_eq!(generate(true), [("vanilla", true), ("source", true), ("merged", true)]);
+    fs::remove_file(merged.join(INDEX_FILE)).unwrap();
+    assert_eq!(update(), [("vanilla", false), ("source", true), ("merged", true)]);
 
-    // A store without metadata keeps its index and is left out.
+    // A store without metadata has no index to write.
     fs::remove_file(merged.join("cache_info.json")).unwrap();
-    assert_eq!(generate(false), [("vanilla", false), ("source", false)]);
-    assert!(output.join("stream_file_rtree-merged.json").is_file());
+    fs::remove_file(merged.join(INDEX_FILE)).unwrap();
+    assert!(!update_store_index(Store::Merged, &merged).unwrap());
+    assert!(!merged.join(INDEX_FILE).exists());
     fs::remove_dir_all(root).unwrap();
   }
 }

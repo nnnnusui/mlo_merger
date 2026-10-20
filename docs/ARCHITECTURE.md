@@ -122,11 +122,15 @@ GUID, entity-position, YBN-center, occluder and file-from-position searches read
 existing native files and return matches as XML, without writing artifacts.
 Filename globs limit reads; position searches use an inclusive 3D radius. YBN
 centers are resolved to world space, and indices are local to each input, not
-persistent IDs. The R-tree export writes file bounds for merged, source and vanilla
-files, one index per store, since the stores change at different rates. Each index
-lists its files from the metadata of its store (the vanilla cache, the source-cache
-inventory, the merge output), records that metadata's fingerprint and is rebuilt only
-when it changes. Each store module owns reading its metadata. Bounds are read without
+persistent IDs.
+
+The vanilla cache, source cache and merge output each keep a bounds index of their
+stream files, `stream_file_rtree.json`, since they change at different rates. Each
+step updates its store's index after building or reusing the store. The index lists
+its files from the store's metadata (the vanilla cache, the source-cache inventory,
+the merge output), records that metadata's fingerprint and is rebuilt only when it
+changes or when the index is missing or outdated, so an interrupted step is repaired
+by the next run. Each store module owns reading its metadata. Bounds are read without
 decoding the rest of a file: a YMAP's entity extents, a YBN's bound tree without
 geometry.
 

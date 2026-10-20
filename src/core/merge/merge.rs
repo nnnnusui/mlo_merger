@@ -43,7 +43,8 @@ pub struct Merge {
 
 impl Merge {
   /// Merges changed groups from the current vanilla and source caches and publishes output
-  /// atomically.
+  /// atomically, then brings the output's stream-file bounds index (`stream_file_rtree.json`)
+  /// up to date.
   ///
   /// Both caches must already be built; this does not update them.
   ///
@@ -85,11 +86,14 @@ impl Merge {
       force: self.force,
     }
     .run()?;
-    if !changed {
-      return Ok(());
+    if changed {
+      publish_directory(&staging.0, &output_dir)?;
+      tracing::info!("Published merged stream files to {}", output_dir.display());
     }
-    publish_directory(&staging.0, &output_dir)?;
-    tracing::info!("Published merged stream files to {}", output_dir.display());
+    crate::core::find::rtree::update_store_index(
+      crate::core::find::rtree::Store::Merged,
+      &output_dir,
+    )?;
     Ok(())
   }
 }

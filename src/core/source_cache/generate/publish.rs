@@ -101,7 +101,9 @@ pub(super) fn publish_if_changed(
     ),
   )?;
   write_json(&staging.0.join(crate::core::source_cache::CACHE_INFO), &metadata)?;
-  for name in metadata.outputs.iter().map(String::as_str).chain([crate::core::source_cache::CACHE_INFO]) {
+  for name in
+    metadata.outputs.iter().map(String::as_str).chain([crate::core::source_cache::CACHE_INFO])
+  {
     fs::rename(staging.0.join(name), output.join(name))?;
   }
   remove_legacy_exclusions(&output)?;
