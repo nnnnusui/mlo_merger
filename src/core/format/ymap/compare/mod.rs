@@ -4,14 +4,15 @@
 //! array items pair up on their types, with `#[diff(key)]` or `#[diff(matching)]` next to the
 //! function they name, and by equality otherwise. This module holds the comparisons the derive
 //! cannot express: entities, grass and prop instances, distant LOD light positions and
-//! physics dictionaries, LOD lights kept in step with their distant LOD lights, and how the
-//! diffs of several sources combine.
+//! physics dictionaries, entity extensions, LOD lights kept in step with their distant LOD
+//! lights, and how the diffs of several sources combine.
 
 mod context;
 mod diff;
 pub mod distant_lod_lights;
 pub mod entities;
 mod entity_parent;
+pub mod extensions;
 pub mod instanced_data;
 pub mod lod_light_pairs;
 mod merge;

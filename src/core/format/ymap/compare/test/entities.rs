@@ -2,6 +2,7 @@ use serde_json::json;
 
 use super::*;
 use crate::core::format::ymap::compare::*;
+use crate::core::format::ymap::model::{YmapDoor, YmapExtension};
 
 fn with_entities(entities: Vec<YmapEntity>) -> Ymap {
   Ymap {
@@ -273,4 +274,42 @@ fn external_parents_are_named_by_their_map_and_guid() {
       index: 1,
     }]
   );
+}
+
+fn door(limit_angle: f32) -> YmapExtension {
+  YmapExtension::Door(YmapDoor {
+    name: "door".into(),
+    offset_position: at(0.0, 0.0, 0.0),
+    enable_limit_angle: true,
+    starts_locked: false,
+    can_break: false,
+    limit_angle,
+    door_target_ratio: 1.0,
+    audio_hash: String::new(),
+  })
+}
+
+#[test]
+fn extensions_compare_as_a_whole_beyond_the_tolerance() {
+  let mut vanilla = with_entities(vec![entity(1)]);
+  vanilla.entities[0].extensions = vec![door(1.5)];
+  let with = |extensions: Vec<YmapExtension>| {
+    let mut modded = vanilla.clone();
+    modded.entities[0].extensions = extensions;
+    modded
+  };
+  let changes =
+    |modded: &Ymap| json(&vanilla, modded)["entities"][0]["Modified"]["changes"].clone();
+  // Re-exporting tools move numbers by less than the tolerance.
+  assert_eq!(json(&vanilla, &with(vec![door(1.5004)])), json!({}));
+  let edited = with(vec![door(0.5)]);
+  assert_eq!(
+    changes(&edited),
+    json!({ "extensions": serde_json::to_value(vec![door(0.5)]).unwrap() })
+  );
+  assert_eq!(changes(&with(Vec::new())), json!({ "extensions": [] }));
+
+  let mut applied = vanilla.clone();
+  applied.apply(&diff(&vanilla, &edited)).unwrap();
+  assert_eq!(applied.entities[0].extensions, vec![door(0.5)]);
 }

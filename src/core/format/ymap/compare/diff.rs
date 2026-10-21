@@ -42,7 +42,7 @@ pub struct YmapComparisonPartner {
 
 impl YmapComparisonDiff {
   /// The current [`Self::schema_version`]. Documents without one predate versioning.
-  pub const SCHEMA_VERSION: u32 = 7;
+  pub const SCHEMA_VERSION: u32 = 8;
 
   /// Reads the document at `path` when it holds the differences of `source` from `vanilla` as
   /// both are now, taken with `tolerances`; `None` when it is missing, of another layout or

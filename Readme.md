@@ -122,6 +122,10 @@ pipeline do). The differences of several sources combine as follows:
   document's `partner` records the files they were taken from. A resource shipping only
   one of the two has its removals merged into the other's vanilla YMAP as well. Pairs
   whose vanilla YMAPs differ in light count are left alone.
+- Entity extensions (light effects, doors, spawn point overrides and cloth bounds) are
+  compared as a whole, ignoring number changes below the `ymap` tolerance; a change
+  records every extension the source's entity has and replaces them. A YMAP with another
+  extension type fails to load rather than lose it.
 - Entity `parentIndex` values are compared and merged as the entity they point at, read
   from the source resource's parent YMAP or else vanilla's, and written back as indices
   into the final entity arrays. Unmodified child YMAPs whose parent's entity order

@@ -13,8 +13,9 @@ use crate::core::format::{
   },
   ymap::model::{
     BoundingBox, GrassInstance, GrassInstanceBatch, Ymap, YmapBlock, YmapBoxOccluder,
-    YmapCarGenerator, YmapContainerLod, YmapDistantLodLights, YmapEntity, YmapInstancedData,
-    YmapLodLight, YmapOccludeModel, YmapTimeCycleModifier,
+    YmapCapsuleBound, YmapCarGenerator, YmapContainerLod, YmapDistantLodLights, YmapDoor,
+    YmapEntity, YmapExtension, YmapInstancedData, YmapLightAttr, YmapLightEffect, YmapLodLight,
+    YmapOccludeModel, YmapSpawnPointOverride, YmapTimeCycleModifier, YmapVerletClothCustomBounds,
   },
 };
 
@@ -91,11 +92,164 @@ impl WriteFields for YmapEntity {
       "ambientOcclusionMultiplier" => field.value(self.ambient_occlusion_multiplier),
       "artificialAmbientOcclusion" => field.value(self.artificial_ambient_occlusion),
       "tintValue" => field.value(self.tint_value),
+      "extensions" => field.structures(self.extensions.iter()),
     })
   }
 
   fn type_name(&self) -> Option<&str> {
     Some(&self.entity_type)
+  }
+}
+
+impl WriteFields for YmapExtension {
+  fn write_field(
+    &self,
+    field: &mut Field<'_, '_, '_>,
+  ) -> io::Result<()> {
+    match self {
+      Self::LightEffect(extension) => extension.write_field(field),
+      Self::SpawnPointOverride(extension) => extension.write_field(field),
+      Self::Door(extension) => extension.write_field(field),
+      Self::VerletClothCustomBounds(extension) => extension.write_field(field),
+    }
+  }
+
+  fn type_name(&self) -> Option<&str> {
+    Some(match self {
+      Self::LightEffect(_) => "CExtensionDefLightEffect",
+      Self::SpawnPointOverride(_) => "CExtensionDefSpawnPointOverride",
+      Self::Door(_) => "CExtensionDefDoor",
+      Self::VerletClothCustomBounds(_) => "rage__phVerletClothCustomBounds",
+    })
+  }
+}
+
+impl WriteFields for YmapLightEffect {
+  fn write_field(
+    &self,
+    field: &mut Field<'_, '_, '_>,
+  ) -> io::Result<()> {
+    fields!(field {
+      "name" => field.value(&self.name),
+      "offsetPosition" => field.vector(&xyz(&self.offset_position)),
+      "instances" => field.structures(self.instances.iter()),
+    })
+  }
+}
+
+impl WriteFields for YmapLightAttr {
+  fn write_field(
+    &self,
+    field: &mut Field<'_, '_, '_>,
+  ) -> io::Result<()> {
+    fields!(field {
+      "posn" => field.values(self.posn.iter().copied()),
+      "colour" => field.values(self.colour.iter().copied()),
+      "flashiness" => field.value(self.flashiness),
+      "intensity" => field.value(self.intensity),
+      "flags" => field.value(self.flags),
+      "boneTag" => field.value(self.bone_tag),
+      "lightType" => field.value(self.light_type),
+      "groupId" => field.value(self.group_id),
+      "timeFlags" => field.value(self.time_flags),
+      "falloff" => field.value(self.falloff),
+      "falloffExponent" => field.value(self.falloff_exponent),
+      "cullingPlane" => field.values(self.culling_plane.iter().copied()),
+      "shadowBlur" => field.value(self.shadow_blur),
+      "padding1" => field.value(self.padding_1),
+      "padding2" => field.value(self.padding_2),
+      "padding3" => field.value(self.padding_3),
+      "volIntensity" => field.value(self.vol_intensity),
+      "volSizeScale" => field.value(self.vol_size_scale),
+      "volOuterColour" => field.values(self.vol_outer_colour.iter().copied()),
+      "lightHash" => field.value(self.light_hash),
+      "volOuterIntensity" => field.value(self.vol_outer_intensity),
+      "coronaSize" => field.value(self.corona_size),
+      "volOuterExponent" => field.value(self.vol_outer_exponent),
+      "lightFadeDistance" => field.value(self.light_fade_distance),
+      "shadowFadeDistance" => field.value(self.shadow_fade_distance),
+      "specularFadeDistance" => field.value(self.specular_fade_distance),
+      "volumetricFadeDistance" => field.value(self.volumetric_fade_distance),
+      "shadowNearClip" => field.value(self.shadow_near_clip),
+      "coronaIntensity" => field.value(self.corona_intensity),
+      "coronaZBias" => field.value(self.corona_z_bias),
+      "direction" => field.values(self.direction.iter().copied()),
+      "tangent" => field.values(self.tangent.iter().copied()),
+      "coneInnerAngle" => field.value(self.cone_inner_angle),
+      "coneOuterAngle" => field.value(self.cone_outer_angle),
+      "extents" => field.values(self.extents.iter().copied()),
+      "projectedTextureKey" => field.value(self.projected_texture_key),
+    })
+  }
+}
+
+impl WriteFields for YmapSpawnPointOverride {
+  fn write_field(
+    &self,
+    field: &mut Field<'_, '_, '_>,
+  ) -> io::Result<()> {
+    fields!(field {
+      "name" => field.value(&self.name),
+      "offsetPosition" => field.vector(&xyz(&self.offset_position)),
+      "ScenarioType" => field.value(&self.scenario_type),
+      "iTimeStartOverride" => field.value(self.i_time_start_override),
+      "iTimeEndOverride" => field.value(self.i_time_end_override),
+      "Group" => field.value(&self.group),
+      "ModelSet" => field.value(&self.model_set),
+      "AvailabilityInMpSp" => field.value(&self.availability_in_mp_sp),
+      "Flags" => field.value(&self.flags),
+      "Radius" => field.value(self.radius),
+      "TimeTillPedLeaves" => field.value(self.time_till_ped_leaves),
+    })
+  }
+}
+
+impl WriteFields for YmapDoor {
+  fn write_field(
+    &self,
+    field: &mut Field<'_, '_, '_>,
+  ) -> io::Result<()> {
+    fields!(field {
+      "name" => field.value(&self.name),
+      "offsetPosition" => field.vector(&xyz(&self.offset_position)),
+      "enableLimitAngle" => field.value(self.enable_limit_angle),
+      "startsLocked" => field.value(self.starts_locked),
+      "canBreak" => field.value(self.can_break),
+      "limitAngle" => field.value(self.limit_angle),
+      "doorTargetRatio" => field.value(self.door_target_ratio),
+      "audioHash" => field.value(&self.audio_hash),
+    })
+  }
+}
+
+impl WriteFields for YmapVerletClothCustomBounds {
+  fn write_field(
+    &self,
+    field: &mut Field<'_, '_, '_>,
+  ) -> io::Result<()> {
+    fields!(field {
+      "name" => field.value(&self.name),
+      "CollisionData" => field.structures(self.collision_data.iter()),
+    })
+  }
+}
+
+impl WriteFields for YmapCapsuleBound {
+  fn write_field(
+    &self,
+    field: &mut Field<'_, '_, '_>,
+  ) -> io::Result<()> {
+    fields!(field {
+      "OwnerName" => field.value(&self.owner_name),
+      "Rotation" => field.vector(&self.rotation),
+      "Position" => field.vector(&xyz(&self.position)),
+      "Normal" => field.vector(&xyz(&self.normal)),
+      "CapsuleRadius" => field.value(self.capsule_radius),
+      "CapsuleLen" => field.value(self.capsule_len),
+      "CapsuleHalfHeight" => field.value(self.capsule_half_height),
+      "CapsuleHalfWidth" => field.value(self.capsule_half_width),
+      "Flags" => field.value(&self.flags),
+    })
   }
 }
 

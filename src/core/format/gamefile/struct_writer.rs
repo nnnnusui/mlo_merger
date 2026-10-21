@@ -45,7 +45,7 @@ macro_rules! value_from {
     })*
   };
 }
-value_from!(Int, i64: u8, u16, u32, i32);
+value_from!(Int, i64: u8, u16, u32, i16, i32);
 value_from!(Float, f32: f32);
 
 impl From<bool> for Value<'_> {
@@ -296,7 +296,8 @@ impl<'s> StructWriter<'s> {
       .get(&entry.reference_key)
       .ok_or_else(|| invalid("META enum schema unavailable"))?;
     let mut result = 0;
-    for name in text.split(',').map(str::trim) {
+    // Flags with no bit set read as empty text.
+    for name in text.split(',').map(str::trim).filter(|name| !name.is_empty()) {
       let hash = Value::Text(name).hash()?;
       let item = schema
         .entries

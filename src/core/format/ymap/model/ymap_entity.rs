@@ -1,6 +1,7 @@
+use super::ymap_extension::YmapExtension;
 use crate::{
   common::{position::Position, rotation::Rotation},
-  core::config::matching::MatchTolerances,
+  core::{config::matching::MatchTolerances, format::ymap::compare},
 };
 
 /// Entity definition in YMAP
@@ -37,4 +38,9 @@ pub struct YmapEntity {
   pub ambient_occlusion_multiplier: u8,
   pub artificial_ambient_occlusion: u8,
   pub tint_value: u32,
+  /// Compared as a whole; a change records every extension the source has.
+  #[serde(default, skip_serializing_if = "Vec::is_empty")]
+  #[cfg_attr(feature = "typescript", specta(optional))]
+  #[diff(with = compare::extensions, context = ctx.ymap)]
+  pub extensions: Vec<YmapExtension>,
 }

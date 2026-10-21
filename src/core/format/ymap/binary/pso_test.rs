@@ -102,6 +102,7 @@ fn entity(
     ambient_occlusion_multiplier: 255,
     artificial_ambient_occlusion: 255,
     tint_value: 0,
+    extensions: Vec::new(),
   }
 }
 

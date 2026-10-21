@@ -9,11 +9,16 @@ use std::io;
 use super::read::invalid_data;
 use crate::common::{position::Position, rotation::Rotation, triangle::Triangle};
 use crate::core::format::{
-  gamefile::struct_reader::{FromScalar, Scalar, StructReader},
+  gamefile::{
+    meta::jenk_hash,
+    struct_reader::{FromScalar, Scalar, StructReader},
+  },
   ymap::model::{
     BoundingBox, GrassInstance, GrassInstanceBatch, Vector3, Vector4, Ymap, YmapBlock,
-    YmapBoxOccluder, YmapCarGenerator, YmapContainerLod, YmapDistantLodLight, YmapDistantLodLights,
-    YmapEntity, YmapInstancedData, YmapLodLight, YmapOccludeModel, YmapTimeCycleModifier,
+    YmapBoxOccluder, YmapCapsuleBound, YmapCarGenerator, YmapContainerLod, YmapDistantLodLight,
+    YmapDistantLodLights, YmapDoor, YmapEntity, YmapExtension, YmapInstancedData, YmapLightAttr,
+    YmapLightEffect, YmapLodLight, YmapOccludeModel, YmapSpawnPointOverride, YmapTimeCycleModifier,
+    YmapVerletClothCustomBounds,
   },
 };
 
@@ -90,6 +95,126 @@ fn entity<S: StructReader>(item: &S) -> io::Result<YmapEntity> {
     ambient_occlusion_multiplier: item.get("ambientOcclusionMultiplier")?,
     artificial_ambient_occlusion: item.get("artificialAmbientOcclusion")?,
     tint_value: item.get("tintValue")?,
+    extensions: collect(item.children("extensions")?, extension)?,
+  })
+}
+
+/// Decodes one entity extension by its structure; other extension types are rejected rather
+/// than dropped.
+fn extension<S: StructReader>(item: &S) -> io::Result<YmapExtension> {
+  let name = item.type_name();
+  let hash = match name.strip_prefix("hash_") {
+    Some(hex) => u32::from_str_radix(hex, 16).unwrap_or_default(),
+    None => jenk_hash(&name),
+  };
+  Ok(match hash {
+    LIGHT_EFFECT => YmapExtension::LightEffect(YmapLightEffect {
+      name: item.get("name")?,
+      offset_position: position(item, "offsetPosition")?,
+      instances: collect(item.children("instances")?, light_attr)?,
+    }),
+    SPAWN_POINT_OVERRIDE => YmapExtension::SpawnPointOverride(YmapSpawnPointOverride {
+      name: item.get("name")?,
+      offset_position: position(item, "offsetPosition")?,
+      scenario_type: item.get("ScenarioType")?,
+      i_time_start_override: item.get("iTimeStartOverride")?,
+      i_time_end_override: item.get("iTimeEndOverride")?,
+      group: item.get("Group")?,
+      model_set: item.get("ModelSet")?,
+      availability_in_mp_sp: item.get("AvailabilityInMpSp")?,
+      flags: item.get("Flags")?,
+      radius: item.get("Radius")?,
+      time_till_ped_leaves: item.get("TimeTillPedLeaves")?,
+    }),
+    DOOR => YmapExtension::Door(YmapDoor {
+      name: item.get("name")?,
+      offset_position: position(item, "offsetPosition")?,
+      enable_limit_angle: item.get("enableLimitAngle")?,
+      starts_locked: item.get("startsLocked")?,
+      can_break: item.get("canBreak")?,
+      limit_angle: item.get("limitAngle")?,
+      door_target_ratio: item.get("doorTargetRatio")?,
+      audio_hash: item.get("audioHash")?,
+    }),
+    VERLET_CLOTH_CUSTOM_BOUNDS => {
+      YmapExtension::VerletClothCustomBounds(YmapVerletClothCustomBounds {
+        name: item.get("name")?,
+        collision_data: collect(item.children("CollisionData")?, capsule_bound)?,
+      })
+    }
+    _ => return Err(invalid_data(&format!("Entity extension {name} is not supported"))),
+  })
+}
+
+const LIGHT_EFFECT: u32 = jenk_hash("CExtensionDefLightEffect");
+const SPAWN_POINT_OVERRIDE: u32 = jenk_hash("CExtensionDefSpawnPointOverride");
+const DOOR: u32 = jenk_hash("CExtensionDefDoor");
+const VERLET_CLOTH_CUSTOM_BOUNDS: u32 = jenk_hash("rage__phVerletClothCustomBounds");
+
+fn light_attr<S: StructReader>(item: &S) -> io::Result<YmapLightAttr> {
+  Ok(YmapLightAttr {
+    posn: array(item, "posn")?,
+    colour: array(item, "colour")?,
+    flashiness: item.get("flashiness")?,
+    intensity: item.get("intensity")?,
+    flags: item.get("flags")?,
+    bone_tag: item.get("boneTag")?,
+    light_type: item.get("lightType")?,
+    group_id: item.get("groupId")?,
+    time_flags: item.get("timeFlags")?,
+    falloff: item.get("falloff")?,
+    falloff_exponent: item.get("falloffExponent")?,
+    culling_plane: array(item, "cullingPlane")?,
+    shadow_blur: item.get("shadowBlur")?,
+    padding_1: item.get("padding1")?,
+    padding_2: item.get("padding2")?,
+    padding_3: item.get("padding3")?,
+    vol_intensity: item.get("volIntensity")?,
+    vol_size_scale: item.get("volSizeScale")?,
+    vol_outer_colour: array(item, "volOuterColour")?,
+    light_hash: item.get("lightHash")?,
+    vol_outer_intensity: item.get("volOuterIntensity")?,
+    corona_size: item.get("coronaSize")?,
+    vol_outer_exponent: item.get("volOuterExponent")?,
+    light_fade_distance: item.get("lightFadeDistance")?,
+    shadow_fade_distance: item.get("shadowFadeDistance")?,
+    specular_fade_distance: item.get("specularFadeDistance")?,
+    volumetric_fade_distance: item.get("volumetricFadeDistance")?,
+    shadow_near_clip: item.get("shadowNearClip")?,
+    corona_intensity: item.get("coronaIntensity")?,
+    corona_z_bias: item.get("coronaZBias")?,
+    direction: array(item, "direction")?,
+    tangent: array(item, "tangent")?,
+    cone_inner_angle: item.get("coneInnerAngle")?,
+    cone_outer_angle: item.get("coneOuterAngle")?,
+    extents: array(item, "extents")?,
+    projected_texture_key: item.get("projectedTextureKey")?,
+  })
+}
+
+fn capsule_bound<S: StructReader>(item: &S) -> io::Result<YmapCapsuleBound> {
+  Ok(YmapCapsuleBound {
+    owner_name: item.get("OwnerName")?,
+    rotation: vector::<4, _>(item, "Rotation")?,
+    position: position(item, "Position")?,
+    normal: position(item, "Normal")?,
+    capsule_radius: item.get("CapsuleRadius")?,
+    capsule_len: item.get("CapsuleLen")?,
+    capsule_half_height: item.get("CapsuleHalfHeight")?,
+    capsule_half_width: item.get("CapsuleHalfWidth")?,
+    flags: item.get("Flags")?,
+  })
+}
+
+/// Reads a fixed-size inline array field of `N` items.
+fn array<T: FromScalar, const N: usize, S: StructReader>(
+  item: &S,
+  name: &str,
+) -> io::Result<[T; N]> {
+  let values = item.list::<T>(name)?;
+  let count = values.len();
+  values.try_into().map_err(|_| {
+    invalid_data(&format!("{}.{name} has {count} items, expected {N}", item.type_name()))
   })
 }
 

@@ -5,6 +5,7 @@ pub mod ymap_car_generator;
 pub mod ymap_container_lod;
 pub mod ymap_distant_lod_lights;
 pub mod ymap_entity;
+pub mod ymap_extension;
 pub mod ymap_instanced_data;
 pub mod ymap_lod_light;
 pub mod ymap_occlude_model;
@@ -17,6 +18,10 @@ pub use ymap_car_generator::YmapCarGenerator;
 pub use ymap_container_lod::YmapContainerLod;
 pub use ymap_distant_lod_lights::{YmapDistantLodLight, YmapDistantLodLights};
 pub use ymap_entity::YmapEntity;
+pub use ymap_extension::{
+  YmapCapsuleBound, YmapDoor, YmapExtension, YmapLightAttr, YmapLightEffect,
+  YmapSpawnPointOverride, YmapVerletClothCustomBounds,
+};
 pub use ymap_instanced_data::BoundingBox;
 pub use ymap_instanced_data::GrassInstance;
 pub use ymap_instanced_data::GrassInstanceBatch;
