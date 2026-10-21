@@ -6,11 +6,7 @@
 //! `MLO_WRITE_SAMPLES=1` to write the samples instead.
 
 use super::*;
-use crate::core::format::gamefile::{
-  meta::{MetaResource, MetaSchemaCatalog},
-  rsc7::Rsc7Resource,
-  test_support::sample_ymap,
-};
+use crate::core::format::gamefile::test_support::sample_ymap;
 use crate::core::format::ymap::binary::write_ymap;
 use crate::core::format::ymap::compare::{YmapComparisonDiff, YmapComparisonFile};
 use crate::core::format::ymap::model::ymap::Ymap;
@@ -81,13 +77,6 @@ fn sample_sources() -> Vec<SampleSource> {
   ]
 }
 
-fn catalog() -> MetaSchemaCatalog {
-  let bytes = fs::read(docs().join("sample.ymap")).unwrap();
-  let mut catalog = MetaSchemaCatalog::default();
-  catalog.add_resource(&MetaResource::parse(&Rsc7Resource::decode(&bytes).unwrap()).unwrap());
-  catalog
-}
-
 fn resource_name(resource: &str) -> &str {
   resource.rsplit('/').next().unwrap()
 }
@@ -156,13 +145,12 @@ fn generate_diffs(
 #[test]
 fn sample_sources_and_overwrites_are_current_and_apply_cleanly() {
   let write = std::env::var_os("MLO_WRITE_SAMPLES").is_some();
-  let catalog = catalog();
   let sources = sample_sources()
     .iter()
     .map(|source| {
       (
         format!("{}/stream/{}", source.resource, source.stream_path),
-        write_ymap(&source.model, &source.model.entities, &catalog).unwrap(),
+        write_ymap(&source.model, &source.model.entities).unwrap(),
       )
     })
     .chain(sample_sources().iter().map(|source| {

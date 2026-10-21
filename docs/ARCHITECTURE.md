@@ -83,7 +83,10 @@ document fails the merge rather than being recomputed silently. YMAP output is
 limited to final models that differ from vanilla after merging and parent-reference
 repairs. Identical inputs and basename conflicts alone do not cause output. A run
 with no edited YMAPs succeeds without generating YMAP files. Only source YMAPs
-replaced by generated output are listed in `_omit.txt`.
+replaced by generated output are listed in `_omit.txt`. Merged YMAPs are written
+as RSC7 META with one schema table shared by every YMAP
+(`src/core/format/ymap/binary/schemas.json`, taken from the latest vanilla YMAPs,
+whose structures each have a single layout), embedding the schemas their blocks use.
 
 Merge records input provenance and output freshness. Timestamp-only changes
 refresh provenance without remerging. YBN groups are independent basenames;

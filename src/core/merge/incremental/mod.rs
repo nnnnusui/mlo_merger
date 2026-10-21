@@ -18,7 +18,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 /// Bump when YMAP merge policy, encoding or cached reports change.
-const YMAP_ALGORITHM_VERSION: u32 = 8;
+const YMAP_ALGORITHM_VERSION: u32 = 9;
 /// Bump when YBN merge policy, encoding or cached reports change.
 const YBN_ALGORITHM_VERSION: u32 = 9;
 

@@ -804,14 +804,13 @@ mod tests {
     let vanilla = root.join("vanilla.ymap");
     let source = root.join("source.ymap");
     let merged_path = merged.join("ymap/lr_cs4_10_strm_0.ymap");
-    let before =
-      crate::core::format::ymap::binary::write_ymap(&model, &entities, &catalog).unwrap();
+    let before = crate::core::format::ymap::binary::write_ymap(&model, &entities).unwrap();
     fs::write(&vanilla, &before).unwrap();
     fs::write(&source, &before).unwrap();
     entities[0].position.x += 1.0;
     fs::write(
       &merged_path,
-      crate::core::format::ymap::binary::write_ymap(&model, &entities, &catalog).unwrap(),
+      crate::core::format::ymap::binary::write_ymap(&model, &entities).unwrap(),
     )
     .unwrap();
     let input = |path: &Path, resource: Option<&str>| {

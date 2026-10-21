@@ -34,22 +34,6 @@ impl MergeYmap {
       None
     };
 
-    let catalog = {
-      use crate::core::format::gamefile::{
-        meta::{MetaResource, MetaSchemaCatalog},
-        rsc7::Rsc7Resource,
-      };
-      let mut catalog = MetaSchemaCatalog::default();
-      for path in latest_files.iter().chain(raw_sources.iter().map(|(_, path, _)| path)) {
-        let bytes = fs::read(path)?;
-        if let Ok(resource) = Rsc7Resource::decode(&bytes)
-          && let Ok(meta) = MetaResource::parse(&resource)
-        {
-          catalog.add_resource(&meta);
-        }
-      }
-      catalog
-    };
     let mut modded_ymaps_map = BTreeMap::<String, Vec<ModYmapReference>>::new();
     for (resource, path, diff_path) in raw_sources {
       let name = path
@@ -537,7 +521,7 @@ impl MergeYmap {
     tracing::info!(
       "Repaired parent references; promoted {repaired} clone/vanilla child YMAPs for rebuild"
     );
-    self.write_outputs(planned, &catalog)?;
+    self.write_outputs(planned)?;
 
     crate::core::vanilla::write_json(
       &self.output_dir.join(".duplicates.json"),

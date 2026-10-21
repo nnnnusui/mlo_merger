@@ -63,7 +63,7 @@ fn incremental_ymap_merge_caches_noop_results_and_removes_obsolete_outputs() {
   let write_source = |model: &crate::core::format::ymap::model::Ymap| {
     fs::write(
       resource.join("stream/map.ymap"),
-      crate::core::format::ymap::binary::write_ymap(model, &entities, &catalog).unwrap(),
+      crate::core::format::ymap::binary::write_ymap(model, &entities).unwrap(),
     )
     .unwrap();
   };

@@ -1,10 +1,9 @@
-//! Native YMAP decoding and encoding from typed models and compatible META schemas.
+//! Native YMAP decoding and encoding between typed models and META or PSO resources.
 
 mod decode;
-mod meta;
-mod model;
+mod encode;
 mod read;
-mod values;
+mod schemas;
 mod write;
 
 pub use read::{ymap_entities_extents, ymap_to_model};

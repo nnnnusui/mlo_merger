@@ -5,6 +5,7 @@ pub mod pso;
 pub mod resource;
 pub mod rsc7;
 pub mod struct_reader;
+pub(crate) mod struct_writer;
 pub mod xml_tree;
 pub mod ynd;
 

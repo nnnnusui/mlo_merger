@@ -1,12 +1,11 @@
 use super::*;
 
 impl MergeYmap {
-  /// Writes each planned map: rebuilt maps as RSC7 binaries encoded with `catalog`, single-source
-  /// maps copied to `clone/`, and stale outputs of the rest removed.
+  /// Writes each planned map: rebuilt maps as RSC7 binaries, single-source maps copied to
+  /// `clone/`, and stale outputs of the rest removed.
   pub(super) fn write_outputs(
     &self,
     planned: BTreeMap<u32, PlannedMap>,
-    catalog: &crate::core::format::gamefile::meta::MetaSchemaCatalog,
   ) -> Result<(), Box<dyn std::error::Error>> {
     let copy_targets_txt = self.output_dir.join("_copy_targets.txt");
     fs::create_dir_all(copy_targets_txt.parent().unwrap())?;
@@ -27,11 +26,10 @@ impl MergeYmap {
         .into_iter()
         .cloned()
         .collect::<Vec<_>>();
-        let bytes =
-          crate::core::format::ymap::binary::write_ymap(&output.model, &entities, catalog)
-            .map_err(|error| {
-              std::io::Error::new(error.kind(), format!("Cannot write {}: {error}", output.name))
-            })?;
+        let bytes = crate::core::format::ymap::binary::write_ymap(&output.model, &entities)
+          .map_err(|error| {
+            std::io::Error::new(error.kind(), format!("Cannot write {}: {error}", output.name))
+          })?;
         fs::write(&binary_path, bytes)?;
         if clone_path.exists() {
           fs::remove_file(&clone_path)?;

@@ -74,11 +74,8 @@ fn overwrites_skip_source_diffs_written_against_the_current_files() {
   let bit = (!edited.content_flags).trailing_zeros();
   edited.content_flags |= 1 << bit;
   edited.entities[0].position.x += 1.0;
-  fs::write(
-    resource.join("stream/maps/map.ymap"),
-    write_ymap(&edited, &edited.entities, &catalog).unwrap(),
-  )
-  .unwrap();
+  fs::write(resource.join("stream/maps/map.ymap"), write_ymap(&edited, &edited.entities).unwrap())
+    .unwrap();
 
   let merge = Merge {
     source_dir: root.join("source"),
@@ -166,11 +163,8 @@ fn vanilla_overwrites_merge_after_the_sources() {
   // The source moves the first entity.
   let mut source = vanilla_model.clone();
   source.entities[0].position.x += 1.0;
-  fs::write(
-    resource.join("stream/map.ymap"),
-    write_ymap(&source, &source.entities, &catalog).unwrap(),
-  )
-  .unwrap();
+  fs::write(resource.join("stream/map.ymap"), write_ymap(&source, &source.entities).unwrap())
+    .unwrap();
   // The overwrite sets a content flag and moves the first two entities.
   let mut edited = vanilla_model.clone();
   let bit = (!edited.content_flags).trailing_zeros();

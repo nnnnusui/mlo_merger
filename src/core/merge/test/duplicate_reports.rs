@@ -72,7 +72,7 @@ fn incremental_merge_preserves_and_restores_duplicate_reports() {
     edited[index].position.x += offset;
     fs::write(
       directory.join("stream").join(&name),
-      crate::core::format::ymap::binary::write_ymap(&model, &edited, &catalog).unwrap(),
+      crate::core::format::ymap::binary::write_ymap(&model, &edited).unwrap(),
     )
     .unwrap();
   }

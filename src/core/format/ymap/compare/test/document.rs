@@ -37,7 +37,7 @@ fn get_diff_fingerprints_both_files_and_derives_their_differences() {
   let removed_index = modded.entities.len() - 1;
   assert!(modded.entities.iter().all(|entity| entity.parent_index != removed_index as i32));
   let removed_guid = modded.entities.remove(removed_index).guid;
-  let modded_bytes = write_ymap(&modded, &modded.entities, &catalog).unwrap();
+  let modded_bytes = write_ymap(&modded, &modded.entities).unwrap();
 
   let root = std::env::temp_dir().join(format!("ymap_compare_document_{}", std::process::id()));
   let _ = fs::remove_dir_all(&root);

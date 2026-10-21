@@ -51,7 +51,7 @@ fn latest_ymap_merge_writes_binary_without_xml() {
   edited.content_flags |= 1u32 << bit;
   fs::write(
     &source_path,
-    crate::core::format::ymap::binary::write_ymap(&edited, &entities, &compatible).unwrap(),
+    crate::core::format::ymap::binary::write_ymap(&edited, &entities).unwrap(),
   )
   .unwrap();
   merge
@@ -113,11 +113,8 @@ fn native_ymap_merge_deletion_wins_over_retained_entities_in_both_orders() {
   let retained = root.join("retained").join(name);
   fs::write(&vanilla, &bytes).unwrap();
   fs::write(&retained, &bytes).unwrap();
-  fs::write(
-    &deleted,
-    crate::core::format::ymap::binary::write_ymap(&model, &remaining, &catalog).unwrap(),
-  )
-  .unwrap();
+  fs::write(&deleted, crate::core::format::ymap::binary::write_ymap(&model, &remaining).unwrap())
+    .unwrap();
   let merge = MergeYmap {
     vanilla_dir: root.join("vanilla"),
     output_dir: root.join("output"),
@@ -168,11 +165,7 @@ fn write_sample(
   let mut catalog = MetaSchemaCatalog::default();
   catalog.add_resource(&MetaResource::parse(&Rsc7Resource::decode(&bytes).unwrap()).unwrap());
   fs::create_dir_all(path.parent().unwrap()).unwrap();
-  fs::write(
-    path,
-    crate::core::format::ymap::binary::write_ymap(model, entities, &catalog).unwrap(),
-  )
-  .unwrap();
+  fs::write(path, crate::core::format::ymap::binary::write_ymap(model, entities).unwrap()).unwrap();
 }
 
 #[test]
@@ -398,7 +391,7 @@ fn lod_light_removals_of_either_ymap_of_a_pair_are_made_in_both() {
   }
   let write = |path: &Path, ymap: &Ymap| {
     fs::create_dir_all(path.parent().unwrap()).unwrap();
-    fs::write(path, write_ymap(ymap, &ymap.entities, &catalog).unwrap()).unwrap();
+    fs::write(path, write_ymap(ymap, &ymap.entities).unwrap()).unwrap();
   };
   // `only_distant` ships only the distant lights, leaving the LOD lights vanilla; `both` ships
   // both, removing a different light from each.

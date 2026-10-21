@@ -1,47 +1,40 @@
 //! Public YMAP META and compressed RSC7 encoding entry points.
 
 use super::super::model::{Ymap, YmapEntity};
-use super::{meta::Writer, model::prepare};
-use crate::core::format::gamefile::meta::{
-  MetaDataBlock, MetaResource, MetaSchemaCatalog, jenk_hash,
+use super::{encode::Root, schemas::schemas};
+use crate::core::format::gamefile::{
+  meta::{MetaResource, jenk_hash},
+  struct_writer::StructWriter,
 };
 use std::io;
 
 /// Builds native META blocks directly from a YMAP model, preserving the supplied entity order.
 ///
-/// Schema layouts must come from compatible vanilla YMAP resources.
+/// Every YMAP is written with the shared YMAP schemas (see `schemas`), embedding those its
+/// blocks use.
 ///
 /// ```no_run
-/// # use mlo_merger::core::format::{ymap::{binary::to_meta, model::Ymap}, gamefile::meta::MetaSchemaCatalog};
-/// # fn build(model: &Ymap, catalog: &MetaSchemaCatalog) -> std::io::Result<()> {
-/// let entities = model.entities.clone();
-/// let meta = to_meta(model, &entities, catalog)?;
+/// # use mlo_merger::core::format::ymap::{binary::to_meta, model::Ymap};
+/// # fn build(model: &Ymap) -> std::io::Result<()> {
+/// let meta = to_meta(model, &model.entities)?;
 /// # Ok(()) }
 /// ```
 pub fn to_meta(
   model: &Ymap,
   entities: &[YmapEntity],
-  catalog: &MetaSchemaCatalog,
 ) -> io::Result<MetaResource> {
-  let value = prepare(model, entities)?;
-  let root = jenk_hash("CMapData");
-  let mut writer = Writer {
-    catalog,
-    blocks: vec![MetaDataBlock {
-      structure_name_hash: root,
-      data: Vec::new(),
-    }],
-  };
-  writer.blocks[0].data = writer.structure(root, &value)?;
-  let mut structures = catalog.structures.values().cloned().collect::<Vec<_>>();
-  structures.sort_by_key(|schema| schema.name_hash);
-  let mut enums = catalog.enums.values().cloned().collect::<Vec<_>>();
-  enums.sort_by_key(|schema| schema.name_hash);
+  let written = StructWriter::new(schemas()).root(
+    jenk_hash("CMapData"),
+    &Root {
+      model,
+      entities,
+    },
+  )?;
   Ok(MetaResource {
     root_block_index: 1,
-    structures,
-    enums,
-    data_blocks: writer.blocks,
+    structures: written.structures,
+    enums: written.enums,
+    data_blocks: written.blocks,
     name: None,
   })
 }
@@ -49,16 +42,14 @@ pub fn to_meta(
 /// Encodes a typed YMAP and ordered entities directly into a compressed RSC7 binary.
 ///
 /// ```no_run
-/// # use mlo_merger::core::format::{ymap::{binary::write_ymap, model::Ymap}, gamefile::meta::MetaSchemaCatalog};
-/// # fn save(model: &Ymap, catalog: &MetaSchemaCatalog) -> std::io::Result<()> {
-/// let entities = model.entities.clone();
-/// std::fs::write("map.ymap", write_ymap(model, &entities, catalog)?)?;
+/// # use mlo_merger::core::format::ymap::{binary::write_ymap, model::Ymap};
+/// # fn save(model: &Ymap) -> std::io::Result<()> {
+/// std::fs::write("map.ymap", write_ymap(model, &model.entities)?)?;
 /// # Ok(()) }
 /// ```
 pub fn write_ymap(
   model: &Ymap,
   entities: &[YmapEntity],
-  catalog: &MetaSchemaCatalog,
 ) -> io::Result<Vec<u8>> {
-  to_meta(model, entities, catalog)?.to_rsc7(2)?.encode()
+  to_meta(model, entities)?.to_rsc7(2)?.encode()
 }
