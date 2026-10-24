@@ -95,6 +95,7 @@ fn ybn_version_change_reuses_current_ymap_groups() {
     }
     .run()
     .unwrap()
+    .is_some()
   );
   let result = MergeMetadata::load(&staging).unwrap().unwrap();
   assert_eq!(result.files["map.ymap"].merged_at, "cached");

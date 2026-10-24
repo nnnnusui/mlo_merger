@@ -1,24 +1,26 @@
 use super::*;
 
+/// Reads the manifest the cache was last published with, if it is readable.
+pub(super) fn previous_manifest(output_dir: &Path) -> Option<DerivedManifest> {
+  let file = fs::File::open(output_dir.join("cache_info.json")).ok()?;
+  serde_json::from_reader(BufReader::new(file)).ok()
+}
+
 pub(super) fn cache_is_current(
   output_dir: &Path,
+  manifest: Option<&DerivedManifest>,
   vanilla_dir: &Path,
   revision: &str,
   latest_version: &str,
   input_timestamps: &BTreeMap<String, SourceTimestamp>,
 ) -> Result<bool> {
-  let manifest_path = output_dir.join("cache_info.json");
   let relationships_path = output_dir.join("ymap_relationships.json");
-  if !manifest_path.is_file() || !relationships_path.is_file() {
+  let Some(manifest) = manifest else {
+    return Ok(false);
+  };
+  if !relationships_path.is_file() {
     return Ok(false);
   }
-  let Ok(manifest_file) = fs::File::open(manifest_path) else {
-    return Ok(false);
-  };
-  let Ok(manifest) = serde_json::from_reader::<_, DerivedManifest>(BufReader::new(manifest_file))
-  else {
-    return Ok(false);
-  };
   if manifest.format_version != CACHE_SCHEMA
     || manifest.vanilla_manifest_sha256 != revision
     || manifest.latest_version != latest_version

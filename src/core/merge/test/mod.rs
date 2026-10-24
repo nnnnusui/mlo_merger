@@ -21,7 +21,7 @@ impl Merge {
       force: false,
     }
     .run_after_vanilla_cache()?;
-    self.run()
+    self.run().map(drop)
   }
 }
 

@@ -18,6 +18,7 @@ use std::{
 };
 
 use self::types::{SourceCacheConflictReport, SourceCacheMetadata};
+use crate::common::changes::StoreChanges;
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
@@ -320,6 +321,16 @@ impl Drop for Staging {
   }
 }
 
+/// Outcome of building or reusing a source cache.
+#[derive(Debug, Default, PartialEq, Eq)]
+pub struct SourceCacheResult {
+  /// Whether changed inventories or reports were published.
+  pub published: bool,
+  /// Stream files the run moved into, replaced in, or archived or dropped from the cache,
+  /// relative to it.
+  pub changes: StoreChanges,
+}
+
 /// Builds or reuses a source processing inventory without generating diffs.
 #[derive(Debug, Clone)]
 pub struct BuildSourceCache {
@@ -358,7 +369,7 @@ impl BuildSourceCache {
   /// }.run()?;
   /// # Ok::<(), Box<dyn std::error::Error>>(())
   /// ```
-  pub fn run(&self) -> Result<bool> {
+  pub fn run(&self) -> Result<SourceCacheResult> {
     generate::run(self)
   }
 }

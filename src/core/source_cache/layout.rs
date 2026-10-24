@@ -1,6 +1,7 @@
 //! Migrates cached stream paths while preserving original resource paths.
 
 use super::{Result, types::ResourceInventory};
+use crate::common::changes::StoreChanges;
 use crate::common::{filesystem::move_file, path::ensure_safe_path};
 use std::{collections::BTreeSet, fs, path::Path};
 
@@ -12,11 +13,13 @@ pub(super) fn stream_relative_path(path: &str) -> Result<&str> {
     .ok_or_else(|| format!("Source file is not under a stream directory: {path}").into())
 }
 
-/// Preserves original stream paths while migrating recorded cache paths without replacing files.
+/// Preserves original stream paths while migrating recorded cache paths without replacing files,
+/// recording each moved file in `changes`.
 pub(super) fn normalize_cached_layout(
   output: &Path,
   name: &str,
   inventory: &mut ResourceInventory,
+  changes: &mut StoreChanges,
 ) -> Result<()> {
   let mut moves = Vec::new();
   for file in inventory.files_by_format.values().flatten() {
@@ -27,11 +30,11 @@ pub(super) fn normalize_cached_layout(
     if old != &new {
       ensure_safe_path(output, &output.join(old))?;
       ensure_safe_path(output, &output.join(&new))?;
-      moves.push((old.clone(), new));
+      moves.push((old.clone(), new, file.sha256.clone()));
     }
   }
-  let old_paths = moves.iter().map(|(old, _)| old.as_str()).collect::<BTreeSet<_>>();
-  for (old, new) in &moves {
+  let old_paths = moves.iter().map(|(old, ..)| old.as_str()).collect::<BTreeSet<_>>();
+  for (old, new, _) in &moves {
     if output.join(old).is_file() && output.join(new).exists() && !old_paths.contains(new.as_str())
     {
       return Err(
@@ -39,9 +42,9 @@ pub(super) fn normalize_cached_layout(
       );
     }
   }
-  moves.sort_by_key(|(old, _)| Path::new(old).components().count());
+  moves.sort_by_key(|(old, ..)| Path::new(old).components().count());
   let mut directories = BTreeSet::new();
-  for (old, new) in &moves {
+  for (old, new, sha256) in &moves {
     let source = output.join(old);
     let destination = output.join(new);
     if source.is_file() {
@@ -52,6 +55,8 @@ pub(super) fn normalize_cached_layout(
       }
       fs::create_dir_all(destination.parent().ok_or("Cache file has no parent")?)?;
       move_file(&source, &destination)?;
+      changes.record(old, Some(sha256), None);
+      changes.record(new, None, Some(sha256));
     }
     for parent in source.ancestors().skip(1).take_while(|parent| {
       parent.starts_with(output)

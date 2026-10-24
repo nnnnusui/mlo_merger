@@ -62,7 +62,7 @@ pub fn run(command: GenerateSourceCache) -> Result<(), Box<dyn std::error::Error
     exclusions: command.exclusions,
     force: command.common.force,
   };
-  let rebuilt = build.run()?;
+  let rebuilt = build.run()?.published;
   if rebuilt {
     println!("Generated source cache.");
   } else {

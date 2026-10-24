@@ -20,18 +20,27 @@ impl BuildVanillaCache {
     let current = resolve_files(&manifest, through_index)?;
     let input_timestamps = source_timestamps(&vanilla_dir, &current)?;
     let output_dir = prepare_output_path(&self.output_dir, &vanilla_dir)?;
+    let previous = previous_manifest(&output_dir);
 
     if !self.force
-      && cache_is_current(&output_dir, &vanilla_dir, &revision, &latest_version, &input_timestamps)?
+      && cache_is_current(
+        &output_dir,
+        previous.as_ref(),
+        &vanilla_dir,
+        &revision,
+        &latest_version,
+        &input_timestamps,
+      )?
     {
       return Ok(VanillaCacheResult {
         latest_version,
         rebuilt: false,
+        changes: StoreChanges::default(),
       });
     }
 
     let staging = Staging(create_staging_directory(&output_dir)?);
-    Self::build(
+    let latest_files = Self::build(
       &vanilla_dir,
       &staging.0,
       &output_dir,
@@ -41,12 +50,25 @@ impl BuildVanillaCache {
       &input_timestamps,
     )?;
     publish_directory(&staging.0, &output_dir)?;
+    let mut changes = StoreChanges::default();
+    let mut previous_files: BTreeMap<_, _> = previous
+      .map(|manifest| manifest.files.into_values().map(|file| (file.object, file.sha256)).collect())
+      .unwrap_or_default();
+    for file in latest_files.values() {
+      let before = previous_files.remove(&file.object);
+      changes.record(&file.object, before.as_deref(), Some(&file.sha256));
+    }
+    for (object, sha256) in previous_files {
+      changes.record(object, Some(&sha256), None);
+    }
     Ok(VanillaCacheResult {
       latest_version,
       rebuilt: true,
+      changes,
     })
   }
 
+  /// Writes the cache into `staging` and returns the latest files it records.
   fn build(
     vanilla_dir: &Path,
     staging: &Path,
@@ -55,7 +77,7 @@ impl BuildVanillaCache {
     revision: &str,
     current: &BTreeMap<String, (String, CachedFile)>,
     input_timestamps: &BTreeMap<String, SourceTimestamp>,
-  ) -> Result<()> {
+  ) -> Result<BTreeMap<String, LatestFile>> {
     let latest_dir = staging.join("latest");
     fs::create_dir_all(latest_dir.join("ymap"))?;
     fs::create_dir_all(latest_dir.join("ybn"))?;
@@ -101,7 +123,7 @@ impl BuildVanillaCache {
         vanilla_manifest_sha256: revision.to_owned(),
         latest_version: latest_version.to_owned(),
         vanilla_input_timestamps: input_timestamps.clone(),
-        files: latest_files,
+        files: latest_files.clone(),
       },
     )?;
     write_json(
@@ -113,6 +135,6 @@ impl BuildVanillaCache {
         children_by_parent: children_by_parent(&parent_by_child)?,
       },
     )?;
-    Ok(())
+    Ok(latest_files)
   }
 }

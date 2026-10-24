@@ -7,6 +7,7 @@ use std::{
   path::{Component, Path, PathBuf},
 };
 
+use crate::common::changes::StoreChanges;
 pub use crate::core::vanilla::VanillaCacheManifest;
 use crate::core::{
   format::gamefile::{
@@ -29,6 +30,8 @@ pub struct VanillaCacheResult {
   pub latest_version: String,
   /// Whether the cache was rebuilt and published.
   pub rebuilt: bool,
+  /// Latest files whose links the rebuild added, changed or removed, relative to the cache.
+  pub changes: StoreChanges,
 }
 
 impl VanillaCacheResult {
@@ -36,7 +39,9 @@ impl VanillaCacheResult {
   ///
   /// ```
   /// use mlo_merger::core::vanilla_cache::VanillaCacheResult;
-  /// let result = VanillaCacheResult { latest_version: "0000-base".into(), rebuilt: false };
+  /// let result = VanillaCacheResult {
+  ///   latest_version: "0000-base".into(), rebuilt: false, changes: Default::default(),
+  /// };
   /// assert_eq!(result.summary(), "Vanilla derived cache is current through 0000-base");
   /// ```
   pub fn summary(&self) -> String {
@@ -107,7 +112,7 @@ mod relationships;
 mod source;
 
 use filesystem::*;
-use freshness::cache_is_current;
+use freshness::{cache_is_current, previous_manifest};
 pub(crate) use read::{DerivedVanillaFile, LoadedCache, load_cache};
 pub use read::{VanillaLatestFile, cache_info_path, latest_files};
 use relationships::children_by_parent;

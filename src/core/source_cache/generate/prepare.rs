@@ -4,7 +4,7 @@ use super::{
   BuildSourceCache, CacheState, Prepared, Publication, Result, SourceCacheMetadata,
   SourceResources, Staging, VanillaInputs,
 };
-use crate::common::{json::write_json, path::ensure_safe_path};
+use crate::common::{changes::StoreChanges, json::write_json, path::ensure_safe_path};
 use crate::core::source_cache::{
   exclusions::{is_excluded, parse_exclusions},
   inventory::{discover_resources, resource_id, source_fingerprints},
@@ -78,8 +78,15 @@ pub(super) fn prepare(build: &BuildSourceCache) -> Result<Prepared> {
     inventories.keys().filter(|id| is_excluded(id, &exclusions)).cloned().collect::<Vec<_>>();
   let exclusions_changed = !excluded_ids.is_empty();
   let mut excluded_cache_paths = BTreeSet::new();
+  // Excluded resources' cached files are archived before any resource is updated.
+  let mut changes = StoreChanges::default();
   for id in excluded_ids {
     let inventory = inventories.get(&id).ok_or("Excluded resource inventory missing")?;
+    for file in inventory.files_by_format.values().flatten() {
+      if let Some(path) = &file.cached_path {
+        changes.record(path, Some(&file.sha256), None);
+      }
+    }
     let name = inventory.source.file_name().ok_or("Resource has no name")?;
     for relative in [Path::new("resources").join(name), Path::new(name).to_path_buf()] {
       let cached = output.join(&relative);
@@ -184,6 +191,7 @@ pub(super) fn prepare(build: &BuildSourceCache) -> Result<Prepared> {
       checks,
       current_inputs,
       source_inputs,
+      changes,
     },
     publication: Publication {
       output,

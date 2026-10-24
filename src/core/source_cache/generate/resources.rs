@@ -42,6 +42,7 @@ pub(super) fn update_selected_resources(
     checks,
     current_inputs,
     source_inputs,
+    changes,
   } = state;
   let mut changed = false;
   for resource in selected.iter() {
@@ -79,6 +80,7 @@ pub(super) fn update_selected_resources(
               "Source file disappeared; dropping stale source-cache record: {}",
               cached_path.display()
             );
+            changes.record(path, Some(&file.sha256), None);
           }
           intact = false;
           continue;
@@ -140,7 +142,7 @@ pub(super) fn update_selected_resources(
       }
     }
     if let Some(retained) = &mut retained {
-      normalize_cached_layout(output, &cache_name, retained)?;
+      normalize_cached_layout(output, &cache_name, retained, changes)?;
       for (format, files) in &retained.files_by_format {
         for file in files {
           let Some(cached_path) = &file.cached_path else {
@@ -176,6 +178,7 @@ pub(super) fn update_selected_resources(
                 }
               }
             }
+            changes.record(cached_path, Some(&file.sha256), Some(&fingerprint.sha256));
             file.sha256 = fingerprint.sha256;
             file.size = fingerprint.size;
             file.modified_seconds = fingerprint.modified_seconds;
@@ -192,6 +195,7 @@ pub(super) fn update_selected_resources(
       let relative = stream_relative_path(&file.path)?;
       let destination = cache_root.join(relative);
       ensure_safe_path(output, &destination)?;
+      let mut replaced = None;
       if destination.exists() {
         fs::create_dir_all(history.as_path())?;
         if !history.join(crate::core::source_cache::CACHE_INFO).exists()
@@ -210,10 +214,13 @@ pub(super) fn update_selected_resources(
           &old_fingerprint,
         )?;
         move_file(&destination, &archived)?;
+        replaced = Some(old_fingerprint.sha256);
       }
       fs::create_dir_all(destination.parent().ok_or("Cache file has no parent")?)?;
       move_file(&resource.join(&file.path), &destination)?;
-      file.cached_path = Some(format!("resources/{cache_name}/{relative}"));
+      let cached_path = format!("resources/{cache_name}/{relative}");
+      changes.record(&cached_path, replaced.as_deref(), Some(&file.sha256));
+      file.cached_path = Some(cached_path);
     }
     for files in inventory.files_by_format.values_mut() {
       files.sort_by(|left, right| left.path.cmp(&right.path));
@@ -258,6 +265,7 @@ pub(super) fn remove_missing_resources(
     inventories,
     source_inputs,
     checks,
+    changes,
     ..
   } = state;
   let mut changed = false;
@@ -267,6 +275,11 @@ pub(super) fn remove_missing_resources(
     for id in removed {
       changed = true;
       if let Some(inventory) = inventories.remove(&id) {
+        for file in inventory.files_by_format.values().flatten() {
+          if let Some(path) = &file.cached_path {
+            changes.record(path, Some(&file.sha256), None);
+          }
+        }
         let name = inventory.source.file_name().ok_or("Resource has no name")?;
         if names.contains(&name.to_string_lossy().to_ascii_lowercase()) {
           return Err(

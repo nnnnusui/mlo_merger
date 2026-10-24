@@ -73,9 +73,12 @@ pub fn run(command: Pipeline) -> Result<(), Box<dyn std::error::Error>> {
     force: command.common.force,
   };
   let result = pipeline.run()?;
-  println!(
+  tracing::info!(
     "Pipeline complete: {} files deployed; {} unchanged; {} removed.",
-    result.copied, result.skipped, result.removed
+    result.deploy.copied,
+    result.deploy.skipped,
+    result.deploy.removed
   );
+  println!("{}", serde_json::to_string(&result.changes)?);
   Ok(())
 }

@@ -6,6 +6,7 @@ use std::{
 use walkdir::WalkDir;
 
 use super::incremental::IncrementalMerge;
+use crate::common::changes::StoreChanges;
 use crate::core::overwrite::Overwrites;
 use crate::core::source_cache::{self, MergeInputs};
 
@@ -44,7 +45,7 @@ pub struct Merge {
 impl Merge {
   /// Merges changed groups from the current vanilla and source caches and publishes output
   /// atomically, then brings the output's stream-file bounds index (`stream_file_rtree.json`)
-  /// up to date.
+  /// up to date; returns the merged files it added, changed or removed, relative to the output.
   ///
   /// Both caches must already be built; this does not update them.
   ///
@@ -56,11 +57,11 @@ impl Merge {
   /// }.run()?;
   /// # Ok::<(), Box<dyn std::error::Error>>(())
   /// ```
-  pub fn run(&self) -> Result<()> {
+  pub fn run(&self) -> Result<StoreChanges> {
     crate::core::config::matching::with_config(|| self.run_inner())?
   }
 
-  fn run_inner(&self) -> Result<()> {
+  fn run_inner(&self) -> Result<StoreChanges> {
     let source_dir = self.source_dir.canonicalize()?;
     let vanilla_cache_dir = self.vanilla_cache_dir.canonicalize()?;
     let source_cache_dir = self.source_cache_dir.canonicalize()?;
@@ -73,7 +74,7 @@ impl Merge {
     let latest_files = dispatch_vanilla_stream_files(&vanilla_cache_dir.join("latest"))?;
     let output_dir = prepare_output_path(&self.output_dir)?;
     let staging = Staging(create_staging_directory(&output_dir)?);
-    let changed = IncrementalMerge {
+    let staged = IncrementalMerge {
       source_dir: &source_dir,
       vanilla_cache: &vanilla_cache_dir,
       source_cache: &source_cache_dir,
@@ -86,7 +87,7 @@ impl Merge {
       force: self.force,
     }
     .run()?;
-    if changed {
+    if staged.is_some() {
       publish_directory(&staging.0, &output_dir)?;
       tracing::info!("Published merged stream files to {}", output_dir.display());
     }
@@ -94,7 +95,7 @@ impl Merge {
       crate::core::find::rtree::Store::Merged,
       &output_dir,
     )?;
-    Ok(())
+    Ok(staged.unwrap_or_default())
   }
 }
 

@@ -15,7 +15,7 @@ impl BuildSourceCache {
       force: false,
     }
     .run()?;
-    self.run()
+    self.run().map(|result| result.published)
   }
 }
 

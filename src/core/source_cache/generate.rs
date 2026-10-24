@@ -6,9 +6,10 @@ use std::{
 };
 
 use super::{
-  BuildSourceCache, Result, Staging,
+  BuildSourceCache, Result, SourceCacheResult, Staging,
   types::{FileFingerprint, ResourceCheck, ResourceInventory, SourceCacheMetadata},
 };
+use crate::common::changes::StoreChanges;
 use crate::core::vanilla_cache::LoadedCache;
 
 pub(super) mod diff;
@@ -40,6 +41,8 @@ struct CacheState {
   checks: BTreeMap<String, ResourceCheck>,
   current_inputs: BTreeMap<String, FileFingerprint>,
   source_inputs: BTreeMap<String, FileFingerprint>,
+  /// Cached stream files this run moved in, replaced, archived or dropped.
+  changes: StoreChanges,
 }
 
 struct Publication {
@@ -59,7 +62,7 @@ struct Prepared {
   changed: bool,
 }
 
-pub(super) fn run(build: &BuildSourceCache) -> Result<bool> {
+pub(super) fn run(build: &BuildSourceCache) -> Result<SourceCacheResult> {
   let Prepared {
     source,
     vanilla,
@@ -76,10 +79,14 @@ pub(super) fn run(build: &BuildSourceCache) -> Result<bool> {
   let output = publication.output.clone();
   let vanilla_dir = vanilla.vanilla_dir.clone();
   let vanilla_cache_dir = vanilla.vanilla_cache_dir.clone();
+  let changes = std::mem::take(&mut state.changes);
   let published = publish::publish_if_changed(source, vanilla, publication, state, changed)?;
   crate::core::config::matching::with_config(|| {
     diff::write_ymap_diffs(&output, &vanilla_dir, &vanilla_cache_dir)
   })??;
   crate::core::find::rtree::update_store_index(crate::core::find::rtree::Store::Source, &output)?;
-  Ok(published)
+  Ok(SourceCacheResult {
+    published,
+    changes,
+  })
 }

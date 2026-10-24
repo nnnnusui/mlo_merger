@@ -1,5 +1,6 @@
 //! Shared geometry types, filesystem, path, JSON, fingerprint and logging primitives.
 
+pub mod changes;
 pub(crate) mod filesystem;
 pub(crate) mod fingerprint;
 pub(crate) mod function;

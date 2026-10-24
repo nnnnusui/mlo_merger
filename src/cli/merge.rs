@@ -65,5 +65,6 @@ pub fn run(command: Merge) -> Result<(), Box<dyn std::error::Error>> {
     overwrite_dir: Some(command.overwrite_dir),
     force: command.common.force,
   }
-  .run()
+  .run()?;
+  Ok(())
 }

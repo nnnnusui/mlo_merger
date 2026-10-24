@@ -5,7 +5,8 @@ use super::{
   vanilla::GenerateVanilla,
   vanilla_cache::BuildVanillaCache,
 };
-use crate::common::path::absolute_path;
+use crate::common::{changes::StoreChanges, path::absolute_path};
+use serde::Serialize;
 use std::path::PathBuf;
 
 /// Executes the cached vanilla, source, merge and deployment stages in order.
@@ -33,6 +34,26 @@ pub struct Pipeline {
   pub force: bool,
 }
 
+/// Store files changed by each cached stage of a run.
+#[derive(Debug, Default, PartialEq, Eq, Serialize)]
+pub struct PipelineChanges {
+  /// Latest vanilla files in the derived vanilla cache.
+  pub vanilla_cache: StoreChanges,
+  /// Source stream files moved into the source cache.
+  pub source_cache: StoreChanges,
+  /// Merged stream files.
+  pub merged: StoreChanges,
+}
+
+/// Outcome of a pipeline run.
+#[derive(Debug)]
+pub struct PipelineSummary {
+  /// Store files changed by the cached stages.
+  pub changes: PipelineChanges,
+  /// File operations performed by the final deployment.
+  pub deploy: DeploySummary,
+}
+
 impl Pipeline {
   /// Runs necessary extraction, derived caches, incremental merge and deployment.
   ///
@@ -49,11 +70,11 @@ impl Pipeline {
   /// }.run()?;
   /// # Ok::<(), Box<dyn std::error::Error>>(())
   /// ```
-  pub fn run(&self) -> Result<DeploySummary, Box<dyn std::error::Error>> {
+  pub fn run(&self) -> Result<PipelineSummary, Box<dyn std::error::Error>> {
     crate::core::config::matching::with_config(|| self.run_steps())?
   }
 
-  fn run_steps(&self) -> Result<DeploySummary, Box<dyn std::error::Error>> {
+  fn run_steps(&self) -> Result<PipelineSummary, Box<dyn std::error::Error>> {
     if !self.source_dir.is_dir() {
       return Err(
         format!("Source resource directory does not exist: {}", self.source_dir.display()).into(),
@@ -81,7 +102,7 @@ impl Pipeline {
     tracing::info!("{}", vanilla_cache.summary());
 
     tracing::info!("Pipeline: generate-source-cache");
-    BuildSourceCache {
+    let source_cache = BuildSourceCache {
       source_dir: self.source_dir.clone(),
       output_dir: self.source_cache_dir.clone(),
       vanilla_dir: self.vanilla_dir.clone(),
@@ -93,7 +114,7 @@ impl Pipeline {
     .run()?;
 
     tracing::info!("Pipeline: merge");
-    Merge {
+    let merged = Merge {
       source_dir: self.source_dir.clone(),
       vanilla_cache_dir: self.vanilla_cache_dir.clone(),
       source_cache_dir: self.source_cache_dir.clone(),
@@ -104,13 +125,21 @@ impl Pipeline {
     .run()?;
 
     tracing::info!("Pipeline: deploy");
-    Deploy {
+    let deploy = Deploy {
       merged_dir: self.merged_dir.clone(),
       source_cache_dir: self.source_cache_dir.clone(),
       output_dir: self.output_dir.clone(),
       force: self.force,
     }
-    .run()
+    .run()?;
+    Ok(PipelineSummary {
+      changes: PipelineChanges {
+        vanilla_cache: vanilla_cache.changes.under(&self.vanilla_cache_dir),
+        source_cache: source_cache.changes.under(&self.source_cache_dir),
+        merged: merged.under(&self.merged_dir),
+      },
+      deploy,
+    })
   }
 
   /// Source nesting is intentional: source can be `resources` while execution and
@@ -216,7 +245,24 @@ mod tests {
     .unwrap();
     let vanilla_manifest = fs::read(pipeline.vanilla_dir.join("cache_info.json")).unwrap();
     let first = pipeline.run().unwrap();
-    assert_eq!(first.copied, 2);
+    assert_eq!(
+      first.changes.vanilla_cache.added,
+      ["latest/ybn/collision.ybn", "latest/ybn/unique.ybn"]
+        .map(|path| pipeline.vanilla_cache_dir.join(path))
+        .into()
+    );
+    assert_eq!(
+      first.changes.source_cache.added,
+      [
+        "resources/resource_a/collision.ybn",
+        "resources/resource_a/unique.ybn",
+        "resources/resource_b/collision.ybn",
+      ]
+      .map(|path| pipeline.source_cache_dir.join(path))
+      .into()
+    );
+    assert_eq!(first.changes.merged.added, [pipeline.merged_dir.join("ybn/collision.ybn")].into());
+    assert_eq!(first.deploy.copied, 2);
     assert!(pipeline.vanilla_cache_dir.join("cache_info.json").is_file());
     assert!(pipeline.source_cache_dir.join("cache_info.json").is_file());
     assert!(pipeline.merged_dir.join("cache_info.json").is_file());
@@ -239,12 +285,40 @@ mod tests {
     assert!(!pipeline.source_dir.join("resource_a/stream/collision.ybn").exists());
     assert_eq!(fs::read(pipeline.vanilla_dir.join("cache_info.json")).unwrap(), vanilla_manifest);
     let second = pipeline.run().unwrap();
-    assert_eq!(second.copied, 0);
-    assert_eq!(second.skipped, 2);
+    assert_eq!(second.deploy.copied, 0);
+    assert_eq!(second.deploy.skipped, 2);
+    assert_eq!(second.changes, PipelineChanges::default());
     let mut forced = pipeline.clone();
     forced.force = true;
-    assert_eq!(forced.run().unwrap().copied, 2);
+    let forced = forced.run().unwrap();
+    assert_eq!(forced.deploy.copied, 2);
+    assert_eq!(forced.changes, PipelineChanges::default());
     assert_eq!(fs::read(pipeline.vanilla_dir.join("cache_info.json")).unwrap(), vanilla_manifest);
+    let replacement = crate::core::format::ybn::xml::xml_to_ybn(include_str!(concat!(
+      env!("CARGO_MANIFEST_DIR"),
+      "/docs/sample/ybn_conflicts/resource_a.ybn.xml"
+    )))
+    .unwrap();
+    fs::write(pipeline.source_dir.join("resource_a/stream/collision.ybn"), &replacement).unwrap();
+    fs::remove_dir_all(pipeline.source_dir.join("resource_b")).unwrap();
+    let changed = pipeline.run().unwrap().changes;
+    assert_eq!(changed.vanilla_cache, StoreChanges::default());
+    assert_eq!(
+      changed.source_cache,
+      StoreChanges {
+        added: Default::default(),
+        modified: [pipeline.source_cache_dir.join("resources/resource_a/collision.ybn")].into(),
+        removed: [pipeline.source_cache_dir.join("resources/resource_b/collision.ybn")].into(),
+      }
+    );
+    assert_eq!(
+      changed.merged,
+      StoreChanges {
+        added: Default::default(),
+        modified: Default::default(),
+        removed: [pipeline.merged_dir.join("ybn/collision.ybn")].into(),
+      }
+    );
     fs::remove_dir_all(root).unwrap();
   }
 

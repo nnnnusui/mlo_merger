@@ -1,9 +1,12 @@
 use super::*;
+use crate::common::changes::StoreChanges;
 use rayon::prelude::*;
 
 impl IncrementalMerge<'_> {
-  /// Rebuilds dependency groups while retaining unchanged outputs and negative results.
-  pub(in crate::core::merge) fn run(&self) -> Result<bool> {
+  /// Rebuilds dependency groups while retaining unchanged outputs and negative results; returns
+  /// the merged files the staged output adds, changes or removes, or `None` when the output is
+  /// current and nothing was staged.
+  pub(in crate::core::merge) fn run(&self) -> Result<Option<StoreChanges>> {
     let previous = MergeMetadata::load(self.output)?;
     let mut previous_inputs = BTreeMap::new();
     if let Some(metadata) = &previous {
@@ -116,8 +119,9 @@ impl IncrementalMerge<'_> {
       && fs::read_to_string(self.output.join("_omit.txt")).ok().as_deref() == Some(&omit_text)
     {
       tracing::info!("Merge output is current; nothing to do");
-      return Ok(false);
+      return Ok(None);
     }
+    let changes = output_changes(previous.as_ref(), &files);
     for (from, to) in retained_files {
       retain_file(&from, &to)?;
     }
@@ -134,7 +138,7 @@ impl IncrementalMerge<'_> {
       },
     )?;
     tracing::info!("Incremental merge: {rebuilt} groups rebuilt, {reused} groups reused");
-    Ok(true)
+    Ok(Some(changes))
   }
 
   /// Reuses `group`'s previous outputs when its inputs are unchanged, or else merges it into
@@ -269,6 +273,30 @@ impl IncrementalMerge<'_> {
       rebuilt,
     })
   }
+}
+
+/// The merged files `files` records that differ from those of the `previous` merge.
+fn output_changes(
+  previous: Option<&MergeMetadata>,
+  files: &BTreeMap<String, FileRecord>,
+) -> StoreChanges {
+  let outputs = |files: &BTreeMap<String, FileRecord>| {
+    files
+      .values()
+      .filter_map(|record| record.output.as_ref())
+      .map(|output| (output.path.clone(), output.fingerprint.sha256.clone()))
+      .collect::<BTreeMap<_, _>>()
+  };
+  let mut before = previous.map(|metadata| outputs(&metadata.files)).unwrap_or_default();
+  let mut changes = StoreChanges::default();
+  for (path, sha256) in outputs(files) {
+    let previous = before.remove(&path);
+    changes.record(path, previous.as_deref(), Some(&sha256));
+  }
+  for (path, sha256) in before {
+    changes.record(path, Some(&sha256), None);
+  }
+  changes
 }
 
 /// What every group's merge reads.
