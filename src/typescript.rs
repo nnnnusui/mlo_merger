@@ -70,6 +70,8 @@ mod tests {
       "OverwriteFingerprint",
       "VanillaOverwrite",
       "YmapDiffSkip",
+      "PipelineChanges",
+      "StoreChanges",
       "ReadResult",
       "ReadFileResult",
       "ReadOrigin",
@@ -94,6 +96,8 @@ mod tests {
     assert!(actual.contains("algorithm_versions?: { [key: string]: number }"));
     assert!(actual.contains("entities?: YmapEntityDiff[]"));
     assert!(actual.contains("skip: YmapDiffSkip"));
+    assert!(actual.contains("vanilla_cache: StoreChanges"));
+    assert!(actual.contains("added: string[]"));
     assert!(!actual.contains(": bigint"));
     fs::remove_file(path).unwrap();
   }

@@ -34,11 +34,12 @@ archive, every one in `mlo_merger-all.zip`.
 | `--read` JSON documents | `YmapReadDocument`, `ReadFingerprint`, `Ymap`, `YmapEntity`, `Position`, `Rotation` |
 | Source-cache diff documents | `YmapComparisonDiff`, `YmapComparisonFile`, `YmapDiffFields`, `YmapEntityDiff`, `YmapEntityFieldDiff` |
 | Overwrite documents | `ResourceOverwrite`, `StreamFileOverwrite`, `OverwriteFingerprint`, `YmapDiffSkip`, `VanillaOverwrite` |
+| Pipeline stdout | `PipelineChanges`, `StoreChanges` |
 | Merge diagnostics | `DuplicateReport` |
 
 ```typescript
 import type {
-  OverwriteFingerprint, ReadResult, ResourceOverwrite, RTreeIndex, Ymap,
+  OverwriteFingerprint, PipelineChanges, ReadResult, ResourceOverwrite, RTreeIndex, Ymap,
   YmapComparisonDiff, YmapDiffSkip, YmapEntity, YmapEntityDiff, YmapReadDocument,
 } from "./gen_mlo_merger";
 ```
@@ -51,7 +52,8 @@ Start the executable from server-side code with `spawn` (spawnProcess).
 
 - Set the working directory to the directory containing `asset/`. Every path
   below, and every command default, is relative to it.
-- stdout carries only the command's result; `--read` prints one line of JSON.
+- stdout carries only the command's result; `--read` and the pipeline each print one
+  line of JSON.
 - stderr carries progress logs and errors. The same log is written to
   `asset/log/mlo_merger_{timestamp}.log`.
 - A failed command exits with code `1`; its last stderr line is the error.
@@ -94,7 +96,7 @@ Paths below are defaults. If you change them with options such as `--source-cach
 | Index file bounds | none; written by vanilla-cache, source-cache and merge runs | | `asset/{vanilla-cache,source-cache,merged}/stream_file_rtree.json` (`RTreeIndex`) |
 | Convert YMAPs to JSON | `--read FILE` | `ReadResult` | each `files[].output` (`YmapReadDocument`) |
 | Inspect differences | none; written by source-cache generation | | `asset/source-cache/diff/{resource}/{stream_path}.diff.json` (`YmapComparisonDiff`) |
-| Apply overwrites | no operation flag (pipeline), or `--merge` then `--deploy` | log lines only | `asset/merged/duplicates.json` (`DuplicateReport`) |
+| Apply overwrites | no operation flag (pipeline), or `--merge` then `--deploy` | `PipelineChanges` (pipeline only) | `asset/merged/duplicates.json` (`DuplicateReport`) |
 
 ### Stream-File Bounds Indexes
 
@@ -167,8 +169,8 @@ asset/source-cache/diff/{resource}/{stream_path}.diff.json
 - Copy `source.sha256`/`size` and `vanilla.sha256`/`size` into the overwrite unchanged.
 - Array differences are `Added`, `Removed`, `Modified` (and `Replaced` for non-entity arrays).
   `Removed.index` and `Modified.before_index` index the vanilla model, and
-  `Modified.after_index` indexes the source model. Entity differences (`YmapEntityDiff`)
-  also carry the `guid`.
+  `Modified.after_index` indexes the source model. Added entities carry their whole
+  entity, including its `guid`.
 - YMAPs without a diff document, such as custom YMAPs that replace no vanilla file, cannot
   be overwritten.
 
@@ -187,7 +189,7 @@ asset/overwrite/resources/{resource}.json
       "vanilla": { "sha256": "<diff document vanilla.sha256>", "size": 5675 },
       "skip": {
         "entities": [
-          { "Modified": { "guid": 3592082822, "changes": { "position": true } } },
+          { "Modified": { "before_index": 0, "changes": { "position": true } } },
           { "Added": { "entity": { "guid": 1513947137 } } }
         ],
         "box_occluders": [{ "Removed": { "index": 0 } }]
@@ -219,7 +221,7 @@ asset/overwrite/vanilla/latest/ymap/{file_name}.diff.json
   "schema_version": 1,
   "vanilla": { "sha256": "<latest vanilla file sha256>", "size": 5675 },
   "diffs": {
-    "entities": [{ "Removed": { "index": 3, "guid": 3592082822 } }]
+    "entities": [{ "Removed": { "index": 3 } }]
   }
 }
 ```
@@ -244,6 +246,32 @@ The pipeline updates the source cache, merges and deploys only what changed. Ove
 part of merge freshness, so `-f` is not needed. Use `--merge` alone to update only
 `asset/merged`. Overwrites that were not applied are logged on stderr as `Overwrite of ...` or
 `Vanilla overwrite of ...`.
+
+### Pipeline Output
+
+The pipeline prints the files its cached stages added, modified or removed as one line of
+`PipelineChanges`:
+
+```json
+{
+  "vanilla_cache": { "added": [], "modified": [], "removed": [] },
+  "source_cache": {
+    "added": [],
+    "modified": ["asset/source-cache/resources/sample_resource_a/hei_ch1_11.ymap"],
+    "removed": []
+  },
+  "merged": { "added": [], "modified": ["asset/merged/ymap/hei_ch1_11.ymap"], "removed": [] }
+}
+```
+
+- Each path is placed below the directory the pipeline used for that store (`--vanilla-cache`,
+  `--source-cache`, `--merged`), so with the defaults it is relative to the working directory.
+- `vanilla_cache` lists the latest vanilla YMAP/YBN links of `asset/vanilla-cache/latest/`,
+  `source_cache` the stream files moved into the cache, and `merged` the merged stream files.
+  Metadata, indexes and diff documents are not listed.
+- Only content changes count: a forced rebuild that writes the same bytes lists nothing, and a
+  run that changes nothing prints empty lists.
+- Deployment is not included; its counts are logged on stderr.
 
 ## Example: From Player Position To Overwrite
 
@@ -411,8 +439,8 @@ function entityOf(file: InspectedFile, change: YmapEntityDiff): YmapEntity | und
 /** A selector leaving out one entity difference as a whole. */
 function entitySelector(change: YmapEntityDiff): YmapDiffSkip {
   if ("Added" in change) return { entities: [{ Added: { entity: { guid: change.Added.entity.guid } } }] };
-  if ("Removed" in change) return { entities: [{ Removed: { guid: change.Removed.guid } }] };
-  return { entities: [{ Modified: { guid: change.Modified.guid } }] };
+  if ("Removed" in change) return { entities: [{ Removed: { index: change.Removed.index } }] };
+  return { entities: [{ Modified: { before_index: change.Modified.before_index } }] };
 }
 
 window.addEventListener("message", ({ data }: MessageEvent<{ type: string; files: InspectedFile[] }>) => {
@@ -452,7 +480,9 @@ Entity positions (`YmapEntity.position`) can also be marked in game, for example
 // server/skip.ts
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import { basename, dirname, resolve } from "path";
-import type { ResourceOverwrite, StreamFileOverwrite, YmapDiffSkip } from "../shared/gen_mlo_merger";
+import type {
+  PipelineChanges, ResourceOverwrite, StoreChanges, StreamFileOverwrite, YmapDiffSkip,
+} from "../shared/gen_mlo_merger";
 import type { SkipRequest } from "../shared/types";
 import { refreshIndex } from "./inspect";
 import { MERGER_CWD, runMerger } from "./merger";
@@ -484,10 +514,14 @@ onNet("mlo:skip", async (request: SkipRequest) => {
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, JSON.stringify(overwrite, null, 2));
 
-  const { stderr } = await runMerger(["-y", "-i", RESOURCES_DIR, "-o", DEPLOY_DIR]);
+  const { stdout, stderr } = await runMerger(["-y", "-i", RESOURCES_DIR, "-o", DEPLOY_DIR]);
   for (const line of stderr.split("\n")) {
     if (line.includes("Overwrite of")) console.warn(line); // not applied
   }
+  const changes: PipelineChanges = JSON.parse(stdout);
+  const changed = (store: StoreChanges) =>
+    store.added.length + store.modified.length + store.removed.length > 0;
+  if (!Object.values(changes).some(changed)) return; // nothing to reload
   await refreshIndex();
   ExecuteCommand("refresh");
   ExecuteCommand(`ensure ${basename(DEPLOY_DIR)}`);

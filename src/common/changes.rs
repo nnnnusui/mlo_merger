@@ -6,9 +6,11 @@ use std::{
   path::{Path, PathBuf},
 };
 
-/// Files of one store whose contents a run added, changed or removed, as paths relative to the
-/// store directory until [`StoreChanges::under`] places them below it.
+/// Files of one store whose contents a run added, changed or removed. A stage records paths
+/// relative to its store directory; [`StoreChanges::under`] places them below it, as the
+/// pipeline reports them.
 #[derive(Debug, Default, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 pub struct StoreChanges {
   /// Files the store did not hold before the run.
   pub added: BTreeSet<PathBuf>,

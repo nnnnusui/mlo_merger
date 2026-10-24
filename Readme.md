@@ -18,6 +18,9 @@ mlo_merger -i resources -o merged_mlo --game-dir /mnt/gtav
 The default operation extracts vanilla only when its archive is missing, updates
 the vanilla and source caches, merges, then deploys. Unchanged stages are reused.
 `--game-dir` defaults to `/mnt/gtav` and is used only for missing vanilla data.
+It prints the vanilla-cache, source-cache and merged files whose contents changed as
+one line of JSON (`PipelineChanges`) and logs everything else on stderr; see
+[docs/usage.md](docs/usage.md#pipeline-output).
 
 | Path | Default | Option |
 |---|---|---|
@@ -331,7 +334,8 @@ The release archives contain `asset/gen_mlo_merger.ts`, generated from the Rust
 Serde models for merge diagnostics, vanilla/source/merge/deploy caches, stream
 conflicts, diff-cache reports, source-cache YMAP diff documents
 (`YmapComparisonDiff`), overwrite documents (`ResourceOverwrite`), `--read`
-documents and results (`YmapReadDocument`, `ReadResult`), version listings and matching/blacklist configuration. It
+documents and results (`YmapReadDocument`, `ReadResult`), pipeline output
+(`PipelineChanges`), version listings and matching/blacklist configuration. It
 does not include YBN difference payloads or JSON Schema documents. The release workflow regenerates it before packaging; it is not
 checked into the repository.
 

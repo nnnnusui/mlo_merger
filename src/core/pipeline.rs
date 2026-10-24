@@ -36,6 +36,7 @@ pub struct Pipeline {
 
 /// Store files changed by each cached stage of a run.
 #[derive(Debug, Default, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 pub struct PipelineChanges {
   /// Latest vanilla files in the derived vanilla cache.
   pub vanilla_cache: StoreChanges,
