@@ -129,12 +129,7 @@ fn collect_occluders(
 ) -> Vec<OccluderItem> {
   let mut items = Vec::new();
   for (index, occluder) in boxes.iter().enumerate() {
-    let center = [
-      f64::from(occluder.i_center_x),
-      f64::from(occluder.i_center_y),
-      f64::from(occluder.i_center_z),
-    ];
-    let distance = point_distance(position, center);
+    let distance = point_distance(position, occluder.center());
     if distance <= radius {
       items.push(OccluderItem {
         kind: "boxOccluder",
@@ -193,8 +188,8 @@ mod tests {
   #[test]
   fn occluder_search_matches_centers_and_aabb_radius_boundary() {
     let boxes = [YmapBoxOccluder {
-      i_center_x: 3,
-      i_center_y: 4,
+      i_center_x: 12,
+      i_center_y: 16,
       i_center_z: 0,
       i_cos_z: 0,
       i_length: 2,

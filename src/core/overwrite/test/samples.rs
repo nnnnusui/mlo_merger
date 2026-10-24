@@ -30,8 +30,6 @@ struct SampleSource {
 
 fn sample_sources() -> Vec<SampleSource> {
   let vanilla = sample_ymap("sample.ymap");
-  let first = vanilla.entities[0].guid;
-
   // Resource A sets a content flag, moves and re-flags the first entity, and removes the box
   // occluder and triangles 10 and 11 of the occlude model. Its overwrite keeps the entity's new
   // flags and the removal of triangle 11, and leaves out the rest.
@@ -44,7 +42,7 @@ fn sample_sources() -> Vec<SampleSource> {
   a.occlude_models[0].triangles.remove(10);
   let a_skip = json!({
     "content_flags": true,
-    "entities": [{"Modified": {"guid": first, "changes": {"position": true}}}],
+    "entities": [{"Modified": {"before_index": 0, "changes": {"position": true}}}],
     "box_occluders": [{"Removed": {"index": 0}}],
     "occlude_models": [
       {"Modified": {"before_index": 0, "changes": {"triangles": [{"Removed": {"index": 10}}]}}}

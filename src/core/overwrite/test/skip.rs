@@ -6,9 +6,9 @@ fn diff() -> YmapDiffFields {
     "content_flags": 65,
     "streaming_extents_min": {"x": -452.29492, "z": 106.28345},
     "entities": [
-      {"Modified": {"guid": 1, "before_index": 0, "after_index": 0,
+      {"Modified": {"before_index": 0, "after_index": 0,
         "changes": {"position": {"z": -961.18286}, "flags": 8}}},
-      {"Removed": {"index": 1, "guid": 2}}
+      {"Removed": {"index": 1}}
     ],
     "box_occluders": [{"Removed": {"index": 236}}, {"Removed": {"index": 237}}],
     "occlude_models": [
@@ -30,8 +30,8 @@ fn skips_fields_items_and_nested_items_selected_by_content() {
       "content_flags": true,
       "streaming_extents_min": {"x": true},
       "entities": [
-        {"Modified": {"guid": 1, "changes": {"position": true}}},
-        {"Removed": {"guid": 2}}
+        {"Modified": {"before_index": 0, "changes": {"position": true}}},
+        {"Removed": {"index": 1}}
       ],
       "box_occluders": [{"Removed": {"index": 236}}],
       "occlude_models": [
@@ -47,7 +47,7 @@ fn skips_fields_items_and_nested_items_selected_by_content() {
     json!({
       "streaming_extents_min": {"z": 106.28345},
       "entities": [
-        {"Modified": {"guid": 1, "before_index": 0, "after_index": 0, "changes": {"flags": 8}}}
+        {"Modified": {"before_index": 0, "after_index": 0, "changes": {"flags": 8}}}
       ],
       "box_occluders": [{"Removed": {"index": 237}}],
       "occlude_models": [
@@ -67,8 +67,8 @@ fn drops_items_and_fields_left_empty_and_reports_unmatched_selectors() {
     &mut diff,
     &json!({
       "entities": [
-        {"Modified": {"guid": 1, "changes": {"position": true, "flags": true}}},
-        {"Removed": {"guid": 2}}
+        {"Modified": {"before_index": 0, "changes": {"position": true, "flags": true}}},
+        {"Removed": {"index": 1}}
       ],
       "box_occluders": [{"Removed": {"index": 1}}],
       "streaming_extents_min": {"x": true, "z": true},

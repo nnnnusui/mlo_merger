@@ -77,7 +77,7 @@ impl Collector {
         ..
       } => format!("Modified {changes:?}"),
     };
-    self.entries.entry(diff.guid()).or_default().push(Candidate {
+    self.entries.entry(guid).or_default().push(Candidate {
       guid,
       vanilla,
       source,
@@ -143,7 +143,6 @@ mod tests {
     };
     let removed = YmapEntityDiff::Removed {
       index: 0,
-      guid: 1,
     };
     let source = |resource: &str, change| Contribution {
       resource: resource.into(),

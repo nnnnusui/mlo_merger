@@ -17,8 +17,8 @@ overwrite leaves out everything except the new entity flags and the removal of
 triangle 11:
 
 - `"content_flags": true` drops a whole field.
-- `{"Modified": {"guid": …, "changes": {"position": true}}}` drops only the
-  position change of the entity with that GUID.
+- `{"Modified": {"before_index": 0, "changes": {"position": true}}}` drops only
+  the position change of vanilla entity 0.
 - `{"Removed": {"index": 0}}` drops the removal of vanilla box occluder 0.
 - `changes.triangles` drops one nested triangle removal and keeps the other.
 

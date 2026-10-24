@@ -22,10 +22,10 @@
         "entities": [
           {
             "Modified": {
+              "before_index": 0,
               "changes": {
                 "position": true
-              },
-              "guid": 3592082822
+              }
             }
           }
         ],

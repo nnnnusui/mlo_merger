@@ -25,7 +25,6 @@ fn modified_entities_list_changed_fields_beyond_the_tolerance() {
     json!({
       "entities": [{
         "Modified": {
-          "guid": 1,
           "before_index": 0,
           "after_index": 0,
           "changes": {
@@ -40,12 +39,12 @@ fn modified_entities_list_changed_fields_beyond_the_tolerance() {
 }
 
 #[test]
-fn removed_entities_keep_only_their_index_and_guid() {
+fn removed_entities_keep_only_their_index() {
   let vanilla = with_entities(vec![entity(1), entity(2)]);
   let modded = with_entities(vec![entity(1)]);
   assert_eq!(
     json(&vanilla, &modded),
-    json!({ "entities": [{ "Removed": { "index": 1, "guid": 2 } }] })
+    json!({ "entities": [{ "Removed": { "index": 1 } }] })
   );
 }
 
@@ -132,7 +131,6 @@ fn reports_modified_removed_and_added_entities() {
   let diffs = entity_diff(&vanilla, &modded);
   assert_eq!(diffs.len(), 4);
   let YmapEntityDiff::Modified {
-    guid: 1,
     before_index: 0,
     after_index: 0,
     changes,
@@ -154,15 +152,14 @@ fn reports_modified_removed_and_added_entities() {
   );
   assert!(matches!(
     &diffs[1],
-    YmapEntityDiff::Modified { guid: 2, changes, .. }
+    YmapEntityDiff::Modified { before_index: 1, changes, .. }
       if changes.archetype_name.as_deref() == Some("replaced")
         && changes == &YmapEntityFieldDiff { archetype_name: changes.archetype_name.clone(), ..Default::default() }
   ));
   assert!(matches!(
     &diffs[2],
     YmapEntityDiff::Removed {
-      index: 2,
-      guid: 3
+      index: 2
     }
   ));
   assert!(
@@ -183,7 +180,6 @@ fn pairs_shared_guids_in_order_and_reports_the_rest() {
   assert!(matches!(
     &diffs[0],
     YmapEntityDiff::Modified {
-      guid: 1,
       before_index: 1,
       after_index: 1,
       ..
@@ -244,7 +240,7 @@ fn parents_compare_by_the_entity_they_point_at() {
     diffs.iter().any(|diff| matches!(
       diff,
       YmapEntityDiff::Modified {
-        guid: 2,
+        before_index: 1,
         parent: Some(EntityParent::Own {
           guid: 3
         }),

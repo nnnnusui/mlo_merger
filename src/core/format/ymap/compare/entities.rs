@@ -31,11 +31,10 @@ pub enum YmapEntityDiff {
   /// Present only in vanilla, at `index` of its entities.
   Removed {
     index: usize,
-    guid: u32,
   },
-  /// Paired by GUID and differing beyond the tolerance, or pointing at another parent.
+  /// Paired by GUID and differing beyond the tolerance, or pointing at another parent; the
+  /// entity is vanilla's at `before_index` and the modded YMAP's at `after_index`.
   Modified {
-    guid: u32,
     before_index: usize,
     after_index: usize,
     changes: YmapEntityFieldDiff,
@@ -107,7 +106,7 @@ pub fn diff(
     .collect::<Vec<_>>();
   let anchors = anchors(&pairs, modded.len());
   let mut diffs = Vec::new();
-  for (guid, vanilla_indices, modded_indices) in guids {
+  for (_, vanilla_indices, modded_indices) in guids {
     for (&before_index, &after_index) in vanilla_indices.iter().zip(&modded_indices) {
       let changes = vanilla[before_index].diff(&modded[after_index], &ctx.tolerances);
       let parent = parent_of(&ctx.modded_parents, modded, after_index);
@@ -115,7 +114,6 @@ pub fn diff(
         (parent != parent_of(&ctx.vanilla_parents, vanilla, before_index)).then_some(parent);
       if changes.is_some() || parent.is_some() {
         diffs.push(YmapEntityDiff::Modified {
-          guid,
           before_index,
           after_index,
           changes: changes.unwrap_or_default(),
@@ -124,10 +122,11 @@ pub fn diff(
       }
     }
     let paired = vanilla_indices.len().min(modded_indices.len());
-    diffs.extend(vanilla_indices[paired..].iter().map(|&index| YmapEntityDiff::Removed {
-      index,
-      guid,
-    }));
+    diffs.extend(
+      vanilla_indices[paired..].iter().map(|&index| YmapEntityDiff::Removed {
+        index,
+      }),
+    );
     diffs.extend(modded_indices[paired..].iter().map(|&index| YmapEntityDiff::Added {
       after: anchors[index],
       entity: modded[index].clone(),
@@ -197,7 +196,6 @@ pub(super) fn merge(
     .filter_map(|index| vanilla.get(index))
     .collect::<Vec<_>>();
   merged.retain_new(|(entity, _)| !removed.contains(&entity));
-  let guid = |index: usize| vanilla.get(index).map_or(0, |entity| entity.guid);
   merged
     .into_diffs(vanilla.len())
     .into_iter()
@@ -215,7 +213,6 @@ pub(super) fn merge(
         ..
       } => vec![YmapEntityDiff::Removed {
         index,
-        guid: guid(index),
       }],
       // Entity diffs never replace, since entities pair by GUID; spelled out for completeness.
       ItemDiff::Replaced {
@@ -224,7 +221,6 @@ pub(super) fn merge(
       } => vec![
         YmapEntityDiff::Removed {
           index,
-          guid: guid(index),
         },
         YmapEntityDiff::Added {
           after: Some(index),
@@ -237,7 +233,6 @@ pub(super) fn merge(
         after_index,
         changes: (changes, parent),
       } => vec![YmapEntityDiff::Modified {
-        guid: guid(before_index),
         before_index,
         after_index,
         changes,
@@ -248,22 +243,26 @@ pub(super) fn merge(
 }
 
 impl YmapEntityDiff {
-  /// The GUID of the entity this diff adds, removes or modifies.
-  pub fn guid(&self) -> u32 {
-    match self {
+  /// The GUID of the entity this diff adds, or of the entity of `vanilla`, the entities the
+  /// diff was taken against, that it removes or modifies; 0 when the index is out of range.
+  pub fn guid(
+    &self,
+    vanilla: &[YmapEntity],
+  ) -> u32 {
+    let index = match self {
       Self::Added {
         entity,
         ..
-      } => entity.guid,
+      } => return entity.guid,
       Self::Removed {
-        guid,
+        index,
+      } => *index,
+      Self::Modified {
+        before_index,
         ..
-      }
-      | Self::Modified {
-        guid,
-        ..
-      } => *guid,
-    }
+      } => *before_index,
+    };
+    vanilla.get(index).map_or(0, |entity| entity.guid)
   }
 
   /// This diff as an owned [`Change`].

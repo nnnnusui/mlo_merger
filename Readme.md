@@ -95,26 +95,41 @@ Merge writes native files under `ymap/` and `ybn/`, plus `_omit.txt` for replace
 source paths and `duplicates.json` for competing YMAP entity changes. It rebuilds
 only changed or invalid groups. Failed merges leave the prior output intact.
 
-Each YMAP is merged by reading every source's difference from the latest vanilla YMAP
-from the source cache's `diff/{resource}/{stream-relative-path}.diff.json` and applying
-them together to vanilla. Source-cache generation writes these documents and keeps them
-while their source and vanilla files and the matching tolerances are unchanged; merge
-fails when one is missing or stale, so rebuild the source cache first (`--merge` and the
-pipeline do). The differences of several sources combine as follows:
+### Merge Behavior
 
-- Array items are paired as the source cache's YMAP diffs pair them. Removed and
-  modified items are named by their vanilla index, and an unpaired source item takes
-  the place of an unpaired vanilla item between the same kept items (a replacement),
-  or is added right after the vanilla item preceding it. Kept items stay in vanilla
-  order, so a source's reordering of kept items is not reproduced.
+Merge applies every source's differences from the latest vanilla file together to
+vanilla. YMAP differences are read from the source cache's
+`diff/{resource}/{stream-relative-path}.diff.json`, which source-cache generation keeps
+while their source and vanilla files and the matching tolerances are unchanged; a
+missing or stale document fails the merge instead of being recomputed, so rebuild the
+source cache first (`--merge` and the pipeline do). Only YMAPs that still differ from
+vanilla after merging are written. The following behaviors are not obvious from that:
+
+**Combining sources**
+
 - A removal wins over every other change of that vanilla item, including another
-  source's replacement of it. Otherwise the first source to modify or replace an item
-  wins, except occlude models, which take each field from the first source changing it
-  and every source's triangle changes. Additions keep their place, in source order.
+  source's replacement of it, whatever the source order. An added entity equal to a
+  removed vanilla entity is dropped too, so deleting wins over re-adding.
+- Otherwise the first source to modify or replace an item wins; resource priority is
+  not configurable. Occlude models are the exception: each field comes from the first
+  source changing it, and every source's triangle changes are applied.
+- Removed and modified items are named by their vanilla index. An unpaired source item
+  takes the place of an unpaired vanilla item between the same kept items (a
+  replacement), or is added right after the vanilla item preceding it; additions keep
+  source order. Kept items stay in vanilla order, so a source's reordering of kept
+  items is not reproduced.
+
+**YMAP fields**
+
 - `contentFlags` are OR-ed into vanilla's; the parent and IMAP link keep the first
-  change. Added physics dictionaries and prop instances skip names already present;
-  dictionary removals are not applied. Name, flags, extents, block and the distant LOD
-  light counts keep their vanilla values.
+  change. Name, flags, extents, block and the distant LOD light counts keep their
+  vanilla values.
+- Added physics dictionaries and prop instances skip names already present;
+  dictionary removals are not applied.
+- Entity extensions (light effects, doors, spawn point overrides and cloth bounds) are
+  compared as a whole, ignoring number changes below the `ymap` tolerance; a change
+  replaces all of the entity's extensions with the source's. A YMAP with another
+  extension type fails to load rather than lose it.
 - `[prefix_]lodlights_*.ymap` and `[prefix_]distlodlights_*.ymap` hold the
   `lodLights` and `distantLodLightsSOA` of the same lights, read by index, so a light
   removed from either is removed from both. The source cache adds the other YMAP's
@@ -122,14 +137,30 @@ pipeline do). The differences of several sources combine as follows:
   document's `partner` records the files they were taken from. A resource shipping only
   one of the two has its removals merged into the other's vanilla YMAP as well. Pairs
   whose vanilla YMAPs differ in light count are left alone.
-- Entity extensions (light effects, doors, spawn point overrides and cloth bounds) are
-  compared as a whole, ignoring number changes below the `ymap` tolerance; a change
-  records every extension the source's entity has and replaces them. A YMAP with another
-  extension type fails to load rather than lose it.
-- Entity `parentIndex` values are compared and merged as the entity they point at, read
-  from the source resource's parent YMAP or else vanilla's, and written back as indices
-  into the final entity arrays. Unmodified child YMAPs whose parent's entity order
-  changed are rebuilt with relinked indices.
+
+**Entity parents**
+
+- `parentIndex` is compared and merged as the entity it points at, read from the
+  source resource's parent YMAP or else vanilla's, and written back as an index into
+  the final entity arrays. Unmodified child YMAPs whose parent's entity order changed
+  are rebuilt with relinked indices.
+- An entity whose parent entity was removed, or whose parent lies in a YMAP the merged
+  map's `parent` no longer names, is detached with a warning: `parentIndex` becomes
+  `-1`, flag 8 (parent in the parent YMAP) is cleared, and `LODTYPES_DEPTH_HD` becomes
+  `LODTYPES_DEPTH_ORPHANHD`; other LOD levels are kept.
+- An index into a parent YMAP the merge cannot read is kept as it is.
+- A parent without a unique, non-zero GUID is kept by index only while the array it
+  indexes is unchanged; otherwise that merge group fails rather than guess.
+
+**YBN**
+
+- Shapes matching vanilla that any source lacks are removed, and new shapes from every
+  source are combined. Removal wins over material or triangle-corner flag changes of
+  the same geometry, whatever the source order.
+- Shapes match by geometry within the coordinate tolerance, not by polygon or vertex
+  index; boxes match by their eight corners, so a different reference vertex does not
+  bring back a removed box.
+- Files without a vanilla baseline are skipped, or rejected when sources conflict.
 
 ### Overwrite Source Differences
 
@@ -141,7 +172,8 @@ document to leave out of the merge:
 - In an object, `true` leaves out the whole field's difference; a nested selector
   only the parts it names.
 - In an array, each selector leaves out the items whose written fields all match,
-  such as `{"Removed": {"index": 0}}` or an entity's `guid`; its `changes` leaves out
+  such as `{"Removed": {"index": 0}}` or `{"Modified": {"before_index": 0}}`, which
+  name vanilla items by index, or an added entity's `guid`; its `changes` leaves out
   only the changes it names. `{"Removed": {"implied": true}}` leaves out every implied
   LOD light removal.
 
@@ -230,7 +262,8 @@ the position and does not accept `--radius`.
 `ybn-position` searches world-space collision shape centers, not any point
 inside a shape. `--type` accepts `box`, `triangle`, `sphere`, `capsule` or
 `cylinder`; omit it to search all supported shapes. Unsupported shapes are
-skipped.
+skipped. `occlude-position` measures box occluders from their center, converted from
+stored quarter-metre units, and occlude models from the nearest point of their bounds.
 
 Use `-i` to select a merged directory (default: `asset/merged`). `--filter`
 accepts a case-insensitive filename glob; quote wildcard patterns. `--all`

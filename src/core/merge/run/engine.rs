@@ -237,7 +237,7 @@ impl MergeYmap {
         let source_originals =
           source.entities.iter().map(|entity| (entity.guid, entity)).collect::<HashMap<_, _>>();
         for diff in ymap_diff.entities.iter().flatten() {
-          let key = diff.guid();
+          let key = diff.guid(&original.entities);
           let change = match diff {
             YmapEntityDiff::Added {
               ..
@@ -303,7 +303,7 @@ impl MergeYmap {
               ..
             } => (Change::Modified, None),
           };
-          let key = diff.guid();
+          let key = diff.guid(&original.entities);
           duplicates.add(
             diff,
             key,

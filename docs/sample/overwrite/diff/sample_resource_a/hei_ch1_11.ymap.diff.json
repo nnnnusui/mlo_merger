@@ -1,5 +1,5 @@
 {
-  "schema_version": 8,
+  "schema_version": 9,
   "source": {
     "path": "docs/sample/source/[maps]/sample_resource_a/stream/hei_ch1_11.ymap",
     "sha256": "51733c11529b45028cb9854e41d81fc52ede13de6d81f5733c6c171879ec0719",
@@ -29,7 +29,6 @@
     "entities": [
       {
         "Modified": {
-          "guid": 3592082822,
           "before_index": 0,
           "after_index": 0,
           "changes": {

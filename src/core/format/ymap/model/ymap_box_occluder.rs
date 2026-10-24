@@ -35,7 +35,16 @@ mod rotation {
   }
 }
 
+/// Stored center and size units per metre (CodeWalker `YmapBoxOccluder`).
+const UNITS_PER_METRE: f64 = 4.0;
+
 impl YmapBoxOccluder {
+  /// World-space center in metres.
+  pub fn center(&self) -> [f64; 3] {
+    [self.i_center_x, self.i_center_y, self.i_center_z]
+      .map(|value| f64::from(value) / UNITS_PER_METRE)
+  }
+
   /// Whether `other` is the same occluder: centers within `tolerance.ymap_box_occluder` on every
   /// axis, in stored units.
   pub fn matches(
