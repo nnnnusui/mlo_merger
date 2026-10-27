@@ -25,12 +25,14 @@ pub use diff::{
   YmapComparisonDiff, YmapComparisonFile, YmapComparisonPartner, physics_dictionaries,
 };
 pub use entities::YmapEntityDiff;
-pub use entity_parent::{EntityParent, EntityParents, YmapDiffContext, entity_parents};
+pub use entity_parent::{
+  EntityParent, EntityParents, YmapDiffContext, entity_parents, raw_entity_parents,
+};
 pub use instanced_data::{
   YmapAddedGrassInstance, YmapGrassBatchDiff, YmapGrassBatchFieldDiff, YmapModifiedGrassInstance,
   YmapPropInstanceDiff,
 };
-pub use merge::merge_diffs;
+pub use merge::{IgnoredChange, YmapMergeOptions, merge_diffs};
 pub use merged_items::NoFieldDiff;
 pub use struct_diff::vec::ItemDiff;
 
@@ -69,5 +71,7 @@ pub type YmapOccludeModelDiff = ItemDiff<YmapOccludeModel, YmapOccludeModelField
 /// How one time cycle modifier of a modded YMAP differs from vanilla.
 pub type YmapTimeCycleModifierDiff =
   ItemDiff<YmapTimeCycleModifier, YmapTimeCycleModifierFieldDiff>;
+/// How one physics dictionary name of a modded YMAP differs from vanilla.
+pub type YmapPhysicsDictionaryDiff = ItemDiff<String, NoFieldDiff>;
 /// How one occlude model triangle of a modded YMAP differs from vanilla.
 pub type YmapTriangleDiff = ItemDiff<Triangle, TriangleDiff>;

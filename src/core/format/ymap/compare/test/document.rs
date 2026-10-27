@@ -102,10 +102,7 @@ fn get_diff_fingerprints_both_files_and_derives_their_differences() {
   assert_eq!(document["vanilla"]["sha256"], json!(sha256(&vanilla_bytes)));
   assert!(document["source"]["path"].as_str().unwrap().ends_with(&cached));
   assert_eq!(document["diffs"]["flags"], json!(modded.flags));
-  assert_eq!(
-    document["diffs"]["entities"],
-    json!([{ "Removed": { "index": removed_index } }])
-  );
+  assert_eq!(document["diffs"]["entities"], json!([{ "Removed": { "index": removed_index } }]));
   let unexpected = document["diffs"]
     .as_object()
     .unwrap()

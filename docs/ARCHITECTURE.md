@@ -72,8 +72,11 @@ merge must read: the parents and children related to changed files.
 3. For YMAPs, read each source's diff document, leave out the differences its
    resource overwrite selects, add the LOD light removals of resources shipping only
    the other YMAP of a light pair, append the vanilla overwrite as the last source,
-   combine the differences and apply them to the latest vanilla file. YBNs apply
-   supported source changes directly.
+   combine the differences and apply them to the latest vanilla file. Combining keeps
+   every change unless told to leave some out; the merge stage leaves out name, flag,
+   extent, block and distant LOD light count changes and physics dictionary removals,
+   keeping vanilla's. Diffs and their application stay complete, so other uses replay
+   every change. YBNs apply supported source changes directly.
 4. Write merged native stream files under extension subdirectories (`ymap/`, `ybn/`),
    `_omit.txt` and `duplicates.json` at the selected output root.
 
@@ -228,6 +231,20 @@ indexes YMAP parent/child relationships. It can be recreated from the raw archiv
 without re-extracting the game. An existing raw archive is not checked against
 changes to the installed game.
 
+Generation of the following YMAP version diffs is currently disabled, together with
+vanilla version inference (see the Readme). When enabled, the derived cache also
+writes, for each YMAP a version after its first changes, its
+diff from the version before (`diff/{version}/ymap/{name}.diff.json`), and lists each
+such YMAP's versions in `ymap_versions.json`. These diffs record every change: no
+value tolerance, entity parents as raw indices, entity moves as removals and
+re-additions, grass batches that instance changes would not rebuild replaced whole,
+and any other array whose diff would not rebuild it rewritten. Each diff is checked
+by applying it when taken, so applying them in order to a YMAP's oldest file
+rebuilds every later version. Source diffs keep their tolerances and do not record
+moves, which merging would take for deletions. A rebuild copies the
+previous cache's diffs between unchanged files while the diff layout, algorithm
+version and hash names match; a forced rebuild takes them all again.
+
 Input fingerprints and upstream state drive reuse. Raw vanilla and merge outputs
 are staged before publication; failed builds do not publish incomplete results.
 Source-cache file moves are incremental, so the whole pipeline is not one
@@ -252,7 +269,7 @@ validation or lossless handling of large JavaScript numbers.
 - The installed-game cache is an archive-overlay history, not a reconstruction of previous game releases.
 - Full mount enable/disable rules and engine-level deletions are not modeled.
 - Parsed-model equality does not guarantee byte identity with an original resource.
-- Diff documents describe differences from one vanilla file; they are not lossless history patches.
+- Source diff documents describe differences from one vanilla file; they are not lossless patches. Vanilla version diffs are.
 - Conversion tests do not replace runtime validation in GTA V/FiveM.
 - FiveM preview and editing are external to this tool.
 

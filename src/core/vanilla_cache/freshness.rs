@@ -45,6 +45,10 @@ pub(super) fn cache_is_current(
   if !output_dir.join("latest/ymap").is_dir() || !output_dir.join("latest/ybn").is_dir() {
     return Ok(false);
   }
+  // Checked again once YMAP version diffs are generated; see `BuildVanillaCache::run_cache`.
+  // if !ymap_diffs_are_current(output_dir, revision, latest_version) {
+  //   return Ok(false);
+  // }
   for file in manifest.files.values() {
     let link = output_dir.join(&file.object);
     if !fs::symlink_metadata(&link).is_ok_and(|metadata| metadata.file_type().is_symlink()) {

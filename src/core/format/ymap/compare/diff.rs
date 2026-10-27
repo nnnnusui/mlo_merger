@@ -42,7 +42,7 @@ pub struct YmapComparisonPartner {
 
 impl YmapComparisonDiff {
   /// The current [`Self::schema_version`]. Documents without one predate versioning.
-  pub const SCHEMA_VERSION: u32 = 9;
+  pub const SCHEMA_VERSION: u32 = 10;
 
   /// Reads the document at `path` when it holds the differences of `source` from `vanilla` as
   /// both are now, taken with `tolerances`; `None` when it is missing, of another layout or
@@ -98,33 +98,11 @@ impl YmapComparisonFile {
   }
 }
 
-/// The `#[diff(with)]` strategy of `Ymap::physics_dictionaries`.
+/// The `#[diff(with)]` strategy of `Ymap::physics_dictionaries`, comparing names by hash as a
+/// multiset, as prop instance names are.
 ///
-/// Their order carries no meaning (CodeWalker only checks membership), so only the dictionaries
-/// `modded` lists that `vanilla` does not are recorded, in `modded` order; removals are not
-/// recorded, and applying keeps every dictionary already present.
+/// CodeWalker only checks membership, so merging adds dictionaries but never removes them; see
+/// [`super::merge::IgnoredChange::PhysicsDictionaryRemovals`].
 pub mod physics_dictionaries {
-  use struct_diff::ApplyError;
-
-  pub fn diff<C: ?Sized>(
-    vanilla: &[String],
-    modded: &[String],
-    _ctx: &C,
-  ) -> Option<Vec<String>> {
-    let added: Vec<String> =
-      modded.iter().filter(|name| !vanilla.contains(name)).cloned().collect();
-    (!added.is_empty()).then_some(added)
-  }
-
-  pub fn apply(
-    dictionaries: &mut Vec<String>,
-    added: &[String],
-  ) -> Result<(), ApplyError> {
-    for name in added {
-      if !dictionaries.contains(name) {
-        dictionaries.push(name.clone());
-      }
-    }
-    Ok(())
-  }
+  pub use super::super::instanced_data::prop_instances::{apply, diff};
 }

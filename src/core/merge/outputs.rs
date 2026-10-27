@@ -45,4 +45,3 @@ pub fn merged_files(merged_dir: &Path) -> Result<Vec<MergedFile>> {
     })
     .collect()
 }
-

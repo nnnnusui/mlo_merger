@@ -59,6 +59,7 @@ impl MergeYmap {
           tolerances,
           vanilla_parents: vanilla_parents.clone(),
           modded_parents: parents_of(sources, references, Some(&mod_info.mod_name), &source.model)?,
+          record_moves: false,
         };
         let mut diff = vanilla_ymap.diff(&source.model, &ctx).unwrap_or_default();
         if let Some((side, partner_hash)) = pair_of(sources, ymap_name)?

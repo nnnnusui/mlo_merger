@@ -6,7 +6,7 @@ use super::*;
 use crate::core::{
   config::blacklist::{BlacklistConfig, OccludeModelBlacklist},
   format::ymap::{
-    compare::merge_diffs,
+    compare::{IgnoredChange, YmapMergeOptions, merge_diffs},
     model::{YmapBoxOccluder, YmapOccludeModel},
   },
 };
@@ -24,15 +24,31 @@ fn occluder(x: i32) -> YmapBoxOccluder {
   }
 }
 
-/// `vanilla` with the diffs of every source in `sources` merged in, in order.
+/// `vanilla` with the diffs of every source in `sources` merged in, in order, leaving out what
+/// the merge stage does.
 fn merged(
   vanilla: &Ymap,
   sources: &[&Ymap],
   blacklist: Option<&BlacklistConfig>,
 ) -> Ymap {
+  merged_with(
+    vanilla,
+    sources,
+    YmapMergeOptions {
+      ignored: IgnoredChange::MERGE,
+      blacklist,
+    },
+  )
+}
+
+fn merged_with(
+  vanilla: &Ymap,
+  sources: &[&Ymap],
+  options: YmapMergeOptions,
+) -> Ymap {
   let diffs = sources.iter().map(|source| diff(vanilla, source)).collect::<Vec<_>>();
   let mut ymap = vanilla.clone();
-  ymap.apply(&merge_diffs(vanilla, &diffs, blacklist)).unwrap();
+  ymap.apply(&merge_diffs(vanilla, &diffs, options)).unwrap();
   ymap
 }
 
@@ -138,10 +154,13 @@ fn references_skip_names_already_present_and_keep_the_first_parent() {
   second.parent = "second_parent".into();
   second.physics_dictionaries = vec!["Added".into(), "other".into()];
   second.instanced_data.prop_instance_list = vec!["PROP".into()];
-  let merged = merged(&vanilla, &[&first, &second], None);
-  assert_eq!(merged.parent, "first_parent");
-  assert_eq!(merged.physics_dictionaries, ["kept", "added", "other"]);
-  assert_eq!(merged.instanced_data.prop_instance_list, ["prop"]);
+  let merged_stage = merged(&vanilla, &[&first, &second], None);
+  assert_eq!(merged_stage.parent, "first_parent");
+  assert_eq!(merged_stage.physics_dictionaries, ["kept", "added", "other"]);
+  assert_eq!(merged_stage.instanced_data.prop_instance_list, ["prop"]);
+  // Without the merge stage's conditions, the second source's replacement of `kept` wins.
+  let merged_all = merged_with(&vanilla, &[&first, &second], YmapMergeOptions::default());
+  assert_eq!(merged_all.physics_dictionaries, ["Added", "other"]);
 }
 
 #[test]
@@ -166,6 +185,36 @@ fn content_flags_are_combined_and_other_metadata_stays_vanilla() {
     },
     vanilla
   );
+}
+
+#[test]
+fn without_ignored_changes_metadata_keeps_the_first_change() {
+  let vanilla = Ymap {
+    content_flags: 1,
+    ..base()
+  };
+  let mut first = vanilla.clone();
+  first.content_flags = 2;
+  first.name = "renamed".into();
+  first.streaming_extents_max.x += 50.0;
+  first.block.owner = "someone".into();
+  first.distant_lod_lights.num_street_lights = 3;
+  let mut second = vanilla.clone();
+  second.name = "other".into();
+  second.flags = vanilla.flags + 1;
+  second.streaming_extents_max.x += 10.0;
+  second.streaming_extents_max.y += 10.0;
+  second.block.owner = "another".into();
+  second.block.time = "now".into();
+  let merged = merged_with(&vanilla, &[&first, &second], YmapMergeOptions::default());
+  let mut expected = first.clone();
+  expected.content_flags = 3;
+  expected.flags = second.flags;
+  expected.streaming_extents_max.y = second.streaming_extents_max.y;
+  expected.block.time = "now".into();
+  assert_eq!(merged, expected);
+  // A single source is rebuilt exactly.
+  assert_eq!(merged_with(&vanilla, &[&second], YmapMergeOptions::default()), second);
 }
 
 #[test]

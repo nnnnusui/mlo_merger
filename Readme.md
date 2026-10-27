@@ -352,6 +352,19 @@ strings; sets are arrays. File sizes and timestamps are JSON numbers, represente
 as TypeScript `number`, not `bigint`. Values above `Number.MAX_SAFE_INTEGER` need
 a precision-aware JSON reader. These definitions do not validate data at runtime.
 
+### Vanilla Version Inference
+
+Inferring which vanilla version a source YMAP was made from, and merging its changes
+from that version, is deferred for now. The code that writes vanilla YMAP
+version-to-version diffs is kept but not called; see
+[docs/vanillaDiff.md](docs/vanillaDiff.md) for what it does and what was measured.
+
+- At least for YMAPs, it is needed only by MLOs made from a vanilla version older than
+  mp2025_02, so it has low priority.
+  - Apart from some LOD light YMAPs, it is needed only for versions up to patchday27ng
+    (before GameBuild 2699).
+- It cannot be implemented until there is a way to track differences exactly.
+
 ### Limitations
 
 - `--get-diff SOURCE` writes the source YMAP's differences from the latest vanilla

@@ -147,4 +147,3 @@ fn builds_source_inventory_and_skips_unchanged_inputs_without_diffing() {
   assert!(build().run_after_vanilla_cache().unwrap());
   fs::remove_dir_all(root).unwrap();
 }
-

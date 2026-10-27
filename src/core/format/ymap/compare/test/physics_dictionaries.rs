@@ -10,36 +10,30 @@ fn with_dictionaries(names: &[&str]) -> Ymap {
 }
 
 #[test]
-fn only_added_physics_dictionaries_are_recorded() {
+fn physics_dictionaries_compare_by_name() {
   let vanilla = with_dictionaries(&["a", "b"]);
   assert_eq!(
-    json(&vanilla, &with_dictionaries(&["c", "b"])),
-    json!({ "physics_dictionaries": ["c"] })
+    json(&vanilla, &with_dictionaries(&["b", "c"])),
+    json!({
+      "physics_dictionaries": [
+        { "Removed": { "index": 0 } },
+        { "Added": { "after": 1, "item": "c" } },
+      ],
+    })
   );
-  // Removals and reordering are not differences.
-  assert_eq!(json(&vanilla, &with_dictionaries(&["b"])), json!({}));
-  assert_eq!(json(&vanilla, &with_dictionaries(&["b", "a"])), json!({}));
+  assert_eq!(
+    json(&vanilla, &with_dictionaries(&["b"])),
+    json!({ "physics_dictionaries": [{ "Removed": { "index": 0 } }] })
+  );
+  // Names match by hash.
+  assert_eq!(json(&vanilla, &with_dictionaries(&["A", "b"])), json!({}));
 }
 
-// Moved from `diff.rs`: the function on its own.
-
 #[test]
-fn records_only_added_physics_dictionaries() {
-  let vanilla = Ymap {
-    physics_dictionaries: vec!["a".into(), "b".into()],
-    ..base()
-  };
-  let modded = Ymap {
-    physics_dictionaries: vec!["c".into(), "b".into()],
-    ..base()
-  };
-  assert_eq!(
-    compare::physics_dictionaries::diff(
-      &vanilla.physics_dictionaries,
-      &modded.physics_dictionaries,
-      &()
-    ),
-    Some(vec!["c".to_string()])
-  );
-  assert_eq!(compare::physics_dictionaries::diff(&modded.physics_dictionaries, &[], &()), None);
+fn physics_dictionaries_are_rebuilt_exactly() {
+  let vanilla = with_dictionaries(&["a", "b", "c"]);
+  let modded = with_dictionaries(&["d", "a", "e", "c"]);
+  let mut applied = vanilla.clone();
+  applied.apply(&diff(&vanilla, &modded)).unwrap();
+  assert_eq!(applied.physics_dictionaries, modded.physics_dictionaries);
 }

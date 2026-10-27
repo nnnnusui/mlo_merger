@@ -59,6 +59,19 @@ struct Config {
 }
 
 impl MatchTolerances {
+  /// [`Self::default`] recording every YMAP change however small, for diffs replayed to rebuild
+  /// the YMAP they were taken to. Items still pair as by default, except occlude models, which
+  /// never pair, since the reordering of their triangles is not recorded.
+  pub fn ymap_exact() -> Self {
+    Self {
+      ymap: 0.0,
+      ymap_occlude_model: 0.0,
+      ymap_box_occluder_rotation: 0,
+      ymap_grass_position: 0.0,
+      ..Self::default()
+    }
+  }
+
   /// Loads optional TOML configuration, rejecting invalid matching tolerances.
   ///
   /// ```no_run

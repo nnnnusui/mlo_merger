@@ -327,7 +327,14 @@ impl MergeYmap {
       if !duplicates.is_empty() {
         duplicate_files.insert(ymap_name.to_ascii_lowercase(), duplicates);
       }
-      let merged_diff = merge_diffs(vanilla_ymap, &ymap_diffs, blacklist.as_ref());
+      let merged_diff = merge_diffs(
+        vanilla_ymap,
+        &ymap_diffs,
+        YmapMergeOptions {
+          ignored: IgnoredChange::MERGE,
+          blacklist: blacklist.as_ref(),
+        },
+      );
       let failed =
         |error: struct_diff::ApplyError| format!("{}: {error}", vanilla_ymap_path.display());
       let mut model = vanilla_ymap.clone();

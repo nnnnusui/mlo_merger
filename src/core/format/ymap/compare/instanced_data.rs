@@ -146,6 +146,33 @@ pub mod grass_batches {
   }
 }
 
+/// Replaces each modified batch of `diffs`, taken from `before` to `after`, whose changes do not
+/// rebuild it exactly, by the batch itself, for diffs replayed onto the YMAP they were taken from:
+/// instances matched within one packed step, those repacked into changed bounds and `pad` bytes
+/// are otherwise not rebuilt.
+pub fn replace_inexact_grass_batches(
+  before: &[GrassInstanceBatch],
+  after: &[GrassInstanceBatch],
+  diffs: &mut [YmapGrassBatchDiff],
+) {
+  for diff in diffs {
+    if let ItemDiff::Modified {
+      before_index,
+      after_index,
+      changes,
+    } = diff
+    {
+      let mut batch = before[*before_index].clone();
+      if changes.apply_to(&mut batch).is_err() || batch != after[*after_index] {
+        *diff = ItemDiff::Replaced {
+          index: *before_index,
+          item: after[*after_index].clone(),
+        };
+      }
+    }
+  }
+}
+
 /// Archetype and render settings shared by batches whose instances can match.
 fn settings_key(batch: &GrassInstanceBatch) -> GroupKey {
   (

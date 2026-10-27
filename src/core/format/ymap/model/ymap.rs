@@ -1,6 +1,6 @@
 use crate::{
   common::position::Position,
-  core::format::ymap::compare::{self, YmapDiffContext, YmapEntityDiff},
+  core::format::ymap::compare::{self, YmapDiffContext, YmapEntityDiff, YmapPhysicsDictionaryDiff},
 };
 
 use super::{
@@ -42,7 +42,7 @@ pub struct Ymap {
   pub lod_lights: Vec<YmapLodLight>,
   #[diff(nested, context = ctx.tolerances)]
   pub distant_lod_lights: YmapDistantLodLights,
-  #[diff(with = compare::physics_dictionaries, output = Vec<String>)]
+  #[diff(with = compare::physics_dictionaries, output = Vec<YmapPhysicsDictionaryDiff>)]
   pub physics_dictionaries: Vec<String>,
   #[diff(nested, context = ctx.tolerances)]
   pub instanced_data: YmapInstancedData,

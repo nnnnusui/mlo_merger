@@ -40,6 +40,20 @@ pub enum EntityParent {
   },
 }
 
+impl EntityParent {
+  /// The parent `entity`'s `parentIndex` names, taken as a raw index rather than resolved.
+  pub fn raw(entity: &YmapEntity) -> Self {
+    if entity.parent_index < 0 {
+      Self::None
+    } else {
+      Self::Unresolved {
+        in_parent: entity.flags & 8 != 0,
+        index: entity.parent_index,
+      }
+    }
+  }
+}
+
 /// The parent of every entity of a YMAP, in entity order.
 pub type EntityParents = Vec<EntityParent>;
 
@@ -52,6 +66,10 @@ pub struct YmapDiffContext {
   pub vanilla_parents: EntityParents,
   /// Parents of the modded YMAP's entities, in entity order.
   pub modded_parents: EntityParents,
+  /// Records entities that move among the kept ones as removed and added again, so applying
+  /// rebuilds their order (see [`super::entities`]). Merging would take them for deletions, so
+  /// only diffs replayed onto the YMAP they were taken from record moves.
+  pub record_moves: bool,
 }
 
 impl YmapDiffContext {
@@ -66,8 +84,16 @@ impl YmapDiffContext {
       tolerances,
       vanilla_parents: entity_parents(vanilla, vanilla_parent),
       modded_parents: entity_parents(modded, modded_parent),
+      record_moves: false,
     }
   }
+}
+
+/// The parent of each entity of `ymap` as its raw `parentIndex` (see [`EntityParent::raw`]), for
+/// diffs that are replayed onto the YMAP they were taken from rather than merged: every changed
+/// index is recorded, and [`super::entities::apply`] sets it again.
+pub fn raw_entity_parents(ymap: &Ymap) -> EntityParents {
+  ymap.entities.iter().map(EntityParent::raw).collect()
 }
 
 /// The parent of each entity of `ymap`, given the entities of its parent YMAP when available.

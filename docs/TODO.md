@@ -29,18 +29,13 @@ Per-resource overwrites (`overwrite/resources/{resourceName}.json`) leave select
 
 ## YMAP Baseline Inference
 
-- [ ] Compare each source YMAP with the available vanilla versions and infer its source version from the number of differences.
-- [ ] Apply source changes from the inferred baseline to the latest vanilla YMAP and repair parent references.
+- [-] Compare each source YMAP with the available vanilla versions and infer its source version from the number of differences.
+- [-] Apply source changes from the inferred baseline to the latest vanilla YMAP and repair parent references.
 
 ## Diff Documents
 
-Source-cache diff documents currently cover YMAPs against the latest vanilla only.
+Source-cache diff documents currently cover YMAPs against the latest vanilla only. Writing each vanilla YMAP's version-to-version diffs is implemented but disabled (see the Readme).
 
 - [ ] Write source diffs against a selected or inferred vanilla version, not only the latest one.
-- [ ] Write vanilla version-to-version diffs.
 - [ ] Add YBN diff documents and their TypeScript types.
 - [ ] Implement `--get-diff SOURCE TARGET`; it currently only prints a mock invocation.
-
-## FiveM Preview and Editing
-
-- [ ] Implement the separate FiveM resource that reads `--read` JSON and writes per-resource overwrites, and validate in-game selection and rendering.

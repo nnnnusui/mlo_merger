@@ -1,4 +1,5 @@
-//! Derived latest-file and YMAP relationship indexes for raw vanilla history.
+//! Derived latest-file and YMAP relationship indexes, and YMAP version diffs, for raw vanilla
+//! history.
 
 use std::{
   collections::{BTreeMap, BTreeSet},
@@ -18,10 +19,11 @@ use crate::core::{
   vanilla::{CachedFile, read_ymap},
 };
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
-pub(crate) const CACHE_SCHEMA: u32 = 3;
+pub(crate) const CACHE_SCHEMA: u32 = 4;
 
 /// Outcome of building or reusing a derived vanilla cache.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -110,6 +112,7 @@ mod freshness;
 mod read;
 mod relationships;
 mod source;
+mod ymap_diffs;
 
 use filesystem::*;
 use freshness::{cache_is_current, previous_manifest};
@@ -118,6 +121,9 @@ pub use read::{VanillaLatestFile, cache_info_path, latest_files};
 use relationships::children_by_parent;
 pub(crate) use relationships::ymap_parent_hash;
 use source::*;
+pub use ymap_diffs::{VanillaYmapDiff, VanillaYmapHistory, VanillaYmapVersion, ymap_history};
+// Generation is disabled; see `BuildVanillaCache::run_cache`.
+// use ymap_diffs::{write_ymap_diffs, ymap_diffs_are_current};
 
 #[cfg(test)]
 mod tests;

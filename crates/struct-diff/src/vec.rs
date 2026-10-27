@@ -222,6 +222,23 @@ impl<T: Clone, C> ItemDiff<T, C> {
     removals.into_iter().chain(replacements).chain(additions).collect()
   }
 
+  /// Diffs removing all `before_len` earlier items and adding every `after` item, in order, so
+  /// applying rebuilds `after` exactly whatever the items' pairing and order.
+  pub fn rewrite(
+    before_len: usize,
+    after: &[T],
+  ) -> Vec<Self> {
+    let removed = (0..before_len).map(|index| Self::Removed {
+      index,
+      implied: false,
+    });
+    let added = after.iter().map(|item| Self::Added {
+      after: None,
+      item: item.clone(),
+    });
+    removed.chain(added).collect()
+  }
+
   /// Pairs whose `changes(before_index, after_index)` are not `None`, then the unpaired items.
   pub fn collect_with(
     pairing: Pairing,
@@ -430,6 +447,14 @@ mod tests {
     assert_eq!(pairing.pairs, vec![(0, 1), (1, 3)]);
     assert_eq!(pairing.removed, vec![2, 3]);
     assert_eq!(pairing.added, vec![0, 2, 4]);
+  }
+
+  #[test]
+  fn a_rewrite_rebuilds_the_later_order() {
+    let mut items = vec![1, 2, 3];
+    let diffs = ItemDiff::<i32, ()>::rewrite(items.len(), &[3, 1, 4]);
+    ItemDiff::apply_with(&mut items, &diffs, |_, _| Ok(())).unwrap();
+    assert_eq!(items, [3, 1, 4]);
   }
 
   #[test]

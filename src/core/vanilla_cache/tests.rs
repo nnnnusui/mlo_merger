@@ -198,3 +198,137 @@ fn direct_parent_reader_matches_latest_ymap_model() {
   let ymap = read_ymap(&path).unwrap();
   assert_eq!(ymap_parent_hash(&path).unwrap(), reference_hash(&ymap.parent));
 }
+
+#[test]
+#[ignore = "YMAP version diff generation is disabled"]
+fn writes_ymap_version_diffs_that_rebuild_each_version() {
+  use crate::core::format::ymap::binary::write_ymap;
+  use std::collections::HashMap;
+
+  let root = std::env::temp_dir().join(format!("vanilla_ymap_diffs_{}", std::process::id()));
+  let vanilla = root.join("vanilla");
+  let output = root.join("cache");
+  let base =
+    crate::core::format::gamefile::test_support::sample_ymap("parent_refs/vanilla_parent.ymap");
+  let mut update = base.clone();
+  update.entities.remove(0);
+  update.entities[0].lod_dist += 0.0001;
+  update.streaming_extents_max.x += 1.0;
+  update.physics_dictionaries = vec!["added".into()];
+  let mut patch = update.clone();
+  patch.flags += 1;
+  let stages = [("0000-base", &base), ("0001-update", &update), ("0002-patch", &patch)];
+  let mut versions = Vec::new();
+  let mut previous_sha256 = None;
+  for (index, (id, ymap)) in stages.iter().enumerate() {
+    let bytes = write_ymap(ymap, &ymap.entities).unwrap();
+    let object = format!("{id}/ymap/map.ymap");
+    fs::create_dir_all(vanilla.join(id).join("ymap")).unwrap();
+    fs::write(vanilla.join(&object), &bytes).unwrap();
+    let sha256 = hex::encode(Sha256::digest(&bytes));
+    versions.push(CacheVersion {
+      id: id.to_string(),
+      parent: index.checked_sub(1).map(|parent| stages[parent].0.to_string()),
+      archives: vec![],
+      changes: BTreeMap::from([(
+        "Map.ymap".into(),
+        FileChange {
+          previous_sha256: previous_sha256.replace(sha256.clone()),
+          file: CachedFile {
+            sha256,
+            object,
+            source: format!("{id}.rpf/map.ymap"),
+          },
+        },
+      )]),
+      unchanged: 0,
+    });
+  }
+  write_json(
+    &vanilla.join("cache_info.json"),
+    &VanillaCacheManifest {
+      format_version: 1,
+      game_dir: "game".into(),
+      versions,
+    },
+  )
+  .unwrap();
+  let build = |through_version: Option<&str>| {
+    BuildVanillaCache {
+      vanilla_dir: vanilla.clone(),
+      output_dir: output.clone(),
+      through_version: through_version.map(Into::into),
+      force: false,
+    }
+    .run()
+    .unwrap()
+  };
+
+  build(Some("update"));
+  let history = ymap_history(&output, "MAP.ymap").unwrap().unwrap();
+  assert_eq!(history.versions.len(), 2);
+  assert!(history.diff_path(1).ends_with("diff/0001-update/ymap/map.ymap.diff.json"));
+  // Marked so a copy can be told from a document taken again.
+  let marked = format!("{}\n", fs::read_to_string(history.diff_path(1)).unwrap());
+  fs::write(history.diff_path(1), &marked).unwrap();
+
+  assert!(build(None).rebuilt);
+  let history = ymap_history(&output, "map.ymap").unwrap().unwrap();
+  let ids = history.versions.iter().map(|version| version.version.as_str()).collect::<Vec<_>>();
+  assert_eq!(ids, ["0000-base", "0001-update", "0002-patch"]);
+  // The diff to the unchanged update is kept, not taken again.
+  assert_eq!(fs::read_to_string(history.diff_path(1)).unwrap(), marked);
+  assert_eq!(history.read_diff(2).unwrap().diffs.flags, Some(patch.flags));
+  let names = HashMap::new();
+  for (index, (_, ymap)) in stages.iter().enumerate() {
+    let expected = crate::core::format::ymap::binary::ymap_to_model(
+      &fs::read(vanilla.join(&history.versions[index].object)).unwrap(),
+      &names,
+    )
+    .unwrap();
+    assert_eq!(history.rebuild(&vanilla, index, &names).unwrap(), expected);
+    assert_eq!(expected.entities.len(), ymap.entities.len());
+  }
+  assert!(!build(None).rebuilt);
+
+  fs::remove_file(history.diff_path(2)).unwrap();
+  assert!(build(None).rebuilt);
+  assert!(history.diff_path(2).is_file());
+  fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+#[ignore = "YMAP version diff generation is disabled; also requires the raw vanilla archive"]
+fn ymap_version_diffs_rebuild_every_vanilla_version() {
+  use crate::core::format::ymap::binary::ymap_to_model;
+
+  let vanilla = Path::new(env!("CARGO_MANIFEST_DIR")).join("asset/vanilla");
+  let output = std::env::temp_dir().join(format!("vanilla_ymap_history_{}", std::process::id()));
+  BuildVanillaCache {
+    vanilla_dir: vanilla.clone(),
+    output_dir: output.clone(),
+    through_version: None,
+    force: true,
+  }
+  .run()
+  .unwrap();
+  let names = crate::core::conversion::load_hash_names_or_empty(&vanilla.join("hash_names.json"));
+  let index: serde_json::Value =
+    serde_json::from_slice(&fs::read(output.join("ymap_versions.json")).unwrap()).unwrap();
+  let (mut versions, mut failures) = (0, Vec::new());
+  for name in index["ymaps"].as_object().unwrap().keys() {
+    let history = ymap_history(&output, name).unwrap().unwrap();
+    for index in 1..history.versions.len() {
+      versions += 1;
+      let rebuilt = history.rebuild(&vanilla, index, &names).unwrap();
+      let path = vanilla.join(&history.versions[index].object);
+      let expected = ymap_to_model(&fs::read(path).unwrap(), &names).unwrap();
+      if rebuilt != expected {
+        failures.push(format!("{name} {}", history.versions[index].version));
+      }
+    }
+  }
+  println!("{} of {versions} versions rebuilt exactly", versions - failures.len());
+  fs::remove_dir_all(output).unwrap();
+  assert!(failures.is_empty(), "{failures:#?}");
+}

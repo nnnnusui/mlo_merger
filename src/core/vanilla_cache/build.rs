@@ -49,6 +49,18 @@ impl BuildVanillaCache {
       &current,
       &input_timestamps,
     )?;
+    // YMAP version diffs are not generated until vanilla version inference is implemented;
+    // see "Vanilla Version Inference" in Readme.md.
+    // // Forced rebuilds take every diff again.
+    // let previous_diffs = (!self.force).then_some(output_dir.as_path());
+    // write_ymap_diffs(
+    //   &vanilla_dir,
+    //   &manifest,
+    //   &revision,
+    //   through_index,
+    //   &staging.0,
+    //   previous_diffs,
+    // )?;
     publish_directory(&staging.0, &output_dir)?;
     let mut changes = StoreChanges::default();
     let mut previous_files: BTreeMap<_, _> = previous

@@ -42,10 +42,7 @@ fn modified_entities_list_changed_fields_beyond_the_tolerance() {
 fn removed_entities_keep_only_their_index() {
   let vanilla = with_entities(vec![entity(1), entity(2)]);
   let modded = with_entities(vec![entity(1)]);
-  assert_eq!(
-    json(&vanilla, &modded),
-    json!({ "entities": [{ "Removed": { "index": 1 } }] })
-  );
+  assert_eq!(json(&vanilla, &modded), json!({ "entities": [{ "Removed": { "index": 1 } }] }));
 }
 
 #[test]
@@ -308,4 +305,30 @@ fn extensions_compare_as_a_whole_beyond_the_tolerance() {
   let mut applied = vanilla.clone();
   applied.apply(&diff(&vanilla, &edited)).unwrap();
   assert_eq!(applied.entities[0].extensions, vec![door(0.5)]);
+}
+
+#[test]
+fn moves_are_recorded_only_when_asked() {
+  let vanilla = with_entities((1..=5).map(entity).collect());
+  let mut modded = with_entities([2, 5, 1, 6, 3, 4].into_iter().map(entity).collect());
+  modded.entities[4].lod_dist = 250.0;
+  let mut ctx = YmapDiffContext::new(MatchTolerances::default(), (&vanilla, None), (&modded, None));
+  let mut applied = vanilla.clone();
+  applied.apply(&vanilla.diff(&modded, &ctx).unwrap()).unwrap();
+  let guids = |ymap: &Ymap| ymap.entities.iter().map(|entity| entity.guid).collect::<Vec<_>>();
+  assert_eq!(guids(&applied), [1, 6, 2, 3, 4, 5]);
+
+  ctx.record_moves = true;
+  let diff = vanilla.diff(&modded, &ctx).unwrap();
+  // 1 and 5 move; 2, 3 and 4 stay in order.
+  let removed = diff
+    .entities
+    .iter()
+    .flatten()
+    .filter(|diff| matches!(diff, YmapEntityDiff::Removed { .. }))
+    .count();
+  assert_eq!(removed, 2);
+  let mut applied = vanilla.clone();
+  applied.apply(&diff).unwrap();
+  assert_eq!(applied, modded);
 }

@@ -7,15 +7,18 @@
 //! they follow, in source order. Occlude
 //! models modified by several sources take each field from the first source changing it and
 //! every source's triangle removals and additions, so cut-outs of every source survive. `content_flags`
-//! are OR-ed into vanilla's, the parent and IMAP link keep the first change, and added physics
-//! dictionaries and prop instances skip names already present. The name, flags, extents, block
-//! and the distant LOD light counts keep their vanilla values.
+//! are OR-ed into vanilla's, other fields keep the first change, each extent axis and block field
+//! on its own, and added physics dictionaries and prop instances skip names already present.
+//!
+//! Every change is combined unless [`YmapMergeOptions::ignored`] names it; the merge stage leaves
+//! out those listed in [`IgnoredChange::MERGE`].
 
 use std::collections::HashSet;
 
 use super::{
-  ItemDiff, PositionDiff, YmapDiffFields, YmapDistantLodLightsDiff, YmapInstancedDataDiff,
-  YmapOccludeModelDiff, YmapOccludeModelFieldDiff, entities,
+  ItemDiff, PositionDiff, YmapBlockDiff, YmapDiffFields, YmapDistantLodLightsDiff,
+  YmapInstancedDataDiff, YmapOccludeModelDiff, YmapOccludeModelFieldDiff, YmapPropInstanceDiff,
+  entities,
   merged_items::{MergedItems, merged, merged_with},
 };
 use crate::core::{
@@ -26,22 +29,122 @@ use crate::core::{
   },
 };
 
+/// A kind of change that [`merge_diffs`] can leave out, keeping vanilla's value.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum IgnoredChange {
+  Name,
+  Flags,
+  StreamingExtents,
+  EntitiesExtents,
+  Block,
+  /// `numStreetLights` and `category` of the distant LOD lights.
+  DistantLodLightCounts,
+  /// Removals and replacements of vanilla physics dictionaries; replacing names are added.
+  PhysicsDictionaryRemovals,
+}
+
+impl IgnoredChange {
+  /// What the merge stage leaves out: metadata a resource's YMAP restates from the version it
+  /// was made from, and dictionary removals, since CodeWalker only checks their membership.
+  pub const MERGE: &[Self] = &[
+    Self::Name,
+    Self::Flags,
+    Self::StreamingExtents,
+    Self::EntitiesExtents,
+    Self::Block,
+    Self::DistantLodLightCounts,
+    Self::PhysicsDictionaryRemovals,
+  ];
+
+  /// The field this change belongs to, as logs name it.
+  fn field(self) -> &'static str {
+    match self {
+      Self::Name => "name",
+      Self::Flags => "flags",
+      Self::StreamingExtents => "streamingExtents",
+      Self::EntitiesExtents => "entitiesExtents",
+      Self::Block => "block",
+      Self::DistantLodLightCounts => "distantLodLights counts",
+      Self::PhysicsDictionaryRemovals => "physicsDictionaries removals",
+    }
+  }
+
+  /// Whether `diff` makes this change.
+  fn is_made_by(
+    self,
+    diff: &YmapDiffFields,
+  ) -> bool {
+    match self {
+      Self::Name => diff.name.is_some(),
+      Self::Flags => diff.flags.is_some(),
+      Self::StreamingExtents => {
+        diff.streaming_extents_min.is_some() || diff.streaming_extents_max.is_some()
+      }
+      Self::EntitiesExtents => {
+        diff.entities_extents_min.is_some() || diff.entities_extents_max.is_some()
+      }
+      Self::Block => diff.block.is_some(),
+      Self::DistantLodLightCounts => diff
+        .distant_lod_lights
+        .as_ref()
+        .is_some_and(|lights| lights.num_street_lights.is_some() || lights.category.is_some()),
+      Self::PhysicsDictionaryRemovals => diff
+        .physics_dictionaries
+        .iter()
+        .flatten()
+        .any(|diff| matches!(diff, ItemDiff::Removed { .. } | ItemDiff::Replaced { .. })),
+    }
+  }
+}
+
+/// How [`merge_diffs`] combines the sources' changes.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct YmapMergeOptions<'a> {
+  /// Changes left out, keeping vanilla's values.
+  pub ignored: &'a [IgnoredChange],
+  /// Added occlude models it lists are dropped.
+  pub blacklist: Option<&'a BlacklistConfig>,
+}
+
 /// One diff of `vanilla` making the changes of every diff in `sources`, taken from `vanilla` in
-/// merge order; added occlude models that `blacklist` lists are dropped.
+/// merge order, except those `options` leave out.
 pub fn merge_diffs(
   vanilla: &Ymap,
   sources: &[YmapDiffFields],
-  blacklist: Option<&BlacklistConfig>,
+  options: YmapMergeOptions,
 ) -> YmapDiffFields {
   for source in sources {
-    log_ignored(source);
+    log_ignored(source, options.ignored);
   }
+  let kept = |change: IgnoredChange| !options.ignored.contains(&change);
   let content_flags =
     sources.iter().filter_map(|diff| diff.content_flags).fold(vanilla.content_flags, |a, b| a | b);
+  let distant_lod_lights = sources.iter().filter_map(|diff| diff.distant_lod_lights.as_ref());
   let instanced_data = sources.iter().filter_map(|diff| diff.instanced_data.as_ref());
   YmapDiffFields {
+    name: kept(IgnoredChange::Name)
+      .then(|| first_change("name", sources.iter().map(|diff| &diff.name)))
+      .flatten(),
+    flags: kept(IgnoredChange::Flags)
+      .then(|| first_change("flags", sources.iter().map(|diff| &diff.flags)))
+      .flatten(),
     content_flags: (content_flags != vanilla.content_flags).then_some(content_flags),
     parent: first_reference("parent", sources.iter().map(|diff| &diff.parent)),
+    streaming_extents_min: kept(IgnoredChange::StreamingExtents)
+      .then(|| first_position(sources.iter().map(|diff| &diff.streaming_extents_min)))
+      .flatten(),
+    streaming_extents_max: kept(IgnoredChange::StreamingExtents)
+      .then(|| first_position(sources.iter().map(|diff| &diff.streaming_extents_max)))
+      .flatten(),
+    entities_extents_min: kept(IgnoredChange::EntitiesExtents)
+      .then(|| first_position(sources.iter().map(|diff| &diff.entities_extents_min)))
+      .flatten(),
+    entities_extents_max: kept(IgnoredChange::EntitiesExtents)
+      .then(|| first_position(sources.iter().map(|diff| &diff.entities_extents_max)))
+      .flatten(),
+    block: kept(IgnoredChange::Block)
+      .then(|| first_block(sources.iter().filter_map(|diff| diff.block.as_ref())))
+      .flatten(),
     entities: non_empty(entities::merge(
       &vanilla.entities,
       &lists(sources.iter().map(|diff| &diff.entities)),
@@ -56,8 +159,9 @@ pub fn merge_diffs(
       &vanilla.occlude_models,
       sources.iter().map(|diff| diff.occlude_models.as_ref()),
       |model| {
-        let listed =
-          blacklist.is_some_and(|list| list.is_occlude_model_blacklisted(&model.bmin, &model.bmax));
+        let listed = options
+          .blacklist
+          .is_some_and(|list| list.is_occlude_model_blacklisted(&model.bmin, &model.bmax));
         if listed {
           tracing::info!(
             "      [Blacklisted] Occlude Model: bmin={:?}, bmax={:?}",
@@ -74,36 +178,44 @@ pub fn merge_diffs(
       sources.iter().map(|diff| diff.lod_lights.as_ref()),
       |_| true,
     ),
-    distant_lod_lights: merge_items(
-      "distant_lod_lights",
-      vanilla.distant_lod_lights.items.len(),
-      sources.iter().map(|diff| diff.distant_lod_lights.as_ref().and_then(|it| it.items.as_ref())),
-      |_| true,
-    )
-    .map(|items| YmapDistantLodLightsDiff {
-      items: Some(items),
-      ..Default::default()
-    }),
-    physics_dictionaries: added_references(
+    distant_lod_lights: {
+      let counts = kept(IgnoredChange::DistantLodLightCounts);
+      let lights = YmapDistantLodLightsDiff {
+        items: merge_items(
+          "distant_lod_lights",
+          vanilla.distant_lod_lights.items.len(),
+          distant_lod_lights.clone().map(|diff| diff.items.as_ref()),
+          |_| true,
+        ),
+        num_street_lights: counts
+          .then(|| {
+            first_change(
+              "numStreetLights",
+              distant_lod_lights.clone().map(|diff| &diff.num_street_lights),
+            )
+          })
+          .flatten(),
+        category: counts
+          .then(|| first_change("category", distant_lod_lights.map(|diff| &diff.category)))
+          .flatten(),
+      };
+      (lights != YmapDistantLodLightsDiff::default()).then_some(lights)
+    },
+    physics_dictionaries: merge_references(
+      "physics_dictionaries",
       &vanilla.physics_dictionaries,
-      sources.iter().filter_map(|diff| diff.physics_dictionaries.as_deref()).flatten(),
+      &lists(sources.iter().map(|diff| &diff.physics_dictionaries)),
+      !kept(IgnoredChange::PhysicsDictionaryRemovals),
     ),
     instanced_data: {
       let data = YmapInstancedDataDiff {
         imap_link: first_reference("imap_link", instanced_data.clone().map(|diff| &diff.imap_link)),
-        prop_instance_list: {
-          let props = &vanilla.instanced_data.prop_instance_list;
-          let mut merged = merged(
-            "prop_instance_list",
-            &lists(instanced_data.clone().map(|diff| &diff.prop_instance_list)),
-          );
-          let mut seen = (0..props.len())
-            .filter(|index| !merged.drops_vanilla(*index))
-            .map(|index| reference_hash(&props[index]))
-            .collect::<HashSet<_>>();
-          merged.retain_new(|name| seen.insert(reference_hash(name)));
-          non_empty(merged.into_diffs(props.len()))
-        },
+        prop_instance_list: merge_references(
+          "prop_instance_list",
+          &vanilla.instanced_data.prop_instance_list,
+          &lists(instanced_data.clone().map(|diff| &diff.prop_instance_list)),
+          false,
+        ),
         grass_instance_list: merge_items(
           "grass_instance_list",
           vanilla.instanced_data.grass_instance_list.len(),
@@ -125,30 +237,16 @@ pub fn merge_diffs(
       sources.iter().map(|diff| diff.car_generators.as_ref()),
       |_| true,
     ),
-    ..Default::default()
   }
 }
 
 /// Logs the changes of `diff` that merging leaves at their vanilla values.
-fn log_ignored(diff: &YmapDiffFields) {
-  let ignored = [
-    ("name", diff.name.is_some()),
-    ("flags", diff.flags.is_some()),
-    ("streamingExtentsMin", diff.streaming_extents_min.is_some()),
-    ("streamingExtentsMax", diff.streaming_extents_max.is_some()),
-    ("entitiesExtentsMin", diff.entities_extents_min.is_some()),
-    ("entitiesExtentsMax", diff.entities_extents_max.is_some()),
-    ("block", diff.block.is_some()),
-    (
-      "distantLodLights counts",
-      diff
-        .distant_lod_lights
-        .as_ref()
-        .is_some_and(|lights| lights.num_street_lights.is_some() || lights.category.is_some()),
-    ),
-  ];
-  for (field, _) in ignored.iter().filter(|(_, changed)| *changed) {
-    tracing::info!("    skip changes: <{field} />");
+fn log_ignored(
+  diff: &YmapDiffFields,
+  ignored: &[IgnoredChange],
+) {
+  for change in ignored.iter().filter(|change| change.is_made_by(diff)) {
+    tracing::info!("    skip changes: <{} />", change.field());
   }
 }
 
@@ -212,6 +310,47 @@ fn combine_occlude_model(
   earlier.triangles = non_empty(triangles.into_diffs(vanilla.triangles.len()));
 }
 
+/// The first change of `changes`, warning about later ones to another value.
+fn first_change<'a, T: PartialEq + std::fmt::Debug + Clone + 'a>(
+  field: &str,
+  changes: impl Iterator<Item = &'a Option<T>>,
+) -> Option<T> {
+  let mut first: Option<&T> = None;
+  for change in changes.flatten() {
+    match first {
+      Some(kept) if kept != change => {
+        tracing::warn!("    Conflicting {field}: keeping {kept:?}, ignoring {change:?}");
+      }
+      Some(_) => {}
+      None => first = Some(change),
+    }
+  }
+  first.cloned()
+}
+
+/// Each axis of the first change of `changes` changing it.
+fn first_position<'a>(
+  changes: impl Iterator<Item = &'a Option<PositionDiff>>
+) -> Option<PositionDiff> {
+  let mut combined = None;
+  for change in changes {
+    combine_position(&mut combined, change);
+  }
+  combined
+}
+
+/// Each field of the first change of `changes` changing it.
+fn first_block<'a>(changes: impl Iterator<Item = &'a YmapBlockDiff>) -> Option<YmapBlockDiff> {
+  changes.cloned().reduce(|earlier, later| YmapBlockDiff {
+    version: earlier.version.or(later.version),
+    flags: earlier.flags.or(later.flags),
+    name: earlier.name.or(later.name),
+    exported_by: earlier.exported_by.or(later.exported_by),
+    owner: earlier.owner.or(later.owner),
+    time: earlier.time.or(later.time),
+  })
+}
+
 /// Fills the axes `earlier` leaves unchanged with those `later` changes.
 fn combine_position(
   earlier: &mut Option<PositionDiff>,
@@ -244,11 +383,48 @@ fn first_reference<'a>(
   first.cloned()
 }
 
-/// The `added` references whose hash neither `existing` nor an earlier addition has.
-fn added_references<'a>(
-  existing: &[String],
-  added: impl Iterator<Item = &'a String>,
-) -> Option<Vec<String>> {
-  let mut seen = existing.iter().map(|name| reference_hash(name)).collect::<HashSet<_>>();
-  non_empty(added.filter(|name| seen.insert(reference_hash(name))).cloned().collect())
+/// The name changes of `sources` to `vanilla` names combined as [`MergedItems`] describes,
+/// skipping added names whose hash a kept or earlier added name has. With `keep_vanilla`, vanilla
+/// names are never removed: removals are left out, and replacing names are added after the name
+/// they replace.
+fn merge_references(
+  what: &str,
+  vanilla: &[String],
+  sources: &[&[YmapPropInstanceDiff]],
+  keep_vanilla: bool,
+) -> Option<Vec<YmapPropInstanceDiff>> {
+  let additions;
+  let sources = if keep_vanilla {
+    additions = sources
+      .iter()
+      .map(|diffs| {
+        diffs
+          .iter()
+          .filter_map(|diff| match diff {
+            ItemDiff::Removed {
+              ..
+            } => None,
+            ItemDiff::Replaced {
+              index,
+              item,
+            } => Some(ItemDiff::Added {
+              after: Some(*index),
+              item: item.clone(),
+            }),
+            diff => Some(diff.clone()),
+          })
+          .collect::<Vec<_>>()
+      })
+      .collect::<Vec<_>>();
+    additions.iter().map(Vec::as_slice).collect()
+  } else {
+    sources.to_vec()
+  };
+  let mut merged = merged(what, &sources);
+  let mut seen = (0..vanilla.len())
+    .filter(|index| !merged.drops_vanilla(*index))
+    .map(|index| reference_hash(&vanilla[index]))
+    .collect::<HashSet<_>>();
+  merged.retain_new(|name| seen.insert(reference_hash(name)));
+  non_empty(merged.into_diffs(vanilla.len()))
 }

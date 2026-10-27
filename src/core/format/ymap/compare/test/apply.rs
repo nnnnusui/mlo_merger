@@ -280,7 +280,7 @@ fn distant_lod_light_positions_are_rewritten_with_their_changed_axes() {
 }
 
 #[test]
-fn physics_dictionaries_are_added_but_never_removed() {
+fn physics_dictionaries_are_applied() {
   let vanilla = Ymap {
     physics_dictionaries: vec!["a".into(), "b".into()],
     ..base()
@@ -289,7 +289,7 @@ fn physics_dictionaries_are_added_but_never_removed() {
     physics_dictionaries: vec!["b".into(), "c".into()],
     ..base()
   };
-  assert_eq!(apply(&vanilla, &modded).physics_dictionaries, ["a", "b", "c"]);
+  assert_eq!(apply(&vanilla, &modded).physics_dictionaries, ["b", "c"]);
 }
 
 fn modifier(x: f32) -> YmapTimeCycleModifier {

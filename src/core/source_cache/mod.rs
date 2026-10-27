@@ -129,9 +129,8 @@ pub(crate) struct SourceYmapIndex {
 
 /// Indexes the YMAPs recorded in a generated source cache by resource name and file name.
 pub(crate) fn load_source_ymap_index(cache_dir: &Path) -> Result<SourceYmapIndex> {
-  let metadata: SourceCacheMetadata = serde_json::from_reader(BufReader::new(
-    std::fs::File::open(cache_info_path(cache_dir))?,
-  ))?;
+  let metadata: SourceCacheMetadata =
+    serde_json::from_reader(BufReader::new(std::fs::File::open(cache_info_path(cache_dir))?))?;
   if !matches!(metadata.format_version, 2 | 3) {
     return Err(format!("Unsupported source cache schema {}", metadata.format_version).into());
   }
@@ -216,9 +215,8 @@ pub fn inventoried_files(cache_dir: &Path) -> Result<Vec<InventoriedFile>> {
 
 /// Loads merge inputs from a generated source cache without rescanning source streams.
 pub fn load_merge_inputs(cache_dir: &Path) -> Result<MergeInputs> {
-  let metadata: SourceCacheMetadata = serde_json::from_reader(BufReader::new(
-    std::fs::File::open(cache_info_path(cache_dir))?,
-  ))?;
+  let metadata: SourceCacheMetadata =
+    serde_json::from_reader(BufReader::new(std::fs::File::open(cache_info_path(cache_dir))?))?;
   if !matches!(metadata.format_version, 2 | 3) {
     return Err(format!("Unsupported source cache schema {}", metadata.format_version).into());
   }

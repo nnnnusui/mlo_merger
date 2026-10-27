@@ -63,6 +63,10 @@ pub(super) fn source_timestamps(
   current: &BTreeMap<String, (String, CachedFile)>,
 ) -> Result<BTreeMap<String, SourceTimestamp>> {
   let mut paths = BTreeSet::from(["cache_info.json".to_owned()]);
+  // YMAP version diffs are decoded with its names.
+  if vanilla_dir.join("hash_names.json").is_file() {
+    paths.insert("hash_names.json".to_owned());
+  }
   for (name, (_, file)) in current {
     if is_supported_stream_file(name) {
       paths.insert(file.object.clone());

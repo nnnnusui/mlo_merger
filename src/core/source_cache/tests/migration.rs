@@ -304,8 +304,7 @@ fn moves_vanilla_files_retains_history_and_updates_only_selected_resources() {
   let history = fs::read_dir(output.join("_old")).unwrap().next().unwrap().unwrap().path();
   assert_eq!(fs::read(history.join("resource_a/nested/collision.ybn")).unwrap(), b"original");
   let old: SourceCacheMetadata =
-    serde_json::from_reader(fs::File::open(history.join("cache_info.json")).unwrap())
-      .unwrap();
+    serde_json::from_reader(fs::File::open(history.join("cache_info.json")).unwrap()).unwrap();
   assert_eq!(old, before);
   let old_file: FileFingerprint = serde_json::from_reader(
     fs::File::open(history.join("resource_a/nested/collision.ybn.fingerprint.json")).unwrap(),
@@ -445,7 +444,13 @@ fn moves_vanilla_files_retains_history_and_updates_only_selected_resources() {
   let duplicate = source.join("[duplicate]/resource_a");
   fs::create_dir_all(&duplicate).unwrap();
   fs::write(duplicate.join("fxmanifest.lua"), []).unwrap();
-  assert!(build.run_after_vanilla_cache().unwrap_err().to_string().contains("Duplicate or reserved resource name"));
+  assert!(
+    build
+      .run_after_vanilla_cache()
+      .unwrap_err()
+      .to_string()
+      .contains("Duplicate or reserved resource name")
+  );
   assert!(output.join("resources/resource_a/nested/collision.ybn").is_file());
   fs::remove_dir_all(duplicate.parent().unwrap()).unwrap();
   fs::create_dir_all(first.join("streams/nested")).unwrap();

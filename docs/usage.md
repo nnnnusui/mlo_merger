@@ -96,6 +96,7 @@ Paths below are defaults. If you change them with options such as `--source-cach
 | Index file bounds | none; written by vanilla-cache, source-cache and merge runs | | `asset/{vanilla-cache,source-cache,merged}/stream_file_rtree.json` (`RTreeIndex`) |
 | Convert YMAPs to JSON | `--read FILE` | `ReadResult` | each `files[].output` (`YmapReadDocument`) |
 | Inspect differences | none; written by source-cache generation | | `asset/source-cache/diff/{resource}/{stream_path}.diff.json` (`YmapComparisonDiff`) |
+| Inspect vanilla version differences | none; vanilla-cache generation would write them, but it is currently disabled | | `asset/vanilla-cache/ymap_versions.json` (`VanillaYmapVersionIndex`), then `asset/vanilla-cache/diff/{version}/ymap/{name}.diff.json` (`VanillaYmapDiff`) for each version after a YMAP's first |
 | Apply overwrites | no operation flag (pipeline), or `--merge` then `--deploy` | `PipelineChanges` (pipeline only) | `asset/merged/duplicates.json` (`DuplicateReport`) |
 
 ### Stream-File Bounds Indexes

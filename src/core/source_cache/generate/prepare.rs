@@ -10,10 +10,7 @@ use crate::core::source_cache::{
   inventory::{discover_resources, resource_id, source_fingerprints},
   publication::{create_staging_directory, prepare_output_path},
 };
-use crate::core::{
-  vanilla::load_manifest_with_revision,
-  vanilla_cache::load_cache,
-};
+use crate::core::{vanilla::load_manifest_with_revision, vanilla_cache::load_cache};
 use std::{
   collections::{BTreeMap, BTreeSet},
   fs,
