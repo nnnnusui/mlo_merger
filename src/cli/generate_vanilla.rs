@@ -9,6 +9,8 @@ use super::common::{self, CommonOptions};
 pub struct GenerateVanilla {
   /// Installed GTA V game directory.
   pub game_dir: PathBuf,
+  /// CodeWalker's `magic.dat`.
+  pub magic: PathBuf,
   /// Shared execution options.
   pub common: CommonOptions,
 }
@@ -19,11 +21,21 @@ pub fn parser() -> impl Parser<GenerateVanilla> {
     .help("Generate versioned vanilla stream files from game archives")
     .req_flag(());
   let game_dir = short('i').long("input").argument::<PathBuf>("GAME_DIR");
+  let magic = magic_parser();
   let common = common::parser(PathBuf::from("asset/vanilla"));
-  construct!(command, game_dir, common).map(|(_, game_dir, common)| GenerateVanilla {
+  construct!(command, game_dir, magic, common).map(|(_, game_dir, magic, common)| GenerateVanilla {
     game_dir,
+    magic,
     common,
   })
+}
+
+/// Parses the `magic.dat` path used to decrypt game archives.
+pub fn magic_parser() -> impl Parser<PathBuf> {
+  long("magic")
+    .help("CodeWalker magic.dat for decrypting game archives (default: ./magic.dat)")
+    .argument::<PathBuf>("FILE")
+    .fallback(PathBuf::from("magic.dat"))
 }
 
 /// Generates the raw vanilla archive through the core workflow.
@@ -32,6 +44,7 @@ pub fn run(command: GenerateVanilla) -> Result<(), Box<dyn std::error::Error>> {
     game_dir: command.game_dir,
     output_dir: command.common.output,
     gamebuild: command.common.gamebuild,
+    magic: command.magic,
     reuse_existing: false,
   }
   .run()

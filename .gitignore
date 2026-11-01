@@ -8,3 +8,6 @@ _
 # CodeWalker.Bridge build outputs (may embed a local, non-redistributable CodeWalker.Core.dll)
 /bridge/**/bin/
 /bridge/**/obj/
+
+# Archive key material from CodeWalker (not redistributable)
+/magic.dat

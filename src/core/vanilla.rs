@@ -23,8 +23,6 @@ mod tests;
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
-use super::codewalker::CodeWalker;
-
 /// Generates versioned raw vanilla stream files from installed GTA V archives.
 #[derive(Debug, Clone)]
 pub struct GenerateVanilla {
@@ -34,21 +32,23 @@ pub struct GenerateVanilla {
   pub output_dir: PathBuf,
   /// Optional final installed version/stage to include.
   pub gamebuild: Option<String>,
+  /// CodeWalker's `magic.dat`, needed only when generating.
+  pub magic: PathBuf,
   /// Reuses a valid existing archive; otherwise generates only into an empty destination.
   pub reuse_existing: bool,
 }
 
 impl GenerateVanilla {
-  /// Reuses an archive when configured, or loads CodeWalker to generate it.
+  /// Reuses an archive when configured, or reads the game archives to generate it.
   ///
   /// Reuse validates the existing archive without requiring an installed game or
-  /// loading the bridge. `gamebuild` selects extraction stages only when generating.
+  /// `magic.dat`. `gamebuild` selects extraction stages only when generating.
   /// Logger initialization belongs to the calling application.
   ///
   /// ```no_run
   /// mlo_merger::core::vanilla::GenerateVanilla {
   ///   game_dir: "/mnt/gtav".into(), output_dir: "asset/vanilla".into(),
-  ///   gamebuild: None, reuse_existing: true,
+  ///   gamebuild: None, magic: "magic.dat".into(), reuse_existing: true,
   /// }.run()?;
   /// # Ok::<(), Box<dyn std::error::Error>>(())
   /// ```
@@ -80,21 +80,12 @@ impl GenerateVanilla {
   }
 
   fn generate(&self) -> Result<()> {
-    let bridge_dll =
-      std::env::var_os("CODEWALKER_BRIDGE_DLL").map(PathBuf::from).unwrap_or_else(|| {
-        PathBuf::from("bridge/CodeWalker.Bridge/bin/publish/CodeWalker.Bridge.dll")
-      });
-    let codewalker = CodeWalker::init(&bridge_dll).map_err(|error| {
-      format!(
-        "Failed to load CodeWalker.Bridge from {} ({error}). Build it with `dotnet publish bridge/CodeWalker.Bridge -c Release -o bridge/CodeWalker.Bridge/bin/publish -p:CodeWalkerCoreDllPath=<path to CodeWalker.Core.dll>`, or set CODEWALKER_BRIDGE_DLL.",
-        bridge_dll.display()
-      )
-    })?;
     BuildVanillaArchive {
       game_dir: self.game_dir.clone(),
       output_dir: self.output_dir.clone(),
       through_version: self.gamebuild.clone(),
+      magic: self.magic.clone(),
     }
-    .run(&codewalker)
+    .run()
   }
 }

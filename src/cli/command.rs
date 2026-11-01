@@ -181,6 +181,7 @@ mod tests {
       panic!("Expected pipeline")
     };
     assert_eq!(command.source_dir, PathBuf::from("asset/source"));
+    assert_eq!(command.magic, PathBuf::from("magic.dat"));
     assert_eq!(command.merged_dir, PathBuf::from("asset/merged"));
     assert_eq!(command.common.output, PathBuf::from("asset/merged_mlo"));
     let Command::Pipeline(command) = parser()
@@ -192,6 +193,8 @@ mod tests {
         "merged_mlo",
         "--game-dir",
         "game",
+        "--magic",
+        "keys/magic.dat",
         "--merged",
         "merged",
         "--vanilla",
@@ -210,6 +213,7 @@ mod tests {
     assert_eq!(command.source_dir, PathBuf::from("resources"));
     assert_eq!(command.common.output, PathBuf::from("merged_mlo"));
     assert_eq!(command.game_dir, PathBuf::from("game"));
+    assert_eq!(command.magic, PathBuf::from("keys/magic.dat"));
     assert_eq!(command.merged_dir, PathBuf::from("merged"));
     assert!(command.common.force);
     assert!(command.common.yes);
@@ -223,6 +227,8 @@ mod tests {
         "--generate-vanilla",
         "-i",
         "game",
+        "--magic",
+        "keys/magic.dat",
         "--vanilla",
         "custom-vanilla",
         "--gamebuild",
@@ -242,6 +248,7 @@ mod tests {
     };
 
     assert_eq!(command.game_dir, PathBuf::from("game"));
+    assert_eq!(command.magic, PathBuf::from("keys/magic.dat"));
     assert_eq!(command.common.vanilla, PathBuf::from("custom-vanilla"));
     assert_eq!(command.common.gamebuild.as_deref(), Some("3095"));
     assert!(command.common.force);
@@ -255,6 +262,7 @@ mod tests {
       panic!("Expected vanilla generation command")
     };
     assert_eq!(command.common.output, PathBuf::from("asset/vanilla"));
+    assert_eq!(command.magic, PathBuf::from("magic.dat"));
   }
 
   #[test]

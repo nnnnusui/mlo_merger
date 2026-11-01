@@ -6,8 +6,8 @@ MLO Merger prepares vanilla data, merges supported FiveM map and collision
 changes, and deploys the resulting stream files. Inspection and conversion are
 separate operations that do not run the pipeline.
 
-Native Rust handles game-file conversion and merging. CodeWalker is an optional
-conversion backend and supplies RPF reading for vanilla cache generation.
+Native Rust handles game-file conversion, merging and RPF reading for vanilla
+generation. CodeWalker is an optional conversion backend.
 
 ## Pipeline
 
@@ -255,7 +255,8 @@ transaction. Version lookup reads overlay metadata without modifying artifacts.
 Binary/XML conversion, semantic comparison and in-game behavior provide different
 guarantees. META rebuilding requires compatible schemas; PSO editing uses an
 existing binary template and cannot change allocated shapes or capacities.
-CodeWalker requires locally supplied assemblies. Unsupported required data must
+CodeWalker requires locally supplied assemblies, and RPF decryption a locally
+supplied `magic.dat`. Unsupported required data must
 fail explicitly rather than be silently discarded.
 
 TypeScript consumers use declarations generated at release time for persisted

@@ -16,6 +16,8 @@ pub struct Pipeline {
   pub source_dir: PathBuf,
   /// Installed game directory used only to create missing vanilla data.
   pub game_dir: PathBuf,
+  /// CodeWalker's `magic.dat`, used only to create missing vanilla data.
+  pub magic: PathBuf,
   /// Raw vanilla archive directory.
   pub vanilla_dir: PathBuf,
   /// Derived vanilla artifact directory.
@@ -88,6 +90,7 @@ impl Pipeline {
       game_dir: self.game_dir.clone(),
       output_dir: self.vanilla_dir.clone(),
       gamebuild: None,
+      magic: self.magic.clone(),
       reuse_existing: true,
     }
     .run()?;
@@ -189,6 +192,7 @@ mod tests {
     let pipeline = Pipeline {
       source_dir: root.join("input"),
       game_dir: root.join("missing-game"),
+      magic: "magic.dat".into(),
       vanilla_dir: root.join("vanilla"),
       vanilla_cache_dir: root.join("vanilla-cache"),
       source_cache_dir: root.join("source-cache"),
@@ -330,6 +334,7 @@ mod tests {
     let pipeline = Pipeline {
       source_dir: root.join("source"),
       game_dir: root.join("game"),
+      magic: "magic.dat".into(),
       vanilla_dir: root.join("vanilla"),
       vanilla_cache_dir: root.join("vanilla-cache"),
       source_cache_dir: root.join("source-cache"),
@@ -394,6 +399,7 @@ mod tests {
     let pipeline = Pipeline {
       source_dir: root.join("input"),
       game_dir: root.join("missing-game"),
+      magic: "magic.dat".into(),
       vanilla_dir: root.join("vanilla"),
       vanilla_cache_dir: root.join("vanilla-cache"),
       source_cache_dir: root.join("source-cache"),

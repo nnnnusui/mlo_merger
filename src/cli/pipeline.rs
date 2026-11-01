@@ -9,6 +9,8 @@ pub struct Pipeline {
   pub source_dir: PathBuf,
   /// Installed game used only when vanilla generation is necessary.
   pub game_dir: PathBuf,
+  /// CodeWalker's `magic.dat`, used only when vanilla generation is necessary.
+  pub magic: PathBuf,
   /// Intermediate merged artifact directory.
   pub merged_dir: PathBuf,
   /// Source resource exclusions for this execution only.
@@ -30,6 +32,7 @@ pub fn parser() -> impl Parser<Pipeline> {
     .help("Game directory for missing vanilla archives (default: /mnt/gtav)")
     .argument::<PathBuf>("DIR")
     .fallback(PathBuf::from("/mnt/gtav"));
+  let magic = super::generate_vanilla::magic_parser();
   let merged_dir = long("merged")
     .help("Intermediate merged directory (default: asset/merged)")
     .argument::<PathBuf>("DIR")
@@ -40,10 +43,11 @@ pub fn parser() -> impl Parser<Pipeline> {
     .fallback(PathBuf::from("asset/overwrite"));
   let common = common::parser(PathBuf::from("asset/merged_mlo"));
   let exclusions = super::generate_source_cache::exclusions_parser();
-  construct!(source_dir, game_dir, merged_dir, overwrite_dir, common, exclusions).map(
-    |(source_dir, game_dir, merged_dir, overwrite_dir, common, exclusions)| Pipeline {
+  construct!(source_dir, game_dir, magic, merged_dir, overwrite_dir, common, exclusions).map(
+    |(source_dir, game_dir, magic, merged_dir, overwrite_dir, common, exclusions)| Pipeline {
       source_dir,
       game_dir,
+      magic,
       merged_dir,
       common,
       exclusions,
@@ -63,6 +67,7 @@ pub fn run(command: Pipeline) -> Result<(), Box<dyn std::error::Error>> {
   let pipeline = crate::core::pipeline::Pipeline {
     source_dir: command.source_dir,
     game_dir: command.game_dir,
+    magic: command.magic,
     vanilla_dir: command.common.vanilla,
     vanilla_cache_dir: command.common.vanilla_cache,
     source_cache_dir: command.common.source_cache,

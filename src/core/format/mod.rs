@@ -1,4 +1,5 @@
 pub mod gamefile;
+pub mod rpf;
 pub mod stream_file;
 pub mod xml;
 pub mod ybn;

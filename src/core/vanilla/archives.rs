@@ -1,15 +1,16 @@
 //! RPF extraction and physical/virtual DLC archive resolution.
 
+use rayon::prelude::*;
 use serde::Deserialize;
+use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
-use std::fs;
-use std::io::BufReader;
+use std::fs::{self, File};
 use std::path::{Path, PathBuf};
 
 use super::Result;
-use crate::core::codewalker::CodeWalker;
+use crate::core::format::rpf::{RpfArchive, RpfFile, RpfKeys};
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone)]
 pub(super) struct ExtractedFile {
   pub(super) name: String,
   pub(super) source: String,
@@ -72,8 +73,13 @@ pub(crate) fn game_path(
   Ok(path)
 }
 
+/// Extracts YMAPs, YBNs and dlclist.xml recursively into `output`, preserving archive
+/// provenance, and collects every entry's name stem into `rpf_names`.
+///
+/// `subtree` limits extraction to one nested archive's full virtual path. Files are
+/// numbered in table-of-contents order, each archive's own files before its children's.
 pub(super) fn extract(
-  codewalker: &CodeWalker,
+  keys: &RpfKeys,
   game_dir: &Path,
   relative: &str,
   output: &Path,
@@ -81,21 +87,58 @@ pub(super) fn extract(
   rpf_names: &mut BTreeSet<String>,
 ) -> Result<Vec<ExtractedFile>> {
   tracing::info!("Scanning {relative}");
-  let archive = game_path(game_dir, Path::new(relative))?;
-  match subtree {
-    Some(subtree) => codewalker.extract_rpf_subtree(&archive, subtree, output)?,
-    None => codewalker.extract_rpf(&archive, output)?,
+  let path = game_path(game_dir, Path::new(relative))?;
+  let root = RpfArchive::open(&path, keys)?;
+  let prefix = subtree.map(|subtree| format!("{}/", subtree.to_lowercase()));
+  let mut selected: Vec<(&RpfArchive, &RpfFile)> = Vec::new();
+  for archive in root.archives() {
+    for file in &archive.files {
+      if prefix.as_ref().is_some_and(|prefix| !file.path.starts_with(prefix)) {
+        continue;
+      }
+      let name = file.name.rsplit_once('.').map_or(file.name.as_str(), |(stem, _)| stem);
+      let name = if name.is_empty() { file.name.as_str() } else { name };
+      if !name.trim().is_empty() {
+        rpf_names.insert(name.to_owned());
+        rpf_names.insert(name.to_lowercase());
+      }
+      if file.path.ends_with(".ymap")
+        || file.path.ends_with(".ybn")
+        || file.path.ends_with("/common/data/dlclist.xml")
+      {
+        selected.push((archive, file));
+      }
+    }
   }
-  let mut files: Vec<ExtractedFile> =
-    serde_json::from_reader(BufReader::new(fs::File::open(output.join("files.json"))?))?;
-  let names: Vec<String> =
-    serde_json::from_reader(BufReader::new(fs::File::open(output.join("rpf_names.json"))?))?;
-  rpf_names.extend(names);
-  for file in &mut files {
-    let (_, entry) = file.source.split_once('/').ok_or("Invalid extracted RPF entry path")?;
-    file.source = format!("{relative}/{entry}");
-  }
-  Ok(files)
+
+  fs::create_dir_all(output)?;
+  selected
+    .par_iter()
+    .enumerate()
+    .map_init(
+      || File::open(&path),
+      |file, (index, (archive, entry))| -> std::result::Result<ExtractedFile, String> {
+        let file = file.as_mut().map_err(|error| format!("{}: {error}", path.display()))?;
+        let data = archive
+          .extract(file, entry, keys)
+          .map_err(|error| format!("Could not extract {}: {error}", entry.path))?;
+        let name = entry.name_lower();
+        let extension = Path::new(&name)
+          .extension()
+          .map_or(String::new(), |extension| format!(".{}", extension.to_string_lossy()));
+        let stored = format!("{index:08}{extension}");
+        fs::write(output.join(&stored), &data).map_err(|error| format!("{stored}: {error}"))?;
+        let (_, inner) = entry.path.split_once('/').ok_or("Invalid extracted RPF entry path")?;
+        Ok(ExtractedFile {
+          name,
+          source: format!("{relative}/{inner}"),
+          stored,
+          sha256: hex::encode(Sha256::digest(&data)),
+        })
+      },
+    )
+    .collect::<std::result::Result<_, _>>()
+    .map_err(Into::into)
 }
 
 pub(super) fn patch_dlc(source: &str) -> Option<&str> {
@@ -112,9 +155,8 @@ pub(super) fn platform_virtual_path(source: &str) -> Option<String> {
 }
 
 pub(super) fn platform_archives(
-  codewalker: &CodeWalker,
+  keys: &RpfKeys,
   game_dir: &Path,
-  staging: &Path,
 ) -> Result<BTreeMap<String, (String, String)>> {
   let mut roots = fs::read_dir(game_dir)?
     .map(|entry| entry.map(|entry| entry.file_name().to_string_lossy().to_ascii_lowercase()))
@@ -124,10 +166,9 @@ pub(super) fn platform_archives(
   for relative in roots.into_iter().filter(|name| name.starts_with("x64") && name.ends_with(".rpf"))
   {
     tracing::info!("Indexing platform archives in {relative}");
-    let output = staging.join("archives.json");
-    codewalker.list_rpf_paths(&game_path(game_dir, Path::new(&relative))?, &output)?;
-    let paths: Vec<String> = serde_json::from_reader(BufReader::new(fs::File::open(output)?))?;
-    for subtree in paths {
+    let root = RpfArchive::open(&game_path(game_dir, Path::new(&relative))?, keys)?;
+    for archive in root.archives() {
+      let subtree = archive.path.clone();
       if let Some(virtual_path) = platform_virtual_path(&subtree)
         && archives.insert(virtual_path.clone(), (relative.clone(), subtree)).is_some()
       {

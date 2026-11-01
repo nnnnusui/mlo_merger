@@ -15,7 +15,7 @@ use super::{
   publication::{Staging, publish_cache, reset_output_directory},
   stage::stage,
 };
-use crate::core::codewalker::CodeWalker;
+use crate::core::format::rpf::RpfKeys;
 
 /// Builds the versioned raw vanilla archive from installed game files.
 #[derive(Debug, Clone)]
@@ -26,30 +26,38 @@ pub struct BuildVanillaArchive {
   pub output_dir: PathBuf,
   /// Stop after this cumulative stage; preceding overlays remain in the cache.
   pub through_version: Option<String>,
+  /// CodeWalker's `magic.dat`, decoded with the key in GTA5.exe.
+  pub magic: PathBuf,
 }
 
 impl BuildVanillaArchive {
   /// Reads installed root RPFs and ordered DLCs, saving changed raw files by version.
-  pub fn run(
-    &self,
-    codewalker: &CodeWalker,
-  ) -> Result<()> {
+  pub fn run(&self) -> Result<()> {
     let game_dir = self.game_dir.canonicalize()?;
     let roots = base_archives(&game_dir)?;
     game_path(&game_dir, Path::new("update/update.rpf"))?;
-    codewalker.load_game_keys(&game_dir)?;
+    let executable = game_path(&game_dir, Path::new("GTA5.exe"))
+      .map_err(|_| "GTA5.exe is required (GTA V Legacy archives only)")?;
+    if !self.magic.is_file() {
+      return Err(format!(
+        "magic.dat is missing: {}. Copy CodeWalker.Core/Resources/magic.dat from the CodeWalker sources or specify --magic.",
+        self.magic.display()
+      )
+      .into());
+    }
+    let keys = RpfKeys::load(&executable, &self.magic)?;
     let output_dir = reset_output_directory(&self.output_dir, &game_dir)?;
     let staging_path = output_dir.join(format!(".staging-{}", std::process::id()));
     fs::create_dir(&staging_path)?;
     let staging = Staging(staging_path);
     let build = staging.0.join("cache");
     fs::create_dir(&build)?;
-    self.build(codewalker, &game_dir, roots, &staging.0, &build, &output_dir)
+    self.build(&keys, &game_dir, roots, &staging.0, &build, &output_dir)
   }
 
   fn build(
     &self,
-    codewalker: &CodeWalker,
+    keys: &RpfKeys,
     game_dir: &Path,
     roots: Vec<String>,
     scratch: &Path,
@@ -69,7 +77,7 @@ impl BuildVanillaArchive {
       let mut files = Vec::new();
       for relative in &roots {
         let directory = base_dir.join(relative);
-        let extracted = extract(codewalker, game_dir, relative, &directory, None, &mut rpf_names)?;
+        let extracted = extract(keys, game_dir, relative, &directory, None, &mut rpf_names)?;
         files.extend(
           extracted
             .into_iter()
@@ -88,8 +96,7 @@ impl BuildVanillaArchive {
     let mut update = Vec::new();
     let mut dlc_items = Vec::new();
     stage(&mut manifest, &mut current, build, "update", || {
-      update =
-        extract(codewalker, game_dir, "update/update.rpf", &update_dir, None, &mut rpf_names)?;
+      update = extract(keys, game_dir, "update/update.rpf", &update_dir, None, &mut rpf_names)?;
       let list = update
         .iter()
         .find(|file| file.source == "update/update.rpf/common/data/dlclist.xml")
@@ -140,7 +147,7 @@ impl BuildVanillaArchive {
         let (physical, subtree) =
           if relative.starts_with("x64/") && game_path(game_dir, Path::new(&relative)).is_err() {
             if platform_index.is_none() {
-              platform_index = Some(platform_archives(codewalker, game_dir, scratch)?);
+              platform_index = Some(platform_archives(keys, game_dir)?);
             }
             let (physical, subtree) = platform_index
               .as_ref()
@@ -152,7 +159,7 @@ impl BuildVanillaArchive {
             (relative.clone(), None)
           };
         let extracted =
-          extract(codewalker, game_dir, &physical, &directory, subtree.as_deref(), &mut rpf_names)?;
+          extract(keys, game_dir, &physical, &directory, subtree.as_deref(), &mut rpf_names)?;
         let mut files: Vec<_> =
           extracted.into_iter().map(|file| (file, directory.clone())).collect();
         let patches: Vec<_> = update

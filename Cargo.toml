@@ -11,11 +11,12 @@ members = ["crates/struct-diff", "crates/struct-diff-derive"]
 typescript = ["dep:specta", "struct-diff/specta"]
 
 [dependencies]
+aes = "0.9.3"
 bpaf = "0.9.28"
 chrono = { version = "0.4.45", features = ["clock"] }
 deku = "0.20.3"
 flate2 = { version = "1.1", default-features = false, features = ["zlib-rs"] }
-globset = "0.4.20"
+globset = "0.4.21"
 hex = "0.4"
 indexmap = { version = "2.14.2", features = ["serde"] }
 indicatif = "0.18"
@@ -25,6 +26,7 @@ rayon = "1.12.0"
 regex = "1.13.1"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
+sha1 = "0.11.0"
 sha2 = "0.11.1"
 specta = { version = "1.0.5", optional = true, features = ["export"] }
 struct-diff = { path = "crates/struct-diff" }

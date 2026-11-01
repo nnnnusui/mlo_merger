@@ -17,7 +17,8 @@ mlo_merger -i resources -o merged_mlo --game-dir /mnt/gtav
 
 The default operation extracts vanilla only when its archive is missing, updates
 the vanilla and source caches, merges, then deploys. Unchanged stages are reused.
-`--game-dir` defaults to `/mnt/gtav` and is used only for missing vanilla data.
+`--game-dir` defaults to `/mnt/gtav` and `--magic` to `./magic.dat`; both are used
+only for missing vanilla data (see [Vanilla extraction](#vanilla-extraction)).
 It prints the vanilla-cache, source-cache and merged files whose contents changed as
 one line of JSON (`PipelineChanges`) and logs everything else on stderr; see
 [docs/usage.md](docs/usage.md#pipeline-output).
@@ -45,7 +46,7 @@ a single stage with its own operation below.
 ### Run Individual Operations
 
 ```bash
-mlo_merger --generate-vanilla -i /mnt/gtav -o asset/vanilla
+mlo_merger --generate-vanilla -i /mnt/gtav -o asset/vanilla --magic magic.dat
 mlo_merger --generate-vanilla-cache --vanilla asset/vanilla -o asset/vanilla-cache
 mlo_merger --generate-source-cache -i asset/source --vanilla-cache asset/vanilla-cache -o asset/source-cache
 mlo_merger --generate-source-cache --exclude 'resourceName,[gabz]/shops'
@@ -379,8 +380,17 @@ version-to-version diffs is kept but not called; see
 ## Development Environment
 
 - Rust stable on Windows or Linux.
-- An installed GTA V and locally supplied CodeWalker bridge/assemblies are needed
-	to extract from game archives. An existing vanilla archive can be reused.
+- An installed GTA V Legacy and `magic.dat` are needed to extract from game
+	archives. An existing vanilla archive can be reused.
+
+### Vanilla Extraction
+
+Game archives are read natively, without CodeWalker. Their tables of contents are
+encrypted: the AES key is located in the installed `GTA5.exe`, and decodes
+CodeWalker's `magic.dat`, which holds the remaining NG keys and tables. Neither is
+redistributed. Copy `CodeWalker.Core/Resources/magic.dat` from the
+[CodeWalker](https://github.com/dexyfex/CodeWalker) sources to `./magic.dat`, or
+pass its path with `--magic`.
 
 Build the executable with:
 
