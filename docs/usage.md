@@ -55,7 +55,8 @@ Start the executable from server-side code with `spawn` (spawnProcess).
 - stdout carries only the command's result; `--read` and the pipeline each print one
   line of JSON.
 - stderr carries progress logs and errors. The same log is written to
-  `asset/log/mlo_merger_{timestamp}.log`.
+  `asset/log/mlo_merger_{timestamp}.log`, which is only created when the run logs
+  something.
 - A failed command exits with code `1`; its last stderr line is the error.
 - Commands never prompt. Pipeline commands also accept `-y`.
 

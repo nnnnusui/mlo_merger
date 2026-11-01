@@ -8,10 +8,8 @@ fn main() {
   let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
   let terminal =
     log::tree_layer(std::io::stderr, std::io::stderr().is_terminal()).with_filter(filter);
-  let (file, guard) = log::file_writer().unzip();
-  let file = file.map(|writer| {
-    log::tree_layer(writer, false).with_filter(EnvFilter::new("info,mlo_merger=debug"))
-  });
+  let (file, guard) = log::file_writer();
+  let file = log::tree_layer(file, false).with_filter(EnvFilter::new("info,mlo_merger=debug"));
   if let Err(error) = tracing_subscriber::registry().with(terminal).with(file).try_init() {
     eprintln!("{error}");
     std::process::exit(1);
