@@ -20,8 +20,45 @@ defaults:
     shell: bash
 
 jobs:
+  notices:
+    name: Collect third-party notices
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Install Rust stable
+        run: |
+          rustup toolchain install stable --profile minimal --no-self-update
+          rustup default stable
+
+      - name: Install cargo-about
+        run: cargo install --locked cargo-about --version 0.9.3 --features cli
+
+      - name: Generate third-party notices
+        run: |
+          # One run per release target; keep in sync with the build matrix.
+          for target in x86_64-pc-windows-msvc x86_64-unknown-linux-gnu x86_64-apple-darwin aarch64-apple-darwin; do
+            cargo about generate --locked --fail --format json --target "$target" -o "about-$target.json"
+          done
+          mkdir notices
+          python3 scripts/third_party_notices.py about-*.json \
+            -o notices/third_party_notices.json --markdown notices/THIRD_PARTY_NOTICES.md
+
+      - name: Upload notices
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: third-party-notices
+          path: notices/*
+          if-no-files-found: error
+          retention-days: 7
+
   build:
     name: Build ${{ matrix.target }}
+    needs: notices
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
     strategy:
@@ -69,6 +106,12 @@ jobs:
       - name: Check executable
         run: '"target/$TARGET/release/$EXECUTABLE" --help'
 
+      - name: Download third-party notices
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          name: third-party-notices
+          path: notices
+
       - name: Package executable
         run: |
           python_command=python3
@@ -109,6 +152,8 @@ jobs:
               destination = package / filename
               destination.parent.mkdir(parents=True, exist_ok=True)
               shutil.copy2(filename, destination)
+          for filename in ("third_party_notices.json", "THIRD_PARTY_NOTICES.md"):
+              shutil.copy2(Path("notices") / filename, package)
           Path("dist").mkdir()
           shutil.make_archive(str(Path("dist") / name), os.environ["ARCHIVE_FORMAT"],
                               root_dir="package", base_dir=name)

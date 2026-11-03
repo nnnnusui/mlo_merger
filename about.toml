@@ -1,0 +1,19 @@
+# Configuration of cargo-about, which collects the license texts of the crates
+# compiled into the released binaries (see scripts/third_party_notices.py).
+# Release targets are passed one at a time by the release workflow: given several
+# targets at once, cargo-about lists crates that no single target compiles.
+accepted = [
+    "MIT",
+    "Apache-2.0",
+    "ISC",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "Zlib",
+    "Unlicense",
+    "0BSD",
+    "Unicode-3.0",
+]
+ignore-build-dependencies = true
+ignore-dev-dependencies = true
+ignore-transitive-dependencies = false
+private = { ignore = true }

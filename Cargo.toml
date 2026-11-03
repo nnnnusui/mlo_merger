@@ -3,6 +3,7 @@ name = "mlo_merger"
 version = "2.2.1"
 edition = "2024"
 default-run = "mlo_merger"
+publish = false
 
 [workspace]
 members = ["crates/struct-diff", "crates/struct-diff-derive"]
