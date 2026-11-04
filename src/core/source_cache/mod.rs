@@ -14,7 +14,7 @@ mod ymap_plan;
 use std::{
   collections::{BTreeMap, BTreeSet},
   io::BufReader,
-  path::{Path, PathBuf},
+  path::{Component, Path, PathBuf},
 };
 
 use self::types::{SourceCacheConflictReport, SourceCacheMetadata};
@@ -67,55 +67,146 @@ pub struct MergeInputs {
   pub vanilla_ymaps_to_read: BTreeSet<String>,
 }
 
-/// Lists original source-relative paths for moved files still present in the active cache.
-/// Returns an empty set when no source inventory is available.
+/// Reads the source cache's inventory, rejecting layouts this version cannot read.
+fn read_metadata(cache_dir: &Path) -> Result<SourceCacheMetadata> {
+  let path = cache_info_path(cache_dir);
+  let metadata: SourceCacheMetadata = serde_json::from_reader(BufReader::new(
+    std::fs::File::open(&path)
+      .map_err(|error| format!("Cannot open {}: {error}", path.display()))?,
+  ))?;
+  if !matches!(metadata.format_version, 2 | 3) {
+    return Err(format!("Unsupported source cache schema {}", metadata.format_version).into());
+  }
+  Ok(metadata)
+}
+
+/// A stream file the source cache moved out of its resource.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CachedFile {
+  /// Path relative to the cache directory: `resources/{resource name}/{stream-relative path}`.
+  pub cached_path: String,
+  /// Original path relative to the source root.
+  pub source_path: String,
+}
+
+/// The files the inventory records as moved into the cache, sorted by cached path.
+///
+/// Only recorded files are listed: anything else under `resources/` is not part of the cache.
+/// A recorded file that is missing is an error, as the cache no longer matches its inventory.
 ///
 /// ```no_run
-/// let paths = mlo_merger::core::source_cache::load_moved_source_paths(
+/// let files = mlo_merger::core::source_cache::cached_files(
 ///   std::path::Path::new("asset/source-cache"),
 /// )?;
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
-pub fn load_moved_source_paths(cache_dir: &Path) -> Result<BTreeSet<String>> {
-  let metadata_path = cache_info_path(cache_dir);
-  if !metadata_path.is_file() {
-    return Ok(BTreeSet::new());
-  }
-  let metadata: SourceCacheMetadata =
-    serde_json::from_reader(BufReader::new(std::fs::File::open(metadata_path)?))?;
-  if !matches!(metadata.format_version, 2 | 3) {
-    return Err(format!("Unsupported source cache schema {}", metadata.format_version).into());
-  }
-  let mut paths = BTreeSet::new();
+pub fn cached_files(cache_dir: &Path) -> Result<Vec<CachedFile>> {
+  let metadata = read_metadata(cache_dir)?;
+  let safe =
+    |path: &Path| path.components().all(|component| matches!(component, Component::Normal(_)));
+  let mut files = Vec::new();
   for resource in metadata.resources.values() {
     for file in resource.files_by_format.values().flatten() {
       let Some(cached) = &file.cached_path else {
         continue;
       };
-      let cached = Path::new(cached);
-      if cached.components().any(|component| !matches!(component, std::path::Component::Normal(_)))
-      {
-        return Err("Unsafe moved source-cache path".into());
-      }
-      if cached.starts_with("_old") || !cache_dir.join(cached).is_file() {
+      // Archived history is not part of the active cache.
+      if cached.starts_with("_old/") {
         continue;
       }
-      let original = resource.source.join(&file.path);
-      let relative = original.strip_prefix(&metadata.source_dir)?;
-      if relative
-        .components()
-        .any(|component| !matches!(component, std::path::Component::Normal(_)))
-      {
+      if !safe(Path::new(cached)) || !cached.starts_with("resources/") {
+        return Err(format!("Unsafe source-cache path {cached}").into());
+      }
+      if !cache_dir.join(cached).is_file() {
+        return Err(
+          format!("Recorded cached file is missing: {cached}; rebuild the source cache").into(),
+        );
+      }
+      let source = resource.source.join(&file.path);
+      let source = source.strip_prefix(&metadata.source_dir)?;
+      if !safe(source) {
         return Err("Unsafe original moved source path".into());
       }
-      let relative = relative.to_string_lossy().replace('\\', "/");
-      if relative.contains(['\r', '\n']) {
+      let source_path = source.to_string_lossy().replace('\\', "/");
+      if source_path.contains(['\r', '\n']) {
         return Err("Moved source path contains a line break".into());
       }
-      paths.insert(relative);
+      files.push(CachedFile {
+        cached_path: cached.clone(),
+        source_path,
+      });
     }
   }
-  Ok(paths)
+  files.sort_by(|a, b| a.cached_path.cmp(&b.cached_path));
+  Ok(files)
+}
+
+/// The original source-relative paths of [`cached_files`].
+#[cfg(test)]
+pub(crate) fn moved_source_paths(cache_dir: &Path) -> BTreeSet<String> {
+  cached_files(cache_dir).unwrap().into_iter().map(|file| file.source_path).collect()
+}
+
+/// Writes an inventory recording each of `cached` (`resources/{resource}/{stream path}`) as
+/// moved from `{source_dir}/{resource}/stream/{stream path}`, for tests of its readers.
+#[cfg(test)]
+pub(crate) fn write_test_inventory(
+  cache_dir: &Path,
+  source_dir: &Path,
+  cached: &[&str],
+) {
+  use types::{ResourceInventory, SourceFile, YmapLoadPlan};
+  let mut resources = BTreeMap::<String, ResourceInventory>::new();
+  for cached_path in cached {
+    let (resource, stream_path) =
+      cached_path.strip_prefix("resources/").unwrap().split_once('/').unwrap();
+    let path = format!("stream/{stream_path}");
+    let file_name = stream_path.rsplit('/').next().unwrap().to_string();
+    let extension = format!(".{}", file_name.rsplit('.').next().unwrap().to_ascii_lowercase());
+    resources
+      .entry(resource.to_string())
+      .or_insert_with(|| ResourceInventory {
+        source: source_dir.join(resource),
+        files_by_format: BTreeMap::new(),
+      })
+      .files_by_format
+      .entry(extension)
+      .or_default()
+      .push(SourceFile {
+        path,
+        file_name,
+        sha256: String::new(),
+        size: 0,
+        modified_seconds: 0,
+        modified_nanos: 0,
+        vanilla: None,
+        ymap_parent_hash: None,
+        metadata_error: None,
+        cached_path: Some(cached_path.to_string()),
+      });
+  }
+  let metadata = SourceCacheMetadata {
+    format_version: 3,
+    source_dir: source_dir.to_path_buf(),
+    vanilla_dir: PathBuf::new(),
+    vanilla_cache_dir: PathBuf::new(),
+    vanilla_manifest_sha256: String::new(),
+    vanilla_cache_revision: String::new(),
+    latest_vanilla_version: String::new(),
+    generated_at: String::new(),
+    source_inputs: BTreeMap::new(),
+    resource_checks: BTreeMap::new(),
+    resources,
+    scanned_stream_file_count: 0,
+    conflict_count: 0,
+    ymap_load_plan: YmapLoadPlan {
+      changed_source_parents: BTreeSet::new(),
+      additional_source_children: BTreeSet::new(),
+    },
+    outputs: BTreeSet::new(),
+  };
+  std::fs::create_dir_all(cache_dir).unwrap();
+  std::fs::write(cache_info_path(cache_dir), serde_json::to_vec(&metadata).unwrap()).unwrap();
 }
 
 /// Recorded source YMAP paths and the vanilla version the source cache was generated against.
@@ -129,11 +220,7 @@ pub(crate) struct SourceYmapIndex {
 
 /// Indexes the YMAPs recorded in a generated source cache by resource name and file name.
 pub(crate) fn load_source_ymap_index(cache_dir: &Path) -> Result<SourceYmapIndex> {
-  let metadata: SourceCacheMetadata =
-    serde_json::from_reader(BufReader::new(std::fs::File::open(cache_info_path(cache_dir))?))?;
-  if !matches!(metadata.format_version, 2 | 3) {
-    return Err(format!("Unsupported source cache schema {}", metadata.format_version).into());
-  }
+  let metadata = read_metadata(cache_dir)?;
   let mut paths = BTreeMap::<_, Vec<_>>::new();
   for resource in metadata.resources.into_values() {
     let resource_name =
@@ -184,14 +271,7 @@ pub fn cache_info_path(cache_dir: &Path) -> PathBuf {
 
 /// Lists every stream file the source cache inventoried, without rescanning source streams.
 pub fn inventoried_files(cache_dir: &Path) -> Result<Vec<InventoriedFile>> {
-  let path = cache_info_path(cache_dir);
-  let metadata: SourceCacheMetadata = serde_json::from_reader(BufReader::new(
-    std::fs::File::open(&path)
-      .map_err(|error| format!("Cannot open {}: {error}", path.display()))?,
-  ))?;
-  if !matches!(metadata.format_version, 2 | 3) {
-    return Err(format!("Unsupported source cache schema {}", metadata.format_version).into());
-  }
+  let metadata = read_metadata(cache_dir)?;
   let mut files = Vec::new();
   for (resource, inventory) in metadata.resources {
     let resource_name =
@@ -215,11 +295,7 @@ pub fn inventoried_files(cache_dir: &Path) -> Result<Vec<InventoriedFile>> {
 
 /// Loads merge inputs from a generated source cache without rescanning source streams.
 pub fn load_merge_inputs(cache_dir: &Path) -> Result<MergeInputs> {
-  let metadata: SourceCacheMetadata =
-    serde_json::from_reader(BufReader::new(std::fs::File::open(cache_info_path(cache_dir))?))?;
-  if !matches!(metadata.format_version, 2 | 3) {
-    return Err(format!("Unsupported source cache schema {}", metadata.format_version).into());
-  }
+  let metadata = read_metadata(cache_dir)?;
   let conflicts: SourceCacheConflictReport = serde_json::from_reader(BufReader::new(
     std::fs::File::open(cache_dir.join("stream_conflicts.json"))?,
   ))?;

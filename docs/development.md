@@ -25,10 +25,17 @@ cargo build
 The documentation uses `mlo_merger` as the executable name. If it is not on your `PATH`,
 invoke it by its path (for example, `./target/debug/mlo_merger`).
 
-A Windows executable can be built from Linux with
-[cargo-xwin](https://github.com/rust-cross/cargo-xwin) and clang/lld. Only the MSVC target
-works, since `nethost-sys` has no `windows-gnu` binaries. cargo-xwin downloads the MSVC
-CRT and Windows SDK, accepting Microsoft's license:
+A Windows executable can be built from Linux with MinGW:
+
+```bash
+sudo apt-get install gcc-mingw-w64-x86-64
+rustup target add x86_64-pc-windows-gnu
+cargo build --release --target x86_64-pc-windows-gnu
+```
+
+The release workflow builds the MSVC target instead, which
+[cargo-xwin](https://github.com/rust-cross/cargo-xwin) and clang/lld can also build from
+Linux; it downloads the MSVC CRT and Windows SDK, accepting Microsoft's license:
 
 ```bash
 rustup target add x86_64-pc-windows-msvc
@@ -40,10 +47,14 @@ XWIN_ACCEPT_LICENSE=1 cargo xwin build --release --target x86_64-pc-windows-msvc
 ```bash
 cargo test --lib
 cargo test --doc
-cargo test --test codewalker_roundtrip
+cargo test --features codewalker --test codewalker_roundtrip -- --ignored
 ```
 
-Some tests require local game assets or CodeWalker; many are ignored by default.
+Some tests require local game assets; many are ignored by default. The CodeWalker
+round-trip tests compare conversion with CodeWalker hosted in-process, which needs the
+`codewalker` feature, the .NET SDK and a locally supplied `CodeWalker.Core.dll`
+(`CODEWALKER_CORE_DLL`, default `asset/CodeWalker.Core.dll`), from which `build.rs` builds
+`bridge/CodeWalker.Bridge`.
 
 ## TypeScript Types
 

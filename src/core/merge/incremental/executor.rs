@@ -30,15 +30,10 @@ impl IncrementalMerge<'_> {
     let merged = if group.extension == "ybn" {
       MergeYbnConflicts {
         source_dir: self.source_cache.to_path_buf(),
-        vanilla_dir: self.vanilla_cache.join("latest/ybn"),
         output_dir: work.clone(),
         omitted_files_path: work.join(".ybn_omit.txt"),
       }
-      .run_with_latest_vanilla_files(
-        None,
-        &vanilla,
-        Some(&sources.iter().map(|source| source.path.clone()).collect::<Vec<_>>()),
-      )?;
+      .run(&vanilla, &sources.iter().map(|source| source.path.clone()).collect::<Vec<_>>())?;
       work.clone()
     } else {
       let vanilla_overwrites = group

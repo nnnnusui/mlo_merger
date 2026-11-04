@@ -1,3 +1,4 @@
+use crate::core::source_cache::CachedFile;
 use crate::core::vanilla::write_json;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -16,7 +17,7 @@ type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 pub struct Deploy {
   /// Existing merged output directory.
   pub merged_dir: PathBuf,
-  /// Existing source cache containing `resources/`.
+  /// Existing source cache; only the files its inventory records are deployed.
   pub source_cache_dir: PathBuf,
   /// Destination containing `stream/` and deployment provenance.
   pub output_dir: PathBuf,
@@ -78,9 +79,11 @@ impl Deploy {
     let merged = self.merged_dir.canonicalize()?;
     let cache = self.source_cache_dir.canonicalize()?;
     let output = prepare_output(&self.output_dir, &[&merged, &cache])?;
-    let planned = plan(&merged, &cache)?;
-    let omitted_files = crate::core::source_cache::load_moved_source_paths(&cache)?;
-    let moved_files = omitted_files.into_iter().collect::<Vec<_>>().join("\n");
+    let cached = crate::core::source_cache::cached_files(&cache)?;
+    let planned = plan(&merged, &cache, &cached)?;
+    let mut moved_files = cached.iter().map(|file| file.source_path.as_str()).collect::<Vec<_>>();
+    moved_files.sort_unstable();
+    let moved_files = moved_files.join("\n");
     let moved_files_path = destination(&output, "files.txt")?;
     let metadata_path = destination(&output, "deploy_cache_info.json")?;
     let previous = if metadata_path.is_file() {
@@ -222,9 +225,12 @@ fn remove_empty_stream_directories(output: &Path) -> Result<()> {
   Ok(())
 }
 
+/// The managed deployment files and their sources: every merged YMAP/YBN, and each file the
+/// source cache moved out of its resource whose name no merged file takes.
 fn plan(
   merged: &Path,
   cache: &Path,
+  cached: &[CachedFile],
 ) -> Result<BTreeMap<String, PathBuf>> {
   let mut files = BTreeMap::new();
   let mut merged_names = BTreeSet::new();
@@ -248,28 +254,18 @@ fn plan(
     }
     files.insert(format!("stream/{extension}/merged/{name}"), path.to_path_buf());
   }
-  let resources = cache.join("resources");
-  if !resources.is_dir() && !crate::core::source_cache::cache_info_path(cache).is_file() {
-    return Err("Source cache has no resources directory or inventory".into());
-  }
-  if resources.is_dir() {
-    for entry in WalkDir::new(&resources).follow_links(false) {
-      let entry = entry?;
-      if entry.file_type().is_symlink() {
-        return Err("Symlink source-cache input is not supported".into());
-      }
-      if !entry.file_type().is_file() {
-        continue;
-      }
-      let path = entry.path();
-      let name =
-        path.file_name().and_then(|name| name.to_str()).ok_or("Cached filename is not UTF-8")?;
-      if merged_names.contains(&name.to_ascii_lowercase()) {
-        continue;
-      }
-      let relative = path.strip_prefix(&resources)?.to_string_lossy().replace('\\', "/");
-      files.insert(format!("stream/{}/clone/{relative}", extension(path)), path.to_path_buf());
+  for file in cached {
+    let path = cache.join(&file.cached_path);
+    if fs::symlink_metadata(&path)?.file_type().is_symlink() {
+      return Err("Symlink source-cache input is not supported".into());
     }
+    let name =
+      path.file_name().and_then(|name| name.to_str()).ok_or("Cached filename is not UTF-8")?;
+    if merged_names.contains(&name.to_ascii_lowercase()) {
+      continue;
+    }
+    let relative = file.cached_path.strip_prefix("resources/").ok_or("Unsafe source-cache path")?;
+    files.insert(format!("stream/{}/clone/{relative}", extension(&path)), path);
   }
   Ok(files)
 }
@@ -386,6 +382,8 @@ fn destination(
 mod tests {
   use super::*;
 
+  use crate::core::source_cache::write_test_inventory;
+
   #[test]
   fn deploy_copies_only_changed_files_and_removes_only_managed_stale_files() {
     let root = std::env::temp_dir().join(format!("deploy_incremental_{}", std::process::id()));
@@ -404,6 +402,14 @@ mod tests {
     fs::write(cache.join("resources/resource_a/nested/MAP.YMAP"), b"must not clone").unwrap();
     fs::write(cache.join("resources/resource_a/nested/collision.ybn"), b"clone bytes").unwrap();
     fs::write(cache.join("_old/timestamp/resource_a/archived.ybn"), b"archive").unwrap();
+    // Not recorded by the inventory, so not part of the cache.
+    fs::write(cache.join("resources/resource_a/nested/stray.ybn"), b"stray").unwrap();
+    let source = root.join("source");
+    let inventory = |cached: &[&str]| write_test_inventory(&cache, &source, cached);
+    inventory(&[
+      "resources/resource_a/nested/MAP.YMAP",
+      "resources/resource_a/nested/collision.ybn",
+    ]);
     let deploy = Deploy {
       merged_dir: merged.clone(),
       source_cache_dir: cache.clone(),
@@ -420,8 +426,12 @@ mod tests {
     );
     let cloned = output.join("stream/ybn/clone/resource_a/nested/collision.ybn");
     assert!(!output.join("stream/obsolete").exists());
+    assert!(!output.join("stream/ybn/clone/resource_a/nested/stray.ybn").exists());
     assert!(output.join("stream/unmanaged/keep.txt").is_file());
-    assert_eq!(fs::read_to_string(output.join("files.txt")).unwrap(), "");
+    assert_eq!(
+      fs::read_to_string(output.join("files.txt")).unwrap(),
+      "resource_a/stream/nested/MAP.YMAP\nresource_a/stream/nested/collision.ybn"
+    );
     let manifest = output.join("fxmanifest.lua");
     assert_eq!(
       fs::read_to_string(&manifest).unwrap(),
@@ -508,6 +518,12 @@ mod tests {
     assert_eq!(metadata.files.len(), 2);
     assert!(metadata.files.values().all(|file| file.input.sha256 == file.output.sha256));
     fs::write(cache.join("resources/resource_a/nested/model.ytyp"), b"cached model").unwrap();
+    assert_eq!(deploy.run().unwrap().copied, 0, "an unrecorded file is not deployed");
+    inventory(&[
+      "resources/resource_a/nested/MAP.YMAP",
+      "resources/resource_a/nested/collision.ybn",
+      "resources/resource_a/nested/model.ytyp",
+    ]);
     assert_eq!(deploy.run().unwrap().copied, 1);
     assert_eq!(
       fs::read(output.join("stream/ytyp/clone/resource_a/nested/model.ytyp")).unwrap(),
@@ -515,6 +531,8 @@ mod tests {
     );
     fs::write(&cloned, b"user edit").unwrap();
     fs::remove_file(cache.join("resources/resource_a/nested/collision.ybn")).unwrap();
+    assert!(deploy.run().unwrap_err().to_string().contains("Recorded cached file is missing"));
+    inventory(&["resources/resource_a/nested/MAP.YMAP", "resources/resource_a/nested/model.ytyp"]);
     assert!(deploy.run().unwrap_err().to_string().contains("Refusing to remove modified"));
     assert_eq!(fs::read(&cloned).unwrap(), b"user edit");
     let mut overlapping = deploy.clone();
@@ -565,7 +583,7 @@ mod tests {
     let cache = root.join("cache");
     let output = root.join("output");
     fs::create_dir_all(merged.join("ymap")).unwrap();
-    fs::create_dir_all(cache.join("resources")).unwrap();
+    write_test_inventory(&cache, &root.join("source"), &[]);
     fs::write(merged.join("ymap/map.ymap"), b"map").unwrap();
     fs::write(merged.join("MAP.YMAP"), b"duplicate").unwrap();
     let deploy = Deploy {

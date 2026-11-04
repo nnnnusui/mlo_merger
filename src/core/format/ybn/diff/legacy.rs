@@ -1,4 +1,8 @@
-//! Existing child/polygon merge implementation retained for compatibility.
+//! The YBN merge in use: combines each source's geometry with the vanilla file directly,
+//! without a diff document.
+//!
+//! It stays in use until YBNs get diff documents and overwrites, as YMAPs have; those will be
+//! built on [`super::YbnDiff`], which this merge does not use yet.
 
 use super::super::*;
 

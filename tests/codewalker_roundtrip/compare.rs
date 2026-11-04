@@ -22,8 +22,8 @@ pub(crate) fn ybn_resource_quantums(bytes: &[u8]) -> Result<Vec<[f32; 3]>, Strin
           let children = resource
             .read_address(children_pointer, count * 8)
             .map_err(|error| error.to_string())?;
-          for child in children.chunks_exact(8) {
-            visit(resource, u64::from_le_bytes(child.try_into().unwrap()), output)?;
+          for child in children.as_chunks::<8>().0 {
+            visit(resource, u64::from_le_bytes(*child), output)?;
           }
         }
       }

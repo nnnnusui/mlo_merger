@@ -43,6 +43,23 @@ caches, merges, then deploys, reusing every unchanged stage. Resources are read 
 **Source-cache generation moves vanilla-named YMAP/YBN files out of resource stream
 directories** into `asset/source-cache`; `--restore-source-cache` moves them back.
 
+## Supported Files
+
+Each stream file type is supported at one of three levels:
+
+| Level | What happens to resources replacing a vanilla file |
+|---|---|
+| **Diff** | Each source's differences from vanilla are written as a diff document; every source is merged from its diff, and [overwrites](docs/reference.md#overwrites) can leave chosen differences out |
+| **Merge** | Sources replacing the same vanilla file are combined from the files themselves; there are no diff documents or overwrites |
+| **Unsupported** | Files stay in their resources and are not merged, so the game loads one of the same-named files. Name collisions between resources are only reported in `source-cache/stream_conflicts.json` |
+
+| Extension | Level | Other operations |
+|---|---|---|
+| `.ymap` | Diff | `--read`, `--find`, XML conversion |
+| `.ybn` | Merge (only when several resources replace the same file) | `--find ybn-position` and `file-from-position`, XML conversion |
+| `.ytyp`, `.ymt`, `.ynd` | Unsupported | XML conversion |
+| Others (`.ydr`, `.ydd`, `.yft`, `.ytd`, `.ynv`, `.ycd`, `.ymf`, …) | Unsupported | |
+
 ## Commands
 
 | Operation | Command |

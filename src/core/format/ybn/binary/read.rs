@@ -133,9 +133,11 @@ pub(in crate::core::format::ybn) fn read_geometry(
     ]);
   }
   geometry.vertices = world_vertices;
-  geometry.vertex_colours = colors.chunks_exact(4).map(|c| [c[0], c[1], c[2], c[3]]).collect();
+  geometry.vertex_colours = colors.as_chunks::<4>().0.to_vec();
   geometry.materials = materials
-    .chunks_exact(8)
+    .as_chunks::<8>()
+    .0
+    .iter()
     .take(material_count)
     .map(|bytes| {
       let data1 = read_u32(bytes, 0).unwrap();
@@ -151,9 +153,8 @@ pub(in crate::core::format::ybn) fn read_geometry(
       }
     })
     .collect();
-  geometry.material_colours =
-    material_colours.chunks_exact(4).map(|c| [c[0], c[1], c[2], c[3]]).collect();
-  for bytes in polygons.chunks_exact(16) {
+  geometry.material_colours = material_colours.as_chunks::<4>().0.to_vec();
+  for bytes in polygons.as_chunks::<16>().0 {
     let material = polygon_material_indices.get(geometry.polygons.len()).copied().unwrap_or(0);
     match bytes[0] & 7 {
       0 => {
@@ -193,7 +194,7 @@ pub(in crate::core::format::ybn) fn read_geometry(
         vertex2: read_u16(bytes, 8)?,
       }),
       _ => geometry.polygons.push(Polygon::Unsupported {
-        raw: bytes.try_into().map_err(|_| invalid("YBN polygon record has the wrong size"))?,
+        raw: *bytes,
       }),
     }
   }

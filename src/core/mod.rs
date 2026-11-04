@@ -1,3 +1,4 @@
+#[cfg(feature = "codewalker")]
 pub mod codewalker;
 pub mod config;
 pub mod conversion;

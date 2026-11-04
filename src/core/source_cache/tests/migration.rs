@@ -96,7 +96,7 @@ fn moves_vanilla_files_retains_history_and_updates_only_selected_resources() {
   );
   assert_eq!(crate::core::source_cache::load_merge_inputs(&output).unwrap().ybn.len(), 2);
   assert_eq!(
-    crate::core::source_cache::load_moved_source_paths(&output).unwrap(),
+    crate::core::source_cache::moved_source_paths(&output),
     BTreeSet::from([
       "resource_a/stream/nested/collision.ybn".into(),
       "resource_b/streams/nested/collision.ybn".into(),
@@ -128,7 +128,7 @@ fn moves_vanilla_files_retains_history_and_updates_only_selected_resources() {
     .unwrap();
   assert!(
     BuildSourceCache {
-      resource: Some("resource_a").map(str::to_owned),
+      resource: Some(str::to_owned("resource_a")),
       ..build.clone()
     }
     .run_after_vanilla_cache()
@@ -145,7 +145,7 @@ fn moves_vanilla_files_retains_history_and_updates_only_selected_resources() {
   assert!(output.join("resource_b/nested/collision.ybn").is_file());
   assert!(
     !BuildSourceCache {
-      resource: Some("resource_a").map(str::to_owned),
+      resource: Some(str::to_owned("resource_a")),
       ..build.clone()
     }
     .run_after_vanilla_cache()
@@ -248,7 +248,7 @@ fn moves_vanilla_files_retains_history_and_updates_only_selected_resources() {
   fs::rename(&empty, &moved_empty).unwrap();
   assert!(
     !BuildSourceCache {
-      resource: Some("resource_a").map(str::to_owned),
+      resource: Some(str::to_owned("resource_a")),
       ..build.clone()
     }
     .run_after_vanilla_cache()
@@ -257,7 +257,7 @@ fn moves_vanilla_files_retains_history_and_updates_only_selected_resources() {
   assert_eq!(read_metadata().resources["empty_resource"], empty_before.resources["empty_resource"]);
   assert!(
     BuildSourceCache {
-      resource: Some("[group]/empty_resource").map(str::to_owned),
+      resource: Some(str::to_owned("[group]/empty_resource")),
       ..build.clone()
     }
     .run_after_vanilla_cache()
@@ -285,7 +285,7 @@ fn moves_vanilla_files_retains_history_and_updates_only_selected_resources() {
   first = moved;
   assert!(
     BuildSourceCache {
-      resource: Some("resource_a").map(str::to_owned),
+      resource: Some(str::to_owned("resource_a")),
       ..build.clone()
     }
     .run_after_vanilla_cache()
@@ -313,7 +313,7 @@ fn moves_vanilla_files_retains_history_and_updates_only_selected_resources() {
   assert_eq!(old_file.sha256, hex::encode(Sha256::digest(b"original")));
   assert!(
     !BuildSourceCache {
-      resource: Some("resource_a").map(str::to_owned),
+      resource: Some(str::to_owned("resource_a")),
       ..build.clone()
     }
     .run_after_vanilla_cache()
@@ -323,7 +323,7 @@ fn moves_vanilla_files_retains_history_and_updates_only_selected_resources() {
   forced.force = true;
   assert!(
     BuildSourceCache {
-      resource: Some("resource_a").map(str::to_owned),
+      resource: Some(str::to_owned("resource_a")),
       ..forced.clone()
     }
     .run_after_vanilla_cache()
@@ -351,7 +351,7 @@ fn moves_vanilla_files_retains_history_and_updates_only_selected_resources() {
   write_json(&build.vanilla_dir.join("cache_info.json"), &raw).unwrap();
   assert!(
     BuildSourceCache {
-      resource: Some("resource_a").map(str::to_owned),
+      resource: Some(str::to_owned("resource_a")),
       ..build.clone()
     }
     .run_after_vanilla_cache()
@@ -364,7 +364,7 @@ fn moves_vanilla_files_retains_history_and_updates_only_selected_resources() {
   assert!(!second.join("streams/custom.ybn").exists());
   assert!(output.join("resources/resource_b/custom.ybn").is_file());
   assert_eq!(
-    crate::core::source_cache::load_moved_source_paths(&output).unwrap(),
+    crate::core::source_cache::moved_source_paths(&output),
     BTreeSet::from([
       "[changed]/resource_a/stream/custom.ybn".into(),
       "[changed]/resource_a/stream/nested/collision.ybn".into(),
@@ -377,7 +377,7 @@ fn moves_vanilla_files_retains_history_and_updates_only_selected_resources() {
   fs::write(empty.join("fxmanifest.lua"), b"changed manifest").unwrap();
   assert!(
     BuildSourceCache {
-      resource: Some("empty_resource").map(str::to_owned),
+      resource: Some(str::to_owned("empty_resource")),
       ..build.clone()
     }
     .run_after_vanilla_cache()
@@ -386,7 +386,7 @@ fn moves_vanilla_files_retains_history_and_updates_only_selected_resources() {
   fs::create_dir_all(empty.join("stream")).unwrap();
   assert!(
     BuildSourceCache {
-      resource: Some("empty_resource").map(str::to_owned),
+      resource: Some(str::to_owned("empty_resource")),
       ..build.clone()
     }
     .run_after_vanilla_cache()
@@ -395,7 +395,7 @@ fn moves_vanilla_files_retains_history_and_updates_only_selected_resources() {
   assert!(read_metadata().resource_checks["empty_resource"].has_stream);
   assert!(
     !BuildSourceCache {
-      resource: Some("empty_resource").map(str::to_owned),
+      resource: Some(str::to_owned("empty_resource")),
       ..build.clone()
     }
     .run_after_vanilla_cache()
@@ -404,7 +404,7 @@ fn moves_vanilla_files_retains_history_and_updates_only_selected_resources() {
   fs::remove_dir_all(empty.join("stream")).unwrap();
   assert!(
     BuildSourceCache {
-      resource: Some("empty_resource").map(str::to_owned),
+      resource: Some(str::to_owned("empty_resource")),
       ..build.clone()
     }
     .run_after_vanilla_cache()
@@ -412,7 +412,7 @@ fn moves_vanilla_files_retains_history_and_updates_only_selected_resources() {
   );
   assert!(
     BuildSourceCache {
-      resource: Some("missing").map(str::to_owned),
+      resource: Some(str::to_owned("missing")),
       ..build.clone()
     }
     .run_after_vanilla_cache()
@@ -432,7 +432,7 @@ fn moves_vanilla_files_retains_history_and_updates_only_selected_resources() {
   write_json(&output.join("cache_info.json"), &ambiguous).unwrap();
   let history_count = fs::read_dir(output.join("_old")).unwrap().count();
   let error = BuildSourceCache {
-    resource: Some("resource_a").map(str::to_owned),
+    resource: Some(str::to_owned("resource_a")),
     ..build.clone()
   }
   .run_after_vanilla_cache()
@@ -457,7 +457,7 @@ fn moves_vanilla_files_retains_history_and_updates_only_selected_resources() {
   fs::write(first.join("streams/nested/collision.ybn"), b"conflicting streams").unwrap();
   assert!(
     BuildSourceCache {
-      resource: Some("resource_a").map(str::to_owned),
+      resource: Some(str::to_owned("resource_a")),
       ..build.clone()
     }
     .run_after_vanilla_cache()
@@ -487,7 +487,7 @@ fn moves_vanilla_files_retains_history_and_updates_only_selected_resources() {
 
   assert!(
     BuildSourceCache {
-      resource: Some("resource_a").map(str::to_owned),
+      resource: Some(str::to_owned("resource_a")),
       ..build.clone()
     }
     .run_after_vanilla_cache()
@@ -518,7 +518,7 @@ fn moves_vanilla_files_retains_history_and_updates_only_selected_resources() {
   assert!(!output.join("resources/resource_a/nested/collision.ybn").exists());
   assert!(
     !BuildSourceCache {
-      resource: Some("resource_a").map(str::to_owned),
+      resource: Some(str::to_owned("resource_a")),
       ..build.clone()
     }
     .run_after_vanilla_cache()
@@ -546,8 +546,7 @@ fn moves_vanilla_files_retains_history_and_updates_only_selected_resources() {
     .unwrap();
   assert_eq!(fs::read(archived.path()).unwrap(), b"unrecorded");
   assert!(
-    crate::core::source_cache::load_moved_source_paths(&output)
-      .unwrap()
+    crate::core::source_cache::moved_source_paths(&output)
       .iter()
       .all(|path| !path.contains("resource_a/"))
   );

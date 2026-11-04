@@ -116,14 +116,6 @@ impl StreamFile {
     }
   }
 
-  /// Reads a native stream file and converts it to CodeWalker-style XML by its extension.
-  pub fn read_to_xml(
-    path: &Path,
-    shared_hash_names: &HashMap<u32, String>,
-  ) -> io::Result<String> {
-    Self::decode_to_xml(FileType::from_path(path)?, &fs::read(path)?, shared_hash_names)
-  }
-
   /// Converts native stream file bytes to CodeWalker-style XML.
   pub fn decode_to_xml(
     file_type: FileType,

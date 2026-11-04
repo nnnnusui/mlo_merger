@@ -2,9 +2,14 @@ use std::env;
 use std::path::PathBuf;
 use std::process::Command;
 
+/// Builds `bridge/CodeWalker.Bridge` for the `codewalker` feature, which only the round-trip
+/// tests use; other builds skip it.
 fn main() {
   println!("cargo:rerun-if-changed=bridge/CodeWalker.Bridge");
   println!("cargo:rerun-if-env-changed=CODEWALKER_CORE_DLL");
+  if env::var_os("CARGO_FEATURE_CODEWALKER").is_none() {
+    return;
+  }
 
   let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
   let bridge_dir = manifest_dir.join("bridge/CodeWalker.Bridge");
@@ -12,7 +17,7 @@ fn main() {
 
   if Command::new("dotnet").arg("--version").output().is_err() {
     println!(
-      "cargo:warning=`dotnet` was not found on PATH. Install the .NET SDK to enable the optional CodeWalker.Bridge backend (`--use-codewalker-dll`)."
+      "cargo:warning=`dotnet` was not found on PATH. Install the .NET SDK to build CodeWalker.Bridge for the round-trip tests."
     );
     return;
   }
@@ -24,7 +29,7 @@ fn main() {
   };
   if !dll_path.exists() {
     println!(
-      "cargo:warning=CodeWalker.Core.dll not found at {} (set CODEWALKER_CORE_DLL, or place it there). It is not distributed with this repo. The optional `--use-codewalker-dll` backend will not be available.",
+      "cargo:warning=CodeWalker.Core.dll not found at {} (set CODEWALKER_CORE_DLL, or place it there). It is not distributed with this repo. The round-trip tests cannot load CodeWalker.Bridge.",
       dll_path.display()
     );
     return;

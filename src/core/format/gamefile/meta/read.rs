@@ -39,7 +39,9 @@ fn read_structures(
 ) -> io::Result<Vec<MetaStructureInfo>> {
   let records = read_records(resource, pointer, count, 32)?;
   records
-    .chunks_exact(32)
+    .as_chunks::<32>()
+    .0
+    .iter()
     .map(|record| {
       let entry_count = read_i16(record, 30)?;
       if entry_count < 0 {
@@ -67,7 +69,9 @@ fn read_structure_entries(
 ) -> io::Result<Vec<MetaStructureEntry>> {
   let records = read_records(resource, pointer, count, 16)?;
   records
-    .chunks_exact(16)
+    .as_chunks::<16>()
+    .0
+    .iter()
     .map(|record| {
       Ok(MetaStructureEntry {
         name_hash: read_u32(record, 0)?,
@@ -88,7 +92,9 @@ fn read_enums(
 ) -> io::Result<Vec<MetaEnumInfo>> {
   let records = read_records(resource, pointer, count, 24)?;
   records
-    .chunks_exact(24)
+    .as_chunks::<24>()
+    .0
+    .iter()
     .map(|record| {
       let entries_count = read_i32(record, 16)?;
       if entries_count < 0 {
@@ -113,7 +119,9 @@ fn read_enum_entries(
 ) -> io::Result<Vec<MetaEnumEntry>> {
   let records = read_records(resource, pointer, count, 8)?;
   records
-    .chunks_exact(8)
+    .as_chunks::<8>()
+    .0
+    .iter()
     .map(|record| {
       Ok(MetaEnumEntry {
         name_hash: read_u32(record, 0)?,
@@ -130,7 +138,9 @@ fn read_data_blocks(
 ) -> io::Result<Vec<MetaDataBlock>> {
   let records = read_records(resource, pointer, count, 16)?;
   records
-    .chunks_exact(16)
+    .as_chunks::<16>()
+    .0
+    .iter()
     .map(|record| {
       let data_length = read_i32(record, 4)?;
       if data_length < 0 {

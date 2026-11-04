@@ -6,7 +6,7 @@ use std::{
 };
 
 use super::duplicates::{DuplicateReport, EntityDuplicate};
-use super::merge::Result;
+use super::operation::Result;
 use super::{run::MergeYmap, ybn_conflicts::MergeYbnConflicts};
 use crate::core::{
   format::ymap::reference_hash,

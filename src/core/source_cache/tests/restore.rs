@@ -2,9 +2,7 @@ use super::*;
 
 #[test]
 fn restoring_some_resources_keeps_the_others_cached_until_the_next_generation() {
-  use crate::core::source_cache::{
-    load_merge_inputs, load_moved_source_paths, restore_source_cache,
-  };
+  use crate::core::source_cache::{load_merge_inputs, moved_source_paths, restore_source_cache};
   use crate::core::vanilla::{CachedFile, FileChange};
   use sha2::{Digest, Sha256};
 
@@ -57,7 +55,7 @@ fn restoring_some_resources_keeps_the_others_cached_until_the_next_generation() 
     force: false,
   };
   assert!(build.run_after_vanilla_cache().unwrap());
-  let moved = || load_moved_source_paths(&output).unwrap();
+  let moved = || moved_source_paths(&output);
   let both = BTreeSet::from([
     "resource_a/stream/collision.ybn".to_string(),
     "resource_b/stream/collision.ybn".to_string(),

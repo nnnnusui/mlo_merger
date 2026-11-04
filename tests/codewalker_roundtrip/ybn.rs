@@ -60,11 +60,10 @@ fn sample_ybn_conflicts_merge_vanilla_deltas_and_omit_source_files() {
 
   MergeYbnConflicts {
     source_dir: source.clone(),
-    vanilla_dir: vanilla.clone(),
     output_dir: output.clone(),
     omitted_files_path: omitted.clone(),
   }
-  .run(None)
+  .run(&ybn_files(&vanilla), &ybn_files(&source))
   .unwrap();
 
   let merged_path = output.join("sc1_18_0.ybn");
@@ -90,13 +89,13 @@ fn all_local_ybn_conflicts_merge_against_vanilla_and_reopen_with_codewalker() {
   let staging = std::env::temp_dir().join(format!("mlo_ybn_corpus_merge_{}", std::process::id()));
   let output = staging.join("merged_ybn");
   let omitted = staging.join("_extracted_ybns.txt");
+  let source = base.join("asset/source-cache/resources");
   MergeYbnConflicts {
-    source_dir: base.join("asset/source"),
-    vanilla_dir: base.join("asset/vanilla/ybn"),
+    source_dir: source.clone(),
     output_dir: output.clone(),
     omitted_files_path: omitted.clone(),
   }
-  .run(Some(&codewalker))
+  .run(&ybn_files(&base.join("asset/vanilla-cache/latest/ybn")), &ybn_files(&source))
   .unwrap();
 
   let binaries = std::fs::read_dir(&output)
@@ -165,4 +164,14 @@ fn native_ybn_matches_codewalker_active_source_corpus() {
     failures.join("\n")
   );
   eprintln!("Compared {} active source YBN resources with CodeWalker.", input_paths.len());
+}
+
+/// Every YBN below `directory`, following links as latest vanilla files are.
+fn ybn_files(directory: &Path) -> Vec<std::path::PathBuf> {
+  walkdir::WalkDir::new(directory)
+    .follow_links(true)
+    .into_iter()
+    .map(|entry| entry.unwrap().into_path())
+    .filter(|path| path.extension().is_some_and(|extension| extension.eq_ignore_ascii_case("ybn")))
+    .collect()
 }

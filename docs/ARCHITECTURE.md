@@ -7,7 +7,8 @@ changes, and deploys the resulting stream files. Inspection and conversion are
 separate operations that do not run the pipeline.
 
 Native Rust handles game-file conversion, merging and RPF reading for vanilla
-generation. CodeWalker is an optional conversion backend.
+generation. CodeWalker is used only by round-trip tests that compare conversion
+with it, behind the `codewalker` feature; the released executable does not load it.
 
 ## Pipeline
 
@@ -160,8 +161,10 @@ than presented as historical data. The same predicate applies to every stage.
 
 ## Deploy
 
-Deployment consumes existing merged output and `source-cache/resources` without
-regenerating either input. Merged stream files go to
+Deployment consumes existing merged output and the files the source-cache inventory
+records as moved, without regenerating either input; other files under
+`source-cache/resources` are not part of the cache and are not deployed, and a recorded
+file that is missing is an error. Merged stream files go to
 `stream/{extension}/merged/{filename}`. Source-cache files not replaced by a
 merged basename go to
 `stream/{extension}/clone/{resourceName}/{stream-relative-path}`. Matching is
@@ -256,7 +259,7 @@ transaction. Version lookup reads overlay metadata without modifying artifacts.
 Binary/XML conversion, semantic comparison and in-game behavior provide different
 guarantees. META rebuilding requires compatible schemas; PSO editing uses an
 existing binary template and cannot change allocated shapes or capacities.
-CodeWalker requires locally supplied assemblies, and RPF decryption a locally
+The CodeWalker round-trip tests require locally supplied assemblies, and RPF decryption a locally
 supplied `magic.dat`. Unsupported required data must
 fail explicitly rather than be silently discarded.
 

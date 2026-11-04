@@ -3,7 +3,7 @@
 use std::path::{Path, PathBuf};
 
 use super::incremental::{MergeMetadata, output_path};
-use super::merge::Result;
+use super::operation::Result;
 
 /// File name of the merge output's metadata.
 pub(crate) const CACHE_INFO: &str = "cache_info.json";

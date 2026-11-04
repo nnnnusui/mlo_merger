@@ -2,7 +2,7 @@
 //!
 //! Ignored by default since it requires a locally built `bridge/CodeWalker.Bridge`
 //! (see build.rs / CODEWALKER_CORE_DLL). Run with:
-//!   CODEWALKER_CORE_DLL=/path/to/CodeWalker.Core.dll cargo test --test codewalker_roundtrip -- --ignored
+//!   CODEWALKER_CORE_DLL=/path/to/CodeWalker.Core.dll cargo test --features codewalker --test codewalker_roundtrip -- --ignored
 
 use std::path::Path;
 

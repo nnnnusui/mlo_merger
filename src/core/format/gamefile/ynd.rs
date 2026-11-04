@@ -79,7 +79,9 @@ pub fn ynd_to_xml(
   let ref_bytes = read_table(&resource, read_u64(body, 64)?, ref_count, 8)?;
 
   let links = link_bytes
-    .chunks_exact(8)
+    .as_chunks::<8>()
+    .0
+    .iter()
     .map(|record| Link {
       area: u16_at(record, 0).unwrap(),
       id: u16_at(record, 2).unwrap(),
@@ -87,7 +89,7 @@ pub fn ynd_to_xml(
     })
     .collect::<Vec<_>>();
   let mut nodes = Vec::with_capacity(node_count);
-  for record in node_bytes.chunks_exact(NODE_SIZE) {
+  for record in node_bytes.as_chunks::<NODE_SIZE>().0 {
     let first_link = u16_at(record, 26)? as usize;
     let link_flags = record[37];
     let count = (link_flags >> 3) as usize;
@@ -107,7 +109,7 @@ pub fn ynd_to_xml(
     });
   }
   let mut junctions = Vec::with_capacity(junction_count);
-  for record in junction_bytes.chunks_exact(12) {
+  for record in junction_bytes.as_chunks::<12>().0 {
     let offset = u16_at(record, 8)? as usize;
     let width = record[10];
     let height = record[11];
@@ -129,7 +131,9 @@ pub fn ynd_to_xml(
     });
   }
   let refs = ref_bytes
-    .chunks_exact(8)
+    .as_chunks::<8>()
+    .0
+    .iter()
     .map(|record| JunctionRef {
       area: u16_at(record, 0).unwrap(),
       node: u16_at(record, 2).unwrap(),

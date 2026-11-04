@@ -85,7 +85,7 @@ fn get_diff_fingerprints_both_files_and_derives_their_differences() {
   });
   fs::write(source_cache.join("cache_info.json"), metadata.to_string()).unwrap();
 
-  let mut context =
+  let context =
     YmapComparisonContext::new(&source_cache, &vanilla_cache, catalog.hash_names.clone()).unwrap();
   let file = StreamFileRef {
     resource_name: Some("mod".into()),

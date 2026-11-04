@@ -332,13 +332,16 @@ fn match_positions<K: std::hash::Hash + Eq + Clone>(
   pairs
 }
 
+/// Instance pairs as `(before index, after index)`.
+type Pairs = Vec<(usize, usize)>;
+
 /// Instance pairs of `before` and `after` that are unchanged, then those that only moved
-/// attributes, as `(before index, after index)`.
+/// attributes.
 fn match_instances(
   before: &[Placed],
   after: &[Placed],
   tolerance: f32,
-) -> (Vec<(usize, usize)>, Vec<(usize, usize)>) {
+) -> (Pairs, Pairs) {
   let (mut before_used, mut after_used) = (vec![false; before.len()], vec![false; after.len()]);
   let unchanged =
     match_positions(before, after, &mut before_used, &mut after_used, tolerance, attributes);
