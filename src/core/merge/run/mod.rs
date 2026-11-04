@@ -1,5 +1,4 @@
 use super::duplicates::{Change, Collector, Contribution, DuplicateReport};
-use crate::core::config::blacklist::BlacklistConfig;
 use crate::core::format::ymap::compare::lod_light_pairs::LightSide;
 use crate::core::format::ymap::compare::{
   EntityParent, EntityParents, IgnoredChange, YmapComparisonDiff, YmapDiffContext, YmapDiffFields,
@@ -27,7 +26,6 @@ pub struct MergeYmap {
   pub vanilla_dir: PathBuf,
   pub output_dir: PathBuf,
   pub rebuild_all: bool,
-  pub blacklist_config: Option<PathBuf>,
   /// The overwrites of the sources, keyed by source path, applied to their diffs.
   pub overwrites: HashMap<PathBuf, StreamFileOverwrite>,
   /// The overwrites of the latest vanilla files, keyed by lowercase file name, merged after the

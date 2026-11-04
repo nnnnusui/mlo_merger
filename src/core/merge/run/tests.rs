@@ -34,7 +34,6 @@ fn latest_ymap_merge_writes_binary_without_xml() {
     vanilla_dir: root.join("vanilla"),
     output_dir: root.join("output"),
     rebuild_all: true,
-    blacklist_config: None,
     overwrites: Default::default(),
     vanilla_overwrites: Default::default(),
   };
@@ -119,7 +118,6 @@ fn native_ymap_merge_deletion_wins_over_retained_entities_in_both_orders() {
     vanilla_dir: root.join("vanilla"),
     output_dir: root.join("output"),
     rebuild_all: true,
-    blacklist_config: None,
     overwrites: Default::default(),
     vanilla_overwrites: Default::default(),
   };
@@ -182,7 +180,6 @@ fn merge_emits_only_edited_ymaps_when_rebuilding() {
     vanilla_dir: root.join("vanilla"),
     output_dir: output.clone(),
     rebuild_all: true,
-    blacklist_config: None,
     overwrites: Default::default(),
     vanilla_overwrites: Default::default(),
   };
@@ -238,7 +235,6 @@ fn merge_deletes_omitted_entities_and_detaches_dependent_children() {
     vanilla_dir: root.join("vanilla"),
     output_dir: output.clone(),
     rebuild_all: false,
-    blacklist_config: None,
     overwrites: Default::default(),
     vanilla_overwrites: Default::default(),
   }
@@ -332,7 +328,6 @@ fn sources_with_a_diff_document_merge_through_it_and_reject_stale_ones() {
     vanilla_dir: root.join("vanilla"),
     output_dir: root.join("output"),
     rebuild_all: true,
-    blacklist_config: None,
     overwrites: Default::default(),
     vanilla_overwrites: Default::default(),
   };
@@ -406,7 +401,6 @@ fn lod_light_removals_of_either_ymap_of_a_pair_are_made_in_both() {
     vanilla_dir: root.join("vanilla"),
     output_dir: output.clone(),
     rebuild_all: true,
-    blacklist_config: None,
     overwrites: Default::default(),
     vanilla_overwrites: Default::default(),
   }

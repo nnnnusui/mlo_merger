@@ -62,7 +62,6 @@ impl IncrementalMerge<'_> {
         vanilla_dir: self.vanilla_cache.join("latest/ymap"),
         output_dir: directory.clone(),
         rebuild_all: true,
-        blacklist_config: None,
         overwrites,
         vanilla_overwrites,
       }

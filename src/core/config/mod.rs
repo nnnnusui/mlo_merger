@@ -1,4 +1,3 @@
-pub mod blacklist;
 pub mod gamebuild;
 pub mod matching;
 

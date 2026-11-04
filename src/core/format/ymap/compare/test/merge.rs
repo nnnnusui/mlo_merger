@@ -3,12 +3,9 @@
 use struct_diff::Diff;
 
 use super::*;
-use crate::core::{
-  config::blacklist::{BlacklistConfig, OccludeModelBlacklist},
-  format::ymap::{
-    compare::{IgnoredChange, YmapMergeOptions, merge_diffs},
-    model::{YmapBoxOccluder, YmapOccludeModel},
-  },
+use crate::core::format::ymap::{
+  compare::{IgnoredChange, YmapMergeOptions, merge_diffs},
+  model::{YmapBoxOccluder, YmapOccludeModel},
 };
 
 fn occluder(x: i32) -> YmapBoxOccluder {
@@ -29,14 +26,12 @@ fn occluder(x: i32) -> YmapBoxOccluder {
 fn merged(
   vanilla: &Ymap,
   sources: &[&Ymap],
-  blacklist: Option<&BlacklistConfig>,
 ) -> Ymap {
   merged_with(
     vanilla,
     sources,
     YmapMergeOptions {
       ignored: IgnoredChange::MERGE,
-      blacklist,
     },
   )
 }
@@ -63,7 +58,7 @@ fn a_single_source_is_rebuilt_in_place() {
     ..base()
   };
   modded.entities[2].lod_dist = 999.0;
-  let merged = merged(&vanilla, &[&modded], None);
+  let merged = merged(&vanilla, &[&modded]);
   assert_eq!(merged.entities, modded.entities);
 }
 
@@ -80,7 +75,7 @@ fn removals_win_and_the_first_modification_wins() {
   second.entities[0].lod_dist = 250.0;
   second.entities.remove(1);
   for sources in [[&first, &second], [&second, &first]] {
-    let merged = merged(&vanilla, &sources, None);
+    let merged = merged(&vanilla, &sources);
     assert_eq!(merged.entities.len(), 1, "the removal wins in either order");
     let expected = if sources[0] == &first { 150.0 } else { 250.0 };
     assert_eq!(merged.entities[0].lod_dist, expected);
@@ -98,7 +93,7 @@ fn additions_of_every_source_keep_their_place() {
   let mut second = vanilla.clone();
   second.box_occluders.remove(0);
   second.box_occluders.push(occluder(400));
-  let merged = merged(&vanilla, &[&first, &second], None);
+  let merged = merged(&vanilla, &[&first, &second]);
   assert_eq!(merged.box_occluders, vec![occluder(300), occluder(100), occluder(400)]);
 }
 
@@ -114,30 +109,8 @@ fn an_item_replaced_by_one_source_keeps_its_index_beside_removals_of_another() {
   first.box_occluders[1] = occluder(150);
   let mut second = vanilla.clone();
   second.box_occluders.remove(3);
-  let merged = merged(&vanilla, &[&first, &second], None);
+  let merged = merged(&vanilla, &[&first, &second]);
   assert_eq!(merged.box_occluders, [0, 150, 200].map(occluder));
-}
-
-#[test]
-fn blacklisted_occlude_models_are_not_added() {
-  let model = |x: f32| YmapOccludeModel {
-    bmin: at(x, 0.0, 0.0),
-    bmax: at(x + 10.0, 10.0, 10.0),
-    triangles: Vec::new(),
-    flags: 0,
-  };
-  let vanilla = base();
-  let modded = Ymap {
-    occlude_models: vec![model(0.0), model(100.0)],
-    ..base()
-  };
-  let blacklist = BlacklistConfig {
-    occlude_models: vec![OccludeModelBlacklist {
-      bmin: Some([100.0, 0.0, 0.0]),
-      bmax: None,
-    }],
-  };
-  assert_eq!(merged(&vanilla, &[&modded], Some(&blacklist)).occlude_models, vec![model(0.0)]);
 }
 
 #[test]
@@ -154,7 +127,7 @@ fn references_skip_names_already_present_and_keep_the_first_parent() {
   second.parent = "second_parent".into();
   second.physics_dictionaries = vec!["Added".into(), "other".into()];
   second.instanced_data.prop_instance_list = vec!["PROP".into()];
-  let merged_stage = merged(&vanilla, &[&first, &second], None);
+  let merged_stage = merged(&vanilla, &[&first, &second]);
   assert_eq!(merged_stage.parent, "first_parent");
   assert_eq!(merged_stage.physics_dictionaries, ["kept", "added", "other"]);
   assert_eq!(merged_stage.instanced_data.prop_instance_list, ["prop"]);
@@ -176,7 +149,7 @@ fn content_flags_are_combined_and_other_metadata_stays_vanilla() {
   first.block.owner = "someone".into();
   let mut second = vanilla.clone();
   second.content_flags = 4;
-  let merged = merged(&vanilla, &[&first, &second], None);
+  let merged = merged(&vanilla, &[&first, &second]);
   assert_eq!(merged.content_flags, 7);
   assert_eq!(
     Ymap {
@@ -242,7 +215,7 @@ fn occlude_models_keep_the_cut_outs_and_fields_of_every_source() {
   second.occlude_models[0].triangles.push(triangle(9.0));
   second.occlude_models[0].bmin.z = -9.0;
   second.occlude_models[0].bmax.x = 20.0;
-  let merged = merged(&vanilla, &[&first, &second], None);
+  let merged = merged(&vanilla, &[&first, &second]);
   assert_eq!(
     merged.occlude_models,
     vec![YmapOccludeModel {
@@ -266,12 +239,12 @@ fn a_removal_by_another_source_drops_a_replacement() {
   let mut removed = vanilla.clone();
   removed.box_occluders.remove(1);
   for sources in [[&moved, &removed], [&removed, &moved]] {
-    assert_eq!(merged(&vanilla, &sources, None).box_occluders, [0, 200].map(occluder));
+    assert_eq!(merged(&vanilla, &sources).box_occluders, [0, 200].map(occluder));
   }
 }
 
 #[test]
-fn a_blacklisted_replacement_removes_the_vanilla_model() {
+fn a_replacing_occlude_model_takes_the_vanilla_models_place() {
   let model = |x: f32| YmapOccludeModel {
     bmin: at(x, 0.0, 0.0),
     bmax: at(x + 10.0, 10.0, 10.0),
@@ -286,12 +259,5 @@ fn a_blacklisted_replacement_removes_the_vanilla_model() {
     occlude_models: vec![model(0.0), model(300.0)],
     ..base()
   };
-  let blacklist = BlacklistConfig {
-    occlude_models: vec![OccludeModelBlacklist {
-      bmin: Some([300.0, 0.0, 0.0]),
-      bmax: None,
-    }],
-  };
-  assert_eq!(merged(&vanilla, &[&modded], None).occlude_models, vec![model(0.0), model(300.0)]);
-  assert_eq!(merged(&vanilla, &[&modded], Some(&blacklist)).occlude_models, vec![model(0.0)]);
+  assert_eq!(merged(&vanilla, &[&modded]).occlude_models, vec![model(0.0), model(300.0)]);
 }

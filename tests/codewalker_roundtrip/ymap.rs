@@ -36,7 +36,6 @@ fn sample_parent_relink_survives_native_and_codewalker_rebuild() {
     vanilla_dir: staging.join("vanilla"),
     output_dir: output.clone(),
     rebuild_all: false,
-    blacklist_config: None,
     overwrites: Default::default(),
     vanilla_overwrites: Default::default(),
   }

@@ -21,12 +21,9 @@ use super::{
   entities,
   merged_items::{MergedItems, merged, merged_with},
 };
-use crate::core::{
-  config::blacklist::BlacklistConfig,
-  format::ymap::{
-    model::{Ymap, YmapOccludeModel},
-    reference_hash,
-  },
+use crate::core::format::ymap::{
+  model::{Ymap, YmapOccludeModel},
+  reference_hash,
 };
 
 /// A kind of change that [`merge_diffs`] can leave out, keeping vanilla's value.
@@ -102,8 +99,6 @@ impl IgnoredChange {
 pub struct YmapMergeOptions<'a> {
   /// Changes left out, keeping vanilla's values.
   pub ignored: &'a [IgnoredChange],
-  /// Added occlude models it lists are dropped.
-  pub blacklist: Option<&'a BlacklistConfig>,
 }
 
 /// One diff of `vanilla` making the changes of every diff in `sources`, taken from `vanilla` in
@@ -153,30 +148,15 @@ pub fn merge_diffs(
       "box_occluders",
       vanilla.box_occluders.len(),
       sources.iter().map(|diff| diff.box_occluders.as_ref()),
-      |_| true,
     ),
     occlude_models: merge_occlude_models(
       &vanilla.occlude_models,
       sources.iter().map(|diff| diff.occlude_models.as_ref()),
-      |model| {
-        let listed = options
-          .blacklist
-          .is_some_and(|list| list.is_occlude_model_blacklisted(&model.bmin, &model.bmax));
-        if listed {
-          tracing::info!(
-            "      [Blacklisted] Occlude Model: bmin={:?}, bmax={:?}",
-            model.bmin,
-            model.bmax
-          );
-        }
-        !listed
-      },
     ),
     lod_lights: merge_items(
       "lod_lights",
       vanilla.lod_lights.len(),
       sources.iter().map(|diff| diff.lod_lights.as_ref()),
-      |_| true,
     ),
     distant_lod_lights: {
       let counts = kept(IgnoredChange::DistantLodLightCounts);
@@ -185,7 +165,6 @@ pub fn merge_diffs(
           "distant_lod_lights",
           vanilla.distant_lod_lights.items.len(),
           distant_lod_lights.clone().map(|diff| diff.items.as_ref()),
-          |_| true,
         ),
         num_street_lights: counts
           .then(|| {
@@ -220,7 +199,6 @@ pub fn merge_diffs(
           "grass_instance_list",
           vanilla.instanced_data.grass_instance_list.len(),
           instanced_data.map(|diff| diff.grass_instance_list.as_ref()),
-          |_| true,
         ),
       };
       (data != YmapInstancedDataDiff::default()).then_some(data)
@@ -229,13 +207,11 @@ pub fn merge_diffs(
       "time_cycle_modifiers",
       vanilla.time_cycle_modifiers.len(),
       sources.iter().map(|diff| diff.time_cycle_modifiers.as_ref()),
-      |_| true,
     ),
     car_generators: merge_items(
       "car_generators",
       vanilla.car_generators.len(),
       sources.iter().map(|diff| diff.car_generators.as_ref()),
-      |_| true,
     ),
   }
 }
@@ -262,17 +238,14 @@ fn non_empty<T>(items: Vec<T>) -> Option<Vec<T>> {
   (!items.is_empty()).then_some(items)
 }
 
-/// The item diffs of `sources` against `vanilla_len` items combined, keeping only additions that
-/// `keep` accepts.
+/// The item diffs of `sources` against `vanilla_len` items combined.
 fn merge_items<'a, T: Clone + 'a, C: Clone + 'a>(
   what: &str,
   vanilla_len: usize,
   sources: impl Iterator<Item = Option<&'a Vec<ItemDiff<T, C>>>>,
-  keep: impl FnMut(&T) -> bool,
 ) -> Option<Vec<ItemDiff<T, C>>> {
   let sources = sources.flatten().map(Vec::as_slice).collect::<Vec<_>>();
-  let mut merged: MergedItems<T, C> = merged(what, &sources);
-  merged.retain_new(keep);
+  let merged: MergedItems<T, C> = merged(what, &sources);
   non_empty(merged.into_diffs(vanilla_len))
 }
 
@@ -281,14 +254,12 @@ fn merge_items<'a, T: Clone + 'a, C: Clone + 'a>(
 fn merge_occlude_models<'a>(
   vanilla: &[YmapOccludeModel],
   sources: impl Iterator<Item = Option<&'a Vec<YmapOccludeModelDiff>>>,
-  keep: impl FnMut(&YmapOccludeModel) -> bool,
 ) -> Option<Vec<YmapOccludeModelDiff>> {
   let sources = sources.flatten().map(Vec::as_slice).collect::<Vec<_>>();
-  let mut merged = merged_with(&sources, |index, earlier, later| {
+  let merged = merged_with(&sources, |index, earlier, later| {
     tracing::info!("    occlude_models: combining changes of vanilla model {index}");
     combine_occlude_model(&vanilla[index], earlier, later);
   });
-  merged.retain_new(keep);
   non_empty(merged.into_diffs(vanilla.len()))
 }
 

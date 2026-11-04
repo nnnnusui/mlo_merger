@@ -57,7 +57,6 @@ mod tests {
       "VanillaCacheManifest",
       "DeployMetadata",
       "MatchingConfig",
-      "BlacklistConfig",
       "RTreeIndex",
       "RTreeItem",
       "YmapComparisonDiff",
@@ -95,7 +94,6 @@ mod tests {
     assert!(actual.contains("{ Removed: { index: number; implied?: boolean } }"));
     assert!(actual.contains("partner?: YmapComparisonPartner | null"));
     assert!(actual.contains("export type Change = \"Added\" | \"Modified\" | \"Removed\""));
-    assert!(actual.contains("bmin?: [number, number, number] | null"));
     assert!(actual.contains("tolerance?: MatchTolerances"));
     assert!(actual.contains("source_conflicts?:"));
     assert!(actual.contains("modified_seconds: number"));

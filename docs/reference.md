@@ -346,7 +346,7 @@ models: merge diagnostics, vanilla/source/merge/deploy caches, stream conflicts,
 diff-cache reports, source-cache YMAP diff documents (`YmapComparisonDiff`), overwrite
 documents (`ResourceOverwrite`), `--read` documents and results (`YmapReadDocument`,
 `ReadResult`), pipeline output (`PipelineReport`), version listings and
-matching/blacklist configuration. It does not include YBN difference payloads or JSON
+matching configuration. It does not include YBN difference payloads or JSON
 Schema documents, and it is not checked into the repository; see
 [development.md](development.md#typescript-types) to generate it locally.
 

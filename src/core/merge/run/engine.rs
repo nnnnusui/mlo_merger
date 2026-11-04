@@ -23,17 +23,6 @@ impl MergeYmap {
       self.output_dir.display()
     );
 
-    // Load blacklist configuration if provided
-    let blacklist = if let Some(blacklist_path) = &self.blacklist_config {
-      tracing::info!("Loading blacklist configuration from {}", blacklist_path.display());
-      let blacklist_content = fs::read_to_string(blacklist_path)?;
-      let config: BlacklistConfig = toml::from_str(&blacklist_content)?;
-      tracing::info!("Loaded {} occlude model blacklist entries", config.occlude_models.len());
-      Some(config)
-    } else {
-      None
-    };
-
     let mut modded_ymaps_map = BTreeMap::<String, Vec<ModYmapReference>>::new();
     for (resource, path, diff_path) in raw_sources {
       let name = path
@@ -332,7 +321,6 @@ impl MergeYmap {
         &ymap_diffs,
         YmapMergeOptions {
           ignored: IgnoredChange::MERGE,
-          blacklist: blacklist.as_ref(),
         },
       );
       let failed =
