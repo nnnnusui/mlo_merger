@@ -50,7 +50,7 @@ impl BuildVanillaCache {
       &input_timestamps,
     )?;
     // YMAP version diffs are not generated until vanilla version inference is implemented;
-    // see "Vanilla Version Inference" in Readme.md.
+    // see "Limitations" in docs/reference.md.
     // // Forced rebuilds take every diff again.
     // let previous_diffs = (!self.force).then_some(output_dir.as_path());
     // write_ymap_diffs(

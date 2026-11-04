@@ -11,7 +11,7 @@ generation. CodeWalker is an optional conversion backend.
 
 ## Pipeline
 
-The default command runs vanilla extraction when no raw archive exists, then
+`--pipeline` runs vanilla extraction when no raw archive exists, then
 vanilla-cache, source-cache, merge and deploy in order. Existing raw vanilla is
 validated and reused; missing vanilla requires an installed game path. Nonempty
 directories without an archive manifest are not automatically replaced. Source
@@ -43,9 +43,9 @@ exposed by the overwrite module, and merge reads overwrite data only through it.
 The vanilla archive, vanilla cache, source cache and merge output each record their
 metadata in `cache_info.json`.
 Format codecs (`format/*`) stay independent of artifact layout and batch processing.
-The binary's `gui` module is a front end for vanilla generation only: it collects the
-game directory and `magic.dat`, calls `core::vanilla::GenerateVanilla` on a worker
-thread and shows the `tracing` output. It holds no generation logic of its own.
+The GUI, opened when the executable starts without arguments, is a front end for
+vanilla generation only: it collects the game directory and `magic.dat` and runs the
+same generation as `--generate-vanilla`, holding no generation logic of its own.
 
 ## Source Cache
 
@@ -90,9 +90,9 @@ limited to final models that differ from vanilla after merging and parent-refere
 repairs. Identical inputs and basename conflicts alone do not cause output. A run
 with no edited YMAPs succeeds without generating YMAP files. Only source YMAPs
 replaced by generated output are listed in `_omit.txt`. Merged YMAPs are written
-as RSC7 META with one schema table shared by every YMAP
-(`src/core/format/ymap/binary/schemas.json`, taken from the latest vanilla YMAPs,
-whose structures each have a single layout), embedding the schemas their blocks use.
+as RSC7 META with one schema table shared by every YMAP, taken from the latest
+vanilla YMAPs (whose structures each have a single layout), embedding the schemas
+their blocks use.
 
 Merge records input provenance and output freshness. Timestamp-only changes
 refresh provenance without remerging. YBN groups are independent basenames;
@@ -207,21 +207,14 @@ Sources are compared with the latest selected vanilla files. Historical baseline
 inference is not part of the merge workflow. YMAP and YBN use independent
 format-specific policies.
 
-For YMAPs, a removal of a vanilla item wins over every other source's change to
-it, regardless of processing order. Otherwise the first source to modify or
-replace an item wins; additions are kept in source order. Configured resource
-priority is not implemented. Parent relationships are resolved before merging and
-repaired after the final entity layout is known. Files affected by those repairs
-are rebuilt even when their own mod data is otherwise unchanged. Ambiguous
-references are rejected rather than guessed.
-
-For YBNs, baseline-matched shapes missing from any source are removed and new
-shapes are combined. Deletion takes precedence over material or triangle-corner
-flag changes to the same geometry, regardless of resource order. Boxes are matched
-by their eight corners so alternate native reference vertices do not resurrect
-deleted volumes. Matching uses configured coordinate tolerance, not polygon or
-vertex indices; geometrically distinct additions remain independent.
-Source groups without a vanilla baseline are skipped or rejected when conflicting.
+The outcome never depends on processing or filesystem order: a removal wins over
+every other change to the same vanilla item, and otherwise the first source in
+source order wins. Configured resource priority is not implemented. YMAP parent
+relationships are resolved before merging and repaired after the final entity layout
+is known, so files affected by those repairs are rebuilt even when their own data is
+unchanged; ambiguous references are rejected rather than guessed. YBN shapes are
+matched by geometry within the configured tolerance, not by polygon or vertex index.
+The exact rules are in the [command reference](reference.md#merge).
 
 Matching tolerances are validated from configuration before each operation and
 kept constant throughout it. Effective values participate in diff-document and
@@ -240,7 +233,7 @@ without re-extracting the game. An existing raw archive is not checked against
 changes to the installed game.
 
 Generation of the following YMAP version diffs is currently disabled, together with
-vanilla version inference (see the Readme). When enabled, the derived cache also
+vanilla version inference (see [Limitations](reference.md#limitations)). When enabled, the derived cache also
 writes, for each YMAP a version after its first changes, its
 diff from the version before (`diff/{version}/ymap/{name}.diff.json`), and lists each
 such YMAP's versions in `ymap_versions.json`. These diffs record every change: no
@@ -282,5 +275,5 @@ validation or lossless handling of large JavaScript numbers.
 - Conversion tests do not replace runtime validation in GTA V/FiveM.
 - FiveM preview and editing are external to this tool.
 
-Usage: [English](../Readme.md).
+Usage: [Readme](../Readme.md), [command reference](reference.md).
 Remaining work: [TODO.md](TODO.md).

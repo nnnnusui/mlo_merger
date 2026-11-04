@@ -2,7 +2,7 @@
 
 vanilla-cache が生成する「vanilla YMAP のバージョン間差分」の仕組みと、実データでの検証結果、残っている課題をまとめる。
 
-> **現在、差分の生成は無効化している。** vanilla バージョンの推定は見送りとし（理由は Readme.md の「Vanilla Version Inference」を参照）、`BuildVanillaCache::run_cache` での生成呼び出しと、freshness check での確認をコメントアウトしている。生成コードと読み出し API は残している。
+> **現在、差分の生成は無効化している。** vanilla バージョンの推定は見送りとし（理由は [reference.md の「Limitations」](reference.md#limitations) を参照）、`BuildVanillaCache::run_cache` での生成呼び出しと、freshness check での確認をコメントアウトしている。生成コードと読み出し API は残している。
 
 計測は 2026-10-27、`asset/vanilla`（0000-base 〜 0102-patch2026_01）に対して行った。
 

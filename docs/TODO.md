@@ -10,12 +10,11 @@ Per-resource overwrites (`overwrite/resources/{resourceName}.json`) leave select
 
 - [ ] Let a vanilla overwrite take precedence over resources' changes to the same items, if the merge policy gains configured priorities.
 - [ ] Support YBN overwrites.
-- [ ] Report missing, stale, unsupported or ambiguous overwrite changes as errors or diagnostics, rather than only warning and skipping them.
+- [ ] Report selectors that match no difference, and unsupported or ambiguous overwrite changes, in the pipeline output, as `ignored_overwrites` does for missing and stale overwrites; they are only logged now.
 
 ## Architecture
 
 - [ ] Give each data owner its own read and freshness-check APIs (`core::vanilla`, `core::vanilla_cache`, `core::source_cache`, …), so merge and other consumers stop walking those directories or reading their files directly. For example, merge still enumerates `vanilla-cache/latest` itself.
-- [ ] Provide the interface for applying overwrites in `core::overwrite`, and have merge read the overwrite data it needs only through it.
 
 ## Merge Policy
 
@@ -30,7 +29,7 @@ Per-resource overwrites (`overwrite/resources/{resourceName}.json`) leave select
 
 ## Diff Documents
 
-Source-cache diff documents currently cover YMAPs against the latest vanilla only. Writing each vanilla YMAP's version-to-version diffs is implemented but disabled (see the Readme).
+Source-cache diff documents currently cover YMAPs against the latest vanilla only. Writing each vanilla YMAP's version-to-version diffs is implemented but disabled (see [Limitations](reference.md#limitations)).
 
 - [ ] Write source diffs against a selected or inferred vanilla version, not only the latest one.
 - [ ] Add YBN diff documents and their TypeScript types.

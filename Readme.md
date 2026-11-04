@@ -2,13 +2,17 @@
 
 [![SUSHI-WARE LICENSE](https://img.shields.io/badge/license-SUSHI--WARE%F0%9F%8D%A3-blue.svg)](https://github.com/MakeNowJust/sushi-ware)
 
-[Architecture](docs/ARCHITECTURE.md) | [Roadmap](docs/TODO.md)
-
 Merges FiveM YMAP resources and conflicting YBN collision files against vanilla data.
 
-## Usage
+| Document | Contents |
+|---|---|
+| [Command reference](docs/reference.md) | Every operation, its files and the merge behavior |
+| [FiveM integration](docs/usage.md) | Calling the executable from a resource, its JSON outputs and overwrite documents |
+| [Architecture](docs/ARCHITECTURE.md) | Workflow and design decisions |
+| [Development](docs/development.md) | Building, testing, type generation and third-party notices |
+| [Roadmap](docs/TODO.md) | Remaining work |
 
-### Generate Vanilla Data With The GUI
+## Generate Vanilla Data With The GUI
 
 Starting the executable without arguments, for example by double-clicking it, opens a
 window that generates the vanilla archive:
@@ -24,483 +28,37 @@ The window is in English; switch it to Japanese with the language selector. Its 
 also written to `log/` next to the executable. Any argument, such as `--pipeline`, runs
 the command line instead.
 
-### Run The Pipeline
+## Run The Pipeline
 
 ```bash
 mlo_merger --pipeline
-mlo_merger --pipeline -i resources -o merged_mlo --game-dir /mnt/gtav
+mlo_merger --pipeline -i resources -o merged_mlo --gamebuild 3095
 ```
 
-The pipeline extracts vanilla only when its archive is missing, updates
-the vanilla and source caches, merges, then deploys. Unchanged stages are reused.
-`--game-dir` defaults to `/mnt/gtav` and `--magic` to `./magic.dat`; both are used
-only for missing vanilla data (see [Vanilla extraction](#vanilla-extraction)).
-It prints the vanilla-cache, source-cache and merged files whose contents changed, and
-the overwrites the merge did not apply, as one line of JSON (`PipelineReport`), and logs
-everything else on stderr; see
-[docs/usage.md](docs/usage.md#pipeline-output).
-
-| Path | Default | Option |
-|---|---|---|
-| Source resources | `asset/source` | `-i` |
-| Raw vanilla archive | `asset/vanilla` | `--vanilla` |
-| Derived vanilla cache | `asset/vanilla-cache` | `--vanilla-cache` |
-| Source cache | `asset/source-cache` | `--source-cache` |
-| Merged files | `asset/merged` | `--merged` |
-| Deployment | `asset/merged_mlo` | `-o` |
-
-**Source-cache generation moves vanilla-named YMAP/YBN files out of resource
-stream directories.** They remain available in the source cache; unmatched files
-stay in the original resources. Resource names must be unique across groups.
-Overlapping artifact directories are rejected. The source root
-can contain them: for example, use `resources` as source while running the tool
-from `resources/mlo_merged`.
-
-Pipeline `-f` forces the derived caches, merge and deployment, but reuses an
-existing raw vanilla archive. `--gamebuild` selects the game build the vanilla
-cache, and so merge, targets (see [Game Builds](#game-builds)).
-
-### Run Individual Operations
-
-```bash
-mlo_merger --generate-vanilla -i /mnt/gtav -o asset/vanilla --magic magic.dat
-mlo_merger --generate-vanilla-cache --vanilla asset/vanilla -o asset/vanilla-cache
-mlo_merger --generate-source-cache -i asset/source --vanilla-cache asset/vanilla-cache -o asset/source-cache
-mlo_merger --generate-source-cache --exclude 'resourceName,[gabz]/shops'
-mlo_merger --merge --vanilla-cache asset/vanilla-cache --source-cache asset/source-cache -o asset/merged
-mlo_merger --deploy -i asset/merged --source-cache asset/source-cache -o asset/merged_mlo
-
-mlo_merger --restore-source-cache -i asset/source --source-cache asset/source-cache
-mlo_merger --restore-source-cache resourceName '[gabz]/cfx-gabz-247'
-```
-
-Source-cache selection accepts a resource name or input-relative resource path;
-`-f` forces that selection, not its prerequisites. Replaced cached files are
-retained under `_old/`. Files are cached at
-`resources/{resourceName}/{stream-relative-path}`, without the leading
-`stream/` or `streams/` component.
-
-Source-cache generation, merge and `--pipeline` accept `--exclude 'name,partial/path'`.
-Each trimmed entry matches a case-insensitive substring of the resource path
-relative to `-i`; resource names and group paths can both be used. Backslashes
-are normalized to `/`; entries are literal text, not globs. Excluded resources
-are not inventoried, fingerprinted, moved, or included in source conflict reports.
-Exclusions apply only to the current execution and are not saved or inherited.
-Omitting `--exclude` or passing `--exclude ''` means no exclusions. Pipeline and
-merge pass the current exclusions to their source-cache prerequisite updates. Legacy
-`source_exclusions.json` files are ignored and removed after successful source-cache
-updates. Previously cached excluded resources are removed
-from the active JSON indexes and their cache directories are archived under
-`_old/`, keeping those files out of merge and clone deployment. Files remaining
-in source are untouched. Omitting exclusions does not automatically restore
-archived files to source.
-
-`--restore-source-cache` moves recorded active cache files back to their original
-resource paths under `-i`, preserving modification times. Different existing
-destination contents, missing cached files and symlink paths are rejected before
-moving any files; identical destination files are retained and their cached
-duplicates removed. The command leaves `_old/` history and unrecorded files
-untouched and invalidates source-cache indexes after success. Run it while no
-other cache or pipeline operation is active. A subsequent source-cache or pipeline
-run will index the resources again and move vanilla-named files back into the cache.
-It does not change merged or deployed output.
-
-Given resource names or input-relative resource paths, `--restore-source-cache`
-restores only those resources. Every name is checked before any file moves; an
-unknown or ambiguous name is an error. The other resources stay cached and indexed,
-and `--read` still finds every file, but `stream_conflicts.json` and
-`vanilla_ymaps_to_read.json` are removed, so merges fail until the next
-source-cache or pipeline run caches the restored resources again.
-
-Merge writes native files under `ymap/` and `ybn/`, plus `_omit.txt` for replaced
-source paths and `duplicates.json` for competing YMAP entity changes. It rebuilds
-only changed or invalid groups. Failed merges leave the prior output intact.
-
-### Merge Behavior
-
-Merge applies every source's differences from the latest vanilla file together to
-vanilla. YMAP differences are read from the source cache's
-`diff/{resource}/{stream-relative-path}.diff.json`, which source-cache generation keeps
-while their source and vanilla files and the matching tolerances are unchanged; a
-missing or stale document fails the merge instead of being recomputed, so rebuild the
-source cache first (`--merge` and the pipeline do). Only YMAPs that still differ from
-vanilla after merging are written. The following behaviors are not obvious from that:
-
-**Combining sources**
-
-- A removal wins over every other change of that vanilla item, including another
-  source's replacement of it, whatever the source order. An added entity equal to a
-  removed vanilla entity is dropped too, so deleting wins over re-adding.
-- Otherwise the first source to modify or replace an item wins; resource priority is
-  not configurable. Occlude models are the exception: each field comes from the first
-  source changing it, and every source's triangle changes are applied.
-- Removed and modified items are named by their vanilla index. An unpaired source item
-  takes the place of an unpaired vanilla item between the same kept items (a
-  replacement), or is added right after the vanilla item preceding it; additions keep
-  source order. Kept items stay in vanilla order, so a source's reordering of kept
-  items is not reproduced.
-
-**YMAP fields**
-
-- `contentFlags` are OR-ed into vanilla's; the parent and IMAP link keep the first
-  change. Name, flags, extents, block and the distant LOD light counts keep their
-  vanilla values.
-- Added physics dictionaries and prop instances skip names already present;
-  dictionary removals are not applied.
-- Entity extensions (light effects, doors, spawn point overrides and cloth bounds) are
-  compared as a whole, ignoring number changes below the `ymap` tolerance; a change
-  replaces all of the entity's extensions with the source's. A YMAP with another
-  extension type fails to load rather than lose it.
-- `[prefix_]lodlights_*.ymap` and `[prefix_]distlodlights_*.ymap` hold the
-  `lodLights` and `distantLodLightsSOA` of the same lights, read by index, so a light
-  removed from either is removed from both. The source cache adds the other YMAP's
-  removals to each one's diff as `{"Removed": {"index": i, "implied": true}}`, and the
-  document's `partner` records the files they were taken from. A resource shipping only
-  one of the two has its removals merged into the other's vanilla YMAP as well. Pairs
-  whose vanilla YMAPs differ in light count are left alone.
-
-**Entity parents**
-
-- `parentIndex` is compared and merged as the entity it points at, read from the
-  source resource's parent YMAP or else vanilla's, and written back as an index into
-  the final entity arrays. Unmodified child YMAPs whose parent's entity order changed
-  are rebuilt with relinked indices.
-- An entity whose parent entity was removed, or whose parent lies in a YMAP the merged
-  map's `parent` no longer names, is detached with a warning: `parentIndex` becomes
-  `-1`, flag 8 (parent in the parent YMAP) is cleared, and `LODTYPES_DEPTH_HD` becomes
-  `LODTYPES_DEPTH_ORPHANHD`; other LOD levels are kept.
-- An index into a parent YMAP the merge cannot read is kept as it is.
-- A parent without a unique, non-zero GUID is kept by index only while the array it
-  indexes is unchanged; otherwise that merge group fails rather than guess.
-
-**YBN**
-
-- Shapes matching vanilla that any source lacks are removed, and new shapes from every
-  source are combined. Removal wins over material or triangle-corner flag changes of
-  the same geometry, whatever the source order.
-- Shapes match by geometry within the coordinate tolerance, not by polygon or vertex
-  index; boxes match by their eight corners, so a different reference vertex does not
-  bring back a removed box.
-- Files without a vanilla baseline are skipped, or rejected when sources conflict.
-
-### Overwrite Source Differences
-
-Merge and `--pipeline` read overwrites from `--overwrite` (default:
-`asset/overwrite`). `resources/{resourceName}.json` (`ResourceOverwrite`) lists,
-per stream-relative path of that resource, the differences of its source-cache diff
-document to leave out of the merge:
-
-- In an object, `true` leaves out the whole field's difference; a nested selector
-  only the parts it names.
-- In an array, each selector leaves out the items whose written fields all match,
-  such as `{"Removed": {"index": 0}}` or `{"Modified": {"before_index": 0}}`, which
-  name vanilla items by index, or an added entity's `guid`; its `changes` leaves out
-  only the changes it names. `{"Removed": {"implied": true}}` leaves out every implied
-  LOD light removal.
-
-An overwrite applies only while the source and vanilla files match its `source` and
-`vanilla` fingerprints (the diff document's `sha256` and `size`); otherwise it is
-left out whole with a warning, and the pipeline lists it in `ignored_overwrites` on
-every run until it is rewritten. See [docs/sample/overwrite](docs/sample/overwrite/README.md).
-
-`vanilla/latest/ymap/{fileName}.diff.json` (`VanillaOverwrite`) holds differences
-written directly against a latest vanilla YMAP, in the shape of a diff document's
-`diffs`. They are merged as one more source after every resource's (with their
-resource overwrites applied), under the same merge policy, and also into vanilla
-YMAPs no resource replaces. One applies only while the latest vanilla file matches
-its `vanilla` fingerprint. Overwrites currently only apply to YMAPs.
-
-### Deploy
-
-Deploy consumes existing merge and source-cache data without regenerating them:
-
-- Merged files: `stream/{extension}/merged/{filename}`.
-- Remaining cached files: `stream/{extension}/clone/{resourceName}/{stream-relative-path}`.
-- `files.txt`: original source-relative paths of active moved files.
-
-Deploy skips unchanged copies, repairs missing/changed outputs, and removes stale
-managed files. Unrelated files are preserved; locally modified stale files are
-rejected rather than deleted. Empty managed stream directories are pruned.
-Deploy also creates `fxmanifest.lua` with the FiveM map declaration and
-`/assetpacks` dependency when absent; existing manifests are never overwritten.
-
-Run `mlo_merger --help` for options and per-command output defaults. Convenience aliases
-are in [.cargo/config.toml](.cargo/config.toml).
-
-### Game Builds
-
-`--gamebuild` takes a FiveM game build number (`sv_enforceGameBuild`) or a DLC name
-listed for one under `[gamebuild]` in [asset/config.toml](asset/config.toml), such
-as `3095` or `mp2023_02`. Stage IDs and positions are not accepted. The table follows
-the [FiveM documentation](https://docs.fivem.net/docs/server-manual/server-commands/#sv_enforcegamebuild-build);
-add a build there when FiveM supports a new one.
-
-A build ends at the last stage before the next build's first listed DLC in
-`dlclist.xml` order, so it includes its own patch and `_g9ec` stages; a name listed
-under several builds selects the latest. A build without DLC names (such as 3323)
-includes what the build before it does, and build 1 stops at the title update.
-The build applies only to the vanilla-cache step: `--generate-vanilla` always
-extracts every stage, and the vanilla cache builds `latest` from the stages up to the
-build's last one. The pipeline, `--generate-source-cache` and `--merge` pass their
-`--gamebuild` to the vanilla-cache step they run first, so running one without it
-returns the cache to the last stage. The base and title-update files come from the
-installed game, not from the target build.
-
-### Matching Configuration
-
-Merge and diff-cache operations read [asset/config.toml](asset/config.toml) once
-per operation. Missing files or omitted keys use these defaults:
-
-```toml
-[tolerance]
-ybn = 0.05
-ymap = 0.001
-ymap_occlude_model = 0.01
-ymap_box_occluder = 1
-ymap_box_occluder_rotation = 1
-ymap_car_generator_position_decimals = 3
-ymap_lod_light_position_decimals = 3
-ymap_grass_position = 0.01
-```
-
-`ybn` controls inclusive per-axis polygon coordinates and radius matching across
-all supported polygon types, not only boxes. `ymap` is the smallest change of a YMAP
-float field that counts as a change: entity positions, rotations, scales and LOD
-distances, car generator, time cycle modifier and distant LOD light values. Extents and
-occlude model corners compare exactly. Occlude models use their XY extent
-tolerance; box occluders use integer stored-coordinate units. YMAP comparisons
-remain exclusive of the boundary. `ymap_box_occluder_rotation` ignores `iCosZ`/`iSinZ`
-changes up to and including that many stored units (0 compares exactly), and
-`ymap_car_generator_position_decimals` (0 to 6) sets the decimal places car generator
-positions are rounded to when pairing generators; `ymap_lod_light_position_decimals` (0 to 6)
-does the same for distant LOD light positions. `ymap_grass_position` is the per-axis
-world-space distance, in metres, within which grass instances are treated as the same one.
-These settings do not change search radii.
-
-All other values must be positive; floating values must also be finite. Unknown keys
-and invalid TOML are errors. Effective settings are included in merge freshness,
-so changing them causes regeneration on the next merge without requiring `-f`.
-Larger tolerances can treat intentionally different nearby shapes as identical.
-
-### Inspect Existing Data
-
-```bash
-mlo_merger --find entity-guid 2443198849 --filter '*cs4_10_strm_0.ymap'
-mlo_merger --find entity-position 3.5,4.2,0.0 --radius 1.0
-mlo_merger --find ybn-position 1211.126,-507.5948,67.54723 --radius 1.0 --type box
-mlo_merger --find file-from-position 1211.126,-507.5948,67.54723
-mlo_merger --find occlude-position 3.5,4.2,0.0 --radius 1.0
-```
-
-Searches write XML to stdout without running the pipeline or modifying artifacts.
-`entity-guid` searches by entity GUID. Position searches accept `X,Y,Z`; use
-`--radius` for `entity-position`, `ybn-position` and `occlude-position`
-(default: `1.0`). `file-from-position` finds files whose spatial bounds contain
-the position and does not accept `--radius`.
-
-`ybn-position` searches world-space collision shape centers, not any point
-inside a shape. `--type` accepts `box`, `triangle`, `sphere`, `capsule` or
-`cylinder`; omit it to search all supported shapes. Unsupported shapes are
-skipped. `occlude-position` measures box occluders from their center, converted from
-stored quarter-metre units, and occlude models from the nearest point of their bounds.
-
-Use `-i` to select a merged directory (default: `asset/merged`). `--filter`
-accepts a case-insensitive filename glob; quote wildcard patterns. `--all`
-includes recorded vanilla and source inputs from before the merge. Duplicate
-occurrences are retained.
-
-Position searches include the 3D radius boundary. Negative coordinates are
-supported; non-finite/out-of-range coordinates and negative or non-finite radii
-are rejected. For entities, radius `0` selects the exact native-precision
-position. `--all` results identify the input resource and path. A changed input
-fingerprint causes an error requiring a fresh merge. This is a snapshot
-comparison, not a computed semantic diff. YBN indices are input-local and may
-change on rebuild.
-
-### Read Stream File Models
-
-```bash
-mlo_merger --read --resource brofx_mansion_06 apa_ch2_occl_05.ymap
-mlo_merger --read --resource '[gabz]/cfx-gabz-247'
-mlo_merger --read --vanilla apa_ch2_occl_05.ymap
-mlo_merger --read --vanilla mpheist hei_ch1_11.ymap
-mlo_merger --read apa_ch2_occl_05.ymap
-mlo_merger --read apa_ch2_occl_05.ymap hei_ch1_11.ymap
-```
-
-`--read` writes each YMAP's model as minified JSON (`YmapReadDocument`), with
-the path and fingerprint of the file it was read from and of the
-`hash_names.json` that named its hashes. A resource's file is written to
-`asset/read-cache/resources/{resourceName}/{stream-relative-path}.json` and a
-vanilla file to `asset/read-cache/vanilla/{version}/ymap/{fileName}.json`.
-A JSON still describing its file is not written again; `-f` writes it anyway.
-
-- `--resource NAME [FILE...]` reads one resource, by name or source-relative ID,
-  from the existing source cache. Without a file it reads all of the resource's
-  YMAPs. A file name matching several of the resource's files is an error;
-  give its stream-relative path instead.
-- `--vanilla [VERSION] [FILE...]` reads a version of the vanilla archive, the latest
-  without one. A version is its ID or the name after the number, such as
-  `mpheist`. Without a file it reads all of the version's YMAPs.
-- Files alone are read from every resource holding them and from the latest
-  vanilla. If any resource holds several files of one name, nothing is written.
-- Several files are read together in the order given; a file named twice is read
-  once. If any name matches no file, nothing is written.
-
-The source cache and vanilla archive default to `asset/source-cache` and
-`asset/vanilla` (`--source-cache`, `--vanilla-dir`); `-o` changes the output root.
-The command prints a `ReadResult` JSON line listing each input, its output and
-whether it was written.
-
-### Convert Files
-
-```bash
-mlo_merger --to-xml collision.ybn -o exported
-mlo_merger --from-xml exported/collision.ybn.xml -o rebuilt
-mlo_merger --from-xml map.ymap.xml -o rebuilt --vanilla asset/vanilla
-```
-
-Inputs can be files or directories. Conversion output defaults to the current
-directory. META resources need compatible schemas; `--vanilla` supplies schema
-or template inputs. YBN conversion does not require an external schema directory.
-
-### TypeScript Types
-
-The release archives contain `asset/gen_mlo_merger.ts`, generated from the Rust
-Serde models for merge diagnostics, vanilla/source/merge/deploy caches, stream
-conflicts, diff-cache reports, source-cache YMAP diff documents
-(`YmapComparisonDiff`), overwrite documents (`ResourceOverwrite`), `--read`
-documents and results (`YmapReadDocument`, `ReadResult`), pipeline output
-(`PipelineReport`), version listings and matching/blacklist configuration. It
-does not include YBN difference payloads or JSON Schema documents. The release workflow regenerates it before packaging; it is not
-checked into the repository.
-
-When generating it locally, import it from its output path:
-
-```typescript
-import type { DuplicateReport, MatchingConfig } from "./asset/gen_mlo_merger";
-
-const config: MatchingConfig = { tolerance: { ybn: 0.05 } };
-```
-
-Types preserve JSON field names, nullability and optional inputs. Paths are
-strings; sets are arrays. File sizes and timestamps are JSON numbers, represented
-as TypeScript `number`, not `bigint`. Values above `Number.MAX_SAFE_INTEGER` need
-a precision-aware JSON reader. These definitions do not validate data at runtime.
-
-### Vanilla Version Inference
-
-Inferring which vanilla version a source YMAP was made from, and merging its changes
-from that version, is deferred for now. The code that writes vanilla YMAP
-version-to-version diffs is kept but not called; see
-[docs/vanillaDiff.md](docs/vanillaDiff.md) for what it does and what was measured.
-
-- At least for YMAPs, it is needed only by MLOs made from a vanilla version older than
-  mp2025_02, so it has low priority.
-  - Apart from some LOD light YMAPs, it is needed only for versions up to patchday27ng
-    (before GameBuild 2699).
-- It cannot be implemented until there is a way to track differences exactly.
-
-### Limitations
-
-- `--get-diff SOURCE` writes the source YMAP's differences from the latest vanilla
-  cache in the source cache's diff form; `--get-diff SOURCE TARGET` only prints a mock
-  invocation.
-- Merge uses the latest selected vanilla, without historical baseline inference.
-- Cache stages do not reproduce the complete game-engine mount rules or historical installations.
-- MLO semantic differences are reports, not lossless history patches.
-- Conversion support depends on the resource family and available schemas. PSO rebuilding cannot grow arrays or allocated strings; RBF YMT is unsupported.
-- Matching XML or stable rebuilds does not establish in-game load safety. Validate generated resources in the target game environment.
-
-## Third-Party Notices
-
-Every release archive, including `mlo_merger-all`, contains `third_party_notices.json`
-next to `LICENSE.md` and `release.json`. It lists the crates compiled into the released
-executables for any release target (the normal dependency graph; no build or dev
-dependencies, and not this workspace's own crates), with their license texts.
-`THIRD_PARTY_NOTICES.md` renders the same data for reading. CodeWalker is not shipped
-and not listed.
-
-```json
-{
-  "parts": ["mlo_merger"],
-  "notices": [
-    {
-      "license": "MIT",
-      "text": "Copyright (c) ...\n\nPermission is hereby granted, ...",
-      "packages": [{ "name": "serde", "version": "1.0.229", "repository": "https://github.com/serde-rs/serde" }]
-    }
-  ]
-}
-```
-
-- Each notice holds one distinct license text (CRLF normalized to LF, trimmed), with
-  copyright lines included, and every package distributed under exactly that text,
-  sorted by name. Notices are sorted by their first package's name.
-- `license` is the SPDX identifier of the text; MIT is preferred for dual-licensed crates.
-- `repository` falls back to the crate's homepage, then its crates.io page.
-
-Other projects copy this file, so keep its format stable. The release workflow
-generates it with [cargo-about](https://github.com/EmbarkStudios/cargo-about)
-(accepted licenses in `about.toml`) and `scripts/third_party_notices.py`. To generate
-it locally:
-
-```bash
-cargo install --locked cargo-about --version 0.9.3 --features cli
-for target in x86_64-pc-windows-msvc x86_64-unknown-linux-gnu x86_64-apple-darwin aarch64-apple-darwin; do
-  cargo about generate --locked --fail --format json --target "$target" -o "target/about-$target.json"
-done
-python3 scripts/third_party_notices.py target/about-*.json \
-  -o target/third_party_notices.json --markdown target/THIRD_PARTY_NOTICES.md
-```
-
-cargo-about runs once per target because, given several targets at once, it also lists
-crates that no single target compiles.
-
-## Development Environment
-
-- Rust stable on Windows or Linux.
-- An installed GTA V Legacy and `magic.dat` are needed to extract from game
-	archives. An existing vanilla archive can be reused.
-
-### Vanilla Extraction
-
-Game archives are read natively, without CodeWalker. Their tables of contents are
-encrypted: the AES key is located in the installed `GTA5.exe`, and decodes
-CodeWalker's `magic.dat`, which holds the remaining NG keys and tables. Neither is
-redistributed. Copy `CodeWalker.Core/Resources/magic.dat` from the
-[CodeWalker](https://github.com/dexyfex/CodeWalker) sources to `./magic.dat`, or
-pass its path with `--magic`. The GUI can download it from the same place.
-
-Build the executable with:
-
-```bash
-cargo build
-```
-
-The examples above use `mlo_merger` as the executable name. If it is not on your
-`PATH`, invoke it using its path (for example, `./target/debug/mlo_merger`).
-
-### Generate TypeScript Types
-
-TypeScript definitions are generated from Rust's Serde models. The optional
-`typescript` feature is required only for generation and verification, not for
-normal builds.
-
-```bash
-cargo export-types
-cargo export-types -o /tmp/mlo_merger.ts
-cargo export-types --output /tmp/mlo_merger.ts
-cargo test --features typescript --lib typescript::tests
-```
-
-### Run Tests
-
-```bash
-cargo test --lib
-cargo test --doc
-cargo test --test codewalker_roundtrip
-```
-
-Some tests require local game assets or CodeWalker; many are ignored by default.
-Game assets and CodeWalker binaries are not redistributed.
+The pipeline extracts vanilla when its archive is missing, updates the vanilla and source
+caches, merges, then deploys, reusing every unchanged stage. Resources are read from
+`asset/source` and the deployable resource is written to `asset/merged_mlo`; see the
+[command reference](docs/reference.md#pipeline) for every path and option.
+
+**Source-cache generation moves vanilla-named YMAP/YBN files out of resource stream
+directories** into `asset/source-cache`; `--restore-source-cache` moves them back.
+
+## Commands
+
+| Operation | Command |
+|---|---|
+| [Run every stage](docs/reference.md#pipeline) | `--pipeline` |
+| [Extract vanilla from the game](docs/reference.md#individual-operations) | `--generate-vanilla` |
+| [Build the vanilla cache](docs/reference.md#game-builds) | `--generate-vanilla-cache` |
+| [Build the source cache](docs/reference.md#source-cache) | `--generate-source-cache` |
+| [Move cached files back](docs/reference.md#restoring-resources) | `--restore-source-cache` |
+| [Merge](docs/reference.md#merge) | `--merge` |
+| [Deploy](docs/reference.md#deploy) | `--deploy` |
+| [Search merged data](docs/reference.md#inspect-existing-data) | `--find` |
+| [Write YMAP models as JSON](docs/reference.md#read-stream-file-models) | `--read` |
+| [Convert to and from XML](docs/reference.md#convert-files) | `--to-xml`, `--from-xml` |
+
+Run `mlo_merger --help` for every option.
+
+Release archives include the third-party license notices (`THIRD_PARTY_NOTICES.md`) and
+TypeScript types for the JSON files (`asset/gen_mlo_merger.ts`).

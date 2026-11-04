@@ -14,7 +14,7 @@
 //! diff layout, [`ALGORITHM_VERSION`] and the hash names the YMAPs are decoded with are
 //! unchanged; a forced rebuild takes every diff again.
 //!
-//! Generation is currently disabled (see "Vanilla Version Inference" in Readme.md), so the
+//! Generation is currently disabled (see "Limitations" in docs/reference.md), so the
 //! writing side is unused.
 #![allow(dead_code)]
 

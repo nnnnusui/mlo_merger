@@ -2,7 +2,7 @@
 
 This guide shows how a FiveM resource calls the `mlo_merger` executable to show
 nearby YMAP changes in NUI and to write overwrites that leave chosen changes out
-of the merge. See the [Readme](../Readme.md) for every option and
+of the merge. See the [command reference](reference.md) for every option and
 [ARCHITECTURE](ARCHITECTURE.md) for the workflow.
 
 ## Types
