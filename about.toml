@@ -12,6 +12,11 @@ accepted = [
     "Unlicense",
     "0BSD",
     "Unicode-3.0",
+    # Brought in by the vanilla generator GUI (egui fonts, clipboard, HTTPS roots).
+    "BSL-1.0",
+    "OFL-1.1",
+    "Ubuntu-font-1.0",
+    "CDLA-Permissive-2.0",
 ]
 ignore-build-dependencies = true
 ignore-dev-dependencies = true

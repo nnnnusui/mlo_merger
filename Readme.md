@@ -8,14 +8,30 @@ Merges FiveM YMAP resources and conflicting YBN collision files against vanilla 
 
 ## Usage
 
+### Generate Vanilla Data With The GUI
+
+Starting the executable without arguments, for example by double-clicking it, opens a
+window that generates the vanilla archive:
+
+1. Choose the GTA V Legacy directory. Common Steam, Epic and Rockstar installs are
+   detected.
+2. Choose `magic.dat`, or press **Download from GitHub** to save CodeWalker's copy next to
+   the executable. The link next to it opens the file's GitHub page.
+3. Press **Generate vanilla**. `vanilla/` is created next to the executable; upload it to
+   the server as `asset/vanilla`.
+
+The window is in English; switch it to Japanese with the language selector. Its log is
+also written to `log/` next to the executable. Any argument, such as `--pipeline`, runs
+the command line instead.
+
 ### Run The Pipeline
 
 ```bash
-mlo_merger
-mlo_merger -i resources -o merged_mlo --game-dir /mnt/gtav
+mlo_merger --pipeline
+mlo_merger --pipeline -i resources -o merged_mlo --game-dir /mnt/gtav
 ```
 
-The default operation extracts vanilla only when its archive is missing, updates
+The pipeline extracts vanilla only when its archive is missing, updates
 the vanilla and source caches, merges, then deploys. Unchanged stages are reused.
 `--game-dir` defaults to `/mnt/gtav` and `--magic` to `./magic.dat`; both are used
 only for missing vanilla data (see [Vanilla extraction](#vanilla-extraction)).
@@ -63,7 +79,7 @@ retained under `_old/`. Files are cached at
 `resources/{resourceName}/{stream-relative-path}`, without the leading
 `stream/` or `streams/` component.
 
-Source-cache generation, merge and the default pipeline accept `--exclude 'name,partial/path'`.
+Source-cache generation, merge and `--pipeline` accept `--exclude 'name,partial/path'`.
 Each trimmed entry matches a case-insensitive substring of the resource path
 relative to `-i`; resource names and group paths can both be used. Backslashes
 are normalized to `/`; entries are literal text, not globs. Excluded resources
@@ -168,7 +184,7 @@ vanilla after merging are written. The following behaviors are not obvious from 
 
 ### Overwrite Source Differences
 
-Merge and the default pipeline read overwrites from `--overwrite` (default:
+Merge and `--pipeline` read overwrites from `--overwrite` (default:
 `asset/overwrite`). `resources/{resourceName}.json` (`ResourceOverwrite`) lists,
 per stream-relative path of that resource, the differences of its source-cache diff
 document to leave out of the merge:
@@ -452,7 +468,7 @@ encrypted: the AES key is located in the installed `GTA5.exe`, and decodes
 CodeWalker's `magic.dat`, which holds the remaining NG keys and tables. Neither is
 redistributed. Copy `CodeWalker.Core/Resources/magic.dat` from the
 [CodeWalker](https://github.com/dexyfex/CodeWalker) sources to `./magic.dat`, or
-pass its path with `--magic`.
+pass its path with `--magic`. The GUI can download it from the same place.
 
 Build the executable with:
 

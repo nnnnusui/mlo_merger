@@ -18,7 +18,7 @@ use super::{
 /// A parsed top-level CLI operation.
 #[derive(Debug, Clone)]
 pub enum Command {
-  /// Run the complete cached pipeline when no operation flag is supplied.
+  /// Run the complete cached pipeline (`--pipeline`).
   Pipeline(Pipeline),
   /// Extract raw, versioned vanilla stream files.
   GenerateVanilla(GenerateVanilla),
@@ -175,8 +175,14 @@ mod tests {
   }
 
   #[test]
+  fn pipeline_requires_its_flag() {
+    assert!(parser().to_options().run_inner(&[] as &[&str]).is_err());
+    assert!(parser().to_options().run_inner(&["-i", "resources"]).is_err());
+  }
+
+  #[test]
   fn default_pipeline_parses_source_and_deployment_paths() {
-    let Command::Pipeline(command) = parser().to_options().run_inner(&[] as &[&str]).unwrap()
+    let Command::Pipeline(command) = parser().to_options().run_inner(&["--pipeline"]).unwrap()
     else {
       panic!("Expected pipeline")
     };
@@ -187,6 +193,7 @@ mod tests {
     let Command::Pipeline(command) = parser()
       .to_options()
       .run_inner(&[
+        "--pipeline",
         "-i",
         "resources",
         "-o",
@@ -366,7 +373,7 @@ mod tests {
     assert_eq!(command.resource, None);
     let Command::Pipeline(command) = parser()
       .to_options()
-      .run_inner(&["-i", "resources", "--exclude", "resource_a,[group]/partial"])
+      .run_inner(&["--pipeline", "-i", "resources", "--exclude", "resource_a,[group]/partial"])
       .unwrap()
     else {
       panic!("Expected pipeline command")
@@ -390,7 +397,8 @@ mod tests {
       panic!("Expected merge command")
     };
     assert_eq!(command.exclusions, Some(Vec::new()));
-    let Command::Pipeline(command) = parser().to_options().run_inner(&["-i", "resources"]).unwrap()
+    let Command::Pipeline(command) =
+      parser().to_options().run_inner(&["--pipeline", "-i", "resources"]).unwrap()
     else {
       panic!("Expected pipeline command")
     };

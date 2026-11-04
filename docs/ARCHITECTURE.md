@@ -43,6 +43,9 @@ exposed by the overwrite module, and merge reads overwrite data only through it.
 The vanilla archive, vanilla cache, source cache and merge output each record their
 metadata in `cache_info.json`.
 Format codecs (`format/*`) stay independent of artifact layout and batch processing.
+The binary's `gui` module is a front end for vanilla generation only: it collects the
+game directory and `magic.dat`, calls `core::vanilla::GenerateVanilla` on a worker
+thread and shows the `tracing` output. It holds no generation logic of its own.
 
 ## Source Cache
 

@@ -2,7 +2,7 @@ use super::common::{self, CommonOptions};
 use bpaf::*;
 use std::path::PathBuf;
 
-/// Arguments for the default vanilla-to-deployment pipeline.
+/// Arguments for the `--pipeline` vanilla-to-deployment run.
 #[derive(Debug, Clone)]
 pub struct Pipeline {
   /// Resource input passed to source-cache generation and merge.
@@ -21,8 +21,11 @@ pub struct Pipeline {
   pub common: CommonOptions,
 }
 
-/// Parses the default operation without requiring a command flag.
+/// Parses `--pipeline` arguments.
 pub fn parser() -> impl Parser<Pipeline> {
+  let command = long("pipeline")
+    .help("Run the cached pipeline: vanilla, caches, merge and deployment")
+    .req_flag(());
   let source_dir = short('i')
     .long("input")
     .help("Source resource directory (default: asset/source)")
@@ -43,23 +46,26 @@ pub fn parser() -> impl Parser<Pipeline> {
     .fallback(PathBuf::from("asset/overwrite"));
   let common = common::parser(PathBuf::from("asset/merged_mlo"));
   let exclusions = super::generate_source_cache::exclusions_parser();
-  construct!(source_dir, game_dir, magic, merged_dir, overwrite_dir, common, exclusions).map(
-    |(source_dir, game_dir, magic, merged_dir, overwrite_dir, common, exclusions)| Pipeline {
-      source_dir,
-      game_dir,
-      magic,
-      merged_dir,
-      common,
-      exclusions,
-      overwrite_dir,
-    },
-  )
+  construct!(command, source_dir, game_dir, magic, merged_dir, overwrite_dir, common, exclusions)
+    .map(|(_, source_dir, game_dir, magic, merged_dir, overwrite_dir, common, exclusions)| {
+      Pipeline {
+        source_dir,
+        game_dir,
+        magic,
+        merged_dir,
+        common,
+        exclusions,
+        overwrite_dir,
+      }
+    })
 }
 
 /// Runs all cached stages with deployment-scoped `-o`.
 pub fn run(command: Pipeline) -> Result<(), Box<dyn std::error::Error>> {
   if !command.common.step_names.is_empty() {
-    return Err("--step-name selection is not implemented for the default pipeline; use an explicit operation".into());
+    return Err(
+      "--step-name selection is not implemented for --pipeline; use an explicit operation".into(),
+    );
   }
   let pipeline = crate::core::pipeline::Pipeline {
     source_dir: command.source_dir,

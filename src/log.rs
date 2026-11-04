@@ -91,14 +91,20 @@ impl Write for LazyLogFile {
   }
 }
 
-/// Writes this run's logs to `asset/log/mlo_merger_<timestamp>.log`.
+/// Writes this run's logs to `path`, normally from [`log_file_path`].
 ///
 /// The file only appears once something is logged. When it cannot be created, a warning is
 /// printed and logs are discarded, so logging stays optional.
-pub(crate) fn file_writer()
--> (tracing_appender::non_blocking::NonBlocking, tracing_appender::non_blocking::WorkerGuard) {
+pub(crate) fn file_writer(
+  path: PathBuf
+) -> (tracing_appender::non_blocking::NonBlocking, tracing_appender::non_blocking::WorkerGuard) {
+  tracing_appender::non_blocking(LazyLogFile::Pending(path))
+}
+
+/// `<dir>/mlo_merger_<timestamp>.log` for a run starting now.
+pub(crate) fn log_file_path(dir: &Path) -> PathBuf {
   let name = format!("mlo_merger_{}.log", chrono::Local::now().format("%Y%m%d_%H%M%S"));
-  tracing_appender::non_blocking(LazyLogFile::Pending(Path::new("asset/log").join(name)))
+  dir.join(name)
 }
 
 #[cfg(test)]

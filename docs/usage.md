@@ -50,6 +50,8 @@ The examples below copy it to `shared/gen_mlo_merger.ts`.
 
 Start the executable from server-side code with `spawn` (spawnProcess).
 
+- Always pass an operation flag. Without arguments the executable opens the vanilla
+  generator GUI; run the pipeline as `mlo_merger --pipeline`.
 - Set the working directory to the directory containing `asset/`. Every path
   below, and every command default, is relative to it.
 - stdout carries only the command's result; `--read` and the pipeline each print one
@@ -263,7 +265,7 @@ asset/overwrite/vanilla/latest/ymap/{file_name}.diff.json
 ### Applying Overwrites
 
 ```bash
-mlo_merger -y -i <resources directory> -o <deployed resource> --gamebuild <GetGameBuildNumber()>
+mlo_merger --pipeline -y -i <resources directory> -o <deployed resource> --gamebuild <GetGameBuildNumber()>
 ```
 
 The pipeline updates the source cache, merges and deploys only what changed. Overwrites are
@@ -539,7 +541,7 @@ onNet("mlo:skip", async (request: SkipRequest, gameBuild: number) => {
   writeFileSync(path, JSON.stringify(overwrite, null, 2));
 
   const { stdout, stderr } = await runMerger([
-    "-y", "-i", RESOURCES_DIR, "-o", DEPLOY_DIR, ...gameBuildArgs(gameBuild),
+    "--pipeline", "-y", "-i", RESOURCES_DIR, "-o", DEPLOY_DIR, ...gameBuildArgs(gameBuild),
   ]);
   for (const line of stderr.split("\n")) {
     if (line.includes("Overwrite of")) console.warn(line); // not applied
