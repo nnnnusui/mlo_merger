@@ -38,15 +38,16 @@ impl VanillaOverwrite {
     hex::encode(Sha256::digest(serde_json::to_vec(self).unwrap_or_default()))
   }
 
-  /// These differences when `vanilla` is the file they were written against; otherwise logs a
-  /// warning naming `label` and returns `None`.
+  /// These differences when `vanilla` is the file they were written against; otherwise `None`.
+  /// `label` names the file in the debug log.
   pub fn diffs_for(
     &self,
     vanilla: &OverwriteFingerprint,
     label: &str,
   ) -> Option<&YmapDiffFields> {
+    // `Merge` reports this with every other overwrite it leaves out.
     if self.vanilla != *vanilla {
-      tracing::warn!(
+      tracing::debug!(
         "Vanilla overwrite of {label} was written against another vanilla file; not applied"
       );
       return None;

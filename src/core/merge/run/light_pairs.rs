@@ -77,8 +77,8 @@ impl MergeYmap {
       let (source, vanilla) = match fingerprints {
         Some(fingerprints) => fingerprints,
         None => (
-          engine::file_fingerprint(&mod_info.mod_ymap_path)?,
-          engine::file_fingerprint(vanilla_ymap_path)?,
+          OverwriteFingerprint::read(&mod_info.mod_ymap_path)?,
+          OverwriteFingerprint::read(vanilla_ymap_path)?,
         ),
       };
       let label = format!("{} ({})", ymap_name, mod_info.mod_name);

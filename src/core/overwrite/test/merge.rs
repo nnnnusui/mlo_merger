@@ -127,7 +127,7 @@ fn overwrites_skip_source_diffs_written_against_the_current_files() {
 
   // A changed overwrite merges again, without the skipped difference.
   write_overwrite(&document.source.sha256);
-  merge.run_after_caches(&vanilla).unwrap();
+  assert!(merge.run_after_caches(&vanilla).unwrap().ignored_overwrites.is_empty());
   let skipped = merged();
   assert_eq!(skipped.content_flags, vanilla_model.content_flags);
   assert_eq!(skipped.entities[0].position.x, edited.entities[0].position.x);
@@ -136,10 +136,35 @@ fn overwrites_skip_source_diffs_written_against_the_current_files() {
   merge.run_after_caches(&vanilla).unwrap();
   assert_eq!(merged_at(), applied);
 
-  // One written against another source file is not applied.
+  // One written against another source file is not applied, and is reported on every run,
+  // including one that reuses the merged output.
   write_overwrite("stale");
-  merge.run_after_caches(&vanilla).unwrap();
+  let stale = vec![IgnoredOverwrite {
+    resource: Some("resource".into()),
+    file: "maps/map.ymap".into(),
+    reason: IgnoredOverwriteReason::SourceChanged,
+  }];
+  assert_eq!(merge.run_after_caches(&vanilla).unwrap().ignored_overwrites, stale);
   assert_eq!(merged().content_flags, edited.content_flags);
+  let reused = merge.run_after_caches(&vanilla).unwrap();
+  assert!(reused.changes.added.is_empty() && reused.changes.modified.is_empty());
+  assert_eq!(reused.ignored_overwrites, stale);
+
+  // One naming a stream file the resource does not merge is reported too.
+  let mut missing: ResourceOverwrite =
+    serde_json::from_reader(fs::File::open(overwrite_dir.join("resources/resource.json")).unwrap())
+      .unwrap();
+  let file = missing.files.remove("Maps/Map.ymap").unwrap();
+  missing.files.insert("maps/other.ymap".into(), file);
+  write_json(&overwrite_dir.join("resources/resource.json"), &missing).unwrap();
+  assert_eq!(
+    merge.run_after_caches(&vanilla).unwrap().ignored_overwrites,
+    vec![IgnoredOverwrite {
+      resource: Some("resource".into()),
+      file: "maps/other.ymap".into(),
+      reason: IgnoredOverwriteReason::MissingSource,
+    }]
+  );
   fs::remove_dir_all(root).unwrap();
 }
 
@@ -226,7 +251,14 @@ fn vanilla_overwrites_merge_after_the_sources() {
 
   // One written against another vanilla file is not applied.
   write_overwrite("stale");
-  merge.run_after_caches(&vanilla).unwrap();
+  assert_eq!(
+    merge.run_after_caches(&vanilla).unwrap().ignored_overwrites,
+    vec![IgnoredOverwrite {
+      resource: None,
+      file: "map.ymap".into(),
+      reason: IgnoredOverwriteReason::VanillaChanged,
+    }]
+  );
   assert_eq!(merged().content_flags, vanilla_model.content_flags);
 
   // Without a source replacing the file, the overwrite alone is merged into it.

@@ -10,7 +10,7 @@ impl Merge {
   pub(crate) fn run_after_caches(
     &self,
     vanilla_dir: &Path,
-  ) -> Result<()> {
+  ) -> Result<MergeSummary> {
     crate::core::source_cache::BuildSourceCache {
       source_dir: self.source_dir.clone(),
       output_dir: self.source_cache_dir.clone(),
@@ -21,7 +21,7 @@ impl Merge {
       force: false,
     }
     .run_after_vanilla_cache()?;
-    self.run().map(drop)
+    self.run()
   }
 }
 

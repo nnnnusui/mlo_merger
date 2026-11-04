@@ -7,6 +7,7 @@ use super::{
 };
 use crate::common::{changes::StoreChanges, path::absolute_path};
 use crate::core::config::gamebuild::GameBuild;
+use crate::core::overwrite::IgnoredOverwrite;
 use serde::Serialize;
 use std::path::PathBuf;
 
@@ -51,11 +52,24 @@ pub struct PipelineChanges {
   pub merged: StoreChanges,
 }
 
+/// What the pipeline prints: [`PipelineChanges`] and the overwrites the merge left out.
+#[derive(Debug, Default, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
+pub struct PipelineReport {
+  #[serde(flatten)]
+  pub changes: PipelineChanges,
+  /// Overwrites not applied because the files they name are missing or changed; listed on
+  /// every run until the overwrite or the files change.
+  pub ignored_overwrites: Vec<IgnoredOverwrite>,
+}
+
 /// Outcome of a pipeline run.
 #[derive(Debug)]
 pub struct PipelineSummary {
   /// Store files changed by the cached stages.
   pub changes: PipelineChanges,
+  /// Overwrites the merge left out.
+  pub ignored_overwrites: Vec<IgnoredOverwrite>,
   /// File operations performed by the final deployment.
   pub deploy: DeploySummary,
 }
@@ -142,8 +156,9 @@ impl Pipeline {
       changes: PipelineChanges {
         vanilla_cache: vanilla_cache.changes.under(&self.vanilla_cache_dir),
         source_cache: source_cache.changes.under(&self.source_cache_dir),
-        merged: merged.under(&self.merged_dir),
+        merged: merged.changes.under(&self.merged_dir),
       },
+      ignored_overwrites: merged.ignored_overwrites,
       deploy,
     })
   }
@@ -186,6 +201,26 @@ mod tests {
   use sha2::{Digest, Sha256};
   use std::collections::BTreeMap;
   use std::fs;
+
+  #[test]
+  fn report_adds_ignored_overwrites_to_the_changes() {
+    use crate::core::overwrite::IgnoredOverwriteReason;
+    let report = PipelineReport {
+      changes: PipelineChanges::default(),
+      ignored_overwrites: vec![IgnoredOverwrite {
+        resource: Some("resource".into()),
+        file: "maps/map.ymap".into(),
+        reason: IgnoredOverwriteReason::SourceChanged,
+      }],
+    };
+    let empty = r#"{"added":[],"modified":[],"removed":[]}"#;
+    assert_eq!(
+      serde_json::to_string(&report).unwrap(),
+      format!(
+        r#"{{"vanilla_cache":{empty},"source_cache":{empty},"merged":{empty},"ignored_overwrites":[{{"resource":"resource","file":"maps/map.ymap","reason":"source_changed"}}]}}"#
+      )
+    );
+  }
 
   #[test]
   fn pipeline_routes_resources_through_merge_and_deploy_and_reuses_vanilla() {

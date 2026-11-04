@@ -34,12 +34,12 @@ archive, every one in `mlo_merger-all.zip`.
 | `--read` JSON documents | `YmapReadDocument`, `ReadFingerprint`, `Ymap`, `YmapEntity`, `Position`, `Rotation` |
 | Source-cache diff documents | `YmapComparisonDiff`, `YmapComparisonFile`, `YmapDiffFields`, `YmapEntityDiff`, `YmapEntityFieldDiff` |
 | Overwrite documents | `ResourceOverwrite`, `StreamFileOverwrite`, `OverwriteFingerprint`, `YmapDiffSkip`, `VanillaOverwrite` |
-| Pipeline stdout | `PipelineChanges`, `StoreChanges` |
+| Pipeline stdout | `PipelineReport`, `PipelineChanges`, `StoreChanges`, `IgnoredOverwrite`, `IgnoredOverwriteReason` |
 | Merge diagnostics | `DuplicateReport` |
 
 ```typescript
 import type {
-  OverwriteFingerprint, PipelineChanges, ReadResult, ResourceOverwrite, RTreeIndex, Ymap,
+  OverwriteFingerprint, PipelineReport, ReadResult, ResourceOverwrite, RTreeIndex, Ymap,
   YmapComparisonDiff, YmapDiffSkip, YmapEntity, YmapEntityDiff, YmapReadDocument,
 } from "./gen_mlo_merger";
 ```
@@ -122,7 +122,7 @@ Paths below are defaults. If you change them with options such as `--source-cach
 | Convert YMAPs to JSON | `--read FILE` | `ReadResult` | each `files[].output` (`YmapReadDocument`) |
 | Inspect differences | none; written by source-cache generation | | `asset/source-cache/diff/{resource}/{stream_path}.diff.json` (`YmapComparisonDiff`) |
 | Inspect vanilla version differences | none; vanilla-cache generation would write them, but it is currently disabled | | `asset/vanilla-cache/ymap_versions.json` (`VanillaYmapVersionIndex`), then `asset/vanilla-cache/diff/{version}/ymap/{name}.diff.json` (`VanillaYmapDiff`) for each version after a YMAP's first |
-| Apply overwrites | no operation flag (pipeline), or `--merge` then `--deploy` | `PipelineChanges` (pipeline only) | `asset/merged/duplicates.json` (`DuplicateReport`) |
+| Apply overwrites | `--pipeline`, or `--merge` then `--deploy` | `PipelineReport` (pipeline only) | `asset/merged/duplicates.json` (`DuplicateReport`) |
 
 ### Stream-File Bounds Indexes
 
@@ -231,8 +231,10 @@ asset/overwrite/resources/{resource}.json
   only the parts it names.
 - In an array, a selector leaves out the entries whose written fields all match. With
   `changes`, only the named changes are left out rather than the whole entry.
-- An overwrite whose `source` or `vanilla` no longer matches the current files is skipped with
-  a warning. Rewrite it from the new diff document after a source or vanilla update.
+- An overwrite whose `source` or `vanilla` no longer matches the current files is not
+  applied. The pipeline lists it in `ignored_overwrites` (see
+  [Pipeline Output](#pipeline-output)) on every run until it is rewritten from the new diff
+  document.
 
 See [docs/sample/overwrite](sample/overwrite/README.md) for complete examples.
 
@@ -259,8 +261,8 @@ asset/overwrite/vanilla/latest/ymap/{file_name}.diff.json
   applied. The merge policy still decides: a removal wins, and otherwise a resource's earlier
   change to the same item wins over the overwrite.
 - A vanilla YMAP with an overwrite is merged even when no resource replaces it.
-- An overwrite whose `vanilla` no longer matches the latest vanilla file is skipped with a
-  warning (`Vanilla overwrite of ...`). Rewrite it after a vanilla update.
+- An overwrite whose `vanilla` no longer matches the latest vanilla file is not applied and is
+  listed in the pipeline's `ignored_overwrites`. Rewrite it after a vanilla update.
 
 ### Applying Overwrites
 
@@ -270,13 +272,30 @@ mlo_merger --pipeline -y -i <resources directory> -o <deployed resource> --gameb
 
 The pipeline updates the source cache, merges and deploys only what changed. Overwrites are
 part of merge freshness, so `-f` is not needed. Use `--merge` alone to update only
-`asset/merged`. Overwrites that were not applied are logged on stderr as `Overwrite of ...` or
-`Vanilla overwrite of ...`.
+`asset/merged`. Overwrites that are not applied are listed in the pipeline's
+`ignored_overwrites`; both commands also log each one on stderr as a warning starting with
+`Overwrite of`.
+
+#### When Source Or Vanilla Files Change
+
+An overwrite is written against the files its fingerprints name. When a resource is updated
+or the game build moves the latest vanilla file, the next run (the pipeline updates the source
+cache first) merges the file again without the overwrite: the overwrite is left out whole,
+not partially applied, and the overwrite document is not changed. The merge does not fail.
+
+- A merge that reuses its previous output still checks every overwrite, so
+  `ignored_overwrites` lists an outdated overwrite on every run, not only on the run where the
+  files changed.
+- Write a new overwrite from the current diff document (or, for a vanilla overwrite, the
+  current `--read` fingerprint), or remove the entry, to clear it.
+- Selectors of an applied overwrite that match no difference are only logged on stderr as
+  `Overwrite of ... skips ..., which is not among the differences`; the rest of that
+  overwrite still applies.
 
 ### Pipeline Output
 
-The pipeline prints the files its cached stages added, modified or removed as one line of
-`PipelineChanges`:
+The pipeline prints one line of `PipelineReport`: the files its cached stages added, modified
+or removed (`PipelineChanges`), and the overwrites the merge did not apply:
 
 ```json
 {
@@ -286,7 +305,11 @@ The pipeline prints the files its cached stages added, modified or removed as on
     "modified": ["asset/source-cache/resources/sample_resource_a/hei_ch1_11.ymap"],
     "removed": []
   },
-  "merged": { "added": [], "modified": ["asset/merged/ymap/hei_ch1_11.ymap"], "removed": [] }
+  "merged": { "added": [], "modified": ["asset/merged/ymap/hei_ch1_11.ymap"], "removed": [] },
+  "ignored_overwrites": [
+    { "resource": "sample_resource_a", "file": "hei_ch1_11.ymap", "reason": "source_changed" },
+    { "file": "hei_ch1_12.ymap", "reason": "vanilla_changed" }
+  ]
 }
 ```
 
@@ -297,6 +320,18 @@ The pipeline prints the files its cached stages added, modified or removed as on
   Metadata, indexes and diff documents are not listed.
 - Only content changes count: a forced rebuild that writes the same bytes lists nothing, and a
   run that changes nothing prints empty lists.
+- `ignored_overwrites` is the current state, not a change: it lists every overwrite that does
+  not apply to the current files, on every run. An entry with `resource` is that resource
+  document's `files[file]`; one without is the vanilla overwrite
+  `vanilla/latest/ymap/{file}.diff.json`. Both names are lowercase; documents are matched
+  case-insensitively. `reason` is one of:
+
+  | `reason` | Meaning |
+  |---|---|
+  | `source_changed` | The source YMAP differs from `source` |
+  | `vanilla_changed` | The latest vanilla YMAP differs from `vanilla` (the source, if any, is unchanged) |
+  | `missing_source` | The resource merges no YMAP at `file`, for example after it was removed or excluded |
+  | `missing_vanilla` | No latest vanilla YMAP is named `file` |
 - Deployment is not included; its counts are logged on stderr.
 
 ## Example: From Player Position To Overwrite
@@ -507,7 +542,7 @@ Entity positions (`YmapEntity.position`) can also be marked in game, for example
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import { basename, dirname, resolve } from "path";
 import type {
-  PipelineChanges, ResourceOverwrite, StoreChanges, StreamFileOverwrite, YmapDiffSkip,
+  PipelineReport, ResourceOverwrite, StoreChanges, StreamFileOverwrite, YmapDiffSkip,
 } from "../shared/gen_mlo_merger";
 import type { SkipRequest } from "../shared/types";
 import { refreshIndex } from "./inspect";
@@ -540,16 +575,17 @@ onNet("mlo:skip", async (request: SkipRequest, gameBuild: number) => {
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, JSON.stringify(overwrite, null, 2));
 
-  const { stdout, stderr } = await runMerger([
+  const { stdout } = await runMerger([
     "--pipeline", "-y", "-i", RESOURCES_DIR, "-o", DEPLOY_DIR, ...gameBuildArgs(gameBuild),
   ]);
-  for (const line of stderr.split("\n")) {
-    if (line.includes("Overwrite of")) console.warn(line); // not applied
+  const report: PipelineReport = JSON.parse(stdout);
+  for (const ignored of report.ignored_overwrites) {
+    console.warn(`Overwrite not applied (${ignored.reason}): ${ignored.resource ?? "vanilla"} ${ignored.file}`);
   }
-  const changes: PipelineChanges = JSON.parse(stdout);
   const changed = (store: StoreChanges) =>
     store.added.length + store.modified.length + store.removed.length > 0;
-  if (!Object.values(changes).some(changed)) return; // nothing to reload
+  const stores = [report.vanilla_cache, report.source_cache, report.merged];
+  if (!stores.some(changed)) return; // nothing to reload
   await refreshIndex();
   ExecuteCommand("refresh");
   ExecuteCommand(`ensure ${basename(DEPLOY_DIR)}`);

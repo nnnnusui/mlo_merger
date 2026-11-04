@@ -93,7 +93,7 @@ impl MergeYmap {
     for (name, overwrite) in &self.vanilla_overwrites {
       let hash = reference_hash(name.trim_end_matches(".ymap"));
       if !vanilla_map_paths.contains_key(&hash) {
-        tracing::warn!("Vanilla overwrite of {name} names no latest vanilla YMAP; not applied");
+        tracing::debug!("Vanilla overwrite of {name} names no latest vanilla YMAP; not applied");
         continue;
       }
       vanilla_overwrites.insert(hash, overwrite);
@@ -273,7 +273,7 @@ impl MergeYmap {
       // Merged as the last source, so the merge policy weighs it against the resources'.
       if let Some(overwrite) = vanilla_overwrite
         && let Some(ymap_diff) =
-          overwrite.diffs_for(&file_fingerprint(&vanilla_ymap_path)?, ymap_name)
+          overwrite.diffs_for(&OverwriteFingerprint::read(&vanilla_ymap_path)?, ymap_name)
       {
         tracing::info!("  Vanilla overwrite of {ymap_name}");
         log_diff_counts(ymap_diff);
@@ -543,16 +543,3 @@ impl MergeYmap {
 
 /// The resource a vanilla overwrite's contributions are reported under in duplicate reports.
 const VANILLA_OVERWRITE_SOURCE: &str = "overwrite/vanilla/latest";
-
-/// The content of the file at `path` (after resolving links, as latest vanilla files are), as an
-/// overwrite records it.
-pub(super) fn file_fingerprint(
-  path: &Path
-) -> Result<OverwriteFingerprint, Box<dyn std::error::Error>> {
-  let fingerprint =
-    crate::common::fingerprint::Fingerprint::read(&path.canonicalize()?, None, false)?;
-  Ok(OverwriteFingerprint {
-    sha256: fingerprint.sha256,
-    size: fingerprint.size,
-  })
-}

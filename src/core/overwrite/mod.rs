@@ -59,6 +59,37 @@ pub struct StreamFileOverwrite {
   pub skip: serde_json::Value,
 }
 
+/// An overwrite the merge leaves out, as the files it names are missing or differ from those it
+/// was written against.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
+pub struct IgnoredOverwrite {
+  /// The resource of a resource overwrite, in lowercase; absent for a vanilla overwrite.
+  #[serde(skip_serializing_if = "Option::is_none")]
+  #[cfg_attr(feature = "typescript", specta(optional))]
+  pub resource: Option<String>,
+  /// The overwritten file, in lowercase: the key in the resource overwrite's `files`, such as
+  /// `vanilla/hei_ch1_11.ymap`, or the vanilla overwrite's file name, such as `hei_ch1_11.ymap`.
+  pub file: String,
+  pub reason: IgnoredOverwriteReason,
+}
+
+/// Why an overwrite is left out of the merge.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
+pub enum IgnoredOverwriteReason {
+  /// No merged source YMAP is the resource overwrite's file.
+  MissingSource,
+  /// The source file differs from the one the overwrite was written against.
+  SourceChanged,
+  /// No latest vanilla YMAP has the overwrite's file name.
+  MissingVanilla,
+  /// The latest vanilla file differs from the one the overwrite was written against; reported
+  /// only when the source, if any, is unchanged.
+  VanillaChanged,
+}
+
 /// The content of a file an overwrite was written against.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "typescript", derive(specta::Type))]
@@ -67,7 +98,35 @@ pub struct OverwriteFingerprint {
   pub size: u64,
 }
 
+impl OverwriteFingerprint {
+  /// The content of the file at `path`, after resolving links as latest vanilla files are.
+  pub fn read(path: &Path) -> Result<Self> {
+    let fingerprint =
+      crate::common::fingerprint::Fingerprint::read(&path.canonicalize()?, None, false)?;
+    Ok(Self {
+      sha256: fingerprint.sha256,
+      size: fingerprint.size,
+    })
+  }
+}
+
 impl StreamFileOverwrite {
+  /// Why this overwrite does not apply to the current `source` and `vanilla` files, if it
+  /// does not.
+  pub fn ignored_because(
+    &self,
+    source: &OverwriteFingerprint,
+    vanilla: &OverwriteFingerprint,
+  ) -> Option<IgnoredOverwriteReason> {
+    if self.source != *source {
+      Some(IgnoredOverwriteReason::SourceChanged)
+    } else if self.vanilla != *vanilla {
+      Some(IgnoredOverwriteReason::VanillaChanged)
+    } else {
+      None
+    }
+  }
+
   /// A digest of this overwrite, for telling whether a merge used the current one.
   pub fn digest(&self) -> String {
     hex::encode(Sha256::digest(serde_json::to_vec(self).unwrap_or_default()))
@@ -83,11 +142,9 @@ impl StreamFileOverwrite {
     vanilla: &OverwriteFingerprint,
     label: &str,
   ) -> Result<()> {
-    if self.source != *source || self.vanilla != *vanilla {
-      tracing::warn!(
-        "Overwrite of {label} was written against another {}; not applied",
-        if self.source != *source { "source file" } else { "vanilla file" }
-      );
+    // `Merge` reports this with every other overwrite it leaves out.
+    if self.ignored_because(source, vanilla).is_some() {
+      tracing::debug!("Overwrite of {label} was written against other files; not applied");
       return Ok(());
     }
     let unmatched = skip_diffs(diff, &self.skip).map_err(|error| format!("{label}: {error}"))?;

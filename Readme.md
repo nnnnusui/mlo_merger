@@ -35,8 +35,9 @@ The pipeline extracts vanilla only when its archive is missing, updates
 the vanilla and source caches, merges, then deploys. Unchanged stages are reused.
 `--game-dir` defaults to `/mnt/gtav` and `--magic` to `./magic.dat`; both are used
 only for missing vanilla data (see [Vanilla extraction](#vanilla-extraction)).
-It prints the vanilla-cache, source-cache and merged files whose contents changed as
-one line of JSON (`PipelineChanges`) and logs everything else on stderr; see
+It prints the vanilla-cache, source-cache and merged files whose contents changed, and
+the overwrites the merge did not apply, as one line of JSON (`PipelineReport`), and logs
+everything else on stderr; see
 [docs/usage.md](docs/usage.md#pipeline-output).
 
 | Path | Default | Option |
@@ -199,7 +200,8 @@ document to leave out of the merge:
 
 An overwrite applies only while the source and vanilla files match its `source` and
 `vanilla` fingerprints (the diff document's `sha256` and `size`); otherwise it is
-skipped with a warning. See [docs/sample/overwrite](docs/sample/overwrite/README.md).
+left out whole with a warning, and the pipeline lists it in `ignored_overwrites` on
+every run until it is rewritten. See [docs/sample/overwrite](docs/sample/overwrite/README.md).
 
 `vanilla/latest/ymap/{fileName}.diff.json` (`VanillaOverwrite`) holds differences
 written directly against a latest vanilla YMAP, in the shape of a diff document's
@@ -369,7 +371,7 @@ Serde models for merge diagnostics, vanilla/source/merge/deploy caches, stream
 conflicts, diff-cache reports, source-cache YMAP diff documents
 (`YmapComparisonDiff`), overwrite documents (`ResourceOverwrite`), `--read`
 documents and results (`YmapReadDocument`, `ReadResult`), pipeline output
-(`PipelineChanges`), version listings and matching/blacklist configuration. It
+(`PipelineReport`), version listings and matching/blacklist configuration. It
 does not include YBN difference payloads or JSON Schema documents. The release workflow regenerates it before packaging; it is not
 checked into the repository.
 

@@ -114,6 +114,9 @@ that resource, the differences of its diff document to leave out of the merge.
 Array items are selected by content rather than position. An entry applies only
 while the source and vanilla files match the fingerprints it was written against;
 otherwise it is skipped with a warning, as are selectors that match no difference.
+Merge checks every overwrite against the current files on each run, including runs
+that reuse their output, and returns those it leaves out; the pipeline prints them as
+`ignored_overwrites`.
 
 `overwrite/vanilla/latest/ymap/{fileName}.diff.json` holds differences written
 directly against a latest vanilla YMAP. Only `latest` is read: merges compare

@@ -1,4 +1,5 @@
 use std::{
+  collections::BTreeMap,
   fs,
   path::{Path, PathBuf},
 };
@@ -7,7 +8,9 @@ use walkdir::WalkDir;
 
 use super::incremental::IncrementalMerge;
 use crate::common::changes::StoreChanges;
-use crate::core::overwrite::Overwrites;
+use crate::core::overwrite::{
+  IgnoredOverwrite, IgnoredOverwriteReason, OverwriteFingerprint, Overwrites,
+};
 use crate::core::source_cache::{self, MergeInputs};
 
 pub(super) type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
@@ -45,7 +48,8 @@ pub struct Merge {
 impl Merge {
   /// Merges changed groups from the current vanilla and source caches and publishes output
   /// atomically, then brings the output's stream-file bounds index (`stream_file_rtree.json`)
-  /// up to date; returns the merged files it added, changed or removed, relative to the output.
+  /// up to date; returns the merged files it added, changed or removed, relative to the output,
+  /// and the overwrites it left out, each of which is also logged as a warning.
   ///
   /// Both caches must already be built; this does not update them.
   ///
@@ -57,11 +61,11 @@ impl Merge {
   /// }.run()?;
   /// # Ok::<(), Box<dyn std::error::Error>>(())
   /// ```
-  pub fn run(&self) -> Result<StoreChanges> {
+  pub fn run(&self) -> Result<MergeSummary> {
     crate::core::config::matching::with_config(|| self.run_inner())?
   }
 
-  fn run_inner(&self) -> Result<StoreChanges> {
+  fn run_inner(&self) -> Result<MergeSummary> {
     let source_dir = self.source_dir.canonicalize()?;
     let vanilla_cache_dir = self.vanilla_cache_dir.canonicalize()?;
     let source_cache_dir = self.source_cache_dir.canonicalize()?;
@@ -70,8 +74,8 @@ impl Merge {
       Some(directory) => Overwrites::load(directory)?,
       None => Overwrites::default(),
     };
-    warn_unused_overwrites(&overwrites, &merge_inputs);
     let latest_files = dispatch_vanilla_stream_files(&vanilla_cache_dir.join("latest"))?;
+    let ignored_overwrites = ignored_overwrites(&overwrites, &merge_inputs, &latest_files.ymap)?;
     let output_dir = prepare_output_path(&self.output_dir)?;
     let staging = Staging(create_staging_directory(&output_dir)?);
     let staged = IncrementalMerge {
@@ -95,28 +99,95 @@ impl Merge {
       crate::core::find::rtree::Store::Merged,
       &output_dir,
     )?;
-    Ok(staged.unwrap_or_default())
+    Ok(MergeSummary {
+      changes: staged.unwrap_or_default(),
+      ignored_overwrites,
+    })
   }
 }
 
-/// Warns of overwrites naming a stream file that is not merged.
-fn warn_unused_overwrites(
+/// Outcome of a merge.
+#[derive(Debug, Default)]
+pub struct MergeSummary {
+  /// Merged files added, changed or removed, relative to the output.
+  pub changes: StoreChanges,
+  /// Overwrites left out because the files they name are missing or changed, whether or not
+  /// this run merged those files again.
+  pub ignored_overwrites: Vec<IgnoredOverwrite>,
+}
+
+/// The overwrites that do not apply to the current files, each logged as a warning.
+///
+/// Checked on every run, as a merge reusing its previous output does not look at overwrites.
+/// A resource overwrite is compared with its merged source YMAP and the latest vanilla file of
+/// that name, as the merge does; a vanilla overwrite with the latest vanilla file.
+fn ignored_overwrites(
   overwrites: &Overwrites,
   inputs: &MergeInputs,
-) {
-  let merged = inputs
+  latest_ymaps: &[PathBuf],
+) -> Result<Vec<IgnoredOverwrite>> {
+  let latest = latest_ymaps
+    .iter()
+    .filter_map(|path| Some((path.file_name()?.to_str()?.to_ascii_lowercase(), path)))
+    .collect::<BTreeMap<_, _>>();
+  let sources = inputs
     .ymap
     .iter()
     .filter_map(|source| {
       let resource = Path::new(&source.resource).file_name()?.to_str()?.to_ascii_lowercase();
-      Some((resource, source.stream_path.replace('\\', "/").to_ascii_lowercase()))
+      Some(((resource, source.stream_path.replace('\\', "/").to_ascii_lowercase()), source))
     })
-    .collect::<std::collections::BTreeSet<_>>();
+    .collect::<BTreeMap<_, _>>();
+  let mut ignored = Vec::new();
   for (resource, stream_path) in overwrites.keys() {
-    if !merged.contains(&(resource.to_string(), stream_path.to_string())) {
-      tracing::warn!("Overwrite of {stream_path} ({resource}) names no merged source YMAP");
+    let Some(overwrite) = overwrites.stream_file(resource, stream_path) else {
+      continue;
+    };
+    let source = sources.get(&(resource.to_string(), stream_path.to_string()));
+    let vanilla = source.and_then(|source| latest.get(&source.file_name.to_ascii_lowercase()));
+    let reason = match (source, vanilla) {
+      (Some(source), Some(vanilla)) => overwrite.ignored_because(
+        &OverwriteFingerprint::read(&source.path)?,
+        &OverwriteFingerprint::read(vanilla)?,
+      ),
+      _ => Some(IgnoredOverwriteReason::MissingSource),
+    };
+    if let Some(reason) = reason {
+      ignored.push(IgnoredOverwrite {
+        resource: Some(resource.to_string()),
+        file: stream_path.to_string(),
+        reason,
+      });
     }
   }
+  for (name, overwrite) in overwrites.vanilla_files() {
+    let reason = match latest.get(name) {
+      Some(vanilla) => (overwrite.vanilla != OverwriteFingerprint::read(vanilla)?)
+        .then_some(IgnoredOverwriteReason::VanillaChanged),
+      None => Some(IgnoredOverwriteReason::MissingVanilla),
+    };
+    if let Some(reason) = reason {
+      ignored.push(IgnoredOverwrite {
+        resource: None,
+        file: name.clone(),
+        reason,
+      });
+    }
+  }
+  for overwrite in &ignored {
+    let file = match &overwrite.resource {
+      Some(resource) => format!("{} ({resource})", overwrite.file),
+      None => format!("vanilla {}", overwrite.file),
+    };
+    let reason = match overwrite.reason {
+      IgnoredOverwriteReason::MissingSource => "names no merged source YMAP",
+      IgnoredOverwriteReason::SourceChanged => "was written against another source file",
+      IgnoredOverwriteReason::MissingVanilla => "names no latest vanilla YMAP",
+      IgnoredOverwriteReason::VanillaChanged => "was written against another vanilla file",
+    };
+    tracing::warn!("Overwrite of {file} {reason}; not applied");
+  }
+  Ok(ignored)
 }
 
 fn dispatch_vanilla_stream_files(latest_dir: &Path) -> Result<VanillaStreamFiles> {

@@ -31,7 +31,7 @@ impl IncrementalMerge<'_> {
       if self.vanilla_overwrite(name).is_some() && baselines.contains_key(name) {
         sources.entry(name.clone()).or_default();
       } else {
-        tracing::warn!("Vanilla overwrite of {name} names no latest vanilla YMAP; not applied");
+        tracing::debug!("Vanilla overwrite of {name} names no latest vanilla YMAP; not applied");
       }
     }
     let graph = self.ymap_graph()?;

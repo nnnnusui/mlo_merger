@@ -88,6 +88,10 @@ pub fn run(command: Pipeline) -> Result<(), Box<dyn std::error::Error>> {
     result.deploy.skipped,
     result.deploy.removed
   );
-  println!("{}", serde_json::to_string(&result.changes)?);
+  let report = crate::core::pipeline::PipelineReport {
+    changes: result.changes,
+    ignored_overwrites: result.ignored_overwrites,
+  };
+  println!("{}", serde_json::to_string(&report)?);
   Ok(())
 }
