@@ -1,9 +1,5 @@
 # TODO
 
-## Pipeline
-
-- [ ] Apply `--gamebuild` across the default pipeline as an upper bound (currently rejected there; only `--generate-vanilla` and `--generate-vanilla-cache` accept a stage ID or name). Also accept numeric GTA build IDs and define their mapping to and ordering against archive stages.
-
 ## Vanilla Archive (`asset/vanilla`)
 
 - [ ] Record source `.rpf` paths with their size and modification time in the archive manifest, and treat an existing archive as stale when they change. Currently an existing archive is reused unless it is explicitly regenerated.

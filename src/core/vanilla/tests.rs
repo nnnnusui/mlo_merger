@@ -22,7 +22,6 @@ fn generator_owns_missing_archive_generation_and_existing_archive_reuse() {
   let mut request = GenerateVanilla {
     game_dir: root.join("game"),
     output_dir: root.join("vanilla"),
-    gamebuild: None,
     magic: root.join("magic.dat"),
     reuse_existing: true,
   };

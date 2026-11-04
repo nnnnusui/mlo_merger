@@ -30,8 +30,6 @@ pub struct GenerateVanilla {
   pub game_dir: PathBuf,
   /// Output directory for versioned raw vanilla files.
   pub output_dir: PathBuf,
-  /// Optional final installed version/stage to include.
-  pub gamebuild: Option<String>,
   /// CodeWalker's `magic.dat`, needed only when generating.
   pub magic: PathBuf,
   /// Reuses a valid existing archive; otherwise generates only into an empty destination.
@@ -42,13 +40,13 @@ impl GenerateVanilla {
   /// Reuses an archive when configured, or reads the game archives to generate it.
   ///
   /// Reuse validates the existing archive without requiring an installed game or
-  /// `magic.dat`. `gamebuild` selects extraction stages only when generating.
+  /// `magic.dat`. Generation extracts every stage.
   /// Logger initialization belongs to the calling application.
   ///
   /// ```no_run
   /// mlo_merger::core::vanilla::GenerateVanilla {
   ///   game_dir: "/mnt/gtav".into(), output_dir: "asset/vanilla".into(),
-  ///   gamebuild: None, magic: "magic.dat".into(), reuse_existing: true,
+  ///   magic: "magic.dat".into(), reuse_existing: true,
   /// }.run()?;
   /// # Ok::<(), Box<dyn std::error::Error>>(())
   /// ```
@@ -83,7 +81,6 @@ impl GenerateVanilla {
     BuildVanillaArchive {
       game_dir: self.game_dir.clone(),
       output_dir: self.output_dir.clone(),
-      through_version: self.gamebuild.clone(),
       magic: self.magic.clone(),
     }
     .run()

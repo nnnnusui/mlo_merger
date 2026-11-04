@@ -2,25 +2,20 @@ use super::*;
 
 pub(super) fn resolve_through_version(
   manifest: &VanillaCacheManifest,
-  requested: Option<&str>,
+  gamebuild: Option<&GameBuild>,
 ) -> Result<usize> {
   if manifest.versions.is_empty() {
     return Err("Vanilla archive has no stages".into());
   }
-  let Some(requested) = requested.map(str::trim).filter(|requested| !requested.is_empty()) else {
+  let Some(gamebuild) = gamebuild else {
     return Ok(manifest.versions.len() - 1);
   };
-  let requested = requested.to_ascii_lowercase();
-  let position = manifest.versions.iter().position(|version| {
-    version.id.eq_ignore_ascii_case(&requested)
-      || version.id.split_once('-').is_some_and(|(_, label)| label.eq_ignore_ascii_case(&requested))
-      || requested.parse::<usize>().ok().is_some_and(|number| {
-        version.id.split_once('-').and_then(|(index, _)| index.parse::<usize>().ok())
-          == Some(number)
-      })
-  });
-  position
-    .ok_or_else(|| format!("Unknown vanilla stage or unsupported gamebuild: {requested}").into())
+  let labels = manifest
+    .versions
+    .iter()
+    .map(|version| version.id.split_once('-').map_or(version.id.as_str(), |(_, label)| label))
+    .collect::<Vec<_>>();
+  gamebuild.last_stage(&labels)
 }
 
 pub(super) fn resolve_files(

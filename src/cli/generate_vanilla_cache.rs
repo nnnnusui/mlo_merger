@@ -1,4 +1,4 @@
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use bpaf::*;
 
@@ -27,7 +27,7 @@ pub fn run(command: GenerateVanillaCache) -> Result<(), Box<dyn std::error::Erro
   let result = crate::core::vanilla_cache::BuildVanillaCache {
     vanilla_dir: command.common.vanilla,
     output_dir: command.common.output,
-    through_version: command.common.gamebuild,
+    gamebuild: common::gamebuild(command.common.gamebuild.as_deref())?,
     force: command.common.force,
   }
   .run()?;
@@ -35,15 +35,13 @@ pub fn run(command: GenerateVanillaCache) -> Result<(), Box<dyn std::error::Erro
   Ok(())
 }
 
-/// Builds the latest vanilla cache when its inputs changed, as a prerequisite of later steps.
-pub(crate) fn update(
-  vanilla_dir: &Path,
-  vanilla_cache_dir: &Path,
-) -> Result<(), Box<dyn std::error::Error>> {
+/// Builds the vanilla cache for `--gamebuild` (the last stage when absent) when its inputs
+/// changed, as a prerequisite of later steps.
+pub(crate) fn update(common: &CommonOptions) -> Result<(), Box<dyn std::error::Error>> {
   crate::core::vanilla_cache::BuildVanillaCache {
-    vanilla_dir: vanilla_dir.to_path_buf(),
-    output_dir: vanilla_cache_dir.to_path_buf(),
-    through_version: None,
+    vanilla_dir: common.vanilla.clone(),
+    output_dir: common.vanilla_cache.clone(),
+    gamebuild: common::gamebuild(common.gamebuild.as_deref())?,
     force: false,
   }
   .run()?;

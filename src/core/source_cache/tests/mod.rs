@@ -11,7 +11,7 @@ impl BuildSourceCache {
     crate::core::vanilla_cache::BuildVanillaCache {
       vanilla_dir: self.vanilla_dir.clone(),
       output_dir: self.vanilla_cache_dir.clone(),
-      through_version: None,
+      gamebuild: None,
       force: false,
     }
     .run()?;

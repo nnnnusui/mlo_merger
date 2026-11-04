@@ -40,8 +40,8 @@ can contain them: for example, use `resources` as source while running the tool
 from `resources/mlo_merged`.
 
 Pipeline `-f` forces the derived caches, merge and deployment, but reuses an
-existing raw vanilla archive. Pipeline-wide `--gamebuild` is not implemented; run
-a single stage with its own operation below.
+existing raw vanilla archive. `--gamebuild` selects the game build the vanilla
+cache, and so merge, targets (see [Game Builds](#game-builds)).
 
 ### Run Individual Operations
 
@@ -206,10 +206,27 @@ rejected rather than deleted. Empty managed stream directories are pruned.
 Deploy also creates `fxmanifest.lua` with the FiveM map declaration and
 `/assetpacks` dependency when absent; existing manifests are never overwritten.
 
-Run `mlo_merger --help` for options and per-command output defaults. To extract
-a limited vanilla archive, use the explicit generator's `--gamebuild` stage
-selector; numeric GTA build-ID mapping is not implemented. Convenience aliases
+Run `mlo_merger --help` for options and per-command output defaults. Convenience aliases
 are in [.cargo/config.toml](.cargo/config.toml).
+
+### Game Builds
+
+`--gamebuild` takes a FiveM game build number (`sv_enforceGameBuild`) or a DLC name
+listed for one under `[gamebuild]` in [asset/config.toml](asset/config.toml), such
+as `3095` or `mp2023_02`. Stage IDs and positions are not accepted. The table follows
+the [FiveM documentation](https://docs.fivem.net/docs/server-manual/server-commands/#sv_enforcegamebuild-build);
+add a build there when FiveM supports a new one.
+
+A build ends at the last stage before the next build's first listed DLC in
+`dlclist.xml` order, so it includes its own patch and `_g9ec` stages; a name listed
+under several builds selects the latest. A build without DLC names (such as 3323)
+includes what the build before it does, and build 1 stops at the title update.
+The build applies only to the vanilla-cache step: `--generate-vanilla` always
+extracts every stage, and the vanilla cache builds `latest` from the stages up to the
+build's last one. The pipeline, `--generate-source-cache` and `--merge` pass their
+`--gamebuild` to the vanilla-cache step they run first, so running one without it
+returns the cache to the last stage. The base and title-update files come from the
+installed game, not from the target build.
 
 ### Matching Configuration
 

@@ -11,6 +11,7 @@ use std::{
 use crate::common::changes::StoreChanges;
 pub use crate::core::vanilla::VanillaCacheManifest;
 use crate::core::{
+  config::gamebuild::GameBuild,
   format::gamefile::{
     meta::{MetaResource, jenk_hash},
     rsc7::Rsc7Resource,
@@ -62,8 +63,8 @@ pub struct BuildVanillaCache {
   pub vanilla_dir: PathBuf,
   /// Destination for latest files, relationship indexes and derived metadata.
   pub output_dir: PathBuf,
-  /// Optional final vanilla stage ID, stage label, or numeric stage position.
-  pub through_version: Option<String>,
+  /// Game build whose last stage the latest files reflect; `None` is the last stage.
+  pub gamebuild: Option<GameBuild>,
   /// Rebuilds this stage even when its inputs and outputs are current.
   pub force: bool,
 }

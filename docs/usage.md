@@ -87,6 +87,28 @@ export function runMerger(args: string[]): Promise<MergerOutput> {
 }
 ```
 
+### Game Build
+
+Pass the game build the server's clients run, the value `GetGameBuildNumber()` returns on
+a client, as `--gamebuild` to every command that runs the vanilla-cache step: the pipeline,
+`--generate-vanilla-cache`, `--generate-source-cache` and `--merge`. The vanilla cache and
+merge then use vanilla files as of that build, so they match `sv_enforceGameBuild`. On the
+server `GetGameBuildNumber()` returns `0`, so a client has to send the value.
+
+- Omit `--gamebuild` when the value is `0` (unknown); the vanilla cache then uses the
+  latest installed stage.
+- Pass the same value to every run. A run without it, or with another build, rebuilds the
+  vanilla cache for that build.
+- A build that is not listed under `[gamebuild]` in `asset/config.toml` fails the command;
+  add it there when FiveM supports a new build.
+
+```typescript
+// server/merger.ts
+/** `--gamebuild` for a client's `GetGameBuildNumber()`; none for 0 (unknown). */
+export const gameBuildArgs = (build: number): string[] =>
+  build > 0 ? ["--gamebuild", String(build)] : [];
+```
+
 Paths below are defaults. If you change them with options such as `--source-cache`,
 `--overwrite` or `-o`, change the paths you read accordingly.
 
@@ -241,7 +263,7 @@ asset/overwrite/vanilla/latest/ymap/{file_name}.diff.json
 ### Applying Overwrites
 
 ```bash
-mlo_merger -y -i <resources directory> -o <deployed resource>
+mlo_merger -y -i <resources directory> -o <deployed resource> --gamebuild <GetGameBuildNumber()>
 ```
 
 The pipeline updates the source cache, merges and deploys only what changed. Overwrites are
@@ -285,7 +307,7 @@ sequenceDiagram
     participant C as client / NUI
     participant S as server
     participant M as mlo_merger
-    S->>M: -y -i ... -o ... (pipeline, writes the indexes)
+    S->>M: -y -i ... -o ... --gamebuild {build} (pipeline, writes the indexes)
     S->>S: load the changed RTreeIndex files
     C->>S: player position
     S->>S: YMAP names whose bounds contain it
@@ -294,9 +316,9 @@ sequenceDiagram
     S->>S: read YmapReadDocument and YmapComparisonDiff
     S-->>C: models and diffs
     C->>C: render in NUI, choose differences to skip
-    C->>S: resource, stream_path, fingerprints, skip
+    C->>S: resource, stream_path, fingerprints, skip, GetGameBuildNumber()
     S->>S: write overwrite/resources/{resource}.json
-    S->>M: -y -i ... -o ... (pipeline)
+    S->>M: -y -i ... -o ... --gamebuild {build} (pipeline)
 ```
 
 ### Shared Message Types
@@ -345,7 +367,7 @@ onNet("mlo:files", (files: InspectedFile[]) => {
 
 RegisterNuiCallbackType("skip");
 on("__cfx_nui:skip", (request: SkipRequest, cb: (result: unknown) => void) => {
-  emitNet("mlo:skip", request);
+  emitNet("mlo:skip", request, GetGameBuildNumber());
   cb({});
 });
 ```
@@ -487,12 +509,12 @@ import type {
 } from "../shared/gen_mlo_merger";
 import type { SkipRequest } from "../shared/types";
 import { refreshIndex } from "./inspect";
-import { MERGER_CWD, runMerger } from "./merger";
+import { gameBuildArgs, MERGER_CWD, runMerger } from "./merger";
 
 const RESOURCES_DIR = "C:/fxserver/resources";
 const DEPLOY_DIR = "C:/fxserver/resources/[local]/mlo_merged";
 
-onNet("mlo:skip", async (request: SkipRequest) => {
+onNet("mlo:skip", async (request: SkipRequest, gameBuild: number) => {
   const path = resolve(MERGER_CWD, "asset/overwrite/resources", `${request.resource}.json`);
   const overwrite: ResourceOverwrite = existsSync(path)
     ? JSON.parse(readFileSync(path, "utf8"))
@@ -516,7 +538,9 @@ onNet("mlo:skip", async (request: SkipRequest) => {
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, JSON.stringify(overwrite, null, 2));
 
-  const { stdout, stderr } = await runMerger(["-y", "-i", RESOURCES_DIR, "-o", DEPLOY_DIR]);
+  const { stdout, stderr } = await runMerger([
+    "-y", "-i", RESOURCES_DIR, "-o", DEPLOY_DIR, ...gameBuildArgs(gameBuild),
+  ]);
   for (const line of stderr.split("\n")) {
     if (line.includes("Overwrite of")) console.warn(line); // not applied
   }

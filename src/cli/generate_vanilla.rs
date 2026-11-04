@@ -43,7 +43,6 @@ pub fn run(command: GenerateVanilla) -> Result<(), Box<dyn std::error::Error>> {
   crate::core::vanilla::GenerateVanilla {
     game_dir: command.game_dir,
     output_dir: command.common.output,
-    gamebuild: command.common.gamebuild,
     magic: command.magic,
     reuse_existing: false,
   }

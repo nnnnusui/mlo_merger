@@ -1,6 +1,8 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use bpaf::*;
+
+use crate::core::config::gamebuild::{GameBuild, GameBuilds};
 
 /// Options shared by the pipeline commands.
 #[derive(Debug, Clone)]
@@ -23,6 +25,16 @@ pub struct CommonOptions {
   pub step_names: Vec<String>,
 }
 
+/// Resolves `--gamebuild` against `[gamebuild]` in `asset/config.toml`.
+pub(crate) fn gamebuild(
+  requested: Option<&str>
+) -> Result<Option<GameBuild>, Box<dyn std::error::Error>> {
+  let Some(requested) = requested else {
+    return Ok(None);
+  };
+  Ok(Some(GameBuilds::load(Path::new("asset/config.toml"))?.resolve(requested)?))
+}
+
 /// Parses paths and execution controls shared by CLI commands.
 pub fn parser(default_output: PathBuf) -> impl Parser<CommonOptions> {
   let output = short('o')
@@ -43,7 +55,7 @@ pub fn parser(default_output: PathBuf) -> impl Parser<CommonOptions> {
     .argument::<PathBuf>("DIR")
     .fallback(PathBuf::from("asset/source-cache"));
   let gamebuild = long("gamebuild")
-    .help("Latest vanilla version/stage to include; numeric build mapping is not implemented yet")
+    .help("Game build the vanilla cache targets: a build number or DLC name from [gamebuild] in asset/config.toml")
     .argument::<String>("BUILD")
     .optional();
   let force = short('f').long("force").help("Force regeneration of this operation").switch();

@@ -7,3 +7,29 @@ ymap_box_occluder_rotation = 1
 ymap_car_generator_position_decimals = 3
 ymap_lod_light_position_decimals = 3
 ymap_grass_position = 0.01
+
+# FiveM game builds for --gamebuild, from
+# https://docs.fivem.net/docs/server-manual/server-commands/#sv_enforcegamebuild-build
+# Each build lists its DLC names; --gamebuild accepts a build number or any listed name.
+# A build includes the stages from its first listed DLC found in dlclist.xml up to the
+# stage before the next build's; a build without names adds no DLC to the one before it.
+[gamebuild]
+1 = []
+1604 = ["xm18", "christmas2018", "mpchristmas2018"]
+# The Diamond Casino & Resort and its heist have no FiveM build; 2060 first includes them.
+2060 = ["mpvinewood", "mpheist3", "sum", "mpsum"]
+2189 = ["h4", "heist4", "mpheist4"]
+2372 = ["tuner", "mptuner"]
+2545 = ["security", "mpsecurity"]
+2612 = ["mpg9ec"]
+2699 = ["mpsum2"]
+2802 = ["mpchristmas3"]
+2944 = ["mp2023_01"]
+3095 = ["mp2023_02"]
+3258 = ["mp2024_01"]
+3323 = []
+3407 = ["mp2024_02"]
+3570 = ["mp2025_01"]
+3751 = ["mp2025_02"]
+3788 = []
+3889 = ["mp2026_01"]

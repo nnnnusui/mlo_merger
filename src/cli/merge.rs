@@ -46,7 +46,7 @@ pub fn parser() -> impl Parser<Merge> {
 ///
 /// `--force` applies only to the merge; the caches are rebuilt only when their inputs changed.
 pub fn run(command: Merge) -> Result<(), Box<dyn std::error::Error>> {
-  super::generate_vanilla_cache::update(&command.common.vanilla, &command.common.vanilla_cache)?;
+  super::generate_vanilla_cache::update(&command.common)?;
   crate::core::source_cache::BuildSourceCache {
     source_dir: command.source_dir.clone(),
     output_dir: command.common.source_cache.clone(),

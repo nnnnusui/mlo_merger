@@ -49,15 +49,6 @@ impl Default for MatchTolerances {
   }
 }
 
-#[derive(Default, Deserialize)]
-#[cfg_attr(feature = "typescript", derive(specta::Type))]
-#[cfg_attr(feature = "typescript", specta(rename = "MatchingConfig"))]
-#[serde(default, deny_unknown_fields)]
-struct Config {
-  #[cfg_attr(feature = "typescript", specta(optional))]
-  tolerance: MatchTolerances,
-}
-
 impl MatchTolerances {
   /// [`Self::default`] recording every YMAP change however small, for diffs replayed to rebuild
   /// the YMAP they were taken to. Items still pair as by default, except occlude models, which
@@ -92,9 +83,7 @@ impl MatchTolerances {
   }
 
   fn parse(text: &str) -> io::Result<Self> {
-    let config: Config =
-      toml::from_str(text).map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
-    let value = config.tolerance;
+    let value = super::Config::parse(text)?.tolerance;
     for (name, tolerance) in [
       ("ybn", value.ybn),
       ("ymap", value.ymap),

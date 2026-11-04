@@ -6,6 +6,7 @@ use super::{
   vanilla_cache::BuildVanillaCache,
 };
 use crate::common::{changes::StoreChanges, path::absolute_path};
+use crate::core::config::gamebuild::GameBuild;
 use serde::Serialize;
 use std::path::PathBuf;
 
@@ -32,6 +33,8 @@ pub struct Pipeline {
   pub overwrite_dir: Option<PathBuf>,
   /// Final deployment directory.
   pub output_dir: PathBuf,
+  /// Game build whose last stage the vanilla cache reflects; `None` is the last stage.
+  pub gamebuild: Option<GameBuild>,
   /// Forces the derived stages without re-extracting an existing raw archive.
   pub force: bool,
 }
@@ -65,11 +68,11 @@ impl Pipeline {
   /// ```no_run
   /// use mlo_merger::core::pipeline::Pipeline;
   /// Pipeline {
-  ///   source_dir: "asset/source".into(), game_dir: "/mnt/gtav".into(),
+  ///   source_dir: "asset/source".into(), game_dir: "/mnt/gtav".into(), magic: "magic.dat".into(),
   ///   vanilla_dir: "asset/vanilla".into(), vanilla_cache_dir: "asset/vanilla-cache".into(),
   ///   source_cache_dir: "asset/source-cache".into(), merged_dir: "asset/merged".into(),
   ///   exclusions: None, overwrite_dir: Some("asset/overwrite".into()),
-  ///   output_dir: "merged_mlo".into(), force: false,
+  ///   output_dir: "merged_mlo".into(), gamebuild: None, force: false,
   /// }.run()?;
   /// # Ok::<(), Box<dyn std::error::Error>>(())
   /// ```
@@ -89,7 +92,6 @@ impl Pipeline {
     GenerateVanilla {
       game_dir: self.game_dir.clone(),
       output_dir: self.vanilla_dir.clone(),
-      gamebuild: None,
       magic: self.magic.clone(),
       reuse_existing: true,
     }
@@ -99,7 +101,7 @@ impl Pipeline {
     let vanilla_cache = BuildVanillaCache {
       vanilla_dir: self.vanilla_dir.clone(),
       output_dir: self.vanilla_cache_dir.clone(),
-      through_version: None,
+      gamebuild: self.gamebuild.clone(),
       force: self.force,
     }
     .run()?;
@@ -199,6 +201,7 @@ mod tests {
       exclusions: None,
       merged_dir: root.join("merged"),
       output_dir: root.join("merged_mlo"),
+      gamebuild: None,
       force: false,
       overwrite_dir: None,
     };
@@ -341,6 +344,7 @@ mod tests {
       exclusions: Some(vec!["unused-resource".into()]),
       merged_dir: root.join("merged"),
       output_dir: root.join("output"),
+      gamebuild: None,
       force: false,
       overwrite_dir: None,
     };
@@ -406,6 +410,7 @@ mod tests {
       exclusions: None,
       merged_dir: root.join("merged"),
       output_dir: root.join("output"),
+      gamebuild: None,
       force: false,
       overwrite_dir: None,
     };

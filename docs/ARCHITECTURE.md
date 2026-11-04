@@ -30,8 +30,8 @@ Each stage retains its own freshness and prerequisite checks and writes the JSON
 records the next stage needs. A single stage runs through its own operation
 (`--generate-vanilla`, `--generate-vanilla-cache`, `--generate-source-cache`,
 `--merge`, `--deploy`), which brings its prerequisites up to date first.
-Pipeline force applies to derived stages, not existing raw vanilla. A
-pipeline-wide gamebuild ceiling remains unimplemented.
+Pipeline force applies to derived stages, not existing raw vanilla. The game build
+applies only to the vanilla-cache stage; raw vanilla always holds every stage.
 
 ## Module Responsibilities
 
@@ -226,8 +226,10 @@ another matching policy. They do not change search radii.
 
 The raw vanilla archive preserves ordered YMAP/YBN overlays from the base game,
 title update and DLCs, stored by version and extension, with a global hash-name
-table. The derived cache selects the latest files through the chosen stage and
-indexes YMAP parent/child relationships. It can be recreated from the raw archive
+table. The derived cache selects the latest files through the last stage of the
+chosen game build and indexes YMAP parent/child relationships. A game build is placed
+among the stages by the `[gamebuild]` table in configuration, which names the DLCs
+each FiveM build first includes. It can be recreated from the raw archive
 without re-extracting the game. An existing raw archive is not checked against
 changes to the installed game.
 

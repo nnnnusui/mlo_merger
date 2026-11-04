@@ -3,14 +3,20 @@ use crate::core::vanilla::{CacheVersion, FileChange, read_ymap, write_json};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 
+/// Build 1, which stops at the `update` stage.
+fn no_dlc() -> Option<crate::core::config::gamebuild::GameBuild> {
+  let builds = crate::core::config::gamebuild::GameBuilds::parse("[gamebuild]\n1 = []").unwrap();
+  Some(builds.resolve("1").unwrap())
+}
+
 #[test]
 fn builds_latest_files_through_selected_stage_and_reuses_valid_output() {
   let root = std::env::temp_dir().join(format!("derived_vanilla_cache_{}", std::process::id()));
   let vanilla = root.join("vanilla");
   let output = root.join("cache");
-  fs::create_dir_all(vanilla.join("0000-base/ybn")).unwrap();
+  fs::create_dir_all(vanilla.join("0000-update/ybn")).unwrap();
   fs::create_dir_all(vanilla.join("0001-patch/ybn")).unwrap();
-  fs::write(vanilla.join("0000-base/ybn/map.ybn"), b"base").unwrap();
+  fs::write(vanilla.join("0000-update/ybn/map.ybn"), b"base").unwrap();
   fs::write(vanilla.join("0001-patch/ybn/map.ybn"), b"patch").unwrap();
   let artifact = |stage: &str, content: &[u8]| CachedFile {
     sha256: hex::encode(Sha256::digest(content)),
@@ -22,21 +28,21 @@ fn builds_latest_files_through_selected_stage_and_reuses_valid_output() {
     game_dir: "game".into(),
     versions: vec![
       CacheVersion {
-        id: "0000-base".into(),
+        id: "0000-update".into(),
         parent: None,
         archives: vec![],
         changes: BTreeMap::from([(
           "map.ybn".into(),
           FileChange {
             previous_sha256: None,
-            file: artifact("0000-base", b"base"),
+            file: artifact("0000-update", b"base"),
           },
         )]),
         unchanged: 0,
       },
       CacheVersion {
         id: "0001-patch".into(),
-        parent: Some("0000-base".into()),
+        parent: Some("0000-update".into()),
         archives: vec![],
         changes: BTreeMap::from([(
           "map.ybn".into(),
@@ -54,19 +60,19 @@ fn builds_latest_files_through_selected_stage_and_reuses_valid_output() {
   let built = BuildVanillaCache {
     vanilla_dir: vanilla.clone(),
     output_dir: output.clone(),
-    through_version: Some("base".into()),
+    gamebuild: no_dlc(),
     force: false,
   }
   .run()
   .unwrap();
   assert!(built.rebuilt);
-  assert_eq!(built.latest_version, "0000-base");
-  assert_eq!(built.summary(), "Built vanilla derived cache through 0000-base");
+  assert_eq!(built.latest_version, "0000-update");
+  assert_eq!(built.summary(), "Built vanilla derived cache through 0000-update");
   assert_eq!(fs::read(output.join("latest/ybn/map.ybn")).unwrap(), b"base");
   let relationships: YmapRelationshipIndex =
     serde_json::from_reader(fs::File::open(output.join("ymap_relationships.json")).unwrap())
       .unwrap();
-  assert_eq!(relationships.version, "0000-base");
+  assert_eq!(relationships.version, "0000-update");
   assert!(relationships.children_by_parent.is_empty());
   let latest_link = output.join("latest/ybn/map.ybn");
   assert!(fs::symlink_metadata(&latest_link).unwrap().file_type().is_symlink());
@@ -74,12 +80,12 @@ fn builds_latest_files_through_selected_stage_and_reuses_valid_output() {
   assert!(!target.is_absolute());
   assert_eq!(
     latest_link.parent().unwrap().join(target).canonicalize().unwrap(),
-    vanilla.join("0000-base/ybn/map.ybn").canonicalize().unwrap()
+    vanilla.join("0000-update/ybn/map.ybn").canonicalize().unwrap()
   );
   let derived: DerivedManifest =
     serde_json::from_reader(fs::File::open(output.join("cache_info.json")).unwrap()).unwrap();
-  assert_eq!(derived.latest_version, "0000-base");
-  let timestamp_key = "0000-base/ybn/map.ybn";
+  assert_eq!(derived.latest_version, "0000-update");
+  let timestamp_key = "0000-update/ybn/map.ybn";
   let source_file = vanilla.join(timestamp_key);
   let changed_time =
     fs::metadata(&source_file).unwrap().modified().unwrap() + std::time::Duration::from_secs(2);
@@ -93,7 +99,7 @@ fn builds_latest_files_through_selected_stage_and_reuses_valid_output() {
   BuildVanillaCache {
     vanilla_dir: root.join("vanilla"),
     output_dir: output.clone(),
-    through_version: Some("base".into()),
+    gamebuild: no_dlc(),
     force: false,
   }
   .run()
@@ -113,21 +119,21 @@ fn builds_latest_files_through_selected_stage_and_reuses_valid_output() {
   let reused = BuildVanillaCache {
     vanilla_dir: root.join("vanilla"),
     output_dir: output.clone(),
-    through_version: Some("0000".into()),
+    gamebuild: no_dlc(),
     force: false,
   }
   .run()
   .unwrap();
   assert!(!reused.rebuilt);
-  assert_eq!(reused.latest_version, "0000-base");
-  assert_eq!(reused.summary(), "Vanilla derived cache is current through 0000-base");
+  assert_eq!(reused.latest_version, "0000-update");
+  assert_eq!(reused.summary(), "Vanilla derived cache is current through 0000-update");
   assert_eq!(fs::read(output.join("latest/ybn/map.ybn")).unwrap(), b"base");
 
   fs::remove_file(output.join("latest/ybn/map.ybn")).unwrap();
   BuildVanillaCache {
     vanilla_dir: root.join("vanilla"),
     output_dir: output.clone(),
-    through_version: Some("base".into()),
+    gamebuild: no_dlc(),
     force: false,
   }
   .run()
@@ -137,7 +143,7 @@ fn builds_latest_files_through_selected_stage_and_reuses_valid_output() {
   let latest = BuildVanillaCache {
     vanilla_dir: root.join("vanilla"),
     output_dir: output.clone(),
-    through_version: None,
+    gamebuild: None,
     force: false,
   }
   .run()
@@ -165,7 +171,7 @@ fn builds_latest_files_through_selected_stage_and_reuses_valid_output() {
   let relationship_bytes = fs::read(&relationship_path).unwrap();
   let mut stale_relationships: YmapRelationshipIndex =
     serde_json::from_slice(&relationship_bytes).unwrap();
-  stale_relationships.version = "0000-base".into();
+  stale_relationships.version = "0000-update".into();
   write_json(&relationship_path, &stale_relationships).unwrap();
   assert!(
     load_cache(&output, &raw_revision)
@@ -253,18 +259,18 @@ fn writes_ymap_version_diffs_that_rebuild_each_version() {
     },
   )
   .unwrap();
-  let build = |through_version: Option<&str>| {
+  let build = |gamebuild: Option<crate::core::config::gamebuild::GameBuild>| {
     BuildVanillaCache {
       vanilla_dir: vanilla.clone(),
       output_dir: output.clone(),
-      through_version: through_version.map(Into::into),
+      gamebuild,
       force: false,
     }
     .run()
     .unwrap()
   };
 
-  build(Some("update"));
+  build(no_dlc());
   let history = ymap_history(&output, "MAP.ymap").unwrap().unwrap();
   assert_eq!(history.versions.len(), 2);
   assert!(history.diff_path(1).ends_with("diff/0001-update/ymap/map.ymap.diff.json"));
@@ -307,7 +313,7 @@ fn ymap_version_diffs_rebuild_every_vanilla_version() {
   BuildVanillaCache {
     vanilla_dir: vanilla.clone(),
     output_dir: output.clone(),
-    through_version: None,
+    gamebuild: None,
     force: true,
   }
   .run()

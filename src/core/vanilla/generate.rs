@@ -24,8 +24,6 @@ pub struct BuildVanillaArchive {
   pub game_dir: PathBuf,
   /// Cache directory containing cache_info.json and version directories.
   pub output_dir: PathBuf,
-  /// Stop after this cumulative stage; preceding overlays remain in the cache.
-  pub through_version: Option<String>,
   /// CodeWalker's `magic.dat`, decoded with the key in GTA5.exe.
   pub magic: PathBuf,
 }
@@ -64,7 +62,6 @@ impl BuildVanillaArchive {
     build: &Path,
     output_dir: &Path,
   ) -> Result<()> {
-    let through_version = self.through_version.as_deref().map(str::to_ascii_lowercase);
     let mut manifest = VanillaCacheManifest {
       format_version: 1,
       game_dir: game_dir.into(),
@@ -88,9 +85,6 @@ impl BuildVanillaArchive {
       Ok((roots.clone(), files))
     })?;
     fs::remove_dir_all(&base_dir)?;
-    if through_version.as_deref() == Some("base") {
-      return self.publish_cache(build, output_dir, &manifest, &rpf_names);
-    }
 
     let update_dir = scratch.join("update");
     let mut update = Vec::new();
@@ -115,9 +109,6 @@ impl BuildVanillaArchive {
           .collect(),
       ))
     })?;
-    if through_version.as_deref() == Some("update") {
-      return self.publish_cache(build, output_dir, &manifest, &rpf_names);
-    }
 
     let dlc_stages = dlc_items
       .into_iter()
@@ -132,16 +123,9 @@ impl BuildVanillaArchive {
         Ok((item, relative, label))
       })
       .collect::<Result<Vec<_>>>()?;
-    if let Some(requested) = through_version.as_deref()
-      && !dlc_stages.iter().any(|(_, _, label)| label.eq_ignore_ascii_case(requested))
-    {
-      return Err(format!("Unknown DLC stage requested: {requested}").into());
-    }
 
     let mut platform_index = None;
     for (item, relative, label) in dlc_stages {
-      let stop_after =
-        through_version.as_deref().is_some_and(|requested| label.eq_ignore_ascii_case(requested));
       let directory = scratch.join("dlc");
       stage(&mut manifest, &mut current, build, &label, || {
         let (physical, subtree) =
@@ -175,9 +159,6 @@ impl BuildVanillaArchive {
         Ok((archives, files))
       })?;
       fs::remove_dir_all(directory)?;
-      if stop_after {
-        break;
-      }
     }
     self.publish_cache(build, output_dir, &manifest, &rpf_names)
   }

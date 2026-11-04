@@ -61,9 +61,6 @@ pub fn run(command: Pipeline) -> Result<(), Box<dyn std::error::Error>> {
   if !command.common.step_names.is_empty() {
     return Err("--step-name selection is not implemented for the default pipeline; use an explicit operation".into());
   }
-  if command.common.gamebuild.is_some() {
-    return Err("--gamebuild ceilings are not implemented across the default pipeline; generate a limited vanilla archive explicitly".into());
-  }
   let pipeline = crate::core::pipeline::Pipeline {
     source_dir: command.source_dir,
     game_dir: command.game_dir,
@@ -75,6 +72,7 @@ pub fn run(command: Pipeline) -> Result<(), Box<dyn std::error::Error>> {
     merged_dir: command.merged_dir,
     overwrite_dir: Some(command.overwrite_dir),
     output_dir: command.common.output,
+    gamebuild: super::common::gamebuild(command.common.gamebuild.as_deref())?,
     force: command.common.force,
   };
   let result = pipeline.run()?;
