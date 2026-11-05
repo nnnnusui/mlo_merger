@@ -38,7 +38,8 @@ pub fn parser() -> impl Parser<Find> {
     vanilla_cache_dir
   });
   let search = search_parser();
-  construct!(search, stores).map(|(search, stores)| Find {
+  // The search ends with the positional GUID or position, which bpaf requires last.
+  construct!(stores, search).map(|(stores, search)| Find {
     stores,
     ..search
   })

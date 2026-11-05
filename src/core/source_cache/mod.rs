@@ -1,5 +1,6 @@
 //! Source stream inventory, vanilla matching, and conflict/load planning.
 
+mod check;
 mod conflicts;
 pub(crate) mod exclusions;
 mod generate;
@@ -22,6 +23,7 @@ use crate::common::changes::StoreChanges;
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
+pub(crate) use check::check;
 pub use restore::restore_source_cache;
 pub(crate) use streams::read_stream_bytes;
 

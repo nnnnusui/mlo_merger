@@ -1,6 +1,7 @@
 use bpaf::*;
 
 use super::{
+  check,
   deploy::{self, Deploy},
   find::{self, Find},
   from_xml::{self, FromXml},
@@ -39,6 +40,8 @@ pub enum Command {
   FromXml(FromXml),
   /// Search generated merge data and optionally its recorded inputs.
   Find(Find),
+  /// Check every store against its metadata.
+  Check(crate::core::check::Check),
   /// Compare two stream files.
   GetDiff(GetDiff),
   /// Write stream file models as JSON.
@@ -57,6 +60,7 @@ fn parser() -> impl Parser<Command> {
   let get_diff = get_diff::parser().map(Command::GetDiff);
   let read = read::parser().map(Command::Read);
   let find = find::parser().map(Command::Find);
+  let check = check::parser().map(Command::Check);
   let pipeline = pipeline::parser().map(Command::Pipeline);
   construct!([
     generate_vanilla,
@@ -69,6 +73,7 @@ fn parser() -> impl Parser<Command> {
     from_xml,
     get_diff,
     find,
+    check,
     read,
     pipeline,
   ])
@@ -92,6 +97,7 @@ pub fn run(command: Command) -> Result<(), Box<dyn std::error::Error>> {
     Command::ToXml(command) => to_xml::run(command)?,
     Command::FromXml(command) => from_xml::run(command)?,
     Command::Find(command) => find::run(command)?,
+    Command::Check(command) => check::run(command)?,
     Command::GetDiff(command) => get_diff::run(command)?,
     Command::Read(command) => read::run(command)?,
   }
@@ -172,6 +178,24 @@ mod tests {
     ] {
       assert!(parser().to_options().run_inner(args.as_slice()).is_err(), "{args:?}");
     }
+  }
+
+  #[test]
+  fn help_renders() {
+    let help = parser().to_options().run_inner(&["--help"]).unwrap_err().unwrap_stdout();
+    assert!(help.contains("--check") && help.contains("--find"), "{help}");
+  }
+
+  #[test]
+  fn check_parses_store_paths_and_deep() {
+    let Command::Check(command) =
+      parser().to_options().run_inner(&["--check", "--deep", "--merged", "out"]).unwrap()
+    else {
+      panic!("Expected check")
+    };
+    assert!(command.deep);
+    assert_eq!(command.merged_dir, PathBuf::from("out"));
+    assert_eq!(command.source_cache_dir, PathBuf::from("asset/source-cache"));
   }
 
   #[test]

@@ -74,6 +74,7 @@ Each stream file type is supported at one of three levels:
 | [Search merged data](docs/reference.md#inspect-existing-data) | `--find` |
 | [Write YMAP models as JSON](docs/reference.md#read-stream-file-models) | `--read` |
 | [Convert to and from XML](docs/reference.md#convert-files) | `--to-xml`, `--from-xml` |
+| [Check the stores for inconsistencies](docs/reference.md#check-the-stores) | `--check` |
 
 Run `mlo_merger --help` for every option.
 

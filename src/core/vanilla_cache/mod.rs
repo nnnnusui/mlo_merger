@@ -108,6 +108,7 @@ pub(crate) struct YmapRelationshipIndex {
 }
 
 mod build;
+mod check;
 mod filesystem;
 mod freshness;
 mod read;
@@ -115,6 +116,7 @@ mod relationships;
 mod source;
 mod ymap_diffs;
 
+pub(crate) use check::check;
 use filesystem::*;
 use freshness::{cache_is_current, previous_manifest};
 pub(crate) use read::{DerivedVanillaFile, LoadedCache, load_cache};

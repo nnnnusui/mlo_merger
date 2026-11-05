@@ -3,6 +3,7 @@
 use std::{error::Error, path::PathBuf};
 
 mod archives;
+mod check;
 mod generate;
 mod hash_index;
 mod io;
@@ -11,6 +12,7 @@ mod publication;
 mod stage;
 mod versions;
 
+pub(crate) use check::check;
 pub(crate) use generate::BuildVanillaArchive;
 pub use manifest::{CacheVersion, CachedFile, FileChange, VanillaCacheManifest};
 pub use versions::{ListVanillaVersions, VanillaVersionChange, VanillaVersionEntry};

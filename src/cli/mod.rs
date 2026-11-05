@@ -1,3 +1,4 @@
+pub mod check;
 pub mod command;
 pub mod common;
 pub mod deploy;
