@@ -42,7 +42,7 @@ pub struct YmapComparisonPartner {
 
 impl YmapComparisonDiff {
   /// The current [`Self::schema_version`]. Documents without one predate versioning.
-  pub const SCHEMA_VERSION: u32 = 10;
+  pub const SCHEMA_VERSION: u32 = 11;
 
   /// Reads the document at `path` when it holds the differences of `source` from `vanilla` as
   /// both are now, taken with `tolerances`; `None` when it is missing, of another layout or
@@ -74,6 +74,8 @@ impl YmapComparisonDiff {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "typescript", derive(specta::Type))]
 pub struct YmapComparisonFile {
+  /// The file relative to the store holding it: the source cache, the vanilla cache, or the
+  /// source root for a source file that was not moved into the cache.
   pub path: String,
   pub sha256: String,
   pub size: u64,
@@ -83,18 +85,30 @@ pub struct YmapComparisonFile {
 
 impl YmapComparisonFile {
   /// Whether the file at `path` (after resolving links) has the recorded contents.
+  ///
+  /// The document names the file, so where it is does not matter: a file whose size and
+  /// modification time match is not hashed again.
   pub fn describes(
     &self,
     path: &Path,
   ) -> Result<bool> {
     let path = path.canonicalize()?;
-    let previous = (path.to_string_lossy() == self.path).then(|| Fingerprint {
+    let previous = Fingerprint {
       sha256: self.sha256.clone(),
       size: self.size,
       modified_seconds: self.modified_seconds,
       modified_nanos: self.modified_nanos,
-    });
-    Ok(Fingerprint::read(&path, previous.as_ref(), false)?.sha256 == self.sha256)
+    };
+    let current = Fingerprint::read(&path, Some(&previous), false)?;
+    Ok(current.sha256 == self.sha256 && current.size == self.size)
+  }
+
+  /// Whether `other` has the same contents, wherever it is and whenever it was modified.
+  pub fn same_content(
+    &self,
+    other: &Self,
+  ) -> bool {
+    self.sha256 == other.sha256 && self.size == other.size
   }
 }
 

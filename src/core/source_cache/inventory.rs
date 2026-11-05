@@ -175,7 +175,7 @@ pub(super) fn source_inventory(
     inventories.insert(
       id.clone(),
       ResourceInventory {
-        source: resource.clone(),
+        source: PathBuf::from(&id),
         files_by_format,
       },
     );

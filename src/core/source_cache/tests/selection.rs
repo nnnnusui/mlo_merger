@@ -51,9 +51,6 @@ fn merge_input_selector_uses_format_conflicts_and_ymap_load_closure() {
     &cache_dir.join("cache_info.json"),
     &SourceCacheMetadata {
       format_version: 2,
-      source_dir: source_dir.clone(),
-      vanilla_dir: root.join("vanilla"),
-      vanilla_cache_dir: root.join("vanilla-cache"),
       vanilla_manifest_sha256: "manifest".into(),
       vanilla_cache_revision: "derived".into(),
       latest_vanilla_version: "0000-base".into(),
@@ -121,7 +118,6 @@ fn merge_input_selector_uses_format_conflicts_and_ymap_load_closure() {
   write_json(
     &cache_dir.join("stream_conflicts.json"),
     &StreamConflictReport {
-      input_dir: source_dir.to_string_lossy().into_owned(),
       scanned_file_count: 6,
       conflict_count: 1,
       conflicts: BTreeMap::from([(
@@ -143,7 +139,7 @@ fn merge_input_selector_uses_format_conflicts_and_ymap_load_closure() {
   )
   .unwrap();
 
-  let inputs = crate::core::source_cache::load_merge_inputs(&cache_dir).unwrap();
+  let inputs = crate::core::source_cache::load_merge_inputs(&cache_dir, &source_dir).unwrap();
   assert_eq!(
     inputs.ymap.iter().map(|source| source.file_name.as_str()).collect::<Vec<_>>(),
     ["parent.ymap", "child.ymap"]

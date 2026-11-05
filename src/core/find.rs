@@ -147,6 +147,41 @@ impl EntityQuery {
   }
 }
 
+/// Where `--all` reads the inputs a merge recorded, which it names relative to these stores.
+#[derive(Debug, Clone)]
+pub struct InputStores {
+  /// Source resources, holding sources that were not moved into the source cache.
+  pub source_dir: PathBuf,
+  pub source_cache_dir: PathBuf,
+  pub vanilla_cache_dir: PathBuf,
+}
+
+impl Default for InputStores {
+  fn default() -> Self {
+    Self {
+      source_dir: "asset/source".into(),
+      source_cache_dir: "asset/source-cache".into(),
+      vanilla_cache_dir: "asset/vanilla-cache".into(),
+    }
+  }
+}
+
+impl InputStores {
+  /// Where a recorded merge input is: a vanilla file in the vanilla cache, a source in the
+  /// source root when it is recorded at its original path, otherwise in the source cache.
+  fn resolve(
+    &self,
+    input: &mut Input,
+  ) {
+    let store = match &input.original_path {
+      None => &self.vanilla_cache_dir,
+      Some(original) if *original == input.path => &self.source_dir,
+      Some(_) => &self.source_cache_dir,
+    };
+    input.path = store.join(&input.path);
+  }
+}
+
 /// Searches existing merged binaries for entities, collision shapes or YMAP occluders.
 #[derive(Debug, Clone)]
 pub struct FindEntity {
@@ -154,6 +189,8 @@ pub struct FindEntity {
   pub query: EntityQuery,
   /// Directory containing merged YMAPs and YBNs.
   pub merged_dir: PathBuf,
+  /// Where the inputs `--all` reads are.
+  pub stores: InputStores,
   /// Optional case-insensitive filename glob.
   pub filter: Option<String>,
   /// Include recorded vanilla and source inputs.
@@ -312,6 +349,7 @@ impl FindEntityGuid {
     FindEntity {
       query: EntityQuery::Guid(self.guid),
       merged_dir: self.merged_dir.clone(),
+      stores: InputStores::default(),
       filter: self.filter.clone(),
       diff_all: self.diff_all,
     }
@@ -326,7 +364,8 @@ impl FindEntity {
   /// use mlo_merger::core::find::{EntityQuery, FindEntity};
   /// let xml = FindEntity {
   ///   query: EntityQuery::Position { position: [3.5, 4.2, 0.0], radius: 1.0 },
-  ///   merged_dir: "asset/merged".into(), filter: None, diff_all: false,
+  ///   merged_dir: "asset/merged".into(), stores: Default::default(), filter: None,
+  ///   diff_all: false,
   /// }.run()?;
   /// # Ok::<(), Box<dyn std::error::Error>>(())
   /// ```
@@ -472,11 +511,16 @@ fn search_inputs(
     }
   }
   let cache = if search.diff_all {
-    let cache: MergeCache = serde_json::from_reader(BufReader::new(fs::File::open(
+    let mut cache: MergeCache = serde_json::from_reader(BufReader::new(fs::File::open(
       crate::core::merge::cache_info_path(&merged),
     )?))?;
     if cache.format_version != 1 {
       return Err("Unsupported merge cache schema for --diff-all".into());
+    }
+    for record in cache.files.values_mut() {
+      for input in record.vanilla.iter_mut().chain(&mut record.merge_sources) {
+        search.stores.resolve(input);
+      }
     }
     Some(cache)
   } else {
@@ -840,6 +884,7 @@ mod tests {
         radius: 1.0,
       },
       merged_dir: merged.clone(),
+      stores: Default::default(),
       filter: query.filter.clone(),
       diff_all: true,
     };
@@ -860,6 +905,7 @@ mod tests {
         ],
       },
       merged_dir: merged.clone(),
+      stores: Default::default(),
       filter: query.filter.clone(),
       diff_all: true,
     }

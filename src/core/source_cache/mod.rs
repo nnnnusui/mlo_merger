@@ -43,8 +43,18 @@ pub struct MergeSourceFile {
   pub resource: String,
   /// Absolute path to the source stream file.
   pub path: PathBuf,
+  /// [`Self::path`] relative to the directory holding it: the source cache when the file was
+  /// moved there, otherwise the source root.
+  #[serde(default)]
+  pub stored_path: String,
+  /// Whether the file was moved into the source cache.
+  #[serde(default)]
+  pub moved: bool,
   /// Original resource stream path before extraction into the cache.
   pub original_path: PathBuf,
+  /// [`Self::original_path`] relative to the source root.
+  #[serde(default)]
+  pub source_path: String,
   /// Lowercase stream filename.
   pub file_name: String,
   /// Path below the resource's `stream` directory, such as `vanilla/hei_ch1_11.ymap`.
@@ -67,15 +77,33 @@ pub struct MergeInputs {
   pub vanilla_ymaps_to_read: BTreeSet<String>,
 }
 
+/// `path` with `/` separators, as relative paths are recorded.
+fn slash_path(path: &Path) -> String {
+  path.to_string_lossy().replace('\\', "/")
+}
+
+/// The [`SourceCacheMetadata::format_version`] this version writes.
+const FORMAT_VERSION: u32 = 4;
+
 /// Reads the source cache's inventory, rejecting layouts this version cannot read.
+///
+/// Each resource's `source` is set to its ID, the path relative to the source root, which
+/// earlier formats recorded as an absolute path.
 fn read_metadata(cache_dir: &Path) -> Result<SourceCacheMetadata> {
   let path = cache_info_path(cache_dir);
-  let metadata: SourceCacheMetadata = serde_json::from_reader(BufReader::new(
+  let mut metadata: SourceCacheMetadata = serde_json::from_reader(BufReader::new(
     std::fs::File::open(&path)
       .map_err(|error| format!("Cannot open {}: {error}", path.display()))?,
   ))?;
-  if !matches!(metadata.format_version, 2 | 3) {
+  if !(2..=FORMAT_VERSION).contains(&metadata.format_version) {
     return Err(format!("Unsupported source cache schema {}", metadata.format_version).into());
+  }
+  for (id, resource) in &mut metadata.resources {
+    let relative = PathBuf::from(id);
+    if relative.components().any(|component| !matches!(component, Component::Normal(_))) {
+      return Err(format!("Unsafe source-cache resource ID {id}").into());
+    }
+    resource.source = relative;
   }
   Ok(metadata)
 }
@@ -123,11 +151,10 @@ pub fn cached_files(cache_dir: &Path) -> Result<Vec<CachedFile>> {
         );
       }
       let source = resource.source.join(&file.path);
-      let source = source.strip_prefix(&metadata.source_dir)?;
-      if !safe(source) {
+      if !safe(&source) {
         return Err("Unsafe original moved source path".into());
       }
-      let source_path = source.to_string_lossy().replace('\\', "/");
+      let source_path = slash_path(&source);
       if source_path.contains(['\r', '\n']) {
         return Err("Moved source path contains a line break".into());
       }
@@ -148,11 +175,10 @@ pub(crate) fn moved_source_paths(cache_dir: &Path) -> BTreeSet<String> {
 }
 
 /// Writes an inventory recording each of `cached` (`resources/{resource}/{stream path}`) as
-/// moved from `{source_dir}/{resource}/stream/{stream path}`, for tests of its readers.
+/// moved from `{resource}/stream/{stream path}` in the source root, for tests of its readers.
 #[cfg(test)]
 pub(crate) fn write_test_inventory(
   cache_dir: &Path,
-  source_dir: &Path,
   cached: &[&str],
 ) {
   use types::{ResourceInventory, SourceFile, YmapLoadPlan};
@@ -166,7 +192,7 @@ pub(crate) fn write_test_inventory(
     resources
       .entry(resource.to_string())
       .or_insert_with(|| ResourceInventory {
-        source: source_dir.join(resource),
+        source: PathBuf::from(resource),
         files_by_format: BTreeMap::new(),
       })
       .files_by_format
@@ -186,10 +212,7 @@ pub(crate) fn write_test_inventory(
       });
   }
   let metadata = SourceCacheMetadata {
-    format_version: 3,
-    source_dir: source_dir.to_path_buf(),
-    vanilla_dir: PathBuf::new(),
-    vanilla_cache_dir: PathBuf::new(),
+    format_version: FORMAT_VERSION,
     vanilla_manifest_sha256: String::new(),
     vanilla_cache_revision: String::new(),
     latest_vanilla_version: String::new(),
@@ -218,18 +241,22 @@ pub(crate) struct SourceYmapIndex {
   pub(crate) paths: BTreeMap<(String, String), Vec<PathBuf>>,
 }
 
-/// Indexes the YMAPs recorded in a generated source cache by resource name and file name.
-pub(crate) fn load_source_ymap_index(cache_dir: &Path) -> Result<SourceYmapIndex> {
+/// Indexes the YMAPs recorded in a generated source cache by resource name and file name; files
+/// that were not moved into the cache are in their resources below `source_dir`.
+pub(crate) fn load_source_ymap_index(
+  cache_dir: &Path,
+  source_dir: &Path,
+) -> Result<SourceYmapIndex> {
   let metadata = read_metadata(cache_dir)?;
   let mut paths = BTreeMap::<_, Vec<_>>::new();
   for resource in metadata.resources.into_values() {
     let resource_name =
       resource.source.file_name().ok_or("Resource has no name")?.to_string_lossy().into_owned();
     for file in resource.files_by_format.get(".ymap").into_iter().flatten() {
-      let path = file
-        .cached_path
-        .as_ref()
-        .map_or_else(|| resource.source.join(&file.path), |path| cache_dir.join(path));
+      let path = file.cached_path.as_ref().map_or_else(
+        || source_dir.join(&resource.source).join(&file.path),
+        |path| cache_dir.join(path),
+      );
       paths
         .entry((resource_name.clone(), file.file_name.to_ascii_lowercase()))
         .or_default()
@@ -255,9 +282,13 @@ pub struct InventoriedFile {
   pub file_name: String,
   /// Where the file is now: in the cache when it was moved there, otherwise in the resource.
   pub path: PathBuf,
-  /// Where the file belongs in its resource, which differs from [`Self::path`] when it was
-  /// moved into the cache.
-  pub original_path: PathBuf,
+  /// [`Self::path`] relative to the directory holding it: the source cache when the file was
+  /// moved there, otherwise the source root.
+  pub stored_path: String,
+  /// Whether the file was moved into the source cache.
+  pub moved: bool,
+  /// Where the file belongs, relative to the source root.
+  pub source_path: String,
 }
 
 /// File name of the source cache's inventory.
@@ -269,23 +300,31 @@ pub fn cache_info_path(cache_dir: &Path) -> PathBuf {
   cache_dir.join(CACHE_INFO)
 }
 
-/// Lists every stream file the source cache inventoried, without rescanning source streams.
-pub fn inventoried_files(cache_dir: &Path) -> Result<Vec<InventoriedFile>> {
+/// Lists every stream file the source cache inventoried, without rescanning source streams;
+/// files that were not moved into the cache are in their resources below `source_dir`.
+pub fn inventoried_files(
+  cache_dir: &Path,
+  source_dir: &Path,
+) -> Result<Vec<InventoriedFile>> {
   let metadata = read_metadata(cache_dir)?;
   let mut files = Vec::new();
   for (resource, inventory) in metadata.resources {
     let resource_name =
       inventory.source.file_name().and_then(|name| name.to_str()).unwrap_or(&resource).to_string();
     for file in inventory.files_by_format.into_values().flatten() {
+      let source_path = slash_path(&inventory.source.join(&file.path));
+      let (path, stored_path) = match &file.cached_path {
+        Some(cached) => (cache_dir.join(cached), cached.clone()),
+        None => (source_dir.join(&source_path), source_path.clone()),
+      };
       files.push(InventoriedFile {
         resource: resource.clone(),
         resource_name: resource_name.clone(),
         stream_path: layout::stream_relative_path(&file.path).unwrap_or(&file.path).to_string(),
-        path: file
-          .cached_path
-          .as_ref()
-          .map_or_else(|| inventory.source.join(&file.path), |path| cache_dir.join(path)),
-        original_path: inventory.source.join(&file.path),
+        moved: file.cached_path.is_some(),
+        path,
+        stored_path,
+        source_path,
         file_name: file.file_name,
       });
     }
@@ -293,8 +332,12 @@ pub fn inventoried_files(cache_dir: &Path) -> Result<Vec<InventoriedFile>> {
   Ok(files)
 }
 
-/// Loads merge inputs from a generated source cache without rescanning source streams.
-pub fn load_merge_inputs(cache_dir: &Path) -> Result<MergeInputs> {
+/// Loads merge inputs from a generated source cache without rescanning source streams; files
+/// that were not moved into the cache are in their resources below `source_dir`.
+pub fn load_merge_inputs(
+  cache_dir: &Path,
+  source_dir: &Path,
+) -> Result<MergeInputs> {
   let metadata = read_metadata(cache_dir)?;
   let conflicts: SourceCacheConflictReport = serde_json::from_reader(BufReader::new(
     std::fs::File::open(cache_dir.join("stream_conflicts.json"))?,
@@ -339,21 +382,16 @@ pub fn load_merge_inputs(cache_dir: &Path) -> Result<MergeInputs> {
         let Some(vanilla) = &file.vanilla else {
           continue;
         };
-        let original_path = resource.source.join(&file.path);
-        let source_path = file
-          .cached_path
-          .as_ref()
-          .map_or_else(|| original_path.clone(), |path| cache_dir.join(path));
+        let relative_source = slash_path(&resource.source.join(&file.path));
+        let original_path = source_dir.join(&relative_source);
+        let (source_path, stored_path) = match &file.cached_path {
+          Some(cached) => (cache_dir.join(cached), cached.clone()),
+          None => (original_path.clone(), relative_source.clone()),
+        };
         let source_relative = if conflicts.source_conflicts.is_some() {
           file.cached_path.as_ref().map(|path| path.to_ascii_lowercase())
         } else {
-          Some(
-            original_path
-              .strip_prefix(&metadata.source_dir)?
-              .to_string_lossy()
-              .replace('\\', "/")
-              .to_ascii_lowercase(),
-          )
+          Some(relative_source.to_ascii_lowercase())
         };
         let conflict = conflict_paths
           .get(extension.as_str())
@@ -373,7 +411,10 @@ pub fn load_merge_inputs(cache_dir: &Path) -> Result<MergeInputs> {
           selected.push(MergeSourceFile {
             resource: resource_id.clone(),
             path: source_path,
+            stored_path,
+            moved: file.cached_path.is_some(),
             original_path,
+            source_path: relative_source,
             file_name: file.file_name,
             stream_path: layout::stream_relative_path(&file.path).unwrap_or(&file.path).to_string(),
             diff_path,

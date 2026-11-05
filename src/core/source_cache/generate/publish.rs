@@ -23,8 +23,6 @@ pub(super) fn publish_if_changed(
     ..
   } = source;
   let VanillaInputs {
-    vanilla_dir,
-    vanilla_cache_dir,
     manifest_sha256,
     derived,
     ..
@@ -72,10 +70,7 @@ pub(super) fn publish_if_changed(
     "vanilla_ymaps_to_read.json".into(),
   ]);
   let metadata = SourceCacheMetadata {
-    format_version: 3,
-    source_dir,
-    vanilla_dir,
-    vanilla_cache_dir,
+    format_version: crate::core::source_cache::FORMAT_VERSION,
     vanilla_manifest_sha256: manifest_sha256,
     vanilla_cache_revision: derived.revision,
     latest_vanilla_version: derived.latest_version,

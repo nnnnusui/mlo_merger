@@ -67,7 +67,7 @@ fn restoring_some_resources_keeps_the_others_cached_until_the_next_generation() 
   assert!(output.join("resources/resource_b/collision.ybn").is_file());
   assert_eq!(moved(), BTreeSet::from(["resource_b/stream/collision.ybn".to_string()]));
   // The inventory still locates every file, but merges wait for the next generation.
-  let located = crate::core::source_cache::inventoried_files(&output).unwrap();
+  let located = crate::core::source_cache::inventoried_files(&output, &source).unwrap();
   assert_eq!(
     located.iter().map(|file| file.path.clone()).collect::<BTreeSet<_>>(),
     BTreeSet::from([
@@ -75,14 +75,14 @@ fn restoring_some_resources_keeps_the_others_cached_until_the_next_generation() 
       source.join("resource_a/stream/collision.ybn"),
     ])
   );
-  assert!(load_merge_inputs(&output).is_err());
+  assert!(load_merge_inputs(&output, &source).is_err());
 
   // The next generation caches the restored resource again.
   assert!(build.run_after_vanilla_cache().unwrap());
   assert!(!source.join("resource_a/stream/collision.ybn").exists());
   assert_eq!(fs::read(output.join("resources/resource_a/collision.ybn")).unwrap(), b"resource_a");
   assert_eq!(moved(), both);
-  assert_eq!(load_merge_inputs(&output).unwrap().ybn.len(), 2);
+  assert_eq!(load_merge_inputs(&output, &source).unwrap().ybn.len(), 2);
   assert!(!build.run_after_vanilla_cache().unwrap());
   fs::remove_dir_all(root).unwrap();
 }

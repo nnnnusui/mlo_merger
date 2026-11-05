@@ -12,6 +12,7 @@ use crate::core::format::ymap::{
 fn reads_vanilla_and_source_ymaps_once() {
   let asset = Path::new(env!("CARGO_MANIFEST_DIR")).join("asset");
   let context = YmapComparisonContext::new(
+    &asset.join("source"),
     &asset.join("source-cache"),
     &asset.join("vanilla-cache"),
     HashMap::new(),
@@ -83,6 +84,7 @@ fn reads_vanilla_and_source_ymaps_once() {
 fn resolves_parents_of_every_source_ymap() {
   let asset = Path::new(env!("CARGO_MANIFEST_DIR")).join("asset");
   let context = YmapComparisonContext::new(
+    &asset.join("source"),
     &asset.join("source-cache"),
     &asset.join("vanilla-cache"),
     HashMap::new(),
@@ -159,6 +161,7 @@ fn dump_source_ymaps_with_changed_parents() {
   let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
   let asset = manifest.join("asset");
   let context = YmapComparisonContext::new(
+    &asset.join("source"),
     &asset.join("source-cache"),
     &asset.join("vanilla-cache"),
     HashMap::new(),

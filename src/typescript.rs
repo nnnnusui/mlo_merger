@@ -109,7 +109,6 @@ mod tests {
   #[test]
   fn stream_conflict_wire_names_remain_camel_case() {
     let report = StreamConflictReport {
-      input_dir: "cache".into(),
       scanned_file_count: 2,
       conflict_count: 1,
       conflicts: BTreeMap::from([(
@@ -121,9 +120,8 @@ mod tests {
       )]),
     };
     let json = serde_json::to_value(report).unwrap();
-    assert_eq!(json["inputDir"], "cache");
     assert_eq!(json["scannedFileCount"], 2);
     assert_eq!(json["conflicts"][".ybn"][0]["fileName"], "collision.ybn");
-    assert!(json.get("input_dir").is_none());
+    assert!(json.get("scanned_file_count").is_none());
   }
 }

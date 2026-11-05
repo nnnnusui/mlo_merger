@@ -26,6 +26,10 @@ pub fn parser() -> impl Parser<Read> {
   let vanilla = vanilla.map(|version| version.map(ReadTarget::Vanilla));
   let target = construct!([resource, vanilla]).fallback(None);
   let files = positional::<String>("FILE").many();
+  let source_dir = long("source")
+    .help("Source resource directory, for resource files not moved into the source cache (default: asset/source)")
+    .argument::<PathBuf>("DIR")
+    .fallback(PathBuf::from("asset/source"));
   let source_cache_dir = long("source-cache")
     .help("Source cache directory (default: asset/source-cache)")
     .argument::<PathBuf>("DIR")
@@ -40,8 +44,8 @@ pub fn parser() -> impl Parser<Read> {
     .argument::<PathBuf>("DIR")
     .fallback(PathBuf::from("asset/read-cache"));
   let force = short('f').long("force").help("Write every JSON again").switch();
-  construct!(command, target, source_cache_dir, vanilla_dir, output_dir, force, files).map(
-    |(_, target, source_cache_dir, vanilla_dir, output_dir, force, mut files)| {
+  construct!(command, target, source_dir, source_cache_dir, vanilla_dir, output_dir, force, files)
+    .map(|(_, target, source_dir, source_cache_dir, vanilla_dir, output_dir, force, mut files)| {
       let target = match target {
         Some(ReadTarget::Vanilla(Some(version))) if names_file(&version) => {
           files.insert(0, version);
@@ -52,13 +56,13 @@ pub fn parser() -> impl Parser<Read> {
       Read {
         target,
         files,
+        source_dir,
         source_cache_dir,
         vanilla_dir,
         output_dir,
         force,
       }
-    },
-  )
+    })
 }
 
 /// Whether a `--vanilla` value names a file rather than a version.

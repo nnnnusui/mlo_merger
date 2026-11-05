@@ -64,6 +64,21 @@ impl IncrementalMerge<'_> {
       duplicates = serde_json::from_reader(BufReader::new(fs::File::open(
         directory.join(".duplicates.json"),
       )?))?;
+      // The report names each file relative to its store, as the merge metadata does.
+      let stored = sources
+        .iter()
+        .map(|source| (source.path.clone(), PathBuf::from(&source.stored_path)))
+        .chain(vanilla.iter().map(|path| (path.clone(), self.stored_vanilla_path(path))))
+        .collect::<HashMap<_, _>>();
+      for duplicate in duplicates.files.values_mut().flatten() {
+        let contributions = std::iter::once(&mut duplicate.applied)
+          .chain(duplicate.ignored.iter_mut().map(|ignored| &mut ignored.source));
+        for contribution in contributions {
+          if let Some(path) = stored.get(&contribution.path) {
+            contribution.path = path.clone();
+          }
+        }
+      }
       directory
     };
     // Only the merged stream files are kept; the merge's own records stay behind.

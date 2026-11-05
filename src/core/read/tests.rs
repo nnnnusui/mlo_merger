@@ -96,6 +96,7 @@ impl Fixture {
     Read {
       target,
       files: files.iter().map(|file| file.to_string()).collect(),
+      source_dir: self.root.join("source"),
       source_cache_dir: self.root.join("source-cache"),
       vanilla_dir: self.root.join("vanilla"),
       output_dir: self.root.join("read-cache"),
@@ -138,7 +139,8 @@ fn resource_files_are_written_once_as_minified_models_with_their_source() {
   let text = fs::read_to_string(&file.output).unwrap();
   assert!(!text.contains('\n'));
   let document: YmapReadDocument = serde_json::from_str(&text).unwrap();
-  assert_eq!(document.source.path, file.input);
+  // The document names its file relative to the source cache, which holds it.
+  assert_eq!(document.source.path, Path::new("resources/alpha/child.ymap"));
   assert_eq!(document.source.sha256, hex::encode(Sha256::digest(fs::read(&file.input).unwrap())));
   assert!(document.hash_names.is_some());
   assert_eq!(document.model.entities[0].guid, 300);
@@ -151,6 +153,7 @@ fn resource_files_are_written_once_as_minified_models_with_their_source() {
     ..Read {
       target: ReadTarget::Resource("alpha".into()),
       files: vec!["child.ymap".into()],
+      source_dir: fixture.root.join("source"),
       source_cache_dir: fixture.root.join("source-cache"),
       vanilla_dir: fixture.root.join("vanilla"),
       output_dir: fixture.root.join("read-cache"),

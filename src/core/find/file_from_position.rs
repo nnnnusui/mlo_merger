@@ -54,25 +54,6 @@ pub(super) struct Candidate {
 }
 
 #[derive(Deserialize)]
-struct SourceCacheIndex {
-  format_version: u32,
-  resources: BTreeMap<String, SourceResource>,
-}
-
-#[derive(Deserialize)]
-struct SourceResource {
-  source: PathBuf,
-  files_by_format: BTreeMap<String, Vec<SourceFile>>,
-}
-
-#[derive(Deserialize)]
-struct SourceFile {
-  path: PathBuf,
-  file_name: String,
-  cached_path: Option<PathBuf>,
-}
-
-#[derive(Deserialize)]
 struct VanillaCacheIndex {
   format_version: u32,
   files: BTreeMap<String, VanillaCacheFile>,
@@ -162,9 +143,9 @@ pub(super) fn collect_candidates(
   collect_candidates_from(
     search,
     progress,
-    Path::new("asset/source"),
-    Path::new("asset/source-cache"),
-    Path::new("asset/vanilla-cache"),
+    &search.stores.source_dir,
+    &search.stores.source_cache_dir,
+    &search.stores.vanilla_cache_dir,
   )
 }
 
@@ -227,6 +208,7 @@ fn collect_candidates_from(
     collect_source_cache_candidates(
       &mut candidates,
       &mut paths,
+      source_dir,
       source_cache_dir,
       filter.as_ref(),
       progress,
@@ -339,61 +321,44 @@ fn collect_source_candidates(
 fn collect_source_cache_candidates(
   candidates: &mut Vec<Candidate>,
   paths: &mut SeenPaths,
+  source_dir: &Path,
   cache_root: &Path,
   filter: Option<&globset::GlobMatcher>,
   progress: &ProgressBar,
 ) -> Result<()> {
-  let metadata_path = crate::core::source_cache::cache_info_path(cache_root);
-  if !metadata_path.is_file() {
+  if !crate::core::source_cache::cache_info_path(cache_root).is_file() {
     return Ok(());
   }
-  let index: SourceCacheIndex = serde_json::from_reader(std::fs::File::open(metadata_path)?)?;
-  if !matches!(index.format_version, 2 | 3) {
-    return Err(format!("Unsupported source cache schema {}", index.format_version).into());
-  }
-  for (resource_id, resource) in index.resources {
-    for (format, files) in resource.files_by_format {
-      let extension = match format.as_str() {
-        ".ymap" => "ymap",
-        ".ybn" => "ybn",
-        _ => continue,
-      };
-      for file in files {
-        if !filter_matches(filter, &file.file_name.to_ascii_lowercase()) {
-          continue;
-        }
-        let Some(cached_path) = file.cached_path else {
-          continue;
-        };
-        if !safe_relative(&cached_path) {
-          return Err("Unsafe source-cache artifact path".into());
-        }
-        let original_path = resource.source.join(&file.path);
-        if original_path.is_file() {
-          continue;
-        }
-        let path = cache_root.join(cached_path);
-        if !path.is_file() {
-          progress
-            .println(format!("Warning: source-cache artifact is missing: {}", path.display()));
-          continue;
-        }
-        push_candidate(
-          candidates,
-          paths,
-          Candidate {
-            name: file.file_name.to_ascii_lowercase(),
-            extension,
-            path,
-            stage: "source-cache",
-            resource: Some(resource_id.clone()),
-            original_path: Some(original_path.to_string_lossy().replace('\\', "/")),
-            version: None,
-            strict: false,
-          },
-        );
-      }
+  for file in crate::core::source_cache::inventoried_files(cache_root, source_dir)? {
+    let Some((_, extension)) = stream_name(Path::new(&file.file_name)) else {
+      continue;
+    };
+    if !file.moved || !filter_matches(filter, &file.file_name.to_ascii_lowercase()) {
+      continue;
     }
+    // A file back in its resource is listed from the source.
+    if source_dir.join(&file.source_path).is_file() {
+      continue;
+    }
+    if !file.path.is_file() {
+      progress
+        .println(format!("Warning: source-cache artifact is missing: {}", file.path.display()));
+      continue;
+    }
+    push_candidate(
+      candidates,
+      paths,
+      Candidate {
+        name: file.file_name.to_ascii_lowercase(),
+        extension,
+        path: file.path,
+        stage: "source-cache",
+        resource: Some(file.resource),
+        original_path: Some(file.source_path),
+        version: None,
+        strict: false,
+      },
+    );
   }
   Ok(())
 }
@@ -621,27 +586,10 @@ mod tests {
     fs::write(merged.join("ymap/merged.ymap"), b"merged").unwrap();
     fs::write(source_cache.join("resources/moved/stream/moved.ybn"), b"cached").unwrap();
     fs::write(vanilla_cache.join("latest/ymap/vanilla.ymap"), b"vanilla").unwrap();
-    fs::write(
-      source_cache.join("cache_info.json"),
-      serde_json::to_vec(&serde_json::json!({
-        "format_version": 3,
-        "source_dir": source,
-        "resources": {
-          "moved": {
-            "source": root.join("source/moved"),
-            "files_by_format": {
-              ".ybn": [{
-                "path": "stream/moved.ybn",
-                "file_name": "moved.ybn",
-                "cached_path": "resources/moved/stream/moved.ybn"
-              }]
-            }
-          }
-        }
-      }))
-      .unwrap(),
-    )
-    .unwrap();
+    crate::core::source_cache::write_test_inventory(
+      &source_cache,
+      &["resources/moved/stream/moved.ybn"],
+    );
     fs::write(
       vanilla_cache.join("cache_info.json"),
       serde_json::to_vec(&serde_json::json!({
@@ -664,6 +612,7 @@ mod tests {
         position: [0.0; 3],
       },
       merged_dir: merged,
+      stores: Default::default(),
       filter: None,
       diff_all: true,
     };

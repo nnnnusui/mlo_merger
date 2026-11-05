@@ -54,6 +54,9 @@ Start the executable from server-side code with `spawn` (spawnProcess).
   generator GUI; run the pipeline as `mlo_merger --pipeline`.
 - Set the working directory to the directory containing `asset/`. Every path
   below, and every command default, is relative to it.
+- Paths recorded in the JSON files are relative to the store holding each file (see
+  [Recorded Paths](#recorded-paths)), so they stay valid when `asset/` moves. Command results
+  on stdout name files as the command was given them.
 - stdout carries only the command's result; `--read` and the pipeline each print one
   line of JSON.
 - stderr carries progress logs and errors. The same log is written to
@@ -114,6 +117,25 @@ export const gameBuildArgs = (build: number): string[] =>
 Paths below are defaults. If you change them with options such as `--source-cache`,
 `--overwrite` or `-o`, change the paths you read accordingly.
 
+## Recorded Paths
+
+Every path recorded in a JSON file is relative to a store, never absolute, so the files stay
+valid when `asset/` is moved or the stores are named by other paths; only their contents
+decide whether a stage reuses its output.
+
+| Path relative to | Recorded for |
+|---|---|
+| The source cache (`asset/source-cache`) | Source files moved into the cache: `resources/{resource}/{stream path}` |
+| The source root (`asset/source`) | Resources (their IDs), source files left in them, and each source's original path |
+| The vanilla cache (`asset/vanilla-cache`) | Latest vanilla files: `latest/{ymap,ybn}/{file name}` |
+| The vanilla archive (`asset/vanilla`) | Vanilla versions read by `--read`, and `hash_names.json` |
+| The merge output (`asset/merged`) | Merged files: `{ymap,ybn}/{file name}` |
+
+A bounds index's `path` and a merge input's `path` name the file relative to its own store:
+a source file moved into the cache relative to the source cache, otherwise relative to the
+source root. `originalPath` and a merge input's `original_path` are always relative to the
+source root.
+
 ## Commands And Files
 
 | Step | Arguments | Result | Files to read afterwards |
@@ -137,7 +159,8 @@ when the store is built (by its own command or by the pipeline):
 
 Each `RTreeIndex` has `ymap` and `ybn` arrays of `RTreeItem`s with RBush-compatible
 `minX`/`minY`/`maxX`/`maxY`, plus `minZ`/`maxZ`, the file `name` and `path`, the `resource`
-ID (and `originalPath` when moved into the cache) for source files, and the `version` for
+ID (and `originalPath`, relative to the source root, when moved into the cache) for source
+files, and the `version` for
 vanilla files. Its `input` records the fingerprint of the metadata it was listed from.
 
 An index is rewritten only when that metadata changed, or when the index is missing or of an
@@ -193,6 +216,8 @@ asset/source-cache/diff/{resource}/{stream_path}.diff.json
 - `diffs` holds the resource's differences from vanilla. Overwrite `skip` selectors pick
   entries from it.
 - Copy `source.sha256`/`size` and `vanilla.sha256`/`size` into the overwrite unchanged.
+  `source.path` and `vanilla.path` name the files relative to their stores, such as
+  `resources/{resource}/{stream_path}` and `latest/ymap/{file_name}`.
 - Array differences are `Added`, `Removed`, `Modified` (and `Replaced` for non-entity arrays).
   `Removed.index` and `Modified.before_index` index the vanilla model, and
   `Modified.after_index` indexes the source model. Added entities carry their whole

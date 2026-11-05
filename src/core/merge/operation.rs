@@ -69,7 +69,7 @@ impl Merge {
     let source_dir = self.source_dir.canonicalize()?;
     let vanilla_cache_dir = self.vanilla_cache_dir.canonicalize()?;
     let source_cache_dir = self.source_cache_dir.canonicalize()?;
-    let merge_inputs = source_cache::load_merge_inputs(&source_cache_dir)?;
+    let merge_inputs = source_cache::load_merge_inputs(&source_cache_dir, &source_dir)?;
     let overwrites = match &self.overwrite_dir {
       Some(directory) => Overwrites::load(directory)?,
       None => Overwrites::default(),
@@ -79,7 +79,6 @@ impl Merge {
     let output_dir = prepare_output_path(&self.output_dir)?;
     let staging = Staging(create_staging_directory(&output_dir)?);
     let staged = IncrementalMerge {
-      source_dir: &source_dir,
       vanilla_cache: &vanilla_cache_dir,
       source_cache: &source_cache_dir,
       output: &output_dir,

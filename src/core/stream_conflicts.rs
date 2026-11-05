@@ -12,8 +12,6 @@ use crate::common::function::get_resource_directories;
 #[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[serde(rename_all = "camelCase")]
 pub struct StreamConflictReport {
-  /// Input directory used for the scan.
-  pub input_dir: String,
   /// Number of unique files scanned under stream directories.
   pub scanned_file_count: usize,
   /// Number of distinct colliding basenames.
@@ -99,7 +97,6 @@ fn scan_directories(
   let conflict_count = conflicts.values().map(Vec::len).sum();
 
   Ok(StreamConflictReport {
-    input_dir: input_dir.to_string_lossy().into_owned(),
     scanned_file_count: scanned_paths.len(),
     conflict_count,
     conflicts,

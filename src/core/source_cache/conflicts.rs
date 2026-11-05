@@ -46,7 +46,6 @@ pub(super) fn conflicts(
   let conflicts = group_conflicts(names);
   Ok(SourceCacheConflictReport {
     report: StreamConflictReport {
-      input_dir: output.to_string_lossy().into_owned(),
       scanned_file_count,
       conflict_count: conflicts.values().map(Vec::len).sum(),
       conflicts,

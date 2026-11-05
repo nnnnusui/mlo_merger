@@ -331,6 +331,29 @@ mod tests {
     assert_eq!(second.deploy.copied, 0);
     assert_eq!(second.deploy.skipped, 2);
     assert_eq!(second.changes, PipelineChanges::default());
+    // Moved elsewhere and named by other paths, every store is still current.
+    let merge_metadata = fs::read(pipeline.merged_dir.join("cache_info.json")).unwrap();
+    let moved_root = root.with_file_name(format!("default_pipeline_moved_{}", std::process::id()));
+    let _ = fs::remove_dir_all(&moved_root);
+    fs::rename(&root, &moved_root).unwrap();
+    let moved = moved_root.join("unused/..");
+    let relocated = Pipeline {
+      source_dir: moved.join("input"),
+      vanilla_dir: moved.join("vanilla"),
+      vanilla_cache_dir: moved.join("vanilla-cache"),
+      source_cache_dir: moved.join("source-cache"),
+      merged_dir: moved.join("merged"),
+      output_dir: moved.join("merged_mlo"),
+      ..pipeline.clone()
+    };
+    fs::create_dir_all(moved_root.join("unused")).unwrap();
+    let after_move = relocated.run().unwrap();
+    assert_eq!(after_move.changes, PipelineChanges::default());
+    assert_eq!(after_move.deploy.copied, 0);
+    assert_eq!(after_move.deploy.skipped, 2);
+    assert_eq!(fs::read(relocated.merged_dir.join("cache_info.json")).unwrap(), merge_metadata);
+    fs::remove_dir_all(moved_root.join("unused")).unwrap();
+    fs::rename(&moved_root, &root).unwrap();
     let mut forced = pipeline.clone();
     forced.force = true;
     let forced = forced.run().unwrap();

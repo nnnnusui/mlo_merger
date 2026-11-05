@@ -17,10 +17,7 @@ use crate::{
       StreamFileRef, YmapComparisonContext, YmapComparisonDiff, YmapComparisonFile,
       YmapComparisonPartner,
     },
-    source_cache::{
-      types::{ResourceInventory, SourceCacheMetadata},
-      ymap_diff_path,
-    },
+    source_cache::{types::ResourceInventory, ymap_diff_path},
   },
 };
 use rayon::prelude::*;
@@ -77,13 +74,12 @@ struct DiffInputs {
 /// no longer overriding vanilla are dropped. YMAPs whose diff cannot be built are logged and
 /// skipped.
 pub(in crate::core::source_cache) fn write_ymap_diffs(
+  source_dir: &Path,
   output: &Path,
   vanilla_dir: &Path,
   vanilla_cache_dir: &Path,
 ) -> Result<YmapDiffCounts> {
-  let metadata: SourceCacheMetadata = serde_json::from_reader(BufReader::new(fs::File::open(
-    crate::core::source_cache::cache_info_path(output),
-  )?))?;
+  let metadata = crate::core::source_cache::read_metadata(output)?;
   let staging = output.join("diff.tmp");
   let target = output.join("diff");
   ensure_safe_path(output, &staging)?;
@@ -137,7 +133,7 @@ pub(in crate::core::source_cache) fn write_ymap_diffs(
   // most of a run in which every diff is current.
   let unchecked = entries.iter().any(|(.., kept)| !kept);
   let context = unchecked
-    .then(|| YmapComparisonContext::new(output, vanilla_cache_dir, Default::default()))
+    .then(|| YmapComparisonContext::new(source_dir, output, vanilla_cache_dir, Default::default()))
     .transpose()?;
   let current = entries
     .par_iter()
@@ -160,7 +156,7 @@ pub(in crate::core::source_cache) fn write_ymap_diffs(
   }
   if !stale.is_empty() {
     let hash_names = load_hash_names_or_empty(&vanilla_dir.join("hash_names.json"));
-    let context = YmapComparisonContext::new(output, vanilla_cache_dir, hash_names)?;
+    let context = YmapComparisonContext::new(source_dir, output, vanilla_cache_dir, hash_names)?;
     counts.written = take_diffs(&context, &stale, tolerances)?;
   }
 
@@ -289,9 +285,14 @@ mod tests {
       }
     }
 
-    let written = write_ymap_diffs(&output, &asset.join("vanilla"), &asset.join("vanilla-cache"))
-      .unwrap()
-      .written;
+    let written = write_ymap_diffs(
+      &asset.join("source"),
+      &output,
+      &asset.join("vanilla"),
+      &asset.join("vanilla-cache"),
+    )
+    .unwrap()
+    .written;
     let files = walkdir::WalkDir::new(output.join("diff"))
       .into_iter()
       .filter_map(std::result::Result::ok)
@@ -303,8 +304,13 @@ mod tests {
     assert!(!output.join("diff.tmp").exists());
 
     // Nothing changed since, so every diff is kept.
-    let rerun =
-      write_ymap_diffs(&output, &asset.join("vanilla"), &asset.join("vanilla-cache")).unwrap();
+    let rerun = write_ymap_diffs(
+      &asset.join("source"),
+      &output,
+      &asset.join("vanilla"),
+      &asset.join("vanilla-cache"),
+    )
+    .unwrap();
     assert_eq!(
       rerun,
       YmapDiffCounts {

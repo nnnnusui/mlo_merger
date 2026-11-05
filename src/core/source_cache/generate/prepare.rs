@@ -14,17 +14,56 @@ use crate::core::{vanilla::load_manifest_with_revision, vanilla_cache::load_cach
 use std::{
   collections::{BTreeMap, BTreeSet},
   fs,
-  io::BufReader,
   path::{Path, PathBuf},
 };
+
+/// Rejects a source root holding none of the cached resources, which is a source tree other than
+/// the one the cache was built from: treating every cached resource as removed would archive the
+/// whole cache.
+///
+/// Resources are compared by directory name, as resources moving between groups are; where the
+/// source root is does not matter.
+fn check_same_source(
+  metadata: &SourceCacheMetadata,
+  resources: &[PathBuf],
+  source_dir: &Path,
+) -> Result<()> {
+  if metadata.resources.is_empty() {
+    return Ok(());
+  }
+  let names = resources
+    .iter()
+    .filter_map(|resource| resource.file_name())
+    .map(|name| name.to_string_lossy().to_ascii_lowercase())
+    .collect::<BTreeSet<_>>();
+  let known = metadata.resources.values().any(|inventory| {
+    inventory
+      .source
+      .file_name()
+      .is_some_and(|name| names.contains(&name.to_string_lossy().to_ascii_lowercase()))
+  });
+  if known {
+    return Ok(());
+  }
+  Err(
+    format!(
+      "None of the source cache's {} resources are in {}; is -i the source directory the cache was built from?",
+      metadata.resources.len(),
+      source_dir.display()
+    )
+    .into(),
+  )
+}
 
 pub(super) fn prepare(build: &BuildSourceCache) -> Result<Prepared> {
   let selection = build.resource.as_deref();
   let source_dir = build.source_dir.canonicalize()?;
   let output = prepare_output_path(&build.output_dir)?;
   let exclusions = parse_exclusions(&build.exclusions.as_deref().unwrap_or_default().join(","))?;
-  let resources = discover_resources(&source_dir)?
-    .into_iter()
+  let all_resources = discover_resources(&source_dir)?;
+  let resources = all_resources
+    .iter()
+    .cloned()
     .map(|resource| Ok((resource_id(&source_dir, &resource)?, resource)))
     .collect::<Result<Vec<_>>>()?
     .into_iter()
@@ -52,11 +91,9 @@ pub(super) fn prepare(build: &BuildSourceCache) -> Result<Prepared> {
   let vanilla_cache_dir = build.vanilla_cache_dir.canonicalize()?;
   let info = crate::core::source_cache::cache_info_path(&output);
   let previous = if info.is_file() {
-    let metadata: SourceCacheMetadata =
-      serde_json::from_reader(BufReader::new(fs::File::open(&info)?))?;
-    if metadata.source_dir != source_dir || !matches!(metadata.format_version, 2 | 3) {
-      return Err("Source cache belongs to another input directory or unsupported schema".into());
-    }
+    let metadata = crate::core::source_cache::read_metadata(&output)?;
+    // Excluded resources still show that this is the cache's source tree.
+    check_same_source(&metadata, &all_resources, &source_dir)?;
     Some(metadata)
   } else {
     None
@@ -120,7 +157,7 @@ pub(super) fn prepare(build: &BuildSourceCache) -> Result<Prepared> {
       continue;
     }
     let mut inventory = inventories.remove(old_id).ok_or("Cached resource missing")?;
-    inventory.source = resource.clone();
+    inventory.source = PathBuf::from(&id);
     inventories.insert(id.clone(), inventory);
     let prefix = format!("{old_id}/");
     let inputs =
@@ -140,9 +177,7 @@ pub(super) fn prepare(build: &BuildSourceCache) -> Result<Prepared> {
   let derived_revision = derived.revision.clone();
   let resource_revision = format!("{manifest_sha256}:{derived_revision}");
   let upstream_changed = previous.as_ref().is_none_or(|metadata| {
-    metadata.format_version != 3
-      || metadata.vanilla_dir != vanilla_dir
-      || metadata.vanilla_cache_dir != vanilla_cache_dir
+    metadata.format_version != crate::core::source_cache::FORMAT_VERSION
       || metadata.vanilla_manifest_sha256 != manifest_sha256
       || metadata.vanilla_cache_revision != derived_revision
   });

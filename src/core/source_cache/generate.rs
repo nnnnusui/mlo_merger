@@ -77,14 +77,20 @@ pub(super) fn run(build: &BuildSourceCache) -> Result<SourceCacheResult> {
     resources::update_selected_resources(&source, &vanilla, &publication, &mut state, build.force)?;
   changed |= resources::remove_missing_resources(&source, &publication, &mut state)?;
   let output = publication.output.clone();
+  let source_dir = source.source_dir.clone();
   let vanilla_dir = vanilla.vanilla_dir.clone();
   let vanilla_cache_dir = vanilla.vanilla_cache_dir.clone();
   let changes = std::mem::take(&mut state.changes);
   let published = publish::publish_if_changed(source, vanilla, publication, state, changed)?;
   crate::core::config::matching::with_config(|| {
-    diff::write_ymap_diffs(&output, &vanilla_dir, &vanilla_cache_dir)
+    diff::write_ymap_diffs(&source_dir, &output, &vanilla_dir, &vanilla_cache_dir)
   })??;
-  crate::core::find::rtree::update_store_index(crate::core::find::rtree::Store::Source, &output)?;
+  crate::core::find::rtree::update_store_index(
+    crate::core::find::rtree::Store::Source {
+      source_dir: &source_dir,
+    },
+    &output,
+  )?;
   Ok(SourceCacheResult {
     published,
     changes,

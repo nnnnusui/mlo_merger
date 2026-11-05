@@ -36,6 +36,8 @@ pub struct Read {
   /// File names, or resources' stream paths, to read; none reads every supported file of the
   /// target. Required for [`ReadTarget::Everywhere`].
   pub files: Vec<String>,
+  /// Source root holding the resources' files that were not moved into the source cache.
+  pub source_dir: PathBuf,
   /// Source cache whose inventory locates the resources' files.
   pub source_cache_dir: PathBuf,
   /// Raw vanilla archive holding the versions and `hash_names.json`.
@@ -104,6 +106,9 @@ impl YmapReadDocument {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "typescript", derive(specta::Type))]
 pub struct ReadFingerprint {
+  /// The file relative to its store: the source cache for a resource's file moved there, the
+  /// source root for one that was not, the vanilla archive for vanilla files and
+  /// `hash_names.json`.
   pub path: PathBuf,
   pub sha256: String,
   pub size: u64,
@@ -112,21 +117,24 @@ pub struct ReadFingerprint {
 }
 
 impl ReadFingerprint {
-  /// The file at `path` as it is now; its contents are hashed again only when its size or
-  /// modification time differs from `previous`.
+  /// The file at `path`, recorded as `stored` (relative to its store), as it is now; its contents
+  /// are hashed again only when its size or modification time differs from `previous`.
   fn read(
     path: &Path,
+    stored: &str,
     previous: Option<&Self>,
   ) -> Result<Self> {
-    let previous = previous.filter(|previous| previous.path == path).map(|previous| Fingerprint {
-      sha256: previous.sha256.clone(),
-      size: previous.size,
-      modified_seconds: previous.modified_seconds,
-      modified_nanos: previous.modified_nanos,
-    });
+    let stored = PathBuf::from(stored);
+    let previous =
+      previous.filter(|previous| previous.path == stored).map(|previous| Fingerprint {
+        sha256: previous.sha256.clone(),
+        size: previous.size,
+        modified_seconds: previous.modified_seconds,
+        modified_nanos: previous.modified_nanos,
+      });
     let fingerprint = Fingerprint::read(path, previous.as_ref(), false)?;
     Ok(Self {
-      path: path.to_path_buf(),
+      path: stored,
       sha256: fingerprint.sha256,
       size: fingerprint.size,
       modified_seconds: fingerprint.modified_seconds,
@@ -154,6 +162,8 @@ struct Header {
 struct Selected {
   origin: ReadOrigin,
   input: PathBuf,
+  /// [`Self::input`] relative to its store, as its document records it.
+  stored: String,
   output: PathBuf,
 }
 
@@ -166,12 +176,14 @@ impl Read {
   /// Fails before writing anything when the target selects no file, when a requested name
   /// matches no file, or when a resource holds more than one file of a requested name.
   pub fn run(&self) -> Result<ReadResult> {
-    // Absolute paths keep the recorded fingerprints valid from any working directory.
+    // Documents record paths relative to each store, so they stay valid wherever the stores are;
+    // the result names files by absolute path.
     fs::create_dir_all(&self.output_dir)?;
     let absolute = |path: &Path| {
       path.canonicalize().map_err(|error| format!("Cannot open {}: {error}", path.display()))
     };
     let read = Self {
+      source_dir: absolute(&self.source_dir)?,
       source_cache_dir: absolute(&self.source_cache_dir)?,
       vanilla_dir: absolute(&self.vanilla_dir)?,
       output_dir: absolute(&self.output_dir)?,
@@ -218,12 +230,17 @@ impl Read {
     let mut files = Vec::with_capacity(selected.len());
     for selected in selected {
       let previous = self.header(&selected.output);
-      let source = ReadFingerprint::read(&selected.input, previous.as_ref().map(|it| &it.source))?;
+      let source = ReadFingerprint::read(
+        &selected.input,
+        &selected.stored,
+        previous.as_ref().map(|it| &it.source),
+      )?;
       let hash_names = names_path
         .is_file()
         .then(|| {
           ReadFingerprint::read(
             &names_path,
+            "hash_names.json",
             previous.as_ref().and_then(|it| it.hash_names.as_ref()),
           )
         })
@@ -277,7 +294,7 @@ impl Read {
     resource: Option<&str>,
     matched: &mut [bool],
   ) -> Result<Vec<Selected>> {
-    let inventory = inventoried_files(&self.source_cache_dir)?;
+    let inventory = inventoried_files(&self.source_cache_dir, &self.source_dir)?;
     let inventory = match resource {
       Some(resource) => {
         let resource = resolve_resource(&inventory, resource)?;
@@ -323,6 +340,7 @@ impl Read {
             stream_path: file.stream_path.clone(),
           },
           input: file.path.clone(),
+          stored: file.stored_path.clone(),
           output: self
             .output_dir
             .join("resources")
@@ -390,6 +408,7 @@ impl Read {
           .join(&extension)
           .join(format!("{file_name}.json")),
         input: self.vanilla_dir.join(&file.object),
+        stored: file.object.replace('\\', "/"),
         origin: ReadOrigin::Vanilla {
           version: version.clone(),
           file_name,

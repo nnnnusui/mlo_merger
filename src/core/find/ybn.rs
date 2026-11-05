@@ -682,6 +682,7 @@ mod tests {
         kind: Some("box".into()),
       },
       merged_dir: merged.clone(),
+      stores: Default::default(),
       filter: Some("COLLISION.YBN".into()),
       diff_all: true,
     };
@@ -698,6 +699,7 @@ mod tests {
         position: [0.0; 3],
       },
       merged_dir: merged.clone(),
+      stores: Default::default(),
       filter: Some("collision.ybn".into()),
       diff_all: true,
     }

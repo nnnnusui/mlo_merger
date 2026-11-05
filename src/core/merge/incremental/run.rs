@@ -88,8 +88,7 @@ impl IncrementalMerge<'_> {
       for record in outcome.planned.values().filter(|record| record.output.is_some()) {
         for input in &record.merge_sources {
           if let Some(original) = &input.original_path {
-            omitted
-              .insert(original.strip_prefix(self.source_dir)?.to_string_lossy().replace('\\', "/"));
+            omitted.insert(original.to_string_lossy().replace('\\', "/"));
           }
         }
       }
@@ -158,15 +157,16 @@ impl IncrementalMerge<'_> {
         .into_iter()
         .flatten()
         .map(|source| {
+          let stored = PathBuf::from(&source.stored_path);
           Ok(InputFile {
-            path: source.path.clone(),
-            resource: Some(source.resource.clone()),
-            original_path: Some(source.original_path.clone()),
             fingerprint: Fingerprint::read(
               &source.path,
-              context.previous_inputs.get(&source.path).copied(),
+              context.previous_inputs.get(&stored).copied(),
               self.force,
             )?,
+            path: stored,
+            resource: Some(source.resource.clone()),
+            original_path: Some(PathBuf::from(&source.source_path)),
             overwrite: self.overwrite(source).map(StreamFileOverwrite::digest),
           })
         })
@@ -175,15 +175,16 @@ impl IncrementalMerge<'_> {
         .baselines
         .get(name)
         .map(|path| {
+          let stored = self.stored_vanilla_path(path);
           Ok::<_, Box<dyn std::error::Error>>(InputFile {
-            path: (*path).clone(),
-            resource: None,
-            original_path: None,
             fingerprint: Fingerprint::read(
               path,
-              context.previous_inputs.get(*path).copied(),
+              context.previous_inputs.get(&stored).copied(),
               self.force,
             )?,
+            path: stored,
+            resource: None,
+            original_path: None,
             overwrite: self.vanilla_overwrite(name).map(VanillaOverwrite::digest),
           })
         })

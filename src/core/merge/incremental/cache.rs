@@ -55,8 +55,12 @@ impl Fingerprint {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[cfg_attr(feature = "typescript", derive(specta::Type))]
 pub(in crate::core::merge) struct InputFile {
+  /// The file relative to its store: the vanilla cache for a vanilla file; for a source, the
+  /// source cache when it was moved there, otherwise the source root, where it is
+  /// [`Self::original_path`].
   pub path: PathBuf,
   pub resource: Option<String>,
+  /// A source's path relative to the source root.
   pub original_path: Option<PathBuf>,
   pub fingerprint: Fingerprint,
   /// Digest of the overwrite applied to this source's diff.

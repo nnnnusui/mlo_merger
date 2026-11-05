@@ -1,4 +1,4 @@
-use crate::core::find::EntityQuery;
+use crate::core::find::{EntityQuery, InputStores};
 use bpaf::*;
 use std::{io::Write, path::PathBuf};
 
@@ -13,10 +13,38 @@ pub struct Find {
   pub diff_all: bool,
   /// Existing merged output directory.
   pub merged_dir: PathBuf,
+  /// Where the inputs `--all` reads are.
+  pub stores: InputStores,
 }
 
 /// Parses find searches without invoking any pipeline stages.
 pub fn parser() -> impl Parser<Find> {
+  let defaults = InputStores::default();
+  let source_dir = long("source")
+    .help("Source resource directory, for --all (default: asset/source)")
+    .argument::<PathBuf>("DIR")
+    .fallback(defaults.source_dir);
+  let source_cache_dir = long("source-cache")
+    .help("Source cache directory, for --all (default: asset/source-cache)")
+    .argument::<PathBuf>("DIR")
+    .fallback(defaults.source_cache_dir);
+  let vanilla_cache_dir = long("vanilla-cache")
+    .help("Derived vanilla cache directory, for --all (default: asset/vanilla-cache)")
+    .argument::<PathBuf>("DIR")
+    .fallback(defaults.vanilla_cache_dir);
+  let stores = construct!(InputStores {
+    source_dir,
+    source_cache_dir,
+    vanilla_cache_dir
+  });
+  let search = search_parser();
+  construct!(search, stores).map(|(search, stores)| Find {
+    stores,
+    ..search
+  })
+}
+
+fn search_parser() -> impl Parser<Find> {
   let kind = long("find").argument::<String>("KIND").guard(
     |kind| {
       matches!(
@@ -124,6 +152,7 @@ pub fn parser() -> impl Parser<Find> {
         merged_dir,
         filter,
         diff_all: all,
+        stores: InputStores::default(),
       })
     },
   )
@@ -134,6 +163,7 @@ pub fn run(command: Find) -> Result<(), Box<dyn std::error::Error>> {
   let xml = crate::core::find::FindEntity {
     query: command.query,
     merged_dir: command.merged_dir,
+    stores: command.stores,
     filter: command.filter,
     diff_all: command.diff_all,
   }

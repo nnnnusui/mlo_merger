@@ -50,6 +50,7 @@ pub(super) struct SourceFile {
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 #[cfg_attr(feature = "typescript", derive(specta::Type))]
 pub(super) struct ResourceInventory {
+  /// The resource directory relative to the source root, which is also its ID.
   pub(super) source: PathBuf,
   pub(super) files_by_format: BTreeMap<String, Vec<SourceFile>>,
 }
@@ -77,13 +78,15 @@ pub(super) struct ResourceCheck {
   pub(super) has_stream: bool,
 }
 
+/// The source cache's inventory (`cache_info.json`).
+///
+/// Paths are relative: resources to the source root, cached files to the cache directory, so the
+/// cache stays valid wherever the source and cache directories are. Format 3 recorded absolute
+/// paths, which [`super::read_metadata`] replaces.
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 #[cfg_attr(feature = "typescript", derive(specta::Type))]
 pub(super) struct SourceCacheMetadata {
   pub(super) format_version: u32,
-  pub(super) source_dir: PathBuf,
-  pub(super) vanilla_dir: PathBuf,
-  pub(super) vanilla_cache_dir: PathBuf,
   pub(super) vanilla_manifest_sha256: String,
   pub(super) vanilla_cache_revision: String,
   pub(super) latest_vanilla_version: String,

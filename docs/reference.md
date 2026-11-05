@@ -32,6 +32,10 @@ else on stderr.
 Overlapping artifact directories are rejected. The source root can contain them: for
 example, use `resources` as source while running the tool from `resources/mlo_merged`.
 
+Caches record paths relative to their stores, so moving `asset/`, or naming the same
+directories by other paths, keeps every stage current. A source root holding none of the
+source cache's resources is rejected, since it is not the tree the cache was built from.
+
 `-f` forces the derived caches, merge and deployment, but reuses an existing raw vanilla
 archive. `--gamebuild` selects the game build the vanilla cache, and so merge, targets
 (see [Game Builds](#game-builds)).
@@ -285,6 +289,8 @@ Searches write XML to stdout without running the pipeline or modifying artifacts
   quarter-metre units, and occlude models from the nearest point of their bounds.
 - `-i` selects a merged directory (default: `asset/merged`). `--filter` accepts a
   case-insensitive filename glob; quote wildcard patterns. Duplicate occurrences are kept.
+- With `--all`, the inputs the merge recorded are read from `--source`, `--source-cache` and
+  `--vanilla-cache` (defaults under `asset/`), which the merge records names relative to.
 - `--all` includes recorded vanilla and source inputs from before the merge, identified
   by resource and path. A changed input fingerprint is an error requiring a fresh merge.
   This is a snapshot comparison, not a computed semantic diff.
@@ -324,7 +330,9 @@ describing its file is not written again; `-f` writes it anyway.
   If any name matches no file, nothing is written.
 
 The source cache and vanilla archive default to `asset/source-cache` and `asset/vanilla`
-(`--source-cache`, `--vanilla-dir`); `-o` changes the output root. The command prints a
+(`--source-cache`, `--vanilla-dir`), and resource files not moved into the source cache are
+read from `--source` (default: `asset/source`); `-o` changes the output root. Each document
+records the file it was read from relative to its store. The command prints a
 `ReadResult` JSON line listing each input, its output and whether it was written.
 
 ## Convert Files

@@ -32,8 +32,11 @@ fn ybn_version_change_reuses_current_ymap_groups() {
     fs::write(&path, b"unchanged input").unwrap();
     MergeSourceFile {
       resource: "resource".into(),
+      stored_path: name.clone(),
+      moved: true,
       path,
       original_path: source.join(&name),
+      source_path: name.clone(),
       file_name: name,
       diff_path: None,
       stream_path: String::new(),
@@ -45,9 +48,9 @@ fn ybn_version_change_reuses_current_ymap_groups() {
   for (extension, input) in [("ymap", &ymap), ("ybn", &ybn)] {
     let mut record = FileRecord {
       merge_sources: vec![InputFile {
-        path: input.path.clone(),
+        path: PathBuf::from(&input.stored_path),
         resource: Some(input.resource.clone()),
-        original_path: Some(input.original_path.clone()),
+        original_path: Some(PathBuf::from(&input.source_path)),
         fingerprint: Fingerprint::read(&input.path, None, false).unwrap(),
         overwrite: None,
       }],
@@ -82,7 +85,6 @@ fn ybn_version_change_reuses_current_ymap_groups() {
   };
   assert!(
     IncrementalMerge {
-      source_dir: &source,
       vanilla_cache: &vanilla,
       source_cache: &cache,
       output: &output,
@@ -117,7 +119,10 @@ fn dependency_groups_invalidate_connected_maps_but_not_independent_maps() {
   let source = |name: &str| MergeSourceFile {
     resource: "resource".into(),
     path: PathBuf::from(name),
+    stored_path: name.into(),
+    moved: true,
     original_path: PathBuf::from(name),
+    source_path: name.into(),
     file_name: name.into(),
     diff_path: None,
     stream_path: String::new(),

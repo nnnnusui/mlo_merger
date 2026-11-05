@@ -51,6 +51,8 @@ struct VanillaCacheInfo {
 /// read is decoded at most once per thread that reaches it first.
 pub struct YmapComparisonContext {
   vanilla_cache_dir: PathBuf,
+  /// The stores files are named relative to in diff documents, most specific first.
+  stores: [PathBuf; 3],
   pub(super) vanilla_version: String,
   pub(super) source_index: SourceYmapIndex,
   /// Lowercase YMAP file names in the vanilla cache.
@@ -63,14 +65,17 @@ pub struct YmapComparisonContext {
 }
 
 impl YmapComparisonContext {
+  /// Reads source YMAPs through the inventory of `source_cache_dir`, finding those that were not
+  /// moved into the cache in their resources below `source_dir`.
   pub fn new(
+    source_dir: &Path,
     source_cache_dir: &Path,
     vanilla_cache_dir: &Path,
     hash_names: HashMap<u32, String>,
   ) -> Result<Self> {
     let info: VanillaCacheInfo =
       serde_json::from_slice(&fs::read(vanilla_cache_dir.join("cache_info.json"))?)?;
-    let source_index = load_source_ymap_index(source_cache_dir)?;
+    let source_index = load_source_ymap_index(source_cache_dir, source_dir)?;
     let mut file_names_by_hash = HashMap::<u32, BTreeSet<String>>::new();
     let vanilla_file_names = fs::read_dir(vanilla_cache_dir.join("latest/ymap"))?
       .map(|entry| Ok(entry?.file_name().to_string_lossy().to_ascii_lowercase()))
@@ -83,6 +88,11 @@ impl YmapComparisonContext {
     }
     Ok(Self {
       vanilla_cache_dir: vanilla_cache_dir.to_path_buf(),
+      stores: [
+        source_cache_dir.to_path_buf(),
+        vanilla_cache_dir.to_path_buf(),
+        source_dir.to_path_buf(),
+      ],
       vanilla_version: info.latest_version,
       source_index,
       vanilla_file_names,
@@ -103,7 +113,7 @@ impl YmapComparisonContext {
       return Ok(ymap.clone());
     }
     // Decoded without holding the lock, so other threads keep reading their own YMAPs.
-    let path = resolve_stream_file(
+    let (path, _) = resolve_stream_file(
       &self.vanilla_cache_dir,
       &self.vanilla_version,
       &self.source_index,
@@ -249,8 +259,8 @@ impl YmapComparisonContext {
       resource_name: None,
       ..file.clone()
     };
-    if self.comparison_file(file, Some(source))? != *source
-      || self.comparison_file(&baseline, Some(vanilla))? != *vanilla
+    if !self.comparison_file(file, Some(source))?.same_content(source)
+      || !self.comparison_file(&baseline, Some(vanilla))?.same_content(vanilla)
     {
       return Ok(false);
     }
@@ -264,41 +274,53 @@ impl YmapComparisonContext {
     Ok(match (current, partner) {
       (None, None) => true,
       (Some((_, current, current_baseline)), Some(partner)) => {
-        self.comparison_file(&current, Some(&partner.source))? == partner.source
-          && self.comparison_file(&current_baseline, Some(&partner.vanilla))? == partner.vanilla
+        self.comparison_file(&current, Some(&partner.source))?.same_content(&partner.source)
+          && self
+            .comparison_file(&current_baseline, Some(&partner.vanilla))?
+            .same_content(&partner.vanilla)
       }
       _ => false,
     })
   }
 
-  /// Fingerprints the file that `file` resolves to, reusing `previous` when its path, size and
-  /// modification time still match.
+  /// Fingerprints the file that `file` resolves to, named relative to the store holding it,
+  /// reusing `previous` when its path, size and modification time still match.
   fn comparison_file(
     &self,
     file: &StreamFileRef,
     previous: Option<&YmapComparisonFile>,
   ) -> Result<YmapComparisonFile> {
-    let path = resolve_stream_file(
+    let (path, vanilla) = resolve_stream_file(
       &self.vanilla_cache_dir,
       &self.vanilla_version,
       &self.source_index,
       file,
     )?;
-    let path = path.display().to_string();
-    let previous = previous.filter(|previous| previous.path == path).map(|previous| Fingerprint {
-      sha256: previous.sha256.clone(),
-      size: previous.size,
-      modified_seconds: previous.modified_seconds,
-      modified_nanos: previous.modified_nanos,
-    });
+    let stored = match vanilla {
+      Some(stored) => stored,
+      None => self
+        .stores
+        .iter()
+        .find_map(|store| path.strip_prefix(store).ok())
+        .unwrap_or(&path)
+        .to_string_lossy()
+        .replace('\\', "/"),
+    };
+    let previous =
+      previous.filter(|previous| previous.path == stored).map(|previous| Fingerprint {
+        sha256: previous.sha256.clone(),
+        size: previous.size,
+        modified_seconds: previous.modified_seconds,
+        modified_nanos: previous.modified_nanos,
+      });
     let Fingerprint {
       sha256,
       size,
       modified_seconds,
       modified_nanos,
-    } = Fingerprint::read(Path::new(&path), previous.as_ref(), false)?;
+    } = Fingerprint::read(&path, previous.as_ref(), false)?;
     Ok(YmapComparisonFile {
-      path,
+      path: stored,
       sha256,
       size,
       modified_seconds,
@@ -350,13 +372,14 @@ impl YmapComparisonContext {
 /// Locates `file` in its source resource, falling back to vanilla when the resource has no
 /// YMAP of that name or `file` names no resource.
 ///
-/// Vanilla cache entries are links into the raw vanilla tree, so their targets are returned.
+/// Vanilla cache entries are links into the raw vanilla tree, so their targets are returned,
+/// with the entry's path in the vanilla cache, `latest/ymap/{file name}`, to record.
 fn resolve_stream_file(
   vanilla_cache_dir: &Path,
   vanilla_version: &str,
   source_index: &SourceYmapIndex,
   file: &StreamFileRef,
-) -> Result<PathBuf> {
+) -> Result<(PathBuf, Option<String>)> {
   if let Some(resource) = &file.resource_name {
     let key = (resource.clone(), file.file_name.to_ascii_lowercase());
     match source_index.paths.get(&key).map(Vec::as_slice) {
@@ -370,7 +393,7 @@ fn resolve_stream_file(
             .into(),
           );
         }
-        return Ok(path.clone());
+        return Ok((path.clone(), None));
       }
       Some(paths) => {
         return Err(
@@ -389,9 +412,10 @@ fn resolve_stream_file(
       .into(),
     );
   }
-  let path = vanilla_cache_dir.join("latest/ymap").join(&file.file_name);
+  let stored = format!("latest/ymap/{}", file.file_name);
+  let path = vanilla_cache_dir.join(&stored);
   if !path.is_file() {
     return Err(format!("No source or vanilla YMAP named {}", file.file_name).into());
   }
-  Ok(path.canonicalize()?)
+  Ok((path.canonicalize()?, Some(stored)))
 }

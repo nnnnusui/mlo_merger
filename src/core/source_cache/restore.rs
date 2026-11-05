@@ -1,7 +1,7 @@
 use std::{
   collections::BTreeSet,
   fs,
-  io::{BufReader, BufWriter, Write},
+  io::{BufWriter, Write},
   path::Path,
 };
 
@@ -55,11 +55,7 @@ pub fn restore_source_cache(
     }
     return Ok(0);
   }
-  let mut metadata: SourceCacheMetadata =
-    serde_json::from_reader(BufReader::new(fs::File::open(&manifest)?))?;
-  if !matches!(metadata.format_version, 2 | 3) {
-    return Err(format!("Unsupported source cache schema {}", metadata.format_version).into());
-  }
+  let mut metadata = super::read_metadata(&cache)?;
   let selected = resources
     .iter()
     .map(|name| resolve_resource(&metadata, name))
@@ -76,8 +72,7 @@ pub fn restore_source_cache(
     if !resource.files_by_format.values().flatten().any(|file| file.cached_path.is_some()) {
       continue;
     }
-    let relative_resource = resource.source.strip_prefix(&metadata.source_dir)?;
-    let resource_dir = source.join(relative_resource);
+    let resource_dir = source.join(&resource.source);
     ensure_safe_path(&source, &resource_dir)?;
     if !resource_dir.is_dir() {
       return Err(format!("Source resource is missing: {}", resource_dir.display()).into());
@@ -340,7 +335,7 @@ mod tests {
       |id: &str| metadata["resources"][id]["files_by_format"][".ymap"][0]["cached_path"].clone();
     assert_eq!(cached_path("[maps]/alpha"), serde_json::Value::Null);
     assert_eq!(cached_path("beta"), "resources/beta/map.ymap");
-    let located = crate::core::source_cache::inventoried_files(&cache).unwrap();
+    let located = crate::core::source_cache::inventoried_files(&cache, &source).unwrap();
     let path =
       |resource: &str| located.iter().find(|file| file.resource == resource).unwrap().path.clone();
     assert_eq!(path("[maps]/alpha"), source.join("[maps]/alpha/stream/map.ymap"));

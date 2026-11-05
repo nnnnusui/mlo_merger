@@ -94,7 +94,7 @@ fn moves_vanilla_files_retains_history_and_updates_only_selected_resources() {
     report["source_conflicts"][".ybn"][0]["paths"],
     serde_json::json!(["resource_a/stream/custom.ybn", "resource_b/streams/custom.ybn",])
   );
-  assert_eq!(crate::core::source_cache::load_merge_inputs(&output).unwrap().ybn.len(), 2);
+  assert_eq!(crate::core::source_cache::load_merge_inputs(&output, &source).unwrap().ybn.len(), 2);
   assert_eq!(
     crate::core::source_cache::moved_source_paths(&output),
     BTreeSet::from([
@@ -196,7 +196,7 @@ fn moves_vanilla_files_retains_history_and_updates_only_selected_resources() {
     assert!(!current.resource_checks.contains_key(&old_id));
     assert!(!current.source_inputs.keys().any(|key| key.starts_with(&format!("{old_id}/"))));
     assert_eq!(current.resources.len(), previous.resources.len());
-    assert_eq!(current.resources[relative].source, moved);
+    assert_eq!(current.resources[relative].source, std::path::Path::new(relative));
     assert!(current.ymap_load_plan.changed_source_parents.contains(&SourceYmapRef {
       resource: relative.into(),
       source_path: "stream/custom.ymap".into(),
@@ -217,7 +217,7 @@ fn moves_vanilla_files_retains_history_and_updates_only_selected_resources() {
         assert_eq!(&current.source_inputs[&format!("{relative}/{suffix}")], fingerprint);
       }
     }
-    let inputs = crate::core::source_cache::load_merge_inputs(&output).unwrap();
+    let inputs = crate::core::source_cache::load_merge_inputs(&output, &source).unwrap();
     let input = inputs.ybn.iter().find(|file| file.resource == relative).unwrap();
     assert_eq!(input.path, cached);
     assert_eq!(input.original_path, moved.join("stream/nested/collision.ybn"));
@@ -265,7 +265,10 @@ fn moves_vanilla_files_retains_history_and_updates_only_selected_resources() {
   );
   let empty_after = read_metadata();
   assert!(!empty_after.resources.contains_key("empty_resource"));
-  assert_eq!(empty_after.resources["[group]/empty_resource"].source, moved_empty);
+  assert_eq!(
+    empty_after.resources["[group]/empty_resource"].source,
+    std::path::Path::new("[group]/empty_resource")
+  );
   assert_eq!(
     empty_after.resource_checks["[group]/empty_resource"],
     empty_before.resource_checks["empty_resource"]
@@ -298,7 +301,10 @@ fn moves_vanilla_files_retains_history_and_updates_only_selected_resources() {
   assert_eq!(fs::read(second.join("streams/nested/collision.ybn")).unwrap(), b"pending");
   let after = read_metadata();
   assert!(!after.resources.contains_key(&previous_id));
-  assert_eq!(after.resources["[changed]/resource_a"].source, first);
+  assert_eq!(
+    after.resources["[changed]/resource_a"].source,
+    std::path::Path::new("[changed]/resource_a")
+  );
   assert_eq!(before.resources["resource_b"], after.resources["resource_b"]);
   assert_eq!(before.resource_checks["resource_b"], after.resource_checks["resource_b"]);
   let history = fs::read_dir(output.join("_old")).unwrap().next().unwrap().unwrap().path();

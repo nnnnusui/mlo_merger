@@ -91,8 +91,8 @@ fn builds_source_inventory_and_skips_unchanged_inputs_without_diffing() {
     serde_json::from_reader(fs::File::open(output.join("stream_conflicts.json")).unwrap()).unwrap();
   assert!(report.report.conflicts.is_empty());
   assert_eq!(report.source_conflicts.as_ref().unwrap().values().map(Vec::len).sum::<usize>(), 2);
-  assert_eq!(info.format_version, 3);
-  let merge_inputs = crate::core::source_cache::load_merge_inputs(&output).unwrap();
+  assert_eq!(info.format_version, 4);
+  let merge_inputs = crate::core::source_cache::load_merge_inputs(&output, &source).unwrap();
   assert!(merge_inputs.ymap.is_empty());
   assert!(merge_inputs.ybn.is_empty());
   let vanilla_ymaps_to_read: BTreeSet<String> =
@@ -115,7 +115,6 @@ fn builds_source_inventory_and_skips_unchanged_inputs_without_diffing() {
   assert!(build().run_after_vanilla_cache().unwrap());
   let cache_report: SourceCacheConflictReport =
     serde_json::from_reader(fs::File::open(output.join("stream_conflicts.json")).unwrap()).unwrap();
-  assert_eq!(cache_report.report.input_dir, output.to_string_lossy());
   assert_eq!(cache_report.report.scanned_file_count, 2);
   assert_eq!(cache_report.report.conflict_count, 1);
   assert_eq!(cache_report.report.conflicts[".ybn"][0].file_name, "cached.ybn");

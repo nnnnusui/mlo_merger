@@ -40,9 +40,6 @@ impl Fixture {
       &output.join("cache_info.json"),
       &SourceCacheMetadata {
         format_version: 2,
-        source_dir: root.join("source"),
-        vanilla_dir: root.join("vanilla"),
-        vanilla_cache_dir: vanilla_cache,
         vanilla_manifest_sha256: "manifest".into(),
         vanilla_cache_revision: "derived".into(),
         latest_vanilla_version: "v1".into(),
@@ -135,8 +132,13 @@ impl Fixture {
   }
 
   fn write_diffs(&self) -> YmapDiffCounts {
-    write_ymap_diffs(&self.output, &self.root.join("vanilla"), &self.root.join("vanilla-cache"))
-      .unwrap()
+    write_ymap_diffs(
+      &self.root.join("source"),
+      &self.output,
+      &self.root.join("vanilla"),
+      &self.root.join("vanilla-cache"),
+    )
+    .unwrap()
   }
 }
 
@@ -186,12 +188,20 @@ fn ymap_diffs_are_regenerated_when_the_vanilla_ymap_changes() {
 }
 
 #[test]
-fn ymap_diffs_are_regenerated_when_only_the_modification_time_changes() {
+fn ymap_diffs_are_kept_when_only_the_modification_time_changes() {
   let fixture = Fixture::new("ymap_diffs_touched");
   fixture.write_current_diff();
   let file = fs::File::options().write(true).open(&fixture.source_ymap).unwrap();
   file.set_modified(std::time::UNIX_EPOCH + std::time::Duration::from_secs(1)).unwrap();
-  assert_eq!(fixture.write_diffs(), DROPPED);
+  // Copying a file need not keep its modification time; its contents decide.
+  assert_eq!(
+    fixture.write_diffs(),
+    YmapDiffCounts {
+      written: 0,
+      reused: 1,
+    }
+  );
+  assert!(fixture.diff_path().exists());
 }
 
 #[test]

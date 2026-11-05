@@ -42,7 +42,11 @@ freshness and exposes the data other stages need; consumers do not walk another
 stage's directories or parse its records. Overwrite application is likewise
 exposed by the overwrite module, and merge reads overwrite data only through it.
 The vanilla archive, vanilla cache, source cache and merge output each record their
-metadata in `cache_info.json`.
+metadata in `cache_info.json`. Recorded paths are relative to the store holding each file
+(resources and their files to the source root), and freshness compares contents, with
+modification times only as a hint to skip hashing. Where the stores are, and how a command
+names them, does not affect any stage. The source cache identifies its source tree by its
+resources rather than its path: a source root holding none of them is rejected.
 Format codecs (`format/*`) stay independent of artifact layout and batch processing.
 The GUI, opened when the executable starts without arguments, is a front end for
 vanilla generation only: it collects the game directory and `magic.dat` and runs the

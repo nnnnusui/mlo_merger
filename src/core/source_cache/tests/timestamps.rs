@@ -17,9 +17,6 @@ fn source_cache_timestamp_refresh_updates_provenance_without_regeneration() {
     &root.join("cache_info.json"),
     &SourceCacheMetadata {
       format_version: 2,
-      source_dir: root.join("source"),
-      vanilla_dir: root.join("vanilla"),
-      vanilla_cache_dir: root.join("vanilla-cache"),
       vanilla_manifest_sha256: "manifest".into(),
       vanilla_cache_revision: "derived".into(),
       latest_vanilla_version: "latest".into(),

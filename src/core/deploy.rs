@@ -49,6 +49,8 @@ struct Fingerprint {
 #[derive(Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[cfg_attr(feature = "typescript", derive(specta::Type))]
 struct CopiedFile {
+  /// The copied file relative to its store: the merge output for `merged/` files, the source
+  /// cache for `clone/` files.
   source: PathBuf,
   input: Fingerprint,
   output: Fingerprint,
@@ -58,8 +60,6 @@ struct CopiedFile {
 #[cfg_attr(feature = "typescript", derive(specta::Type))]
 struct DeployMetadata {
   format_version: u32,
-  merged_dir: PathBuf,
-  source_cache_dir: PathBuf,
   generated_at: String,
   files: BTreeMap<String, CopiedFile>,
 }
@@ -105,12 +105,12 @@ impl Deploy {
     }
     let mut summary = DeploySummary::default();
     let mut files = BTreeMap::new();
-    for (relative, source) in &planned {
+    for (relative, (source, stored)) in &planned {
       let target = destination(&output, relative)?;
       let old = previous.as_ref().and_then(|metadata| metadata.files.get(relative));
       let input = fingerprint(
         source,
-        old.filter(|file| file.source == *source).map(|file| &file.input),
+        old.filter(|file| file.source == *stored).map(|file| &file.input),
         self.force,
       )?;
       let existing = if target.is_file() {
@@ -137,7 +137,7 @@ impl Deploy {
       files.insert(
         relative.clone(),
         CopiedFile {
-          source: source.clone(),
+          source: stored.clone(),
           input,
           output: target_fingerprint,
         },
@@ -163,17 +163,10 @@ impl Deploy {
     }
     let metadata = DeployMetadata {
       format_version: 1,
-      merged_dir: merged,
-      source_cache_dir: cache,
       generated_at: chrono::Utc::now().to_rfc3339(),
       files,
     };
-    if previous.as_ref().is_none_or(|previous| previous.files != metadata.files)
-      || previous.as_ref().is_some_and(|previous| {
-        previous.merged_dir != metadata.merged_dir
-          || previous.source_cache_dir != metadata.source_cache_dir
-      })
-    {
+    if previous.as_ref().is_none_or(|previous| previous.files != metadata.files) {
       let temporary = destination(&output, &format!(".deploy-cache-{}.tmp", std::process::id()))?;
       if temporary.exists() {
         return Err("Deployment cache temporary file already exists".into());
@@ -225,13 +218,14 @@ fn remove_empty_stream_directories(output: &Path) -> Result<()> {
   Ok(())
 }
 
-/// The managed deployment files and their sources: every merged YMAP/YBN, and each file the
-/// source cache moved out of its resource whose name no merged file takes.
+/// The managed deployment files, each with its source and that source's path relative to its
+/// store: every merged YMAP/YBN, and each file the source cache moved out of its resource whose
+/// name no merged file takes.
 fn plan(
   merged: &Path,
   cache: &Path,
   cached: &[CachedFile],
-) -> Result<BTreeMap<String, PathBuf>> {
+) -> Result<BTreeMap<String, (PathBuf, PathBuf)>> {
   let mut files = BTreeMap::new();
   let mut merged_names = BTreeSet::new();
   for entry in WalkDir::new(merged).follow_links(false) {
@@ -252,7 +246,10 @@ fn plan(
     if !merged_names.insert(name.to_ascii_lowercase()) {
       return Err(format!("Duplicate merged stream basename: {name}").into());
     }
-    files.insert(format!("stream/{extension}/merged/{name}"), path.to_path_buf());
+    files.insert(
+      format!("stream/{extension}/merged/{name}"),
+      (path.to_path_buf(), path.strip_prefix(merged)?.to_path_buf()),
+    );
   }
   for file in cached {
     let path = cache.join(&file.cached_path);
@@ -265,7 +262,10 @@ fn plan(
       continue;
     }
     let relative = file.cached_path.strip_prefix("resources/").ok_or("Unsafe source-cache path")?;
-    files.insert(format!("stream/{}/clone/{relative}", extension(&path)), path);
+    files.insert(
+      format!("stream/{}/clone/{relative}", extension(&path)),
+      (path, PathBuf::from(&file.cached_path)),
+    );
   }
   Ok(files)
 }
@@ -404,8 +404,7 @@ mod tests {
     fs::write(cache.join("_old/timestamp/resource_a/archived.ybn"), b"archive").unwrap();
     // Not recorded by the inventory, so not part of the cache.
     fs::write(cache.join("resources/resource_a/nested/stray.ybn"), b"stray").unwrap();
-    let source = root.join("source");
-    let inventory = |cached: &[&str]| write_test_inventory(&cache, &source, cached);
+    let inventory = |cached: &[&str]| write_test_inventory(&cache, cached);
     inventory(&[
       "resources/resource_a/nested/MAP.YMAP",
       "resources/resource_a/nested/collision.ybn",
@@ -583,7 +582,7 @@ mod tests {
     let cache = root.join("cache");
     let output = root.join("output");
     fs::create_dir_all(merged.join("ymap")).unwrap();
-    write_test_inventory(&cache, &root.join("source"), &[]);
+    write_test_inventory(&cache, &[]);
     fs::write(merged.join("ymap/map.ymap"), b"map").unwrap();
     fs::write(merged.join("MAP.YMAP"), b"duplicate").unwrap();
     let deploy = Deploy {
