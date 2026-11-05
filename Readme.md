@@ -53,12 +53,22 @@ Each stream file type is supported at one of three levels:
 | **Merge** | Sources replacing the same vanilla file are combined from the files themselves; there are no diff documents or overwrites |
 | **Unsupported** | Files stay in their resources and are not merged, so the game loads one of the same-named files. Name collisions between resources are only reported in `source-cache/stream_conflicts.json` |
 
-| Extension | Level | Other operations |
-|---|---|---|
-| `.ymap` | Diff | `--read`, `--find`, XML conversion |
-| `.ybn` | Merge (only when several resources replace the same file) | `--find ybn-position` and `file-from-position`, XML conversion |
-| `.ytyp`, `.ymt`, `.ynd` | Unsupported | XML conversion |
-| Others (`.ydr`, `.ydd`, `.yft`, `.ytd`, `.ynv`, `.ycd`, `.ymf`, …) | Unsupported | |
+| Extension | Contents | Level | Other operations |
+|---|---|---|---|
+| `.ymap` | Map placements: entities, MLO instances, car generators, grass, occluders, LOD lights | Diff | `--read`, `--find`, XML conversion |
+| `.ybn` | Static collision bounds | Merge | `--find ybn-position` and `file-from-position`, XML conversion |
+| `.ytyp` | Archetype definitions, including MLO interiors | Unsupported | XML conversion |
+| `.ymt` | Metadata such as scenario points | Unsupported | XML conversion |
+| `.ynd` | Vehicle and ped path nodes | Unsupported | XML conversion |
+| `.ynv` | Navigation meshes | Unsupported | |
+| `.ymf` | Manifests such as `_manifest.ymf` (map dependencies) | Unsupported | |
+| `.ydr` | Drawables (models) | Unsupported | |
+| `.ydd` | Drawable dictionaries | Unsupported | |
+| `.yft` | Fragments (breakable or physical models) | Unsupported | |
+| `.ytd` | Texture dictionaries | Unsupported | |
+| `.ywr` | Water reflection data | Unsupported | |
+| `.ycd` | Clip dictionaries (animations, including animated props) | Unsupported | |
+| Others | | Unsupported | |
 
 ## Commands
 
