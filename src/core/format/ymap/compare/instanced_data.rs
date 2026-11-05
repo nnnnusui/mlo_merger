@@ -184,36 +184,33 @@ fn settings_key(batch: &GrassInstanceBatch) -> GroupKey {
 }
 
 /// Instance attributes that must be equal to match, excluding position and `pad`.
-fn attributes(instance: &GrassInstance) -> (u32, u32, Vec<u32>, u32, u32) {
-  (instance.normal_x, instance.normal_y, instance.color.clone(), instance.scale, instance.ao)
+fn attributes(instance: &GrassInstance) -> (u32, u32, [u32; 3], u32, u32) {
+  (instance.normal_x, instance.normal_y, instance.color, instance.scale, instance.ao)
 }
 
-/// World position of `instance` (CodeWalker `GetGrassWorldPos`), or `None` if malformed.
+/// World position of `instance` (CodeWalker `GetGrassWorldPos`).
 pub(super) fn grass_world_position(
   batch: &GrassInstanceBatch,
   instance: &GrassInstance,
-) -> Option<Position> {
+) -> Position {
   unpack_position(&batch.batch_aabb, &instance.position)
 }
 
-/// World position of a `packed` position within `bounds`, or `None` if malformed.
+/// World position of a `packed` position within `bounds`.
 fn unpack_position(
   bounds: &BoundingBox,
-  packed: &[f32],
-) -> Option<Position> {
-  let [x, y, z] = packed else {
-    return None;
-  };
+  [x, y, z]: &[f32; 3],
+) -> Position {
   let (min, max) = (&bounds.min, &bounds.max);
   let axis = |min: f32, max: f32, packed: f32| {
     (f64::from(min)
       + (f64::from(max) - f64::from(min)) * (f64::from(packed) * BATCH_VERT_MULTIPLIER)) as f32
   };
-  Some(Position {
+  Position {
     x: axis(min.x, max.x, *x),
     y: axis(min.y, max.y, *y),
     z: axis(min.z, max.z, *z),
-  })
+  }
 }
 
 /// `position` packed relative to `bounds`, the inverse of [`unpack_position`] up to one packed
@@ -221,7 +218,7 @@ fn unpack_position(
 fn pack_position(
   bounds: &BoundingBox,
   position: &Position,
-) -> Vec<f32> {
+) -> [f32; 3] {
   let (min, max) = (&bounds.min, &bounds.max);
   let axis = |min: f32, max: f32, world: f32| {
     let size = f64::from(max) - f64::from(min);
@@ -231,11 +228,7 @@ fn pack_position(
     let packed = (f64::from(world) - f64::from(min)) / size / BATCH_VERT_MULTIPLIER;
     packed.round().clamp(0.0, f64::from(u16::MAX)) as f32
   };
-  vec![
-    axis(min.x, max.x, position.x),
-    axis(min.y, max.y, position.y),
-    axis(min.z, max.z, position.z),
-  ]
+  [axis(min.x, max.x, position.x), axis(min.y, max.y, position.y), axis(min.z, max.z, position.z)]
 }
 
 /// An instance located in world space, remembering where it is stored.
@@ -243,7 +236,7 @@ fn pack_position(
 struct Placed<'a> {
   batch: usize,
   instance: &'a GrassInstance,
-  position: Option<Position>,
+  position: Position,
   /// One packed position step of the instance's batch on each axis.
   step: [f32; 3],
 }
@@ -336,7 +329,8 @@ fn match_positions<K: std::hash::Hash + Eq>(
   let mut keys = HashMap::<K, u32>::new();
   let mut grid = HashMap::<(u32, i64, i64, i64), Vec<usize>, CellHash>::default();
   for (index, placed) in after.iter().enumerate() {
-    if let (false, Some(position)) = (after_used[index], &placed.position) {
+    if !after_used[index] {
+      let position = &placed.position;
       let next = keys.len() as u32;
       let id = *keys.entry(key(placed.instance)).or_insert(next);
       grid
@@ -347,9 +341,10 @@ fn match_positions<K: std::hash::Hash + Eq>(
   }
   let mut pairs = Vec::new();
   for (index, placed) in before.iter().enumerate() {
-    let (false, Some(position)) = (before_used[index], &placed.position) else {
+    if before_used[index] {
       continue;
-    };
+    }
+    let position = &placed.position;
     // No `after` instance has this key.
     let Some(&wanted) = keys.get(&key(placed.instance)) else {
       continue;
@@ -367,7 +362,7 @@ fn match_positions<K: std::hash::Hash + Eq>(
         let close = |axis: usize, from: f32, to: f32| {
           (from - to).abs() <= tolerance.max(placed.step[axis]).max(other.step[axis])
         };
-        let to = other.position.as_ref().unwrap();
+        let to = &other.position;
         if !after_used[candidate]
           && close(0, position.x, to.x)
           && close(1, position.y, to.y)
@@ -519,9 +514,8 @@ impl YmapGrassBatchFieldDiff {
     } = self;
     if let Some(bounds) = batch_aabb {
       for instance in &mut batch.instances {
-        if let Some(position) = unpack_position(&batch.batch_aabb, &instance.position) {
-          instance.position = pack_position(bounds, &position);
-        }
+        instance.position =
+          pack_position(bounds, &unpack_position(&batch.batch_aabb, &instance.position));
       }
       batch.batch_aabb = bounds.clone();
     }
@@ -563,7 +557,7 @@ impl YmapGrassBatchFieldDiff {
       .map(|(from, to)| YmapModifiedGrassInstance {
         before_index: from,
         after_index: to,
-        world_position: after_placed[to].position.clone().unwrap_or_default(),
+        world_position: after_placed[to].position.clone(),
         // Pairs found by position alone may still share attributes.
         changes: before_placed[from]
           .instance
@@ -579,7 +573,7 @@ impl YmapGrassBatchFieldDiff {
         .filter(|index| !after_kept[*index])
         .map(|index| YmapAddedGrassInstance {
           after: anchors[index],
-          world_position: after_placed[index].position.clone().unwrap_or_default(),
+          world_position: after_placed[index].position.clone(),
           instance: after.instances[index].clone(),
         })
         .collect(),

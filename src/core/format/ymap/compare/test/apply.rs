@@ -361,13 +361,13 @@ fn grass_instance(
 ) -> GrassInstance {
   let packed = ((x - min_x) / (max_x - min_x) * 65536.0).round();
   GrassInstance {
-    position: vec![packed, 0.0, 0.0],
+    position: [packed, 0.0, 0.0],
     normal_x: 0,
     normal_y: 0,
-    color: vec![255, 255, 255],
+    color: [255, 255, 255],
     scale: 1,
     ao: 0,
-    pad: vec![0, 0, 0],
+    pad: [0, 0, 0],
   }
 }
 
@@ -429,7 +429,7 @@ fn instanced_data_is_applied() {
     vec![grass_batch(0.0, 10.0, &[1.0, 3.0, 7.0]), grass_batch(80.0, 90.0, &[85.0])],
   );
   modded.instanced_data.grass_instance_list[0].instances[1].scale = 9;
-  modded.instanced_data.grass_instance_list[0].instances[1].color = vec![0, 128, 0];
+  modded.instanced_data.grass_instance_list[0].instances[1].color = [0, 128, 0];
   assert_round_trip(&vanilla, &modded);
 }
 
@@ -445,9 +445,7 @@ fn grass_instances_keep_their_world_position_when_bounds_change() {
     .instances
     .iter()
     .map(|instance| {
-      crate::core::format::ymap::compare::instanced_data::grass_world_position(batch, instance)
-        .unwrap()
-        .x
+      crate::core::format::ymap::compare::instanced_data::grass_world_position(batch, instance).x
     })
     .collect::<Vec<_>>();
   for (x, expected) in xs.iter().zip([1.0, 2.0, 3.0, 15.0]) {

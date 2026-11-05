@@ -14,13 +14,13 @@ fn instance(
 ) -> GrassInstance {
   let packed = ((x - min_x) / (max_x - min_x) * 65536.0).round();
   GrassInstance {
-    position: vec![packed, 0.0, 0.0],
+    position: [packed, 0.0, 0.0],
     normal_x: 0,
     normal_y: 0,
-    color: vec![255, 255, 255],
+    color: [255, 255, 255],
     scale: 1,
     ao: 0,
-    pad: vec![0, 0, 0],
+    pad: [0, 0, 0],
   }
 }
 
@@ -292,6 +292,6 @@ fn requantised_positions_within_one_packed_step_match() {
 fn ignores_padding_and_changes_within_tolerance() {
   let vanilla = with_grass(vec![batch(0.0, 100.0, &[10.0])]);
   let mut modded = with_grass(vec![batch(0.0, 100.0, &[10.005])]);
-  modded.instanced_data.grass_instance_list[0].instances[0].pad = vec![7, 7, 7];
+  modded.instanced_data.grass_instance_list[0].instances[0].pad = [7, 7, 7];
   assert!(grass(&vanilla, &modded).is_empty());
 }

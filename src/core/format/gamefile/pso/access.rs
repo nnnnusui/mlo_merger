@@ -1,7 +1,7 @@
 //! [`StructReader`] over PSO structures and their embedded schemas.
 
 use super::*;
-use crate::core::format::gamefile::struct_reader::{Scalar, StructReader};
+use crate::core::format::gamefile::struct_reader::{FieldName, Scalar, StructReader};
 
 /// One structure instance inside a PSO, read through its embedded schema.
 ///
@@ -74,9 +74,9 @@ impl<'a> PsoStruct<'a> {
 
   fn field(
     &self,
-    name: &str,
+    name: FieldName,
   ) -> io::Result<Option<&'a Field>> {
-    let hash = xml_hash(name)?;
+    let hash = name.hash;
     Ok(self.schema.fields.iter().find(|field| field.name == hash && field.name != 0x100))
   }
 
@@ -90,7 +90,7 @@ impl<'a> PsoStruct<'a> {
   fn array(
     &self,
     field: &Field,
-    name: &str,
+    name: FieldName,
   ) -> io::Result<(&'a Field, usize, usize, usize)> {
     if field.kind != 13 {
       return Err(self.context(name, invalid("PSO field is not an array")));
@@ -133,7 +133,7 @@ impl StructReader for PsoStruct<'_> {
   /// Reads a scalar field, or `None` when the schema has no such field.
   fn scalar(
     &self,
-    name: &str,
+    name: FieldName,
   ) -> io::Result<Option<Scalar>> {
     let Some(field) = self.field(name)? else {
       return Ok(None);
@@ -144,7 +144,7 @@ impl StructReader for PsoStruct<'_> {
   /// Reads a float vector field (`xy`, `xyz` or `xyzw`), or `None` when it is absent.
   fn vector(
     &self,
-    name: &str,
+    name: FieldName,
   ) -> io::Result<Option<Vec<f32>>> {
     let Some(field) = self.field(name)? else {
       return Ok(None);
@@ -167,7 +167,7 @@ impl StructReader for PsoStruct<'_> {
   /// Reads an embedded or pointed-to structure field; `None` when absent or a null pointer.
   fn child(
     &self,
-    name: &str,
+    name: FieldName,
   ) -> io::Result<Option<Self>> {
     let Some(field) = self.field(name)? else {
       return Ok(None);
@@ -192,7 +192,7 @@ impl StructReader for PsoStruct<'_> {
   /// Reads a structure array field; absent fields read as empty.
   fn children(
     &self,
-    name: &str,
+    name: FieldName,
   ) -> io::Result<Vec<Self>> {
     let Some(field) = self.field(name)? else {
       return Ok(Vec::new());
@@ -231,7 +231,7 @@ impl StructReader for PsoStruct<'_> {
   /// Reads a primitive or hash array field; absent fields read as empty.
   fn values(
     &self,
-    name: &str,
+    name: FieldName,
   ) -> io::Result<Vec<Scalar>> {
     let Some(field) = self.field(name)? else {
       return Ok(Vec::new());

@@ -5,7 +5,7 @@
 use std::borrow::Cow;
 
 use super::*;
-use crate::core::format::gamefile::struct_reader::{Scalar, StructReader};
+use crate::core::format::gamefile::struct_reader::{FieldName, Scalar, StructReader};
 
 /// One structure instance inside a META resource.
 #[derive(Clone)]
@@ -77,9 +77,9 @@ impl<'a> MetaStruct<'a> {
   /// Finds a named field and the ARRAYINFO entry that describes its elements, if any.
   fn field(
     &self,
-    name: &str,
+    name: FieldName,
   ) -> io::Result<Option<(MetaStructureEntry, Option<MetaStructureEntry>)>> {
-    let hash = field_hash(name)?;
+    let hash = name.hash;
     let entries = &self.structure.entries;
     Ok(entries.iter().enumerate().find_map(|(index, entry)| {
       (entry.name_hash == hash && entry.name_hash != ARRAY_INFO_HASH).then(|| {
@@ -124,7 +124,7 @@ impl<'a> MetaStruct<'a> {
 
   fn array_info(
     &self,
-    name: &str,
+    name: FieldName,
     entry: &MetaStructureEntry,
     info: Option<MetaStructureEntry>,
   ) -> io::Result<MetaStructureEntry> {
@@ -151,7 +151,7 @@ impl StructReader for MetaStruct<'_> {
 
   fn scalar(
     &self,
-    name: &str,
+    name: FieldName,
   ) -> io::Result<Option<Scalar>> {
     let Some((entry, _)) = self.field(name)? else {
       return Ok(None);
@@ -183,7 +183,7 @@ impl StructReader for MetaStruct<'_> {
 
   fn vector(
     &self,
-    name: &str,
+    name: FieldName,
   ) -> io::Result<Option<Vec<f32>>> {
     let Some((entry, _)) = self.field(name)? else {
       return Ok(None);
@@ -204,7 +204,7 @@ impl StructReader for MetaStruct<'_> {
 
   fn child(
     &self,
-    name: &str,
+    name: FieldName,
   ) -> io::Result<Option<Self>> {
     let Some((entry, _)) = self.field(name)? else {
       return Ok(None);
@@ -217,7 +217,7 @@ impl StructReader for MetaStruct<'_> {
 
   fn children(
     &self,
-    name: &str,
+    name: FieldName,
   ) -> io::Result<Vec<Self>> {
     let Some((entry, info)) = self.field(name)? else {
       return Ok(Vec::new());
@@ -290,7 +290,7 @@ impl StructReader for MetaStruct<'_> {
 
   fn values(
     &self,
-    name: &str,
+    name: FieldName,
   ) -> io::Result<Vec<Scalar>> {
     let mut values = Vec::new();
     self.visit_values(name, &mut |value| {
@@ -302,7 +302,7 @@ impl StructReader for MetaStruct<'_> {
 
   fn list<T: crate::core::format::gamefile::struct_reader::FromScalar>(
     &self,
-    name: &str,
+    name: FieldName,
   ) -> io::Result<Vec<T>> {
     // Converted as read, without collecting the elements as scalars first.
     let mut values = Vec::new();
@@ -321,7 +321,7 @@ impl MetaStruct<'_> {
   /// an absent field has none.
   fn visit_values(
     &self,
-    name: &str,
+    name: FieldName,
     visit: &mut dyn FnMut(Scalar) -> io::Result<()>,
   ) -> io::Result<()> {
     let Some((entry, info)) = self.field(name)? else {
@@ -408,14 +408,4 @@ fn element(
     0x4a => Scalar::Text(resolve_hash(u32_at(bytes, 0)?, names)),
     _ => Scalar::Int(bytes[0] as i64),
   })
-}
-
-/// Hashes a field name, accepting `hash_XXXXXXXX` for names that are not known.
-fn field_hash(name: &str) -> io::Result<u32> {
-  match name.strip_prefix("hash_") {
-    Some(hex) => {
-      u32::from_str_radix(hex, 16).map_err(|_| invalid_data("invalid explicit META field hash"))
-    }
-    None => Ok(jenk_hash(name)),
-  }
 }
