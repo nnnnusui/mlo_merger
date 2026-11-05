@@ -237,9 +237,18 @@ impl StructReader for MetaStruct<'_> {
             self.context(name, invalid_data("META array structure schema is missing"))
           })?
           .structure_size as usize;
+        // Every element shares one schema, found once.
+        let first = self.nested(block, offset, info.reference_key)?;
         let mut items = Vec::with_capacity(count);
         for _ in 0..count {
-          items.push(self.nested(block, offset, info.reference_key)?);
+          if block >= self.meta.data_blocks.len() {
+            return Err(invalid_data("META structure references a missing data block"));
+          }
+          items.push(MetaStruct {
+            block,
+            offset,
+            ..first.clone()
+          });
           offset += size;
           let length = self.meta.data_blocks.get(block).map_or(0, |block| block.data.len());
           if offset >= length {
@@ -283,8 +292,40 @@ impl StructReader for MetaStruct<'_> {
     &self,
     name: &str,
   ) -> io::Result<Vec<Scalar>> {
+    let mut values = Vec::new();
+    self.visit_values(name, &mut |value| {
+      values.push(value);
+      Ok(())
+    })?;
+    Ok(values)
+  }
+
+  fn list<T: crate::core::format::gamefile::struct_reader::FromScalar>(
+    &self,
+    name: &str,
+  ) -> io::Result<Vec<T>> {
+    // Converted as read, without collecting the elements as scalars first.
+    let mut values = Vec::new();
+    self
+      .visit_values(name, &mut |value| {
+        values.push(T::from_scalar(value)?);
+        Ok(())
+      })
+      .map_err(|error| self.context(name, error))?;
+    Ok(values)
+  }
+}
+
+impl MetaStruct<'_> {
+  /// Passes each element of the primitive or hash array field `name` to `visit`, in order;
+  /// an absent field has none.
+  fn visit_values(
+    &self,
+    name: &str,
+    visit: &mut dyn FnMut(Scalar) -> io::Result<()>,
+  ) -> io::Result<()> {
     let Some((entry, info)) = self.field(name)? else {
-      return Ok(Vec::new());
+      return Ok(());
     };
     match entry.data_type {
       // Fixed-size inline array; elements default to raw bytes like `inline_bytes_text`.
@@ -299,25 +340,31 @@ impl StructReader for MetaStruct<'_> {
         };
         let count = entry.reference_key as usize;
         let bytes = slice(self.data(), self.location(&entry)?, count.saturating_mul(width))?;
-        bytes.chunks_exact(width).map(|bytes| element(info.data_type, bytes, self.names)).collect()
+        for bytes in bytes.chunks_exact(width) {
+          visit(element(info.data_type, bytes, self.names)?)?;
+        }
+        Ok(())
       }
       // Pointer to a whole data block holding raw bytes.
       0x59 => {
         let block = (u64_at(self.bytes(&entry)?, 0)? & 0xfff) as usize;
         if block == 0 {
-          return Ok(Vec::new());
+          return Ok(());
         }
         let block = self
           .meta
           .data_blocks
           .get(block - 1)
           .ok_or_else(|| invalid_data("META data pointer references a missing block"))?;
-        Ok(block.data.iter().map(|byte| Scalar::Int(*byte as i64)).collect())
+        for byte in &block.data {
+          visit(Scalar::Int(*byte as i64))?;
+        }
+        Ok(())
       }
       _ => {
         let info = self.array_info(name, &entry, info)?;
         let Some((block, offset, count)) = self.array(&entry)? else {
-          return Ok(Vec::new());
+          return Ok(());
         };
         let width = match info.data_type {
           0x11 => 1,
@@ -336,11 +383,10 @@ impl StructReader for MetaStruct<'_> {
           .get(block)
           .ok_or_else(|| invalid_data("META primitive array references a missing block"))?
           .data;
-        (0..count)
-          .map(|index| {
-            element(info.data_type, slice(data, offset + index * width, width)?, self.names)
-          })
-          .collect()
+        for index in 0..count {
+          visit(element(info.data_type, slice(data, offset + index * width, width)?, self.names)?)?;
+        }
+        Ok(())
       }
     }
   }

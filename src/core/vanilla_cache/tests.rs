@@ -160,11 +160,12 @@ fn builds_latest_files_through_selected_stage_and_reuses_valid_output() {
   assert_eq!(loaded.latest_version, "0001-patch");
   assert_eq!(loaded.files["map.ybn"].version, "0001-patch");
   assert_eq!(loaded.relationships.version, "0001-patch");
+  // The revision covers both files through the SHA-256 of each.
   let mut digest = Sha256::new();
-  for name in ["cache_info.json", "ymap_relationships.json"] {
-    digest.update(name.as_bytes());
-    digest.update(fs::read(output.join(name)).unwrap());
-  }
+  digest.update(b"cache_info.json");
+  digest.update(hex::encode(Sha256::digest(fs::read(output.join("cache_info.json")).unwrap())));
+  digest.update(b"ymap_relationships.json");
+  digest.update(Sha256::digest(fs::read(output.join("ymap_relationships.json")).unwrap()));
   assert_eq!(loaded.revision, hex::encode(digest.finalize()));
   assert!(load_cache(&output, "stale").err().unwrap().to_string().contains("stale"));
   let relationship_path = output.join("ymap_relationships.json");

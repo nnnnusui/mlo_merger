@@ -25,7 +25,7 @@ impl BuildVanillaCache {
     if !self.force
       && cache_is_current(
         &output_dir,
-        previous.as_ref(),
+        previous.as_ref().map(|previous| &previous.manifest),
         &vanilla_dir,
         &revision,
         &latest_version,
@@ -64,8 +64,10 @@ impl BuildVanillaCache {
     publish_directory(&staging.0, &output_dir)?;
     let mut changes = StoreChanges::default();
     let mut previous_files: BTreeMap<_, _> = previous
-      .map(|manifest| manifest.files.into_values().map(|file| (file.object, file.sha256)).collect())
-      .unwrap_or_default();
+      .iter()
+      .flat_map(|previous| previous.manifest.files.values())
+      .map(|file| (file.object.clone(), file.sha256.clone()))
+      .collect();
     for file in latest_files.values() {
       let before = previous_files.remove(&file.object);
       changes.record(&file.object, before.as_deref(), Some(&file.sha256));

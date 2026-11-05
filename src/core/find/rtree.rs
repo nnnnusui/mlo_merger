@@ -384,13 +384,16 @@ mod tests {
     let vanilla = root.join("vanilla-cache");
     write(&vanilla.join("objects/map.ymap"), &ymap);
     write(&vanilla.join("objects/collision.ybn"), &ybn);
-    let vanilla_file =
-      |object: &str| json!({"version": "0001-update", "sha256": "", "object": object});
+    let vanilla_file = |object: &str| {
+      json!({"version": "0001-update", "sha256": "", "object": object,
+        "vanilla_object": object, "source": "base.rpf"})
+    };
     write(
       &vanilla.join("cache_info.json"),
       &serde_json::to_vec(&json!({
         "format_version": crate::core::vanilla_cache::CACHE_SCHEMA,
         "vanilla_manifest_sha256": "", "latest_version": "0001-update",
+        "vanilla_input_timestamps": {},
         "files": {
           "map.ymap": vanilla_file("objects/map.ymap"),
           "collision.ybn": vanilla_file("objects/collision.ybn"),

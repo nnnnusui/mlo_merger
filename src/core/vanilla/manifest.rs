@@ -3,8 +3,8 @@
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
-use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use super::Result;
 
@@ -88,20 +88,27 @@ impl VanillaCacheManifest {
 }
 
 /// Loads the schema-1 cache manifest from the cache root.
-pub(crate) fn load_manifest(cache: &Path) -> Result<VanillaCacheManifest> {
+pub(crate) fn load_manifest(cache: &Path) -> Result<Arc<VanillaCacheManifest>> {
   load_manifest_with_revision(cache).map(|(manifest, _)| manifest)
 }
 
 /// Reads and validates the raw manifest and hashes the same bytes that were decoded.
-pub(crate) fn load_manifest_with_revision(cache: &Path) -> Result<(VanillaCacheManifest, String)> {
+///
+/// The manifest is decoded once per process while it is unchanged, as every pipeline stage
+/// reads it.
+pub(crate) fn load_manifest_with_revision(
+  cache: &Path
+) -> Result<(Arc<VanillaCacheManifest>, String)> {
   let root = cache.join("cache_info.json");
   if !root.is_file() {
     return Err(format!("No vanilla cache manifest found in {}", cache.display()).into());
   }
-  let bytes = fs::read(root)?;
-  let manifest: VanillaCacheManifest = serde_json::from_slice(&bytes)?;
-  if manifest.format_version != 1 {
-    return Err(format!("Unsupported GTA V cache schema {}", manifest.format_version).into());
-  }
-  Ok((manifest, hex::encode(Sha256::digest(&bytes))))
+  let loaded = crate::common::json::read_shared(&root, |bytes| {
+    let manifest: VanillaCacheManifest = serde_json::from_slice(bytes)?;
+    if manifest.format_version != 1 {
+      return Err(format!("Unsupported GTA V cache schema {}", manifest.format_version).into());
+    }
+    Ok((Arc::new(manifest), hex::encode(Sha256::digest(bytes))))
+  })?;
+  Ok((loaded.0.clone(), loaded.1.clone()))
 }

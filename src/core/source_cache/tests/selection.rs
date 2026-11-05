@@ -224,7 +224,6 @@ fn parent_change_lists_vanilla_closure_and_source_children_in_other_resources() 
       DerivedVanillaFile {
         version: "0000-base".into(),
         sha256: "parent".into(),
-        object: "latest/ymap/parent_map.ymap".into(),
       },
     ),
     (
@@ -232,7 +231,6 @@ fn parent_change_lists_vanilla_closure_and_source_children_in_other_resources() 
       DerivedVanillaFile {
         version: "0000-base".into(),
         sha256: "child".into(),
-        object: "latest/ymap/child_map.ymap".into(),
       },
     ),
     (
@@ -240,7 +238,6 @@ fn parent_change_lists_vanilla_closure_and_source_children_in_other_resources() 
       DerivedVanillaFile {
         version: "0000-base".into(),
         sha256: "vanilla-child".into(),
-        object: "latest/ymap/vanilla_only_child.ymap".into(),
       },
     ),
   ]);

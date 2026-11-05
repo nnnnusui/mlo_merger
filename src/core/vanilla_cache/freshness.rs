@@ -1,8 +1,9 @@
 use super::*;
+use std::sync::Arc;
 
 /// Reads the manifest the cache was last published with, if it is readable.
-pub(super) fn previous_manifest(output_dir: &Path) -> Option<DerivedManifest> {
-  crate::common::json::read_json(output_dir.join("cache_info.json")).ok()
+pub(super) fn previous_manifest(output_dir: &Path) -> Option<Arc<read::LoadedDerived>> {
+  read::read_derived(output_dir).ok()
 }
 
 pub(super) fn cache_is_current(
