@@ -40,7 +40,7 @@ pub(super) struct DeployMetadata {
 
 /// Reads the deployment metadata at `path`, rejecting layouts this version cannot read.
 pub(super) fn read_metadata(path: &Path) -> Result<DeployMetadata> {
-  let metadata: DeployMetadata = serde_json::from_reader(BufReader::new(fs::File::open(path)?))?;
+  let metadata: DeployMetadata = crate::common::json::read_json(path)?;
   if metadata.format_version != 1 {
     return Err(format!("Unsupported deployment cache schema {}", metadata.format_version).into());
   }

@@ -107,7 +107,7 @@ impl MergeMetadata {
     if !path.is_file() {
       return Ok(None);
     }
-    let metadata: Self = serde_json::from_reader(BufReader::new(fs::File::open(path)?))?;
+    let metadata: Self = crate::common::json::read_json(path)?;
     Ok((metadata.format_version == 1).then_some(metadata))
   }
 

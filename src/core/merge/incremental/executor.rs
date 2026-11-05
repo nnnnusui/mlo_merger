@@ -61,9 +61,7 @@ impl IncrementalMerge<'_> {
         vanilla_overwrites,
       }
       .run_with_latest_vanilla_files(&vanilla, &ymap_sources)?;
-      duplicates = serde_json::from_reader(BufReader::new(fs::File::open(
-        directory.join(".duplicates.json"),
-      )?))?;
+      duplicates = crate::common::json::read_json(directory.join(".duplicates.json"))?;
       // The report names each file relative to its store, as the merge metadata does.
       let stored = sources
         .iter()

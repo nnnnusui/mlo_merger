@@ -8,7 +8,6 @@ use sha2::{Digest, Sha256};
 use std::{
   collections::{BTreeMap, BTreeSet, HashMap},
   fs,
-  io::BufReader,
   path::{Component, Path, PathBuf},
 };
 
@@ -99,9 +98,8 @@ pub(super) fn search_inputs(
     }
   }
   let cache = if search.diff_all {
-    let mut cache: MergeCache = serde_json::from_reader(BufReader::new(fs::File::open(
-      crate::core::merge::cache_info_path(&merged),
-    )?))?;
+    let mut cache: MergeCache =
+      crate::common::json::read_json(crate::core::merge::cache_info_path(&merged))?;
     if cache.format_version != 1 {
       return Err("Unsupported merge cache schema for --diff-all".into());
     }

@@ -23,7 +23,7 @@ use crate::{
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use std::{collections::BTreeMap, fs, io::BufReader, path::Path};
+use std::{collections::BTreeMap, fs, path::Path};
 
 /// File name of the record of what the diffs were taken under, in the `diff` directory.
 const INPUTS_FILE: &str = "inputs.json";
@@ -208,7 +208,7 @@ fn take_diffs(
 }
 
 fn read_record(path: &Path) -> Option<DiffRecord> {
-  serde_json::from_reader(BufReader::new(fs::File::open(path).ok()?)).ok()
+  crate::common::json::read_json(path).ok()
 }
 
 /// A digest of what `resource`'s diffs are taken from in its inventory: each YMAP's path,
@@ -243,10 +243,7 @@ fn is_current(
   file: &StreamFileRef,
   path: &Path,
 ) -> bool {
-  let Ok(reader) = fs::File::open(path) else {
-    return false;
-  };
-  let Ok(inputs) = serde_json::from_reader::<_, DiffInputs>(BufReader::new(reader)) else {
+  let Ok(inputs) = crate::common::json::read_json::<DiffInputs>(path) else {
     return false;
   };
   inputs.schema_version == YmapComparisonDiff::SCHEMA_VERSION

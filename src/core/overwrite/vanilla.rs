@@ -7,7 +7,6 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 use std::fs;
-use std::io::BufReader;
 use std::path::Path;
 
 /// The extension of a vanilla overwrite document, after the stream file's own name.
@@ -99,9 +98,8 @@ pub(super) fn load(directory: &Path) -> Result<BTreeMap<String, VanillaOverwrite
       tracing::warn!("Not a YMAP vanilla overwrite; ignoring {}", path.display());
       continue;
     };
-    let overwrite: VanillaOverwrite =
-      serde_json::from_reader(BufReader::new(fs::File::open(&path)?))
-        .map_err(|error| format!("Cannot read {}: {error}", path.display()))?;
+    let overwrite: VanillaOverwrite = crate::common::json::read_json(&path)
+      .map_err(|error| format!("Cannot read {}: {error}", path.display()))?;
     if overwrite.schema_version != VanillaOverwrite::SCHEMA_VERSION {
       return Err(
         format!(

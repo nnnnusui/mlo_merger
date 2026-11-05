@@ -67,22 +67,25 @@ pub(super) fn source_timestamps(
       paths.insert(file.object.clone());
     }
   }
+  // One stat per archive file, tens of thousands in all, so they run in parallel.
+  use rayon::prelude::*;
   paths
-    .into_iter()
+    .into_par_iter()
     .map(|relative| {
-      let path = checked_source_path(vanilla_dir, &relative)?;
-      let metadata = fs::metadata(path)?;
-      let modified = metadata.modified()?.duration_since(std::time::UNIX_EPOCH)?;
-      Ok((
-        relative,
-        SourceTimestamp {
+      let timestamp = || -> Result<SourceTimestamp> {
+        let metadata = fs::metadata(checked_source_path(vanilla_dir, &relative)?)?;
+        let modified = metadata.modified()?.duration_since(std::time::UNIX_EPOCH)?;
+        Ok(SourceTimestamp {
           modified_seconds: modified.as_secs(),
           modified_nanos: modified.subsec_nanos(),
           size: metadata.len(),
-        },
-      ))
+        })
+      };
+      let timestamp = timestamp().map_err(|error| format!("{relative}: {error}"))?;
+      Ok((relative, timestamp))
     })
-    .collect()
+    .collect::<std::result::Result<_, String>>()
+    .map_err(Into::into)
 }
 
 pub(super) fn is_supported_stream_file(name: &str) -> bool {

@@ -19,7 +19,6 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 use std::fs;
-use std::io::BufReader;
 use std::path::Path;
 
 pub use skip::skip_diffs;
@@ -219,9 +218,8 @@ fn load_resources(directory: &Path) -> Result<BTreeMap<String, ResourceOverwrite
       .file_stem()
       .and_then(|name| name.to_str())
       .ok_or_else(|| format!("Overwrite file name is not UTF-8: {}", path.display()))?;
-    let overwrite: ResourceOverwrite =
-      serde_json::from_reader(BufReader::new(fs::File::open(&path)?))
-        .map_err(|error| format!("Cannot read {}: {error}", path.display()))?;
+    let overwrite: ResourceOverwrite = crate::common::json::read_json(&path)
+      .map_err(|error| format!("Cannot read {}: {error}", path.display()))?;
     if overwrite.schema_version != ResourceOverwrite::SCHEMA_VERSION {
       return Err(
         format!(

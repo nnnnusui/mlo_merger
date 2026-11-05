@@ -14,7 +14,6 @@ mod ymap_plan;
 
 use std::{
   collections::{BTreeMap, BTreeSet},
-  io::BufReader,
   path::{Component, Path, PathBuf},
 };
 
@@ -93,10 +92,8 @@ const FORMAT_VERSION: u32 = 4;
 /// earlier formats recorded as an absolute path.
 fn read_metadata(cache_dir: &Path) -> Result<SourceCacheMetadata> {
   let path = cache_info_path(cache_dir);
-  let mut metadata: SourceCacheMetadata = serde_json::from_reader(BufReader::new(
-    std::fs::File::open(&path)
-      .map_err(|error| format!("Cannot open {}: {error}", path.display()))?,
-  ))?;
+  let mut metadata: SourceCacheMetadata = crate::common::json::read_json(&path)
+    .map_err(|error| format!("Cannot read {}: {error}", path.display()))?;
   if !(2..=FORMAT_VERSION).contains(&metadata.format_version) {
     return Err(format!("Unsupported source cache schema {}", metadata.format_version).into());
   }
@@ -341,9 +338,8 @@ pub fn load_merge_inputs(
   source_dir: &Path,
 ) -> Result<MergeInputs> {
   let metadata = read_metadata(cache_dir)?;
-  let conflicts: SourceCacheConflictReport = serde_json::from_reader(BufReader::new(
-    std::fs::File::open(cache_dir.join("stream_conflicts.json"))?,
-  ))?;
+  let conflicts: SourceCacheConflictReport =
+    crate::common::json::read_json(cache_dir.join("stream_conflicts.json"))?;
   let conflict_paths = [".ymap", ".ybn"]
     .into_iter()
     .map(|extension| {
@@ -366,9 +362,8 @@ pub fn load_merge_inputs(
     .chain(&metadata.ymap_load_plan.additional_source_children)
     .map(|source| (source.resource.clone(), source.source_path.to_ascii_lowercase()))
     .collect::<BTreeSet<_>>();
-  let vanilla_ymaps_to_read = serde_json::from_reader(BufReader::new(std::fs::File::open(
-    cache_dir.join("vanilla_ymaps_to_read.json"),
-  )?))?;
+  let vanilla_ymaps_to_read =
+    crate::common::json::read_json(cache_dir.join("vanilla_ymaps_to_read.json"))?;
   let mut inputs = MergeInputs {
     vanilla_ymaps_to_read,
     ..MergeInputs::default()

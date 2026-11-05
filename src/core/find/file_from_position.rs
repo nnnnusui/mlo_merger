@@ -376,7 +376,7 @@ fn collect_vanilla_candidates(
       .println(format!("Warning: vanilla-cache manifest is missing: {}", manifest_path.display()));
     return Ok(());
   }
-  let index: VanillaCacheIndex = serde_json::from_reader(std::fs::File::open(manifest_path)?)?;
+  let index: VanillaCacheIndex = crate::common::json::read_json(manifest_path)?;
   if index.format_version != crate::core::vanilla_cache::CACHE_SCHEMA {
     return Err(format!("Unsupported vanilla-cache schema {}", index.format_version).into());
   }

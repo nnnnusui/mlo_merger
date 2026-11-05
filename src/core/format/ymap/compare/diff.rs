@@ -4,7 +4,7 @@
 //! `#[derive(Diff)]`: every field is optional and omitted when unchanged, so the documents list
 //! only changes.
 
-use std::{fs, io::BufReader, path::Path};
+use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
@@ -56,10 +56,7 @@ impl YmapComparisonDiff {
     vanilla: &Path,
     tolerances: &MatchTolerances,
   ) -> Result<Option<Self>> {
-    let Ok(file) = fs::File::open(path) else {
-      return Ok(None);
-    };
-    let Ok(document) = serde_json::from_reader::<_, Self>(BufReader::new(file)) else {
+    let Ok(document) = crate::common::json::read_json::<Self>(path) else {
       return Ok(None);
     };
     let current = document.schema_version == Self::SCHEMA_VERSION

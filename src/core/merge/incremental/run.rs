@@ -104,10 +104,8 @@ impl IncrementalMerge<'_> {
         .collect(),
     };
     let duplicate_path = output_path(self.output, "duplicates.json")?;
-    let duplicate_current = fs::File::open(&duplicate_path)
-      .ok()
-      .and_then(|file| serde_json::from_reader::<_, DuplicateReport>(BufReader::new(file)).ok())
-      .is_some_and(|previous| previous == duplicates);
+    let duplicate_current = crate::common::json::read_json::<DuplicateReport>(&duplicate_path)
+      .is_ok_and(|previous| previous == duplicates);
     if rebuilt == 0
       && !self.force
       && previous.as_ref().is_some_and(|previous| previous.files == files)

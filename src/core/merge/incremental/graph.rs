@@ -41,18 +41,17 @@ impl IncrementalMerge<'_> {
       }
       graph.insert(name, BTreeSet::new());
     }
-    let relationships: Relationships = serde_json::from_reader(BufReader::new(fs::File::open(
-      self.vanilla_cache.join("ymap_relationships.json"),
-    )?))?;
+    let relationships: Relationships =
+      crate::common::json::read_json(self.vanilla_cache.join("ymap_relationships.json"))?;
     for (parent, children) in relationships.children_by_parent {
       let parent = parent.to_ascii_lowercase();
       for child in children {
         connect(&mut graph, &parent, &child.to_ascii_lowercase());
       }
     }
-    let metadata: SourceParents = serde_json::from_reader(BufReader::new(fs::File::open(
+    let metadata: SourceParents = crate::common::json::read_json(
       crate::core::source_cache::cache_info_path(self.source_cache),
-    )?))?;
+    )?;
     for resource in metadata.resources.values() {
       for source in resource.files_by_format.get(".ymap").into_iter().flatten() {
         if let Some(hash) = &source.ymap_parent_hash

@@ -19,7 +19,7 @@ use serde::{Deserialize, Serialize};
 use std::io::IsTerminal;
 use std::{
   fs,
-  io::{BufReader, BufWriter, Write},
+  io::{BufWriter, Write},
   path::{Path, PathBuf},
   time::Duration,
 };
@@ -243,7 +243,7 @@ pub(crate) fn update_store_index(
 }
 
 fn read_header(path: &Path) -> Option<Header> {
-  serde_json::from_reader(BufReader::new(fs::File::open(path).ok()?)).ok()
+  crate::common::json::read_json(path).ok()
 }
 
 fn fingerprint_of(input: &RTreeInput) -> Fingerprint {

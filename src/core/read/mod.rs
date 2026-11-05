@@ -15,7 +15,7 @@ use crate::core::vanilla::load_manifest;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
 use std::fs;
-use std::io::{BufReader, BufWriter, Write};
+use std::io::{BufWriter, Write};
 use std::path::{Path, PathBuf};
 
 /// Which stream files to read.
@@ -423,8 +423,7 @@ impl Read {
     &self,
     path: &Path,
   ) -> Option<Header> {
-    let file = fs::File::open(path).ok()?;
-    serde_json::from_reader(BufReader::new(file)).ok()
+    crate::common::json::read_json(path).ok()
   }
 }
 

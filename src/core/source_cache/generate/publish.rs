@@ -8,7 +8,7 @@ use crate::core::source_cache::{
   types::{SourceCacheConflictReport, VanillaMatch},
   ymap_plan,
 };
-use std::{collections::BTreeSet, fs, io::BufReader};
+use std::{collections::BTreeSet, fs};
 
 pub(super) fn publish_if_changed(
   source: SourceResources,
@@ -40,10 +40,10 @@ pub(super) fn publish_if_changed(
     ..
   } = state;
   let conflicts = conflicts(&source_dir, &output, &inventories, &resources)?;
-  let previous_conflicts =
-    fs::File::open(output.join("stream_conflicts.json")).ok().and_then(|file| {
-      serde_json::from_reader::<_, SourceCacheConflictReport>(BufReader::new(file)).ok()
-    });
+  let previous_conflicts = crate::common::json::read_json::<SourceCacheConflictReport>(
+    output.join("stream_conflicts.json"),
+  )
+  .ok();
   changed |= previous_conflicts.as_ref() != Some(&conflicts);
   if !changed {
     remove_legacy_exclusions(&output)?;

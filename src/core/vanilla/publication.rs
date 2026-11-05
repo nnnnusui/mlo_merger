@@ -1,7 +1,6 @@
 //! Scratch cleanup, completed-cache publication and rollback.
 
 use std::fs;
-use std::io::BufReader;
 use std::path::{Component, Path, PathBuf};
 
 use super::{
@@ -94,9 +93,8 @@ pub(super) fn publish_cache(
   for version in &manifest.versions {
     let destination = output.join(&version.id);
     if destination.exists() {
-      let existing: CacheVersion = serde_json::from_reader(BufReader::new(fs::File::open(
-        destination.join("version_info.json"),
-      )?))?;
+      let existing: CacheVersion =
+        crate::common::json::read_json(destination.join("version_info.json"))?;
       if existing.id != version.id {
         return Err(
           format!("Refusing to replace unrecognized cache directory {}", destination.display())

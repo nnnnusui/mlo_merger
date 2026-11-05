@@ -273,9 +273,54 @@ fn place(batches: &[GrassInstanceBatch]) -> Vec<Vec<Placed<'_>>> {
 
 type GroupKey = (u32, [u32; 3], [u32; 3], u32);
 
+/// Hashes grid cells by multiplying and rotating, as FxHash does.
+///
+/// The standard hasher resists keys chosen to collide, which cell coordinates computed here are
+/// not, and its cost dominated matching large grass batches.
+#[derive(Default)]
+struct CellHasher(u64);
+
+impl std::hash::Hasher for CellHasher {
+  fn finish(&self) -> u64 {
+    self.0
+  }
+
+  fn write(
+    &mut self,
+    bytes: &[u8],
+  ) {
+    for byte in bytes {
+      self.write_u64(u64::from(*byte));
+    }
+  }
+
+  fn write_u32(
+    &mut self,
+    value: u32,
+  ) {
+    self.write_u64(u64::from(value));
+  }
+
+  fn write_i64(
+    &mut self,
+    value: i64,
+  ) {
+    self.write_u64(value as u64);
+  }
+
+  fn write_u64(
+    &mut self,
+    value: u64,
+  ) {
+    self.0 = (self.0.rotate_left(5) ^ value).wrapping_mul(0x51_7c_c1_b7_27_22_0a_95);
+  }
+}
+
+type CellHash = std::hash::BuildHasherDefault<CellHasher>;
+
 /// Pairs unmatched `before` instances with unmatched `after` ones whose positions match and
 /// whose `key`s are equal, each `before` taking the first such `after` in order.
-fn match_positions<K: std::hash::Hash + Eq + Clone>(
+fn match_positions<K: std::hash::Hash + Eq>(
   before: &[Placed],
   after: &[Placed],
   before_used: &mut [bool],
@@ -286,11 +331,18 @@ fn match_positions<K: std::hash::Hash + Eq + Clone>(
   // Cells must be at least as large as the widest allowed difference.
   let widest = before.iter().chain(after).flat_map(|placed| placed.step).fold(tolerance, f32::max);
   let cell = |value: f32| (f64::from(value) / f64::from(widest)).floor() as i64;
-  let mut grid = HashMap::<_, Vec<usize>>::new();
+  // Each instance's key is looked up once and replaced by a number, so the 27 cell lookups of
+  // every `before` instance hash a few integers instead of the key.
+  let mut keys = HashMap::<K, u32>::new();
+  let mut grid = HashMap::<(u32, i64, i64, i64), Vec<usize>, CellHash>::default();
   for (index, placed) in after.iter().enumerate() {
     if let (false, Some(position)) = (after_used[index], &placed.position) {
-      let cells = (cell(position.x), cell(position.y), cell(position.z));
-      grid.entry((key(placed.instance), cells)).or_default().push(index);
+      let next = keys.len() as u32;
+      let id = *keys.entry(key(placed.instance)).or_insert(next);
+      grid
+        .entry((id, cell(position.x), cell(position.y), cell(position.z)))
+        .or_default()
+        .push(index);
     }
   }
   let mut pairs = Vec::new();
@@ -298,13 +350,16 @@ fn match_positions<K: std::hash::Hash + Eq + Clone>(
     let (false, Some(position)) = (before_used[index], &placed.position) else {
       continue;
     };
-    let wanted = key(placed.instance);
+    // No `after` instance has this key.
+    let Some(&wanted) = keys.get(&key(placed.instance)) else {
+      continue;
+    };
     let (x, y, z) = (cell(position.x), cell(position.y), cell(position.z));
     let mut best: Option<usize> = None;
     let neighbours = (-1..=1)
       .flat_map(|dx| (-1..=1).flat_map(move |dy| (-1..=1).map(move |dz| (x + dx, y + dy, z + dz))));
-    for cells in neighbours {
-      let Some(candidates) = grid.get(&(wanted.clone(), cells)) else {
+    for (x, y, z) in neighbours {
+      let Some(candidates) = grid.get(&(wanted, x, y, z)) else {
         continue;
       };
       for &candidate in candidates.iter() {
