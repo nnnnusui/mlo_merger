@@ -4,7 +4,7 @@ use struct_diff::Diff;
 
 use super::*;
 use crate::core::format::ymap::{
-  compare::{IgnoredChange, YmapMergeOptions, merge_diffs},
+  compare::{IgnoredChange, leave_out, merge_diffs},
   model::{YmapBoxOccluder, YmapOccludeModel},
 };
 
@@ -21,29 +21,30 @@ fn occluder(x: i32) -> YmapBoxOccluder {
   }
 }
 
-/// `vanilla` with the diffs of every source in `sources` merged in, in order, leaving out what
-/// the merge stage does.
+/// `vanilla` with the diffs of every source in `sources` merged in, in order, leaving out of each
+/// what the merge stage leaves out of resources' diffs.
 fn merged(
   vanilla: &Ymap,
   sources: &[&Ymap],
 ) -> Ymap {
-  merged_with(
-    vanilla,
-    sources,
-    YmapMergeOptions {
-      ignored: IgnoredChange::MERGE,
-    },
-  )
+  merged_with(vanilla, sources, IgnoredChange::MERGE)
 }
 
 fn merged_with(
   vanilla: &Ymap,
   sources: &[&Ymap],
-  options: YmapMergeOptions,
+  ignored: &[IgnoredChange],
 ) -> Ymap {
-  let diffs = sources.iter().map(|source| diff(vanilla, source)).collect::<Vec<_>>();
+  let diffs = sources
+    .iter()
+    .map(|source| {
+      let mut diff = diff(vanilla, source);
+      leave_out(&mut diff, ignored);
+      diff
+    })
+    .collect::<Vec<_>>();
   let mut ymap = vanilla.clone();
-  ymap.apply(&merge_diffs(vanilla, &diffs, options)).unwrap();
+  ymap.apply(&merge_diffs(vanilla, &diffs)).unwrap();
   ymap
 }
 
@@ -132,7 +133,7 @@ fn references_skip_names_already_present_and_keep_the_first_parent() {
   assert_eq!(merged_stage.physics_dictionaries, ["kept", "added", "other"]);
   assert_eq!(merged_stage.instanced_data.prop_instance_list, ["prop"]);
   // Without the merge stage's conditions, the second source's replacement of `kept` wins.
-  let merged_all = merged_with(&vanilla, &[&first, &second], YmapMergeOptions::default());
+  let merged_all = merged_with(&vanilla, &[&first, &second], &[]);
   assert_eq!(merged_all.physics_dictionaries, ["Added", "other"]);
 }
 
@@ -179,7 +180,7 @@ fn without_ignored_changes_metadata_keeps_the_first_change() {
   second.streaming_extents_max.y += 10.0;
   second.block.owner = "another".into();
   second.block.time = "now".into();
-  let merged = merged_with(&vanilla, &[&first, &second], YmapMergeOptions::default());
+  let merged = merged_with(&vanilla, &[&first, &second], &[]);
   let mut expected = first.clone();
   expected.content_flags = 3;
   expected.flags = second.flags;
@@ -187,7 +188,7 @@ fn without_ignored_changes_metadata_keeps_the_first_change() {
   expected.block.time = "now".into();
   assert_eq!(merged, expected);
   // A single source is rebuilt exactly.
-  assert_eq!(merged_with(&vanilla, &[&second], YmapMergeOptions::default()), second);
+  assert_eq!(merged_with(&vanilla, &[&second], &[]), second);
 }
 
 #[test]

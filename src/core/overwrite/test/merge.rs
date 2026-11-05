@@ -185,9 +185,12 @@ fn vanilla_overwrites_merge_after_the_sources() {
   fs::create_dir_all(resource.join("stream")).unwrap();
   fs::write(resource.join("fxmanifest.lua"), []).unwrap();
   write_vanilla(&vanilla, &bytes);
-  // The source moves the first entity.
+  // The source moves the first entity and changes the extents, which merging leaves out of a
+  // resource's diff.
   let mut source = vanilla_model.clone();
   source.entities[0].position.x += 1.0;
+  source.streaming_extents_max.x += 10.0;
+  source.entities_extents_min.y -= 10.0;
   fs::write(resource.join("stream/map.ymap"), write_ymap(&source, &source.entities).unwrap())
     .unwrap();
   // The overwrite sets a content flag and moves the first two entities.
@@ -196,6 +199,8 @@ fn vanilla_overwrites_merge_after_the_sources() {
   edited.content_flags |= 1 << bit;
   edited.entities[0].position.x += 2.0;
   edited.entities[1].position.x += 3.0;
+  // It also writes the extents, which apply from a vanilla overwrite.
+  edited.streaming_extents_max.x += 20.0;
   let diffs = vanilla_model
     .diff(
       &edited,
@@ -242,6 +247,8 @@ fn vanilla_overwrites_merge_after_the_sources() {
   assert_eq!(result.content_flags, edited.content_flags);
   assert_eq!(result.entities[0].position.x, source.entities[0].position.x);
   assert_eq!(result.entities[1].position.x, edited.entities[1].position.x);
+  assert_eq!(result.streaming_extents_max, edited.streaming_extents_max);
+  assert_eq!(result.entities_extents_min, vanilla_model.entities_extents_min);
   let duplicates = fs::read_to_string(output.join("duplicates.json")).unwrap();
   assert!(duplicates.contains("first_change_wins"), "{duplicates}");
   assert!(duplicates.contains("overwrite/vanilla/latest"), "{duplicates}");

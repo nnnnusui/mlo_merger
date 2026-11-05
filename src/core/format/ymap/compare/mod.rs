@@ -32,7 +32,7 @@ pub use instanced_data::{
   YmapAddedGrassInstance, YmapGrassBatchDiff, YmapGrassBatchFieldDiff, YmapModifiedGrassInstance,
   YmapPropInstanceDiff,
 };
-pub use merge::{IgnoredChange, YmapMergeOptions, merge_diffs};
+pub use merge::{IgnoredChange, leave_out, merge_diffs};
 pub use merged_items::NoFieldDiff;
 pub use struct_diff::vec::ItemDiff;
 

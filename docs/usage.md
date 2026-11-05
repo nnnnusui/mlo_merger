@@ -285,6 +285,11 @@ asset/overwrite/vanilla/latest/ymap/{file_name}.diff.json
 - It is merged as the last source, after every resource's diff with its resource overwrite
   applied. The merge policy still decides: a removal wins, and otherwise a resource's earlier
   change to the same item wins over the overwrite.
+- Name, flags, extents, block, the distant LOD light counts and physics dictionary removals
+  are left out of every resource's diff but apply from the vanilla overwrite. To keep a
+  resource's extents, for example, copy its `streaming_extents_*`/`entities_extents_*`
+  differences from the resource's diff document into the vanilla overwrite. The value is
+  tied only to the vanilla file, so it is not updated when the resource changes.
 - A vanilla YMAP with an overwrite is merged even when no resource replaces it.
 - An overwrite whose `vanilla` no longer matches the latest vanilla file is not applied and is
   listed in the pipeline's `ignored_overwrites`. Rewrite it after a vanilla update.

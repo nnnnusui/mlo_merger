@@ -214,7 +214,7 @@ impl MergeYmap {
           continue;
         };
         references.register_entities(hash, &source.entities);
-        let ymap_diff = self.source_diff(
+        let mut ymap_diff = self.source_diff(
           mod_info,
           &source,
           (&vanilla_ymap_path, vanilla_ymap, &vanilla_parents),
@@ -223,6 +223,7 @@ impl MergeYmap {
           &registered_maps,
         )?;
         log_diff_counts(&ymap_diff);
+        leave_out(&mut ymap_diff, IgnoredChange::MERGE);
         let source_originals =
           source.entities.iter().map(|entity| (entity.guid, entity)).collect::<HashMap<_, _>>();
         for diff in ymap_diff.entities.iter().flatten() {
@@ -252,14 +253,16 @@ impl MergeYmap {
         }
         ymap_diffs.push(ymap_diff);
       }
-      for (resource, ymap_diff) in implied.remove(&hash).into_iter().flatten() {
+      for (resource, mut ymap_diff) in implied.remove(&hash).into_iter().flatten() {
         tracing::info!(
           "  LOD light removals {resource} makes only in the other YMAP of the pair (implied)"
         );
         log_diff_counts(&ymap_diff);
+        leave_out(&mut ymap_diff, IgnoredChange::MERGE);
         ymap_diffs.push(ymap_diff);
       }
-      // Merged as the last source, so the merge policy weighs it against the resources'.
+      // Merged as the last source, so the merge policy weighs it against the resources'. The
+      // changes left out of the resources' diffs are kept: they apply only from here.
       if let Some(overwrite) = vanilla_overwrite
         && let Some(ymap_diff) =
           overwrite.diffs_for(&OverwriteFingerprint::read(&vanilla_ymap_path)?, ymap_name)
@@ -316,13 +319,7 @@ impl MergeYmap {
       if !duplicates.is_empty() {
         duplicate_files.insert(ymap_name.to_ascii_lowercase(), duplicates);
       }
-      let merged_diff = merge_diffs(
-        vanilla_ymap,
-        &ymap_diffs,
-        YmapMergeOptions {
-          ignored: IgnoredChange::MERGE,
-        },
-      );
+      let merged_diff = merge_diffs(vanilla_ymap, &ymap_diffs);
       let failed =
         |error: struct_diff::ApplyError| format!("{}: {error}", vanilla_ymap_path.display());
       let mut model = vanilla_ymap.clone();

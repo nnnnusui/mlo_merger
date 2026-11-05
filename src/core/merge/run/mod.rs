@@ -2,7 +2,7 @@ use super::duplicates::{Change, Collector, Contribution, DuplicateReport};
 use crate::core::format::ymap::compare::lod_light_pairs::LightSide;
 use crate::core::format::ymap::compare::{
   EntityParent, EntityParents, IgnoredChange, YmapComparisonDiff, YmapDiffContext, YmapDiffFields,
-  YmapEntityDiff, YmapMergeOptions, entities, entity_parents, merge_diffs,
+  YmapEntityDiff, entities, entity_parents, leave_out, merge_diffs,
 };
 use crate::core::format::ymap::model::YmapEntity;
 use crate::core::format::ymap::model::ymap::Ymap;

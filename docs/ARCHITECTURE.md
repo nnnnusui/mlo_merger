@@ -81,10 +81,11 @@ merge must read: the parents and children related to changed files.
    resource overwrite selects, add the LOD light removals of resources shipping only
    the other YMAP of a light pair, append the vanilla overwrite as the last source,
    combine the differences and apply them to the latest vanilla file. Combining keeps
-   every change unless told to leave some out; the merge stage leaves out name, flag,
-   extent, block and distant LOD light count changes and physics dictionary removals,
-   keeping vanilla's. Diffs and their application stay complete, so other uses replay
-   every change. YBNs apply supported source changes directly.
+   every change of its inputs; the merge stage first leaves name, flag, extent, block and
+   distant LOD light count changes and physics dictionary removals out of each
+   resource's diff, keeping vanilla's, but not out of the vanilla overwrite, through
+   which they can still be set. Diffs and their application stay complete, so other uses
+   replay every change. YBNs apply supported source changes directly.
 4. Write merged native stream files under extension subdirectories (`ymap/`, `ybn/`),
    `_omit.txt` and `duplicates.json` at the selected output root.
 

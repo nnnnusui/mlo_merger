@@ -32,7 +32,7 @@ source 差分（merge 用）とは別に、復元のための設定で差分を�
 - エンティティの親は生の `parentIndex` として記録する（`raw_entity_parents`）。通常の `apply` も、生の index で表された親の変更を書き戻す。
 - 生成時に差分を実際に適用して検証し、一致しなければ警告を出す。
 
-merge で無視していた変更（name・flags・extents・block・distant LOD light counts・physics dictionary の削除）は、差分には常に記録する。無視するかどうかは merge 側の条件（`IgnoredChange::MERGE`）で決める。
+merge で無視していた変更（name・flags・extents・block・distant LOD light counts・physics dictionary の削除）は、差分には常に記録する。無視するかどうかは merge 側の条件（`IgnoredChange::MERGE`）で決め、リソースの差分にだけ適用する（vanilla overwrite の差分には適用しない）。
 
 ## 検証結果
 

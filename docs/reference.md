@@ -136,10 +136,13 @@ merging are written.
 ### YMAP Fields
 
 - `contentFlags` are OR-ed into vanilla's; the parent and IMAP link keep the first
-  change. Name, flags, extents, block and the distant LOD light counts keep their vanilla
-  values.
-- Added physics dictionaries and prop instances skip names already present; dictionary
-  removals are not applied.
+  change. Resources' changes to name, flags, extents, block and the distant LOD light
+  counts are left out, keeping vanilla's values.
+- Added physics dictionaries and prop instances skip names already present; resources'
+  dictionary removals are not applied, and their replacements are applied as additions.
+- A [vanilla overwrite](#overwrites) is not limited this way: its changes to these
+  fields apply. To keep a resource's value of one of them, write it into the vanilla
+  overwrite.
 - Entity extensions (light effects, doors, spawn point overrides and cloth bounds) are
   compared as a whole, ignoring number changes below the `ymap` tolerance; a change
   replaces all of the entity's extensions with the source's. A YMAP with another
@@ -187,7 +190,9 @@ Overwrites currently only apply to YMAPs.
 - `vanilla/latest/ymap/{fileName}.diff.json` (`VanillaOverwrite`) holds differences
   written directly against a latest vanilla YMAP. They are merged as one more source
   after every resource's, under the same merge policy, and also into vanilla YMAPs no
-  resource replaces.
+  resource replaces. Unlike resources' changes, their name, flags, extents, block,
+  distant LOD light count and physics dictionary changes apply (see
+  [YMAP Fields](#ymap-fields)).
 
 An overwrite applies only while the files it was written against are current: its
 `source` and `vanilla` fingerprints (`sha256` and `size`) must match. Otherwise it is

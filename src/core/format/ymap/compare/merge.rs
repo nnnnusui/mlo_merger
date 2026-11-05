@@ -10,8 +10,9 @@
 //! are OR-ed into vanilla's, other fields keep the first change, each extent axis and block field
 //! on its own, and added physics dictionaries and prop instances skip names already present.
 //!
-//! Every change is combined unless [`YmapMergeOptions::ignored`] names it; the merge stage leaves
-//! out those listed in [`IgnoredChange::MERGE`].
+//! Every change of `sources` is combined; [`leave_out`] removes changes from one source's diff
+//! beforehand. The merge stage leaves those listed in [`IgnoredChange::MERGE`] out of every
+//! resource's diff, but not out of a vanilla overwrite's.
 
 use std::collections::HashSet;
 
@@ -26,7 +27,7 @@ use crate::core::format::ymap::{
   reference_hash,
 };
 
-/// A kind of change that [`merge_diffs`] can leave out, keeping vanilla's value.
+/// A kind of change that [`leave_out`] removes from a source's diff, keeping vanilla's value.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum IgnoredChange {
   Name,
@@ -41,8 +42,9 @@ pub enum IgnoredChange {
 }
 
 impl IgnoredChange {
-  /// What the merge stage leaves out: metadata a resource's YMAP restates from the version it
-  /// was made from, and dictionary removals, since CodeWalker only checks their membership.
+  /// What the merge stage leaves out of resources' diffs: metadata a resource's YMAP restates
+  /// from the version it was made from, and dictionary removals, since CodeWalker only checks
+  /// their membership.
   pub const MERGE: &[Self] = &[
     Self::Name,
     Self::Flags,
@@ -94,52 +96,84 @@ impl IgnoredChange {
   }
 }
 
-/// How [`merge_diffs`] combines the sources' changes.
-#[derive(Debug, Clone, Copy, Default)]
-pub struct YmapMergeOptions<'a> {
-  /// Changes left out, keeping vanilla's values.
-  pub ignored: &'a [IgnoredChange],
+/// Removes the changes `ignored` names from `diff`, logging each one it makes. Replacements of
+/// vanilla physics dictionaries become additions after the replaced name.
+pub fn leave_out(
+  diff: &mut YmapDiffFields,
+  ignored: &[IgnoredChange],
+) {
+  for &change in ignored {
+    if !change.is_made_by(diff) {
+      continue;
+    }
+    tracing::info!("    skip changes: <{} />", change.field());
+    match change {
+      IgnoredChange::Name => diff.name = None,
+      IgnoredChange::Flags => diff.flags = None,
+      IgnoredChange::StreamingExtents => {
+        diff.streaming_extents_min = None;
+        diff.streaming_extents_max = None;
+      }
+      IgnoredChange::EntitiesExtents => {
+        diff.entities_extents_min = None;
+        diff.entities_extents_max = None;
+      }
+      IgnoredChange::Block => diff.block = None,
+      IgnoredChange::DistantLodLightCounts => {
+        if let Some(lights) = &mut diff.distant_lod_lights {
+          lights.num_street_lights = None;
+          lights.category = None;
+          if *lights == YmapDistantLodLightsDiff::default() {
+            diff.distant_lod_lights = None;
+          }
+        }
+      }
+      IgnoredChange::PhysicsDictionaryRemovals => {
+        let kept = diff
+          .physics_dictionaries
+          .take()
+          .into_iter()
+          .flatten()
+          .filter_map(|diff| match diff {
+            ItemDiff::Removed {
+              ..
+            } => None,
+            ItemDiff::Replaced {
+              index,
+              item,
+            } => Some(ItemDiff::Added {
+              after: Some(index),
+              item,
+            }),
+            diff => Some(diff),
+          })
+          .collect();
+        diff.physics_dictionaries = non_empty(kept);
+      }
+    }
+  }
 }
 
 /// One diff of `vanilla` making the changes of every diff in `sources`, taken from `vanilla` in
-/// merge order, except those `options` leave out.
+/// merge order.
 pub fn merge_diffs(
   vanilla: &Ymap,
   sources: &[YmapDiffFields],
-  options: YmapMergeOptions,
 ) -> YmapDiffFields {
-  for source in sources {
-    log_ignored(source, options.ignored);
-  }
-  let kept = |change: IgnoredChange| !options.ignored.contains(&change);
   let content_flags =
     sources.iter().filter_map(|diff| diff.content_flags).fold(vanilla.content_flags, |a, b| a | b);
   let distant_lod_lights = sources.iter().filter_map(|diff| diff.distant_lod_lights.as_ref());
   let instanced_data = sources.iter().filter_map(|diff| diff.instanced_data.as_ref());
   YmapDiffFields {
-    name: kept(IgnoredChange::Name)
-      .then(|| first_change("name", sources.iter().map(|diff| &diff.name)))
-      .flatten(),
-    flags: kept(IgnoredChange::Flags)
-      .then(|| first_change("flags", sources.iter().map(|diff| &diff.flags)))
-      .flatten(),
+    name: first_change("name", sources.iter().map(|diff| &diff.name)),
+    flags: first_change("flags", sources.iter().map(|diff| &diff.flags)),
     content_flags: (content_flags != vanilla.content_flags).then_some(content_flags),
     parent: first_reference("parent", sources.iter().map(|diff| &diff.parent)),
-    streaming_extents_min: kept(IgnoredChange::StreamingExtents)
-      .then(|| first_position(sources.iter().map(|diff| &diff.streaming_extents_min)))
-      .flatten(),
-    streaming_extents_max: kept(IgnoredChange::StreamingExtents)
-      .then(|| first_position(sources.iter().map(|diff| &diff.streaming_extents_max)))
-      .flatten(),
-    entities_extents_min: kept(IgnoredChange::EntitiesExtents)
-      .then(|| first_position(sources.iter().map(|diff| &diff.entities_extents_min)))
-      .flatten(),
-    entities_extents_max: kept(IgnoredChange::EntitiesExtents)
-      .then(|| first_position(sources.iter().map(|diff| &diff.entities_extents_max)))
-      .flatten(),
-    block: kept(IgnoredChange::Block)
-      .then(|| first_block(sources.iter().filter_map(|diff| diff.block.as_ref())))
-      .flatten(),
+    streaming_extents_min: first_position(sources.iter().map(|diff| &diff.streaming_extents_min)),
+    streaming_extents_max: first_position(sources.iter().map(|diff| &diff.streaming_extents_max)),
+    entities_extents_min: first_position(sources.iter().map(|diff| &diff.entities_extents_min)),
+    entities_extents_max: first_position(sources.iter().map(|diff| &diff.entities_extents_max)),
+    block: first_block(sources.iter().filter_map(|diff| diff.block.as_ref())),
     entities: non_empty(entities::merge(
       &vanilla.entities,
       &lists(sources.iter().map(|diff| &diff.entities)),
@@ -159,24 +193,17 @@ pub fn merge_diffs(
       sources.iter().map(|diff| diff.lod_lights.as_ref()),
     ),
     distant_lod_lights: {
-      let counts = kept(IgnoredChange::DistantLodLightCounts);
       let lights = YmapDistantLodLightsDiff {
         items: merge_items(
           "distant_lod_lights",
           vanilla.distant_lod_lights.items.len(),
           distant_lod_lights.clone().map(|diff| diff.items.as_ref()),
         ),
-        num_street_lights: counts
-          .then(|| {
-            first_change(
-              "numStreetLights",
-              distant_lod_lights.clone().map(|diff| &diff.num_street_lights),
-            )
-          })
-          .flatten(),
-        category: counts
-          .then(|| first_change("category", distant_lod_lights.map(|diff| &diff.category)))
-          .flatten(),
+        num_street_lights: first_change(
+          "numStreetLights",
+          distant_lod_lights.clone().map(|diff| &diff.num_street_lights),
+        ),
+        category: first_change("category", distant_lod_lights.map(|diff| &diff.category)),
       };
       (lights != YmapDistantLodLightsDiff::default()).then_some(lights)
     },
@@ -184,7 +211,6 @@ pub fn merge_diffs(
       "physics_dictionaries",
       &vanilla.physics_dictionaries,
       &lists(sources.iter().map(|diff| &diff.physics_dictionaries)),
-      !kept(IgnoredChange::PhysicsDictionaryRemovals),
     ),
     instanced_data: {
       let data = YmapInstancedDataDiff {
@@ -193,7 +219,6 @@ pub fn merge_diffs(
           "prop_instance_list",
           &vanilla.instanced_data.prop_instance_list,
           &lists(instanced_data.clone().map(|diff| &diff.prop_instance_list)),
-          false,
         ),
         grass_instance_list: merge_items(
           "grass_instance_list",
@@ -213,16 +238,6 @@ pub fn merge_diffs(
       vanilla.car_generators.len(),
       sources.iter().map(|diff| diff.car_generators.as_ref()),
     ),
-  }
-}
-
-/// Logs the changes of `diff` that merging leaves at their vanilla values.
-fn log_ignored(
-  diff: &YmapDiffFields,
-  ignored: &[IgnoredChange],
-) {
-  for change in ignored.iter().filter(|change| change.is_made_by(diff)) {
-    tracing::info!("    skip changes: <{} />", change.field());
   }
 }
 
@@ -355,43 +370,13 @@ fn first_reference<'a>(
 }
 
 /// The name changes of `sources` to `vanilla` names combined as [`MergedItems`] describes,
-/// skipping added names whose hash a kept or earlier added name has. With `keep_vanilla`, vanilla
-/// names are never removed: removals are left out, and replacing names are added after the name
-/// they replace.
+/// skipping added names whose hash a kept or earlier added name has.
 fn merge_references(
   what: &str,
   vanilla: &[String],
   sources: &[&[YmapPropInstanceDiff]],
-  keep_vanilla: bool,
 ) -> Option<Vec<YmapPropInstanceDiff>> {
-  let additions;
-  let sources = if keep_vanilla {
-    additions = sources
-      .iter()
-      .map(|diffs| {
-        diffs
-          .iter()
-          .filter_map(|diff| match diff {
-            ItemDiff::Removed {
-              ..
-            } => None,
-            ItemDiff::Replaced {
-              index,
-              item,
-            } => Some(ItemDiff::Added {
-              after: Some(*index),
-              item: item.clone(),
-            }),
-            diff => Some(diff.clone()),
-          })
-          .collect::<Vec<_>>()
-      })
-      .collect::<Vec<_>>();
-    additions.iter().map(Vec::as_slice).collect()
-  } else {
-    sources.to_vec()
-  };
-  let mut merged = merged(what, &sources);
+  let mut merged = merged(what, sources);
   let mut seen = (0..vanilla.len())
     .filter(|index| !merged.drops_vanilla(*index))
     .map(|index| reference_hash(&vanilla[index]))
