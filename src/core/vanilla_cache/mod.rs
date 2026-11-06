@@ -1,9 +1,9 @@
 //! Derived latest-file and YMAP relationship indexes, and YMAP version diffs, for raw vanilla
 //! history.
 
+use crate::fs;
 use std::{
   collections::{BTreeMap, BTreeSet},
-  fs,
   io::{BufReader, BufWriter, Write},
   path::{Component, Path, PathBuf},
 };

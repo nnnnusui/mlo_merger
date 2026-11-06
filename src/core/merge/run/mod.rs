@@ -12,8 +12,8 @@ use crate::core::merge::ymap_parent_refs::{
   OriginalMap, ParentReferences, SourceMaps, runtime_entities,
 };
 use crate::core::overwrite::{OverwriteFingerprint, StreamFileOverwrite, VanillaOverwrite};
+use crate::fs;
 use std::collections::{BTreeMap, HashMap, HashSet};
-use std::fs;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use struct_diff::Diff;

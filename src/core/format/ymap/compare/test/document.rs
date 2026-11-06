@@ -1,6 +1,7 @@
 //! End-to-end derivation through [`YmapComparisonContext::get_diff`] over minimal caches.
 
-use std::{fs, path::Path};
+use crate::fs;
+use std::path::Path;
 
 use crate::common::fingerprint::Fingerprint;
 use crate::core::config::matching::MatchTolerances;

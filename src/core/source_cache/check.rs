@@ -6,6 +6,7 @@ use super::{
   read_metadata, ymap_diff_path,
 };
 use crate::core::check::{CheckIssueKind, Findings};
+use crate::fs;
 use std::{collections::BTreeSet, path::Path};
 
 /// Entries of the cache directory.
@@ -55,12 +56,12 @@ pub(crate) fn check(
   }
   findings.unrecorded_below(dir, "resources", &cached)?;
   findings.unrecorded_below(dir, "diff", &diffs)?;
-  if dir.join(PROPAGATED_DIR).is_dir() {
+  if fs::is_dir(dir.join(PROPAGATED_DIR)) {
     let mut propagated = BTreeSet::from([format!("{PROPAGATED_DIR}/inputs.json")]);
     match read_record(dir) {
       Some(record) => {
         for document in record.documents {
-          if !dir.join(&document.path).is_file() {
+          if !fs::is_file(dir.join(&document.path)) {
             findings.add(CheckIssueKind::Missing, &document.path, None);
           }
           propagated.insert(document.path);

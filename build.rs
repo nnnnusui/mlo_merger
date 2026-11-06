@@ -1,3 +1,6 @@
+// Runs on the build machine, never in the browser, so `web/clippy.toml` does not apply.
+#![allow(clippy::disallowed_methods, clippy::disallowed_types)]
+
 use std::env;
 use std::path::PathBuf;
 use std::process::Command;

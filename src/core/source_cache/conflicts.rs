@@ -6,6 +6,7 @@ use super::{
 };
 use crate::common::path::ensure_safe_path;
 use crate::core::stream_conflicts::{StreamConflictReport, StreamFileConflict};
+use crate::fs;
 use std::{
   collections::{BTreeMap, BTreeSet},
   path::Path,
@@ -22,12 +23,12 @@ pub(super) fn conflicts(
   for inventory in inventories.values() {
     let name = inventory.source.file_name().ok_or("Resource has no name")?;
     let current = output.join("resources").join(name);
-    let root = if current.is_dir() { current } else { output.join(name) };
+    let root = if fs::is_dir(&current) { current } else { output.join(name) };
     ensure_safe_path(output, &root)?;
-    if !root.is_dir() {
+    if !fs::is_dir(&root) {
       continue;
     }
-    for entry in walkdir::WalkDir::new(&root).follow_links(false) {
+    for entry in crate::fs::WalkDir::new(&root).follow_links(false) {
       let entry = entry?;
       if !entry.file_type().is_file() {
         continue;

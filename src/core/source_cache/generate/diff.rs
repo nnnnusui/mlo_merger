@@ -8,6 +8,7 @@
 //! inventory changed, or every resource when the rest changed, are checked file by file.
 
 use super::Result;
+use crate::fs;
 use crate::{
   common::{json::write_json, path::ensure_safe_path},
   core::config::matching::{self, MatchTolerances},
@@ -23,7 +24,7 @@ use crate::{
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use std::{collections::BTreeMap, fs, path::Path};
+use std::{collections::BTreeMap, path::Path};
 
 /// File name of the record of what the diffs were taken under, in the `diff` directory.
 const INPUTS_FILE: &str = "inputs.json";
@@ -125,7 +126,7 @@ pub(in crate::core::source_cache) fn write_ymap_diffs(
       let (previous, path) = (target.join(&file_path), staging.join(&file_path));
       ensure_safe_path(&target, &previous)?;
       ensure_safe_path(&staging, &path)?;
-      let kept = vouched && previous.is_file();
+      let kept = vouched && fs::is_file(&previous);
       entries.push((stream_file, file_path, previous, path, kept));
     }
   }
@@ -272,7 +273,7 @@ mod tests {
     let source_cache = asset.join("source-cache");
     let output = std::env::temp_dir().join(format!("ymap_diffs_{}", std::process::id()));
     let _ = fs::remove_dir_all(&output);
-    for entry in walkdir::WalkDir::new(&source_cache) {
+    for entry in crate::fs::WalkDir::new(&source_cache) {
       let entry = entry.unwrap();
       let destination = output.join(entry.path().strip_prefix(&source_cache).unwrap());
       if entry.file_type().is_dir() {
@@ -290,7 +291,7 @@ mod tests {
     )
     .unwrap()
     .written;
-    let files = walkdir::WalkDir::new(output.join("diff"))
+    let files = crate::fs::WalkDir::new(output.join("diff"))
       .into_iter()
       .filter_map(std::result::Result::ok)
       .filter(|entry| entry.file_name().to_string_lossy().ends_with(".ymap.diff.json"))

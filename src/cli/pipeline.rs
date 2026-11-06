@@ -62,6 +62,12 @@ pub fn parser() -> impl Parser<Pipeline> {
 
 /// Runs all cached stages with deployment-scoped `-o`.
 pub fn run(command: Pipeline) -> Result<(), Box<dyn std::error::Error>> {
+  println!("{}", report(command)?);
+  Ok(())
+}
+
+/// Runs all cached stages and returns the one line of JSON [`run`] prints.
+pub fn report(command: Pipeline) -> Result<String, Box<dyn std::error::Error>> {
   if !command.common.step_names.is_empty() {
     return Err(
       "--step-name selection is not implemented for --pipeline; use an explicit operation".into(),
@@ -92,6 +98,5 @@ pub fn run(command: Pipeline) -> Result<(), Box<dyn std::error::Error>> {
     changes: result.changes,
     ignored_overwrites: result.ignored_overwrites,
   };
-  println!("{}", serde_json::to_string(&report)?);
-  Ok(())
+  Ok(serde_json::to_string(&report)?)
 }

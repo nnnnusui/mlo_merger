@@ -9,7 +9,8 @@ use crate::core::source_cache::{
   inventory::{fingerprint, resource_id, source_fingerprints, source_inventory},
   layout::{normalize_cached_layout, stream_relative_path},
 };
-use std::{collections::BTreeMap, fs};
+use crate::fs;
+use std::collections::BTreeMap;
 
 pub(super) fn update_selected_resources(
   source: &SourceResources,
@@ -63,14 +64,14 @@ pub(super) fn update_selected_resources(
         };
         let expected = format!("resources/{cache_name}/{}", stream_relative_path(&file.path)?);
         layout_current &= path == &expected;
-        let cached_path = if path != &expected && !output.join(path).is_file() {
+        let cached_path = if path != &expected && !fs::is_file(output.join(path)) {
           output.join(&expected)
         } else {
           output.join(path)
         };
         ensure_safe_path(output, &cached_path)?;
-        if !cached_path.is_file() {
-          if resource.join(&file.path).is_file() {
+        if !fs::is_file(&cached_path) {
+          if fs::is_file(resource.join(&file.path)) {
             tracing::warn!(
               "Source-cache artifact is missing and will be restored from source: {}",
               cached_path.display()
@@ -122,10 +123,9 @@ pub(super) fn update_selected_resources(
     let mut targets = BTreeMap::new();
     for file in
       inventory.files_by_format.values().flatten().filter(|file| file.vanilla.is_some()).chain(
-        retained
-          .iter()
-          .flat_map(|inventory| inventory.files_by_format.values().flatten())
-          .filter(|file| file.cached_path.as_ref().is_some_and(|path| output.join(path).is_file())),
+        retained.iter().flat_map(|inventory| inventory.files_by_format.values().flatten()).filter(
+          |file| file.cached_path.as_ref().is_some_and(|path| fs::is_file(output.join(path))),
+        ),
       )
     {
       let relative = stream_relative_path(&file.path)?.to_ascii_lowercase();
@@ -162,7 +162,7 @@ pub(super) fn update_selected_resources(
               modified_nanos: file.modified_nanos,
             };
             let path = output.join(cached_path);
-            if !path.is_file() {
+            if !fs::is_file(&path) {
               continue;
             }
             let fingerprint = fingerprint(&path, if force { None } else { Some(&recorded) })?;
@@ -196,9 +196,9 @@ pub(super) fn update_selected_resources(
       let destination = cache_root.join(relative);
       ensure_safe_path(output, &destination)?;
       let mut replaced = None;
-      if destination.exists() {
+      if fs::exists(&destination).unwrap_or(false) {
         fs::create_dir_all(history.as_path())?;
-        if !history.join(crate::core::source_cache::CACHE_INFO).exists()
+        if !fs::exists(history.join(crate::core::source_cache::CACHE_INFO)).unwrap_or(false)
           && let Some(previous) = previous
         {
           write_json(&history.join(crate::core::source_cache::CACHE_INFO), previous)?;
@@ -237,7 +237,7 @@ pub(super) fn update_selected_resources(
       ResourceCheck {
         checked_at: generated_at.clone(),
         vanilla_revision: resource_revision.clone(),
-        has_stream: ["stream", "streams"].iter().any(|name| resource.join(name).is_dir()),
+        has_stream: ["stream", "streams"].iter().any(|name| fs::is_dir(resource.join(name))),
       },
     );
   }
@@ -291,8 +291,9 @@ pub(super) fn remove_missing_resources(
           );
         }
         let current = output.join("resources").join(name);
-        let cached = if current.exists() { current } else { output.join(name) };
-        if cached.exists() {
+        let cached =
+          if fs::exists(&current).unwrap_or(false) { current } else { output.join(name) };
+        if fs::exists(&cached).unwrap_or(false) {
           fs::create_dir_all(history.as_path())?;
           if let Some(previous) = previous {
             write_json(&history.join(crate::core::source_cache::CACHE_INFO), previous)?;

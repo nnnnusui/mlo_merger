@@ -10,6 +10,7 @@ use super::{
   file_from_position::{self, Candidate, stream_name},
 };
 use crate::common::fingerprint::Fingerprint;
+use crate::fs;
 #[cfg(not(test))]
 use indicatif::ProgressDrawTarget;
 use indicatif::{ProgressBar, ProgressStyle};
@@ -18,7 +19,6 @@ use serde::{Deserialize, Serialize};
 #[cfg(not(test))]
 use std::io::IsTerminal;
 use std::{
-  fs,
   io::{BufWriter, Write},
   path::{Path, PathBuf},
   time::Duration,
@@ -203,7 +203,7 @@ pub(crate) fn update_store_index(
   directory: &Path,
 ) -> Result<bool> {
   let info = store.cache_info_path(directory);
-  if !info.is_file() {
+  if !fs::is_file(&info) {
     return Ok(false);
   }
   let output = directory.join(INDEX_FILE);

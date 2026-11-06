@@ -84,6 +84,16 @@ pub fn parse_args() -> Command {
   parser().to_options().run()
 }
 
+/// Parses `args`, which leave out the executable name, as the command line would.
+///
+/// Help and parse errors come back as the text the executable would print.
+pub fn parse_args_from(args: &[&str]) -> Result<Command, String> {
+  parser().to_options().run_inner(args).map_err(|failure| match failure {
+    ParseFailure::Stdout(doc, _) | ParseFailure::Stderr(doc) => doc.to_string(),
+    ParseFailure::Completion(text) => text,
+  })
+}
+
 /// Dispatches an operation to its implementation or placeholder.
 pub fn run(command: Command) -> Result<(), Box<dyn std::error::Error>> {
   match command {

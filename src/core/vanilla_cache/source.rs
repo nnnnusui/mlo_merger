@@ -59,7 +59,7 @@ pub(super) fn source_timestamps(
 ) -> Result<BTreeMap<String, SourceTimestamp>> {
   let mut paths = BTreeSet::from(["cache_info.json".to_owned()]);
   // YMAP version diffs are decoded with its names.
-  if vanilla_dir.join("hash_names.json").is_file() {
+  if fs::is_file(vanilla_dir.join("hash_names.json")) {
     paths.insert("hash_names.json".to_owned());
   }
   for (name, (_, file)) in current {
@@ -99,7 +99,7 @@ pub(super) fn existing_artifact_path(
   file: &CachedFile,
 ) -> Result<PathBuf> {
   let path = checked_source_path(vanilla_dir, &file.object)?;
-  if !path.is_file() {
+  if !fs::is_file(&path) {
     return Err(format!("Vanilla artifact is missing: {}", path.display()).into());
   }
   Ok(path)

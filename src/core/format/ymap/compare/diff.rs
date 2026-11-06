@@ -4,6 +4,7 @@
 //! `#[derive(Diff)]`: every field is optional and omitted when unchanged, so the documents list
 //! only changes.
 
+use crate::fs;
 use std::path::Path;
 
 use serde::{Deserialize, Serialize};
@@ -139,7 +140,7 @@ impl YmapComparisonFile {
     &self,
     path: &Path,
   ) -> Result<bool> {
-    let path = path.canonicalize()?;
+    let path = fs::canonicalize(path)?;
     let previous = Fingerprint {
       sha256: self.sha256.clone(),
       size: self.size,

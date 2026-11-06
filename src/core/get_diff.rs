@@ -1,10 +1,11 @@
+use crate::fs;
 use std::{
   collections::HashMap,
   path::{Path, PathBuf},
 };
 
+use crate::fs::WalkDir;
 use struct_diff::Diff;
-use walkdir::WalkDir;
 
 use crate::core::{
   config::matching,
@@ -38,13 +39,13 @@ fn generate(
   let vanilla_dir = vanilla_cache_dir.join("latest/ymap");
   let source_paths = by_reference(sources.iter().cloned());
   let vanilla_paths = by_reference(
-    std::fs::read_dir(&vanilla_dir)?.filter_map(|entry| entry.ok().map(|entry| entry.path())),
+    crate::fs::read_dir(&vanilla_dir)?.filter_map(|entry| entry.ok().map(|entry| entry.path())),
   );
   let mut outputs = Vec::with_capacity(sources.len());
   for source_path in &sources {
     let name = source_path.file_name().ok_or("Source YMAP has no filename")?;
     let vanilla_path = vanilla_dir.join(name);
-    if !vanilla_path.is_file() {
+    if !fs::is_file(&vanilla_path) {
       return Err(
         format!("Latest vanilla YMAP baseline is missing: {}", vanilla_path.display()).into(),
       );
@@ -66,7 +67,7 @@ fn generate(
     let diff = vanilla.diff(&source, &ctx).unwrap_or_default();
     let output = diff_output_path(source_input, source_path, sources.len(), output_path)?;
     if let Some(parent) = output.parent() {
-      std::fs::create_dir_all(parent)?;
+      crate::fs::create_dir_all(parent)?;
     }
     write_json(&output, &diff)?;
     outputs.push(output);
@@ -107,12 +108,12 @@ fn diff_output_path(
 }
 
 fn collect_source_ymaps(source_input: &Path) -> Result<Vec<PathBuf>> {
-  let mut sources = if source_input.is_file() {
+  let mut sources = if fs::is_file(source_input) {
     if !source_input.extension().is_some_and(|extension| extension.eq_ignore_ascii_case("ymap")) {
       return Err("Single-input --get-diff currently supports YMAP files only".into());
     }
     vec![source_input.to_path_buf()]
-  } else if source_input.is_dir() {
+  } else if fs::is_dir(source_input) {
     WalkDir::new(source_input)
       .follow_links(false)
       .into_iter()

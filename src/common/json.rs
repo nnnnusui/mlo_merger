@@ -1,9 +1,9 @@
 use super::Result;
+use crate::fs;
 use serde::{Serialize, de::DeserializeOwned};
 use std::{
   any::{Any, TypeId},
   collections::HashMap,
-  fs,
   io::{BufWriter, Write},
   path::{Path, PathBuf},
   sync::{Arc, Mutex, OnceLock},
@@ -47,7 +47,7 @@ pub(crate) fn read_shared<T: Send + Sync + 'static>(
   path: &Path,
   decode: impl FnOnce(&[u8]) -> Result<T>,
 ) -> Result<Arc<T>> {
-  let path = path.canonicalize()?;
+  let path = fs::canonicalize(path)?;
   let key = (path.clone(), TypeId::of::<T>());
   let bytes = fs::read(&path)?;
   let shared = SHARED.get_or_init(Default::default);

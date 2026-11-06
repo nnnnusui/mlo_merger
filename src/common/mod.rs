@@ -17,7 +17,8 @@ pub(crate) type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 #[cfg(test)]
 mod tests {
   use super::*;
-  use std::{fs, path::PathBuf};
+  use crate::fs;
+  use std::path::PathBuf;
 
   struct TemporaryDirectory(PathBuf);
 

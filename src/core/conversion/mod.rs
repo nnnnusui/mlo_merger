@@ -1,13 +1,14 @@
 //! Batch conversion between native stream files and CodeWalker-style XML.
 
+use crate::fs;
 use std::{
   collections::{BTreeSet, HashMap},
   error::Error,
-  fs, io,
+  io,
   path::{Path, PathBuf},
 };
 
-use walkdir::WalkDir;
+use crate::fs::WalkDir;
 
 use crate::core::format::{
   gamefile::{
@@ -95,7 +96,7 @@ pub fn from_xml(
     );
   }
   fs::create_dir_all(output_dir)?;
-  if input.is_dir() {
+  if fs::is_dir(input) {
     prune_managed_ymap_outputs(input, output_dir)?;
   }
 
@@ -143,7 +144,7 @@ pub fn from_xml(
     let result = fs::read_to_string(source).and_then(|xml| {
       if is_pso_xml(source) {
         let schema_dir = schema_dir.expect("PSO schema directory was validated");
-        let template = if schema_dir.is_file() {
+        let template = if fs::is_file(schema_dir) {
           schema_dir.to_path_buf()
         } else {
           schema_dir.join(&output_name)
@@ -173,7 +174,7 @@ fn prune_managed_ymap_outputs(
   output_dir: &Path,
 ) -> io::Result<()> {
   let manifest = input_dir.join("_managed_ymaps.txt");
-  if !manifest.is_file() {
+  if !fs::is_file(&manifest) {
     return Ok(());
   }
   let content = fs::read_to_string(manifest)?;
@@ -191,7 +192,7 @@ fn prune_managed_ymap_outputs(
   for name in names {
     let xml = input_dir.join(name).with_extension("ymap.xml");
     let binary = output_dir.join(name);
-    if !xml.is_file() && binary.is_file() {
+    if !fs::is_file(&xml) && fs::is_file(&binary) {
       fs::remove_file(binary)?;
     }
   }
@@ -202,10 +203,10 @@ fn collect_inputs(
   input: &Path,
   supported: &dyn Fn(&Path) -> bool,
 ) -> io::Result<Vec<PathBuf>> {
-  if input.is_file() {
+  if fs::is_file(input) {
     return Ok(if supported(input) { vec![input.to_path_buf()] } else { Vec::new() });
   }
-  if !input.is_dir() {
+  if !fs::is_dir(input) {
     return Err(io::Error::new(
       io::ErrorKind::NotFound,
       format!("input path does not exist: {}", input.display()),
@@ -227,7 +228,7 @@ fn relative_input_path(
   input: &Path,
   source: &Path,
 ) -> io::Result<PathBuf> {
-  if input.is_file() {
+  if fs::is_file(input) {
     return source
       .file_name()
       .map(PathBuf::from)
@@ -285,7 +286,7 @@ fn discover_schema_inputs(
       candidates.push(ancestor.join("extracted").join(file_name));
       candidates.push(ancestor.join("vanilla").join(vanilla_family).join(file_name));
     }
-    if let Some(schema) = candidates.into_iter().find(|candidate| candidate.is_file()) {
+    if let Some(schema) = candidates.into_iter().find(|candidate| fs::is_file(candidate)) {
       schemas.insert(schema);
     }
   }

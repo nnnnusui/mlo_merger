@@ -1,6 +1,6 @@
+use crate::fs;
 use std::{
   collections::BTreeSet,
-  fs,
   io::{BufWriter, Write},
   path::Path,
 };
@@ -35,8 +35,8 @@ pub fn restore_source_cache(
   source_dir: &Path,
   resources: &[String],
 ) -> Result<usize> {
-  let cache = cache_dir.canonicalize()?;
-  let source = source_dir.canonicalize()?;
+  let cache = fs::canonicalize(cache_dir)?;
+  let source = fs::canonicalize(source_dir)?;
   if cache.starts_with(&source) || source.starts_with(&cache) {
     return Err("Source and source-cache directories overlap".into());
   }
@@ -44,12 +44,12 @@ pub fn restore_source_cache(
   for report in reports {
     ensure_safe_path(&cache, &cache.join(report))?;
     let path = cache.join(report);
-    if path.try_exists()? && !path.is_file() {
+    if fs::exists(&path)? && !fs::is_file(&path) {
       return Err(format!("Source-cache index is not a file: {}", path.display()).into());
     }
   }
   let manifest = cache.join(reports[0]);
-  if !manifest.exists() {
+  if !fs::exists(&manifest).unwrap_or(false) {
     if let Some(name) = resources.first() {
       return Err(format!("The source cache has no resource {name}").into());
     }
@@ -74,7 +74,7 @@ pub fn restore_source_cache(
     }
     let resource_dir = source.join(&resource.source);
     ensure_safe_path(&source, &resource_dir)?;
-    if !resource_dir.is_dir() {
+    if !fs::is_dir(&resource_dir) {
       return Err(format!("Source resource is missing: {}", resource_dir.display()).into());
     }
     let files = resource.files_by_format.iter().flat_map(|(format, files)| {
@@ -106,8 +106,8 @@ pub fn restore_source_cache(
       if !cached_paths.insert(cached.clone()) || !destinations.insert(destination.clone()) {
         return Err("Duplicate source-cache restoration path".into());
       }
-      if !cached.is_file() {
-        if destination.is_file() {
+      if !fs::is_file(&cached) {
+        if fs::is_file(&destination) {
           let bytes = fs::read(&destination)?;
           use sha2::{Digest, Sha256};
           if hex::encode(Sha256::digest(&bytes)) == file.sha256 {
@@ -117,8 +117,8 @@ pub fn restore_source_cache(
         }
         return Err(format!("Cached source file is missing: {}", cached.display()).into());
       }
-      let existing = destination.try_exists()?;
-      if existing && (!destination.is_file() || fs::read(&cached)? != fs::read(&destination)?) {
+      let existing = fs::exists(&destination)?;
+      if existing && (!fs::is_file(&destination) || fs::read(&cached)? != fs::read(&destination)?) {
         return Err(
           format!("Restore destination has different contents: {}", destination.display()).into(),
         );

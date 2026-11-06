@@ -12,9 +12,9 @@ use crate::core::conversion::load_hash_names_or_empty;
 use crate::core::format::ymap::{binary::ymap_to_model, model::ymap::Ymap};
 use crate::core::source_cache::{InventoriedFile, inventoried_files};
 use crate::core::vanilla::load_manifest;
+use crate::fs;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
-use std::fs;
 use std::io::{BufWriter, Write};
 use std::path::{Path, PathBuf};
 
@@ -180,7 +180,7 @@ impl Read {
     // the result names files by absolute path.
     fs::create_dir_all(&self.output_dir)?;
     let absolute = |path: &Path| {
-      path.canonicalize().map_err(|error| format!("Cannot open {}: {error}", path.display()))
+      fs::canonicalize(path).map_err(|error| format!("Cannot open {}: {error}", path.display()))
     };
     let read = Self {
       source_dir: absolute(&self.source_dir)?,
@@ -235,8 +235,7 @@ impl Read {
         &selected.stored,
         previous.as_ref().map(|it| &it.source),
       )?;
-      let hash_names = names_path
-        .is_file()
+      let hash_names = fs::is_file(&names_path)
         .then(|| {
           ReadFingerprint::read(
             &names_path,

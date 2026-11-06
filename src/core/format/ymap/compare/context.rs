@@ -1,6 +1,6 @@
+use crate::fs;
 use std::{
   collections::{BTreeSet, HashMap, HashSet},
-  fs,
   path::{Path, PathBuf},
   sync::{Arc, Mutex},
 };
@@ -414,8 +414,8 @@ fn resolve_stream_file(
   }
   let stored = format!("latest/ymap/{}", file.file_name);
   let path = vanilla_cache_dir.join(&stored);
-  if !path.is_file() {
+  if !fs::is_file(&path) {
     return Err(format!("No source or vanilla YMAP named {}", file.file_name).into());
   }
-  Ok((path.canonicalize()?, Some(stored)))
+  Ok((fs::canonicalize(&path)?, Some(stored)))
 }

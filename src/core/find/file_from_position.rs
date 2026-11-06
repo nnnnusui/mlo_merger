@@ -2,6 +2,8 @@ use super::{FindEntity, Input, MergeCache, Result, aabb_intersects_radius, searc
 use crate::core::format::{
   ybn::read_ybn_bound_tree, ymap::binary::ymap_entities_extents, ymap::model::Ymap,
 };
+use crate::fs;
+use crate::fs::WalkDir;
 #[cfg(not(test))]
 use indicatif::ProgressDrawTarget;
 use indicatif::{ProgressBar, ProgressStyle};
@@ -13,7 +15,6 @@ use std::{
   path::{Component, Path, PathBuf},
   time::Duration,
 };
-use walkdir::WalkDir;
 
 #[derive(Serialize)]
 #[serde(rename = "FileFromPositionSearch")]
@@ -160,13 +161,13 @@ fn collect_candidates_from(
   let mut candidates = Vec::new();
   let mut paths = SeenPaths::new();
   for extension in ["ymap", "ybn"] {
-    if search.diff_all && !search.merged_dir.is_dir() {
+    if search.diff_all && !fs::is_dir(&search.merged_dir) {
       progress
         .println(format!("Warning: merged directory is missing: {}", search.merged_dir.display()));
       continue;
     }
     let missing_provenance =
-      search.diff_all && !crate::core::merge::cache_info_path(&search.merged_dir).is_file();
+      search.diff_all && !fs::is_file(crate::core::merge::cache_info_path(&search.merged_dir));
     let merged_only;
     let search_config = if missing_provenance {
       merged_only = FindEntity {
@@ -270,7 +271,7 @@ fn collect_source_candidates(
   filter: Option<&globset::GlobMatcher>,
   progress: &ProgressBar,
 ) -> Result<()> {
-  if !source_dir.is_dir() {
+  if !fs::is_dir(source_dir) {
     progress.println(format!("Warning: source directory is missing: {}", source_dir.display()));
     return Ok(());
   }
@@ -296,7 +297,8 @@ fn collect_source_candidates(
       .ancestors()
       .skip(1)
       .find(|directory| {
-        directory.join("fxmanifest.lua").is_file() || directory.join("__resource.lua").is_file()
+        fs::is_file(directory.join("fxmanifest.lua"))
+          || fs::is_file(directory.join("__resource.lua"))
       })
       .and_then(|directory| directory.strip_prefix(source_dir).ok())
       .map(|relative| relative.to_string_lossy().replace('\\', "/"));
@@ -326,7 +328,7 @@ fn collect_source_cache_candidates(
   filter: Option<&globset::GlobMatcher>,
   progress: &ProgressBar,
 ) -> Result<()> {
-  if !crate::core::source_cache::cache_info_path(cache_root).is_file() {
+  if !fs::is_file(crate::core::source_cache::cache_info_path(cache_root)) {
     return Ok(());
   }
   for file in crate::core::source_cache::inventoried_files(cache_root, source_dir)? {
@@ -337,10 +339,10 @@ fn collect_source_cache_candidates(
       continue;
     }
     // A file back in its resource is listed from the source.
-    if source_dir.join(&file.source_path).is_file() {
+    if fs::is_file(source_dir.join(&file.source_path)) {
       continue;
     }
-    if !file.path.is_file() {
+    if !fs::is_file(&file.path) {
       progress
         .println(format!("Warning: source-cache artifact is missing: {}", file.path.display()));
       continue;
@@ -371,7 +373,7 @@ fn collect_vanilla_candidates(
   progress: &ProgressBar,
 ) -> Result<()> {
   let manifest_path = cache_root.join("cache_info.json");
-  if !manifest_path.is_file() {
+  if !fs::is_file(&manifest_path) {
     progress
       .println(format!("Warning: vanilla-cache manifest is missing: {}", manifest_path.display()));
     return Ok(());
@@ -391,7 +393,7 @@ fn collect_vanilla_candidates(
       return Err("Unsafe vanilla-cache artifact path".into());
     }
     let path = cache_root.join(file.object);
-    if !path.is_file() {
+    if !fs::is_file(&path) {
       progress.println(format!("Warning: vanilla-cache artifact is missing: {}", path.display()));
       continue;
     }
@@ -428,7 +430,7 @@ impl SeenPaths {
   fn new() -> Self {
     Self {
       resolved: HashMap::new(),
-      working_dir: std::env::current_dir().and_then(|directory| directory.canonicalize()).ok(),
+      working_dir: fs::current_dir().and_then(|directory| fs::canonicalize(&directory)).ok(),
     }
   }
 
@@ -446,7 +448,7 @@ pub(super) fn display_path(
   path: &Path,
   working_dir: Option<&Path>,
 ) -> PathBuf {
-  let resolved = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+  let resolved = fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
   match working_dir.and_then(|directory| resolved.strip_prefix(directory).ok()) {
     Some(relative) => relative.to_path_buf(),
     None => resolved,
@@ -535,7 +537,7 @@ pub(super) fn spatial_bounds(candidate: &Candidate) -> Result<Option<SpatialBoun
   let failed = |error: std::io::Error| -> Box<dyn std::error::Error> {
     format!("Cannot read {} resource {}: {error}", candidate.stage, candidate.path.display()).into()
   };
-  let bytes = std::fs::read(&candidate.path).map_err(failed)?;
+  let bytes = crate::fs::read(&candidate.path).map_err(failed)?;
   let bounds = match candidate.extension {
     "ymap" => {
       let (minimum, maximum) =
@@ -567,7 +569,7 @@ pub(super) fn ymap_extents(model: &Ymap) -> ([f64; 3], [f64; 3]) {
 #[cfg(test)]
 mod tests {
   use super::*;
-  use std::fs;
+  use crate::fs;
 
   #[test]
   fn all_candidates_include_source_moved_source_and_latest_vanilla_files() {

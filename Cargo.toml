@@ -6,7 +6,7 @@ default-run = "mlo_merger"
 publish = false
 
 [workspace]
-members = ["crates/struct-diff", "crates/struct-diff-derive"]
+members = ["crates/struct-diff", "crates/struct-diff-derive", "crates/web"]
 
 [features]
 typescript = ["dep:specta", "struct-diff/specta"]
@@ -18,7 +18,6 @@ aes = "0.9.4"
 bpaf = "0.9.28"
 chrono = { version = "0.4.45", features = ["clock"] }
 deku = "0.20.3"
-eframe = "0.37.0"
 flate2 = { version = "1.1.11", default-features = false, features = ["zlib-rs"] }
 globset = "0.4.21"
 hex = "0.4"
@@ -28,7 +27,6 @@ netcorehost = { version = "0.22.0", optional = true }
 quick-xml = { version = "0.42.0", features = ["serialize", "overlapped-lists"] }
 rayon = "1.12.0"
 regex = "1.13.1"
-rfd = "0.17.2"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
 sha1 = "0.11.0"
@@ -36,12 +34,22 @@ sha2 = "0.11.1"
 specta = { version = "1.0.5", optional = true, features = ["export"] }
 struct-diff = { path = "crates/struct-diff" }
 tracing = "0.1"
-tracing-appender = "0.2"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 tracing-tree = { version = "0.4", features = ["time"] }
 toml = "1.2.1"
-ureq = "3.5.1"
 walkdir = "2.5.0"
+
+# The GUI, log files and downloads exist only in the native executable.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+eframe = "0.37.0"
+rfd = "0.17.2"
+tracing-appender = "0.2"
+ureq = "3.5.1"
+
+# The browser build reaches the page's virtual filesystem through `web/vfs.js`.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+js-sys = "0.3"
+wasm-bindgen = "0.2"
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_System_Console", "Win32_System_Registry"] }

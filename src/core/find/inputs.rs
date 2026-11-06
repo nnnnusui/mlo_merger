@@ -2,12 +2,12 @@
 
 use super::{FindEntity, Result};
 use crate::core::format::{stream_file::StreamFile, ymap::model::Ymap};
+use crate::fs;
 use globset::{GlobBuilder, GlobMatcher};
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use std::{
   collections::{BTreeMap, BTreeSet, HashMap},
-  fs,
   path::{Component, Path, PathBuf},
 };
 
@@ -76,10 +76,10 @@ pub(super) fn search_inputs(
   search: &FindEntity,
   extension: &str,
 ) -> Result<SearchInputs> {
-  let merged = search.merged_dir.canonicalize()?;
+  let merged = fs::canonicalize(&search.merged_dir)?;
   let filter = filename_filter(search.filter.as_deref())?;
   let mut paths = BTreeMap::new();
-  for entry in walkdir::WalkDir::new(&merged).follow_links(false) {
+  for entry in crate::fs::WalkDir::new(&merged).follow_links(false) {
     let entry = entry?;
     if !entry.file_type().is_file() {
       continue;

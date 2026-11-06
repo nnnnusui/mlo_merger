@@ -1,7 +1,8 @@
 //! Matching tolerances loaded once per operation and scoped to its comparisons.
 
+use crate::fs;
 use serde::{Deserialize, Serialize};
-use std::{cell::Cell, fs, io, path::Path};
+use std::{cell::Cell, io, path::Path};
 
 /// Coordinate and scalar tolerances used by collision and map comparisons.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]

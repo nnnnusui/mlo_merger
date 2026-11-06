@@ -8,7 +8,8 @@ use crate::core::source_cache::{
   types::{SourceCacheConflictReport, VanillaMatch},
   ymap_plan,
 };
-use std::{collections::BTreeSet, fs};
+use crate::fs;
+use std::collections::BTreeSet;
 
 pub(super) fn publish_if_changed(
   source: SourceResources,

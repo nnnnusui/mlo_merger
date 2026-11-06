@@ -33,7 +33,7 @@ fn direct_ymap_writer_roundtrips_local_vanilla() {
   let root =
     std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("asset/vanilla-cache/latest/ymap");
   let mut paths =
-    std::fs::read_dir(root).unwrap().map(|entry| entry.unwrap().path()).collect::<Vec<_>>();
+    crate::fs::read_dir(root).unwrap().map(|entry| entry.unwrap().path()).collect::<Vec<_>>();
   paths.sort();
   let mut selected = paths.iter().take(20).collect::<Vec<_>>();
   for pattern in ["occl", "lodlights", "distlodlights", "interior", "grass"] {
@@ -44,7 +44,7 @@ fn direct_ymap_writer_roundtrips_local_vanilla() {
     }
   }
   for path in selected {
-    let bytes = std::fs::read(path).unwrap();
+    let bytes = crate::fs::read(path).unwrap();
     let model = ymap_to_model(&bytes, &HashMap::new()).unwrap();
     let entities = model.entities.clone();
     let output =
@@ -66,7 +66,7 @@ fn direct_ymap_writer_rejects_container_lods_without_a_schema() {
   // CodeWalker has no META layout for it; writing them must fail rather than drop them.
   let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
     .join("asset/vanilla-cache/latest/ymap/ap1_01_a.ymap");
-  let bytes = std::fs::read(path).unwrap();
+  let bytes = crate::fs::read(path).unwrap();
   let mut model = ymap_to_model(&bytes, &HashMap::new()).unwrap();
   model.container_lods = vec![YmapContainerLod {
     name: "container".into(),
@@ -86,7 +86,7 @@ fn entity_extents_alone_match_the_decoded_model() {
     "parent_refs/child.ymap",
     "parent_refs/vanilla_parent.ymap",
   ] {
-    let bytes = std::fs::read(root.join(name)).unwrap();
+    let bytes = crate::fs::read(root.join(name)).unwrap();
     let names = std::collections::HashMap::new();
     let model = super::ymap_to_model(&bytes, &names).unwrap();
     let (minimum, maximum) = super::ymap_entities_extents(&bytes, &names).unwrap();

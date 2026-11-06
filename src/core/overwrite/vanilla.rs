@@ -3,10 +3,10 @@
 use super::OverwriteFingerprint;
 use crate::common::Result;
 use crate::core::format::ymap::compare::YmapDiffFields;
+use crate::fs;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
-use std::fs;
 use std::path::Path;
 
 /// The extension of a vanilla overwrite document, after the stream file's own name.
@@ -62,7 +62,7 @@ impl VanillaOverwrite {
 pub(super) fn load(directory: &Path) -> Result<BTreeMap<String, VanillaOverwrite>> {
   let vanilla_dir = directory.join("vanilla");
   let mut overwrites = BTreeMap::new();
-  if !vanilla_dir.is_dir() {
+  if !fs::is_dir(&vanilla_dir) {
     return Ok(overwrites);
   }
   for entry in fs::read_dir(&vanilla_dir)? {
@@ -72,7 +72,7 @@ pub(super) fn load(directory: &Path) -> Result<BTreeMap<String, VanillaOverwrite
     }
   }
   let latest = vanilla_dir.join("latest");
-  if !latest.is_dir() {
+  if !fs::is_dir(&latest) {
     return Ok(overwrites);
   }
   for entry in fs::read_dir(&latest)? {
@@ -82,7 +82,7 @@ pub(super) fn load(directory: &Path) -> Result<BTreeMap<String, VanillaOverwrite
     }
   }
   let ymap_dir = latest.join("ymap");
-  if !ymap_dir.is_dir() {
+  if !fs::is_dir(&ymap_dir) {
     return Ok(overwrites);
   }
   for entry in fs::read_dir(&ymap_dir)? {
@@ -93,7 +93,7 @@ pub(super) fn load(directory: &Path) -> Result<BTreeMap<String, VanillaOverwrite
       .ok_or_else(|| format!("Overwrite file name is not UTF-8: {}", path.display()))?
       .to_ascii_lowercase();
     let Some(stream_name) = name.strip_suffix(DOCUMENT_EXTENSION).filter(|name| {
-      path.is_file() && Path::new(name).extension().is_some_and(|extension| extension == "ymap")
+      fs::is_file(&path) && Path::new(name).extension().is_some_and(|extension| extension == "ymap")
     }) else {
       tracing::warn!("Not a YMAP vanilla overwrite; ignoring {}", path.display());
       continue;

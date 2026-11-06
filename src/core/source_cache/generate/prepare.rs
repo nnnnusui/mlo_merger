@@ -11,9 +11,9 @@ use crate::core::source_cache::{
   publication::{create_staging_directory, prepare_output_path},
 };
 use crate::core::{vanilla::load_manifest_with_revision, vanilla_cache::load_cache};
+use crate::fs;
 use std::{
   collections::{BTreeMap, BTreeSet},
-  fs,
   path::{Path, PathBuf},
 };
 
@@ -57,7 +57,7 @@ fn check_same_source(
 
 pub(super) fn prepare(build: &BuildSourceCache) -> Result<Prepared> {
   let selection = build.resource.as_deref();
-  let source_dir = build.source_dir.canonicalize()?;
+  let source_dir = fs::canonicalize(&build.source_dir)?;
   let output = prepare_output_path(&build.output_dir)?;
   let exclusions = parse_exclusions(&build.exclusions.as_deref().unwrap_or_default().join(","))?;
   let all_resources = discover_resources(&source_dir)?;
@@ -87,10 +87,10 @@ pub(super) fn prepare(build: &BuildSourceCache) -> Result<Prepared> {
       format!("Resource not found or excluded: {}", selection.unwrap_or_default()).into(),
     );
   }
-  let vanilla_dir = build.vanilla_dir.canonicalize()?;
-  let vanilla_cache_dir = build.vanilla_cache_dir.canonicalize()?;
+  let vanilla_dir = fs::canonicalize(&build.vanilla_dir)?;
+  let vanilla_cache_dir = fs::canonicalize(&build.vanilla_cache_dir)?;
   let info = crate::core::source_cache::cache_info_path(&output);
-  let previous = if info.is_file() {
+  let previous = if fs::is_file(&info) {
     let metadata = crate::core::source_cache::read_metadata(&output)?;
     // Excluded resources still show that this is the cache's source tree.
     check_same_source(&metadata, &all_resources, &source_dir)?;
@@ -125,8 +125,8 @@ pub(super) fn prepare(build: &BuildSourceCache) -> Result<Prepared> {
     for relative in [Path::new("resources").join(name), Path::new(name).to_path_buf()] {
       let cached = output.join(&relative);
       ensure_safe_path(&output, &cached)?;
-      if cached.exists() {
-        for entry in walkdir::WalkDir::new(&cached).follow_links(false) {
+      if fs::exists(&cached).unwrap_or(false) {
+        for entry in crate::fs::WalkDir::new(&cached).follow_links(false) {
           let entry = entry?;
           ensure_safe_path(&output, entry.path())?;
         }
@@ -196,7 +196,7 @@ pub(super) fn prepare(build: &BuildSourceCache) -> Result<Prepared> {
     || upstream_changed
     || previous
       .as_ref()
-      .is_some_and(|metadata| metadata.outputs.iter().any(|name| !output.join(name).is_file()));
+      .is_some_and(|metadata| metadata.outputs.iter().any(|name| !fs::is_file(output.join(name))));
   fs::create_dir_all(&output)?;
   ensure_safe_path(&output, &history)?;
   let staging = Staging(create_staging_directory(&output)?);

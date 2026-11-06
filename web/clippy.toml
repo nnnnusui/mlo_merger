@@ -1,0 +1,50 @@
+# Lints for the browser build, where `std::fs` and friends fail at run time instead of reaching
+# the page's virtual filesystem. Library code uses `crate::fs` instead; see `src/fs/mod.rs`.
+#
+#   CLIPPY_CONF_DIR=web cargo clippy -p mlo_merger --lib --target wasm32-unknown-unknown \
+#     -- -D clippy::disallowed_methods -D clippy::disallowed_types
+
+disallowed-methods = [
+  { path = "std::fs::read", reason = "use crate::fs" },
+  { path = "std::fs::read_to_string", reason = "use crate::fs" },
+  { path = "std::fs::write", reason = "use crate::fs" },
+  { path = "std::fs::create_dir", reason = "use crate::fs" },
+  { path = "std::fs::create_dir_all", reason = "use crate::fs" },
+  { path = "std::fs::remove_file", reason = "use crate::fs" },
+  { path = "std::fs::remove_dir", reason = "use crate::fs" },
+  { path = "std::fs::remove_dir_all", reason = "use crate::fs" },
+  { path = "std::fs::rename", reason = "use crate::fs" },
+  { path = "std::fs::copy", reason = "use crate::fs" },
+  { path = "std::fs::hard_link", reason = "use crate::fs" },
+  { path = "std::fs::metadata", reason = "use crate::fs" },
+  { path = "std::fs::symlink_metadata", reason = "use crate::fs" },
+  { path = "std::fs::read_dir", reason = "use crate::fs" },
+  { path = "std::fs::read_link", reason = "use crate::fs" },
+  { path = "std::fs::canonicalize", reason = "use crate::fs" },
+  { path = "std::fs::exists", reason = "use crate::fs" },
+  { path = "std::path::Path::is_file", reason = "use crate::fs::is_file" },
+  { path = "std::path::Path::is_dir", reason = "use crate::fs::is_dir" },
+  { path = "std::path::Path::exists", reason = "use crate::fs::exists" },
+  { path = "std::path::Path::try_exists", reason = "use crate::fs::exists" },
+  { path = "std::path::Path::canonicalize", reason = "use crate::fs::canonicalize" },
+  { path = "std::path::Path::metadata", reason = "use crate::fs::metadata" },
+  { path = "std::path::Path::symlink_metadata", reason = "use crate::fs::symlink_metadata" },
+  { path = "std::path::Path::read_dir", reason = "use crate::fs::read_dir" },
+  { path = "std::path::Path::read_link", reason = "use crate::fs::read_link" },
+  { path = "std::env::current_dir", reason = "use crate::fs::current_dir" },
+  { path = "std::env::set_current_dir", reason = "use crate::fs::set_current_dir" },
+  { path = "std::env::temp_dir", reason = "no temporary directory in the browser" },
+  { path = "std::process::id", reason = "use crate::fs::process_id" },
+  { path = "std::time::SystemTime::now", reason = "panics in the browser; use chrono" },
+  { path = "std::time::Instant::now", reason = "panics in the browser" },
+]
+
+disallowed-types = [
+  { path = "std::fs::File", reason = "use crate::fs::File" },
+  { path = "std::fs::OpenOptions", reason = "use crate::fs::OpenOptions" },
+  { path = "std::fs::FileTimes", reason = "use crate::fs::FileTimes" },
+  { path = "std::fs::Metadata", reason = "use crate::fs::Metadata" },
+  { path = "std::fs::DirEntry", reason = "use crate::fs::DirEntry" },
+  { path = "walkdir::WalkDir", reason = "use crate::fs::WalkDir" },
+  { path = "walkdir::DirEntry", reason = "use crate::fs::walk::DirEntry" },
+]

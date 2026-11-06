@@ -1,11 +1,11 @@
-use std::fs;
+use crate::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
 /// Discovers a single FiveM resource or manifest-bearing resources inside bracket groups.
 pub fn get_resource_directories(input: &Path) -> io::Result<Vec<PathBuf>> {
   fn is_resource(path: &Path) -> bool {
-    path.join("fxmanifest.lua").is_file() || path.join("__resource.lua").is_file()
+    fs::is_file(path.join("fxmanifest.lua")) || fs::is_file(path.join("__resource.lua"))
   }
   fn explore(
     path: &Path,

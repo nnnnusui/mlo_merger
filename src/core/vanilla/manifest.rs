@@ -1,5 +1,6 @@
 //! Cache metadata and cumulative artifact lookup.
 
+use crate::fs;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
@@ -100,7 +101,7 @@ pub(crate) fn load_manifest_with_revision(
   cache: &Path
 ) -> Result<(Arc<VanillaCacheManifest>, String)> {
   let root = cache.join("cache_info.json");
-  if !root.is_file() {
+  if !fs::is_file(&root) {
     return Err(format!("No vanilla cache manifest found in {}", cache.display()).into());
   }
   let loaded = crate::common::json::read_shared(&root, |bytes| {

@@ -350,7 +350,7 @@ pub(super) fn write_ymap_diffs(
       fs::create_dir_all(staging.join(&object).parent().ok_or("Diff has no parent")?)?;
       let reusable = previous
         .map(|previous| previous.join(&object))
-        .filter(|path| old.windows(2).any(|old| old == pair) && path.is_file());
+        .filter(|path| old.windows(2).any(|old| old == pair) && fs::is_file(path));
       if let Some(path) = reusable {
         fs::copy(path, staging.join(&object))?;
         reused += 1;
@@ -433,6 +433,6 @@ pub(super) fn ymap_diffs_are_current(
     && index.ymaps.iter().all(|(name, versions)| {
       versions[1..]
         .iter()
-        .all(|version| output_dir.join(diff_object(&version.version, name)).is_file())
+        .all(|version| fs::is_file(output_dir.join(diff_object(&version.version, name))))
     })
 }

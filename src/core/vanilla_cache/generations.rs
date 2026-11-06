@@ -147,7 +147,7 @@ impl GenerationIndex {
   /// algorithm version.
   pub(crate) fn load(cache_dir: &Path) -> Result<Option<Self>> {
     let path = cache_dir.join(GENERATIONS_FILE);
-    if !path.is_file() {
+    if !fs::is_file(&path) {
       return Ok(None);
     }
     let index: Self = crate::common::json::read_json(&path)?;
@@ -279,7 +279,7 @@ pub(super) fn write_generations(
         let (older_files, newer_files) =
           (unit_files(older_generation), unit_files(newer_generation));
         let key = unit_key(&name, &older_files, &newer_files)?;
-        if !units_dir.join(format!("{key}.json")).is_file() {
+        if !fs::is_file(units_dir.join(format!("{key}.json"))) {
           missing.insert(key.clone(), (name.clone(), older_files, newer_files));
         }
         units.push(UnitRef {

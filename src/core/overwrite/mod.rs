@@ -15,10 +15,10 @@ mod vanilla;
 
 use crate::common::Result;
 use crate::core::format::ymap::compare::YmapDiffFields;
+use crate::fs;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
-use std::fs;
 use std::path::Path;
 
 pub use skip::skip_diffs;
@@ -101,7 +101,7 @@ impl OverwriteFingerprint {
   /// The content of the file at `path`, after resolving links as latest vanilla files are.
   pub fn read(path: &Path) -> Result<Self> {
     let fingerprint =
-      crate::common::fingerprint::Fingerprint::read(&path.canonicalize()?, None, false)?;
+      crate::common::fingerprint::Fingerprint::read(&fs::canonicalize(path)?, None, false)?;
     Ok(Self {
       sha256: fingerprint.sha256,
       size: fingerprint.size,
@@ -206,12 +206,12 @@ impl Overwrites {
 fn load_resources(directory: &Path) -> Result<BTreeMap<String, ResourceOverwrite>> {
   let resources_dir = directory.join("resources");
   let mut resources = BTreeMap::new();
-  if !resources_dir.is_dir() {
+  if !fs::is_dir(&resources_dir) {
     return Ok(resources);
   }
   for entry in fs::read_dir(&resources_dir)? {
     let path = entry?.path();
-    if !path.is_file() || path.extension().is_none_or(|extension| extension != "json") {
+    if !fs::is_file(&path) || path.extension().is_none_or(|extension| extension != "json") {
       continue;
     }
     let name = path

@@ -607,7 +607,7 @@ mod tests {
   fn builder_splits_polygons_and_repairs_triangle_edges() {
     let path =
       Path::new(env!("CARGO_MANIFEST_DIR")).join("docs/sample/ybn_conflicts/geometry_bvh.ybn.xml");
-    let xml = std::fs::read_to_string(path).unwrap();
+    let xml = crate::fs::read_to_string(path).unwrap();
     let root = super::super::parse_xml(&xml).unwrap();
     let bounds =
       super::super::read_bound_xml(super::super::child(&root, "Bounds").unwrap(), None).unwrap();
@@ -630,7 +630,7 @@ mod tests {
   fn native_geometry_bvh_writes_pointer_nodes_and_tree_records() {
     let path =
       Path::new(env!("CARGO_MANIFEST_DIR")).join("docs/sample/ybn_conflicts/geometry_bvh.ybn.xml");
-    let xml = std::fs::read_to_string(path).unwrap();
+    let xml = crate::fs::read_to_string(path).unwrap();
     let bytes = super::super::xml_to_ybn(&xml).unwrap();
     let resource = super::super::Rsc7Resource::decode(&bytes).unwrap();
     let root = resource.read_address(super::super::BASE, super::super::COMPOSITE_SIZE).unwrap();

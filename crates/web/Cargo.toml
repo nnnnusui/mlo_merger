@@ -1,0 +1,17 @@
+[package]
+name = "mlo_merger_web"
+version = "2.3.0"
+edition = "2024"
+publish = false
+description = "Runs mlo_merger's --pipeline and --read in a browser page"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+# Everything is browser-only; a native build of this crate is empty.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+js-sys = "0.3"
+mlo_merger = { path = "../.." }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", default-features = false, features = ["env-filter", "fmt", "std"] }
+wasm-bindgen = "0.2"

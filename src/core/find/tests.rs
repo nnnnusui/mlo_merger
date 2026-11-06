@@ -1,10 +1,11 @@
 use super::*;
 use crate::core::format::ymap::binary::ymap_to_model;
+use crate::fs;
 use entity::{FileResult, entity_data, search_result};
 use inputs::matches;
 use sha2::{Digest, Sha256};
+use std::collections::HashMap;
 use std::path::Path;
-use std::{collections::HashMap, fs};
 
 #[test]
 fn entity_position_search_includes_the_3d_boundary_and_all_occurrences() {

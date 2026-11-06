@@ -9,6 +9,7 @@ mod findings;
 #[cfg(test)]
 mod tests;
 
+use crate::fs;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
@@ -114,7 +115,7 @@ fn check_store(
   directory: &Path,
   check: impl FnOnce(&mut Findings) -> Result<()>,
 ) -> Result<()> {
-  if !directory.is_dir() {
+  if !fs::is_dir(directory) {
     tracing::info!("Skipping the {store} check: {} does not exist", directory.display());
     return Ok(());
   }

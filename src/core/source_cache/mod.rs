@@ -12,6 +12,7 @@ mod streams;
 mod types;
 mod ymap_plan;
 
+use crate::fs;
 use std::{
   collections::{BTreeMap, BTreeSet},
   path::{Component, Path, PathBuf},
@@ -152,7 +153,7 @@ pub fn cached_files(cache_dir: &Path) -> Result<Vec<CachedFile>> {
       if !safe(Path::new(cached)) || !cached.starts_with("resources/") {
         return Err(format!("Unsafe source-cache path {cached}").into());
       }
-      if !cache_dir.join(cached).is_file() {
+      if !fs::is_file(cache_dir.join(cached)) {
         return Err(
           format!("Recorded cached file is missing: {cached}; rebuild the source cache").into(),
         );
@@ -235,8 +236,8 @@ pub(crate) fn write_test_inventory(
     },
     outputs: BTreeSet::new(),
   };
-  std::fs::create_dir_all(cache_dir).unwrap();
-  std::fs::write(cache_info_path(cache_dir), serde_json::to_vec(&metadata).unwrap()).unwrap();
+  crate::fs::create_dir_all(cache_dir).unwrap();
+  crate::fs::write(cache_info_path(cache_dir), serde_json::to_vec(&metadata).unwrap()).unwrap();
 }
 
 /// Recorded source YMAP paths and the vanilla version the source cache was generated against.
@@ -456,7 +457,7 @@ struct Staging(PathBuf);
 
 impl Drop for Staging {
   fn drop(&mut self) {
-    let _ = std::fs::remove_dir_all(&self.0);
+    let _ = crate::fs::remove_dir_all(&self.0);
   }
 }
 

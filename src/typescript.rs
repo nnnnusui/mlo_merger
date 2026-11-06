@@ -1,7 +1,8 @@
 //! Generates TypeScript types from the same Rust models used by Serde.
 
+use crate::fs;
 use specta::ts::{BigIntExportBehavior, ExportConfiguration};
-use std::{fs, path::Path};
+use std::path::Path;
 
 /// Exports report, cache and configuration types without running the asset pipeline.
 ///

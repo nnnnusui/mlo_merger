@@ -10,6 +10,7 @@ use super::{
 };
 use crate::common::path::absolute_path;
 use crate::core::config::gamebuild::GameBuild;
+use crate::fs;
 use std::path::PathBuf;
 
 pub use report::{PipelineChanges, PipelineReport, PipelineSummary};
@@ -64,7 +65,7 @@ impl Pipeline {
   }
 
   fn run_steps(&self) -> Result<PipelineSummary, Box<dyn std::error::Error>> {
-    if !self.source_dir.is_dir() {
+    if !fs::is_dir(&self.source_dir) {
       return Err(
         format!("Source resource directory does not exist: {}", self.source_dir.display()).into(),
       );
@@ -146,7 +147,7 @@ impl Pipeline {
     .into_iter()
     .map(|(name, path)| Ok((name, absolute_path(path)?)))
     .collect::<Result<Vec<_>, std::io::Error>>()?;
-    let workspace = std::env::current_dir()?.canonicalize()?;
+    let workspace = fs::canonicalize(&fs::current_dir()?)?;
     for (index, (name, path)) in paths.iter().enumerate() {
       if *name != "vanilla" && workspace.starts_with(path) {
         return Err(format!("Pipeline {name} output overlaps the workspace").into());

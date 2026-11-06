@@ -109,7 +109,7 @@ fn validate_asset_ymap_readability() {
     .unwrap_or_else(|| std::env::temp_dir().join("ymap-read-validation.json"));
   let mut paths = Vec::new();
   let mut failures = Vec::new();
-  for entry in walkdir::WalkDir::new(&root) {
+  for entry in crate::fs::WalkDir::new(&root) {
     match entry {
       Ok(entry) if entry.file_type().is_file() => {
         let name = entry.file_name().to_string_lossy().to_ascii_lowercase();
@@ -130,7 +130,7 @@ fn validate_asset_ymap_readability() {
   for (index, path) in paths.iter().enumerate() {
     let group = path.strip_prefix(&root).unwrap().components().next().unwrap();
     let key = group.as_os_str().to_string_lossy().into_owned();
-    let result = std::fs::read(path).map_err(|error| error.to_string()).and_then(|bytes| {
+    let result = crate::fs::read(path).map_err(|error| error.to_string()).and_then(|bytes| {
       use sha2::Digest;
       let key: [u8; 32] = sha2::Sha256::digest(&bytes).into();
       results
@@ -170,7 +170,7 @@ fn validate_asset_ymap_readability() {
       );
     }
   }
-  let mut writer = std::io::BufWriter::new(std::fs::File::create(&report).unwrap());
+  let mut writer = std::io::BufWriter::new(crate::fs::File::create(&report).unwrap());
   serde_json::to_writer_pretty(
     &mut writer,
     &serde_json::json!({

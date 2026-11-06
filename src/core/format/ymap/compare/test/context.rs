@@ -1,6 +1,7 @@
 //! Loading, caching and parent resolution of [`YmapComparisonContext`] over the local caches.
 
-use std::{collections::HashMap, fs, path::Path, sync::Arc};
+use crate::fs;
+use std::{collections::HashMap, path::Path, sync::Arc};
 
 use crate::core::format::ymap::{
   compare::{StreamFileRef, YmapComparisonContext, YmapParentRef},

@@ -1,10 +1,10 @@
+use crate::fs;
 use std::collections::BTreeMap;
-use std::fs;
 use std::path::{Path, PathBuf};
 
+use crate::fs::WalkDir;
 use rayon::prelude::*;
 use sha2::{Digest, Sha256};
-use walkdir::WalkDir;
 
 use super::{
   Result,
@@ -34,13 +34,13 @@ pub(super) fn source_fingerprints(
     inputs.push((input_key(&id, ""), resource.clone(), false));
     for manifest in ["fxmanifest.lua", "__resource.lua"] {
       let path = resource.join(manifest);
-      if path.is_file() {
+      if fs::is_file(&path) {
         inputs.push((input_key(&id, manifest), path, true));
       }
     }
     for stream_name in ["stream", "streams"] {
       let stream = resource.join(stream_name);
-      if !stream.is_dir() {
+      if !fs::is_dir(&stream) {
         continue;
       }
       for entry in WalkDir::new(&stream).follow_links(false) {
@@ -102,7 +102,7 @@ pub(super) fn source_inventory(
     let mut files_by_format: BTreeMap<String, Vec<SourceFile>> = BTreeMap::new();
     for stream_name in ["stream", "streams"] {
       let stream = resource.join(stream_name);
-      if !stream.is_dir() {
+      if !fs::is_dir(&stream) {
         continue;
       }
       for entry in WalkDir::new(&stream).follow_links(false) {
@@ -203,6 +203,16 @@ fn input_key(
   format!("{resource_id}/{relative}")
 }
 
+/// A file name as `serde` serializes an `OsString` on Unix.
+///
+/// `serde` serializes `OsString` only on Unix and Windows; the browser build uses this form
+/// so it fingerprints directories as Linux does.
+#[cfg(target_arch = "wasm32")]
+#[derive(serde::Serialize, PartialEq, Eq, PartialOrd, Ord)]
+enum UnixName {
+  Unix(Vec<u8>),
+}
+
 pub(super) fn fingerprint(
   path: &Path,
   cached: Option<&FileFingerprint>,
@@ -213,7 +223,11 @@ pub(super) fn fingerprint(
     let mut entries = fs::read_dir(path)?
       .map(|entry| {
         let entry = entry?;
-        Ok((entry.file_name(), entry.file_type()?.is_dir()))
+        #[cfg(not(target_arch = "wasm32"))]
+        let name = entry.file_name();
+        #[cfg(target_arch = "wasm32")]
+        let name = UnixName::Unix(entry.file_name().into_encoded_bytes());
+        Ok((name, entry.file_type()?.is_dir()))
       })
       .collect::<std::io::Result<Vec<_>>>()?;
     entries.sort();

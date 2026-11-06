@@ -1,10 +1,10 @@
 //! RPF extraction and physical/virtual DLC archive resolution.
 
+use crate::fs::{self, File};
 use rayon::prelude::*;
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
-use std::fs::{self, File};
 use std::path::{Path, PathBuf};
 
 use super::Result;

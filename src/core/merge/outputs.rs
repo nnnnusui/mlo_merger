@@ -1,5 +1,6 @@
 //! The merged stream files a merge output records, for readers outside the merge.
 
+use crate::fs;
 use std::path::{Path, PathBuf};
 
 use super::incremental::{MergeMetadata, output_path};
@@ -28,7 +29,7 @@ pub struct MergedFile {
 /// Files a merge left unchanged from vanilla have no output and are not listed.
 pub fn merged_files(merged_dir: &Path) -> Result<Vec<MergedFile>> {
   let path = cache_info_path(merged_dir);
-  if !path.is_file() {
+  if !fs::is_file(&path) {
     return Err(format!("Merge metadata is missing: {}", path.display()).into());
   }
   let metadata = MergeMetadata::load(merged_dir)?

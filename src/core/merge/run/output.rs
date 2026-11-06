@@ -31,7 +31,7 @@ impl MergeYmap {
             std::io::Error::new(error.kind(), format!("Cannot write {}: {error}", output.name))
           })?;
         fs::write(&binary_path, bytes)?;
-        if clone_path.exists() {
+        if fs::exists(&clone_path).unwrap_or(false) {
           fs::remove_file(&clone_path)?;
         }
         tracing::info!(
@@ -47,10 +47,10 @@ impl MergeYmap {
           output.name
         );
       } else {
-        if binary_path.exists() {
+        if fs::exists(&binary_path).unwrap_or(false) {
           fs::remove_file(&binary_path)?;
         }
-        if clone_path.exists() {
+        if fs::exists(&clone_path).unwrap_or(false) {
           fs::remove_file(&clone_path)?;
         }
       }

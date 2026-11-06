@@ -1,5 +1,6 @@
 //! Ordered raw vanilla YMAP/YBN files from GTA V RPF archives.
 
+use crate::fs;
 use std::{error::Error, path::PathBuf};
 
 mod archives;
@@ -61,18 +62,18 @@ impl GenerateVanilla {
     generate: impl FnOnce() -> Result<()>,
   ) -> Result<()> {
     if self.reuse_existing {
-      if self.output_dir.join("cache_info.json").is_file() {
+      if fs::is_file(self.output_dir.join("cache_info.json")) {
         load_manifest(&self.output_dir)?;
         tracing::info!("Reusing existing vanilla archive");
         return Ok(());
       }
-      if self.output_dir.is_dir() && std::fs::read_dir(&self.output_dir)?.next().is_some() {
+      if fs::is_dir(&self.output_dir) && crate::fs::read_dir(&self.output_dir)?.next().is_some() {
         return Err(
           "Vanilla directory is nonempty but has no manifest; refusing automatic replacement"
             .into(),
         );
       }
-      if !self.game_dir.is_dir() {
+      if !fs::is_dir(&self.game_dir) {
         return Err(format!("Vanilla archive is missing; specify --game-dir with an installed GTA V directory (current: {})", self.game_dir.display()).into());
       }
     }

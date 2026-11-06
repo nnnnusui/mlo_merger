@@ -1,8 +1,8 @@
 //! GTAV archive, stage and publication regression tests.
 
+use crate::fs;
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
-use std::fs;
 use std::path::{Path, PathBuf};
 
 use super::*;

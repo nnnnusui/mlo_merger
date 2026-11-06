@@ -4,9 +4,9 @@ use crate::core::overwrite::IgnoredOverwrite;
 use crate::core::vanilla::{
   CacheVersion, CachedFile, FileChange, VanillaCacheManifest, write_json,
 };
+use crate::fs;
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
-use std::fs;
 
 #[test]
 fn report_adds_ignored_overwrites_to_the_changes() {

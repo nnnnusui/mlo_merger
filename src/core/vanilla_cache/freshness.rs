@@ -18,7 +18,7 @@ pub(super) fn cache_is_current(
   let Some(manifest) = manifest else {
     return Ok(false);
   };
-  if !relationships_path.is_file() {
+  if !fs::is_file(&relationships_path) {
     return Ok(false);
   }
   if manifest.format_version != CACHE_SCHEMA
@@ -39,7 +39,7 @@ pub(super) fn cache_is_current(
   {
     return Ok(false);
   }
-  if !output_dir.join("latest/ymap").is_dir() || !output_dir.join("latest/ybn").is_dir() {
+  if !fs::is_dir(output_dir.join("latest/ymap")) || !fs::is_dir(output_dir.join("latest/ybn")) {
     return Ok(false);
   }
   if !generations::index_is_current(output_dir, revision, latest_version) {

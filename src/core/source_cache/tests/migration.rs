@@ -545,7 +545,7 @@ fn moves_vanilla_files_retains_history_and_updates_only_selected_resources() {
   assert!(!excluded.resource_checks.contains_key(cache_resource));
   assert!(!output.join("resources/resource_a").exists());
   assert!(first.join("stream/custom.ymap").is_file());
-  let archived = walkdir::WalkDir::new(output.join("_old"))
+  let archived = crate::fs::WalkDir::new(output.join("_old"))
     .into_iter()
     .filter_map(|entry| entry.ok())
     .find(|entry| entry.path().ends_with("resources/resource_a/unrecorded.ybn"))

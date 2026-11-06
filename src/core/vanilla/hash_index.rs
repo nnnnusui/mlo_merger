@@ -1,8 +1,8 @@
 //! Hash-name and YMAP entity archetype extraction for raw vanilla generation.
 
+use crate::fs;
 use std::{
   collections::{BTreeMap, BTreeSet},
-  fs,
   path::{Component, Path, PathBuf},
 };
 
@@ -254,7 +254,7 @@ fn checked_artifact_path(
     return Err(format!("Invalid vanilla artifact path: {object}").into());
   }
   let path = vanilla_dir.join(relative);
-  if !path.is_file() {
+  if !fs::is_file(&path) {
     return Err(format!("Vanilla artifact is missing: {}", path.display()).into());
   }
   Ok(path)

@@ -1,3 +1,4 @@
+use crate::fs;
 use std::path::PathBuf;
 
 use bpaf::*;
@@ -30,7 +31,9 @@ pub fn run(command: FromXml) -> Result<(), Box<dyn std::error::Error>> {
   let (converted, failed) = crate::core::conversion::from_xml(
     &command.input,
     &command.common.output,
-    command.common.vanilla.exists().then_some(command.common.vanilla.as_path()),
+    fs::exists(&command.common.vanilla)
+      .unwrap_or(false)
+      .then_some(command.common.vanilla.as_path()),
   )?;
   println!("Converted {converted} XML files to binary; {failed} failed.");
   Ok(())

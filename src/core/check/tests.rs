@@ -1,5 +1,6 @@
 use super::*;
-use std::{collections::BTreeSet, fs};
+use crate::fs;
+use std::collections::BTreeSet;
 
 /// An empty directory for one test.
 fn directory(name: &str) -> PathBuf {

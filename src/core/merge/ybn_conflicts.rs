@@ -1,6 +1,7 @@
 //! Merging same-named YBN overrides from several resources against their latest vanilla file.
 
-use std::{collections::BTreeMap, fs, io, path::PathBuf};
+use crate::fs;
+use std::{collections::BTreeMap, io, path::PathBuf};
 
 use crate::core::format::ybn::merge_ybn_deltas;
 
@@ -84,7 +85,7 @@ fn group_by_name(paths: &[PathBuf]) -> BTreeMap<String, Vec<PathBuf>> {
 fn vanilla_by_name(paths: &[PathBuf]) -> io::Result<BTreeMap<String, &PathBuf>> {
   let mut files = BTreeMap::new();
   for path in paths {
-    if !path.is_file()
+    if !fs::is_file(path)
       || path.extension().is_none_or(|extension| !extension.eq_ignore_ascii_case("ybn"))
     {
       continue;

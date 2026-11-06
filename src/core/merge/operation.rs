@@ -1,10 +1,10 @@
+use crate::fs;
 use std::{
   collections::BTreeMap,
-  fs,
   path::{Path, PathBuf},
 };
 
-use walkdir::WalkDir;
+use crate::fs::WalkDir;
 
 use super::incremental::IncrementalMerge;
 use crate::common::changes::StoreChanges;
@@ -66,9 +66,9 @@ impl Merge {
   }
 
   fn run_inner(&self) -> Result<MergeSummary> {
-    let source_dir = self.source_dir.canonicalize()?;
-    let vanilla_cache_dir = self.vanilla_cache_dir.canonicalize()?;
-    let source_cache_dir = self.source_cache_dir.canonicalize()?;
+    let source_dir = fs::canonicalize(&self.source_dir)?;
+    let vanilla_cache_dir = fs::canonicalize(&self.vanilla_cache_dir)?;
+    let source_cache_dir = fs::canonicalize(&self.source_cache_dir)?;
     let merge_inputs = source_cache::load_merge_inputs(&source_cache_dir, &source_dir)?;
     let overwrites = match &self.overwrite_dir {
       Some(directory) => Overwrites::load(directory)?,
@@ -197,7 +197,7 @@ fn dispatch_vanilla_stream_files(latest_dir: &Path) -> Result<VanillaStreamFiles
   for entry in WalkDir::new(latest_dir).follow_links(false) {
     let entry = entry?;
     let path = entry.path();
-    if !path.is_file() {
+    if !fs::is_file(path) {
       continue;
     }
     match path.extension().and_then(|extension| extension.to_str()) {
@@ -221,18 +221,19 @@ fn dispatch_vanilla_stream_files(latest_dir: &Path) -> Result<VanillaStreamFiles
 
 fn prepare_output_path(output: &Path) -> Result<PathBuf> {
   let absolute =
-    if output.is_absolute() { output.to_path_buf() } else { std::env::current_dir()?.join(output) };
+    if output.is_absolute() { output.to_path_buf() } else { fs::current_dir()?.join(output) };
   let parent = absolute.parent().ok_or("Merge output has no parent")?;
   fs::create_dir_all(parent)?;
-  let output = parent.canonicalize()?.join(absolute.file_name().ok_or("Merge output has no name")?);
-  let current_dir = std::env::current_dir()?.canonicalize()?;
+  let output =
+    fs::canonicalize(parent)?.join(absolute.file_name().ok_or("Merge output has no name")?);
+  let current_dir = fs::canonicalize(&fs::current_dir()?)?;
   if output == current_dir || current_dir.starts_with(&output) {
     return Err("Refusing to replace the workspace directory or one of its parents".into());
   }
   if fs::symlink_metadata(&output).is_ok_and(|metadata| metadata.file_type().is_symlink()) {
     return Err(format!("Refusing to replace symlink output {}", output.display()).into());
   }
-  if output.exists() && !output.is_dir() {
+  if fs::exists(&output).unwrap_or(false) && !fs::is_dir(&output) {
     return Err(format!("Merge output is not a directory: {}", output.display()).into());
   }
   Ok(output)
@@ -241,7 +242,7 @@ fn prepare_output_path(output: &Path) -> Result<PathBuf> {
 fn create_staging_directory(output: &Path) -> Result<PathBuf> {
   let parent = output.parent().ok_or("Merge output has no parent")?;
   let name = output.file_name().ok_or("Merge output has no name")?.to_string_lossy();
-  let staging = parent.join(format!(".{name}.staging-{}", std::process::id()));
+  let staging = parent.join(format!(".{name}.staging-{}", fs::process_id()));
   fs::create_dir(&staging)?;
   Ok(staging)
 }
@@ -253,12 +254,12 @@ fn publish_directory(
   let backup = output.with_file_name(format!(
     ".{}.backup-{}",
     output.file_name().unwrap_or_default().to_string_lossy(),
-    std::process::id()
+    fs::process_id()
   ));
-  if backup.exists() {
+  if fs::exists(&backup).unwrap_or(false) {
     return Err(format!("Merge backup already exists: {}", backup.display()).into());
   }
-  let existed = output.exists();
+  let existed = fs::exists(output).unwrap_or(false);
   if existed {
     fs::rename(output, &backup)?;
   }

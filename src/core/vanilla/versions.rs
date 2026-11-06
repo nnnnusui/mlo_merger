@@ -111,8 +111,8 @@ mod tests {
   use crate::core::vanilla::{
     CacheVersion, CachedFile, FileChange, VanillaCacheManifest, write_json,
   };
+  use crate::fs;
   use std::collections::BTreeMap;
-  use std::fs;
 
   #[test]
   fn vanilla_version_list_matches_names_and_skips_unchanged_stages() {

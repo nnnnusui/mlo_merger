@@ -19,9 +19,9 @@
 //! so `propagated/inputs.json` records a digest of both, and the documents are kept while it
 //! matches. It also lists the documents for merges.
 
+use crate::fs;
 use std::{
   collections::{BTreeMap, BTreeSet, HashMap},
-  fs,
   path::Path,
 };
 
@@ -106,7 +106,7 @@ pub(in crate::core::source_cache) fn write_propagated_diffs(
   ))?));
   if let Some(record) = read_record(output)
     && record.digest == digest
-    && record.documents.iter().all(|document| output.join(&document.path).is_file())
+    && record.documents.iter().all(|document| fs::is_file(output.join(&document.path)))
   {
     return Ok(PropagationCounts {
       documents: record.documents.len(),
@@ -495,7 +495,7 @@ impl Propagation<'_> {
     file_name: &str,
   ) -> Result<YmapComparisonFile> {
     let stored = format!("latest/ymap/{file_name}");
-    let path = self.vanilla_cache_dir.join(&stored).canonicalize()?;
+    let path = fs::canonicalize(self.vanilla_cache_dir.join(&stored))?;
     let fingerprint = crate::common::fingerprint::Fingerprint::read(&path, None, false)?;
     Ok(YmapComparisonFile {
       path: stored,
@@ -562,7 +562,7 @@ mod tests {
     let output = std::env::temp_dir().join(format!("propagated_{}", std::process::id()));
     let _ = fs::remove_dir_all(&output);
     let source_cache = asset.join("source-cache");
-    for entry in walkdir::WalkDir::new(source_cache.join("diff")) {
+    for entry in crate::fs::WalkDir::new(source_cache.join("diff")) {
       let entry = entry.unwrap();
       let destination = output.join(entry.path().strip_prefix(&source_cache).unwrap());
       if entry.file_type().is_dir() {

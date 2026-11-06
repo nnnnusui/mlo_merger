@@ -2,7 +2,8 @@
 
 use super::{CACHE_SCHEMA, DerivedManifest, Result, generations::GenerationIndex};
 use crate::core::check::{CheckIssueKind, Findings};
-use std::{collections::BTreeSet, fs, path::Path};
+use crate::fs;
+use std::{collections::BTreeSet, path::Path};
 
 /// Entries of the cache directory besides `latest/`.
 const CACHE_ENTRIES: [&str; 8] = [
@@ -55,13 +56,13 @@ pub(crate) fn check(
       findings.add(CheckIssueKind::WrongLink, &object, Some("not a link".into()));
       continue;
     }
-    let Ok(target) = link.canonicalize() else {
+    let Ok(target) = fs::canonicalize(&link) else {
       let target = fs::read_link(&link)?;
       findings.add(CheckIssueKind::BrokenLink, &object, Some(target.display().to_string()));
       continue;
     };
     // The archive may be elsewhere, or absent, in which case only the link is checked.
-    if let Ok(expected) = vanilla_dir.join(&file.vanilla_object).canonicalize()
+    if let Ok(expected) = fs::canonicalize(vanilla_dir.join(&file.vanilla_object))
       && target != expected
     {
       findings.add(
@@ -78,7 +79,7 @@ pub(crate) fn check(
     Ok(Some(index)) => {
       for unit in index.families.values().flat_map(|family| &family.units) {
         let path = format!("generation-units/{}.json", unit.key);
-        if !dir.join(&path).is_file() {
+        if !fs::is_file(dir.join(&path)) {
           findings.add(CheckIssueKind::Missing, &path, None);
         }
       }

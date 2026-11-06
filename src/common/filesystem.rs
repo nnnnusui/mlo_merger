@@ -1,5 +1,6 @@
 use super::{Result, path::reject_symlinks};
-use std::{fs, path::Path};
+use crate::fs;
+use std::path::Path;
 
 pub(crate) fn read_bytes(path: &Path) -> Result<Vec<u8>> {
   reject_symlinks(path)?;

@@ -72,9 +72,13 @@ fn names_file(value: &str) -> bool {
 
 /// Writes the JSON and prints what was read as one line of JSON.
 pub fn run(command: Read) -> Result<(), Box<dyn std::error::Error>> {
-  let result = command.run()?;
-  println!("{}", serde_json::to_string(&result)?);
+  println!("{}", report(command)?);
   Ok(())
+}
+
+/// Writes the JSON and returns the one line of JSON [`run`] prints.
+pub fn report(command: Read) -> Result<String, Box<dyn std::error::Error>> {
+  Ok(serde_json::to_string(&command.run()?)?)
 }
 
 #[cfg(test)]

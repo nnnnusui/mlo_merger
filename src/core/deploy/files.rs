@@ -1,17 +1,17 @@
 //! Safe file operations in the deployment directory.
 
 use super::Result;
+use crate::fs;
+use crate::fs::WalkDir;
 use std::{
-  fs,
   io::Write,
   path::{Component, Path, PathBuf},
 };
-use walkdir::WalkDir;
 
 /// Removes empty directories below `stream/`, without following links.
 pub(super) fn remove_empty_stream_directories(output: &Path) -> Result<()> {
   let stream = destination(output, "stream")?;
-  if !stream.is_dir() {
+  if !fs::is_dir(&stream) {
     return Ok(());
   }
   for entry in WalkDir::new(&stream).follow_links(false).contents_first(true) {
@@ -42,7 +42,7 @@ pub(super) fn copy_file(
   let temporary = parent.join(format!(
     ".{}.deploy-{}.tmp",
     target.file_name().ok_or("Deployment file has no name")?.to_string_lossy(),
-    std::process::id()
+    fs::process_id()
   ));
   let mut writer = fs::OpenOptions::new().write(true).create_new(true).open(&temporary)?;
   let result = (|| -> Result<()> {
@@ -67,12 +67,12 @@ pub(super) fn prepare_output(
   inputs: &[&Path],
 ) -> Result<PathBuf> {
   let absolute =
-    if path.is_absolute() { path.to_path_buf() } else { std::env::current_dir()?.join(path) };
+    if path.is_absolute() { path.to_path_buf() } else { fs::current_dir()?.join(path) };
   let parent = absolute.parent().ok_or("Deployment output has no parent")?;
   fs::create_dir_all(parent)?;
   let output =
-    parent.canonicalize()?.join(absolute.file_name().ok_or("Deployment output has no name")?);
-  let current = std::env::current_dir()?.canonicalize()?;
+    fs::canonicalize(parent)?.join(absolute.file_name().ok_or("Deployment output has no name")?);
+  let current = fs::canonicalize(&fs::current_dir()?)?;
   if current.starts_with(&output)
     || inputs.iter().any(|input| output.starts_with(input) || input.starts_with(&output))
   {

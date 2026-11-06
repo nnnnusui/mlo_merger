@@ -1,8 +1,8 @@
 //! Dumps entities that share a GUID within a single YMAP, for inspecting local assets.
 
+use crate::fs;
 use std::{
   collections::HashMap,
-  fs,
   path::{Path, PathBuf},
 };
 
@@ -92,11 +92,11 @@ fn resolve_hash_name(
 }
 
 fn ymap_paths(root: &Path) -> Vec<PathBuf> {
-  walkdir::WalkDir::new(root)
+  crate::fs::WalkDir::new(root)
     .sort_by_file_name()
     .into_iter()
     .filter_map(Result::ok)
-    .map(walkdir::DirEntry::into_path)
+    .map(crate::fs::walk::DirEntry::into_path)
     .filter(|path| path.extension().is_some_and(|ext| ext.eq_ignore_ascii_case("ymap")))
     .collect()
 }

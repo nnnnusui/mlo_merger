@@ -6,7 +6,7 @@ fn parses_four_vanilla_pso_ymaps() {
   for name in ["cs1_railwyc", "cs1_railwyc_long_0", "id2_17", "id2_17_strm_0"] {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
       .join(format!("asset/vanilla/0000-base/ymap/{name}.ymap"));
-    let bytes = std::fs::read(&path).unwrap();
+    let bytes = crate::fs::read(&path).unwrap();
     let resource = PsoResource::parse(&bytes).unwrap();
     assert_eq!(resource.blocks[resource.root - 1].name, jenk_hash("CMapData"));
     assert!(resource.structures.contains_key(&jenk_hash("CMapData")));
@@ -35,7 +35,7 @@ fn parses_four_vanilla_pso_ymaps() {
 fn template_rebuild_edits_flags_and_rejects_shape_changes() {
   let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
     .join("asset/vanilla/0000-base/ymap/cs1_railwyc.ymap");
-  let bytes = std::fs::read(path).unwrap();
+  let bytes = crate::fs::read(path).unwrap();
   let xml = PsoResource::parse(&bytes).unwrap().to_xml(&HashMap::new()).unwrap();
   let edited = xml.replacen("<flags value=\"2\"", "<flags value=\"3\"", 1);
   assert_ne!(edited, xml);

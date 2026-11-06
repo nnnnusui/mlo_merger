@@ -2,8 +2,9 @@
 
 use super::{CheckIssue, CheckIssueKind, Result};
 use crate::common::fingerprint::Fingerprint;
-use std::{collections::BTreeSet, fs, path::Path};
-use walkdir::WalkDir;
+use crate::fs;
+use crate::fs::WalkDir;
+use std::{collections::BTreeSet, path::Path};
 
 /// The issues found in one store.
 pub(crate) struct Findings {
@@ -90,7 +91,7 @@ impl Findings {
         Some(format!("size {} instead of {size}", metadata.len())),
       );
     } else if deep {
-      let actual = Fingerprint::read(&path.canonicalize()?, None, true)?.sha256;
+      let actual = Fingerprint::read(&fs::canonicalize(&path)?, None, true)?.sha256;
       if actual != sha256 {
         self.add(CheckIssueKind::Changed, relative, Some(format!("SHA-256 {actual}")));
       }
@@ -106,7 +107,7 @@ pub(crate) fn files_below(
   directory: &str,
 ) -> Result<Vec<String>> {
   let start = root.join(directory);
-  if !start.is_dir() {
+  if !fs::is_dir(&start) {
     return Ok(Vec::new());
   }
   let mut files = Vec::new();

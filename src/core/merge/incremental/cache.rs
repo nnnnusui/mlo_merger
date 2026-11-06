@@ -104,7 +104,7 @@ pub(in crate::core::merge) struct MergeMetadata {
 impl MergeMetadata {
   pub(in crate::core::merge) fn load(output: &Path) -> Result<Option<Self>> {
     let path = crate::core::merge::cache_info_path(output);
-    if !path.is_file() {
+    if !fs::is_file(&path) {
       return Ok(None);
     }
     let metadata: Self = crate::common::json::read_json(path)?;
@@ -137,7 +137,7 @@ pub(in crate::core::merge) fn reusable(
     return Ok(true);
   };
   let path = output_path(output, &file.path)?;
-  if !path.is_file() {
+  if !fs::is_file(&path) {
     return Ok(false);
   }
   Ok(Fingerprint::read(&path, Some(&file.fingerprint), false)?.same_content(&file.fingerprint))

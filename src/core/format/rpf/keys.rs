@@ -1,6 +1,7 @@
 //! Archive keys: the AES key found in GTA5.exe and the NG material in CodeWalker's `magic.dat`.
 
-use std::{fs, io, io::Read, path::Path};
+use crate::fs;
+use std::{io, io::Read, path::Path};
 
 use aes::{
   Aes256,

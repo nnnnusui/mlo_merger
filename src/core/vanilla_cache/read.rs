@@ -1,12 +1,12 @@
 //! Validated derived-cache metadata for downstream processing stages.
 
 use super::{CACHE_SCHEMA, DerivedManifest, Result, YmapRelationshipIndex};
+use crate::fs;
 use rayon::prelude::*;
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use std::{
   collections::BTreeMap,
-  fs,
   path::{Path, PathBuf},
   sync::Arc,
 };
@@ -109,13 +109,14 @@ pub(crate) fn load_cache(
     return Err("Derived vanilla YMAP relationship index is stale".into());
   }
   for format in ["ymap", "ybn"] {
-    if !directory.join("latest").join(format).is_dir() {
+    if !fs::is_dir(directory.join("latest").join(format)) {
       return Err(format!("Derived vanilla cache is missing latest/{format}").into());
     }
   }
   // One stat per latest file, tens of thousands in all, so they run in parallel.
   let objects = metadata.files.values().map(|file| file.object.as_str()).collect::<Vec<_>>();
-  if let Some(missing) = objects.par_iter().find_any(|object| !directory.join(object).is_file()) {
+  if let Some(missing) = objects.par_iter().find_any(|object| !fs::is_file(directory.join(object)))
+  {
     return Err(format!("Derived vanilla latest file is missing: {missing}").into());
   }
   let mut digest = Sha256::new();

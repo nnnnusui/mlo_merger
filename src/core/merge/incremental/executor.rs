@@ -88,10 +88,10 @@ impl IncrementalMerge<'_> {
     // Only the merged stream files are kept; the merge's own records stay behind.
     let target = self.staging.join(group.extension);
     let mut outputs = Vec::new();
-    if merged.is_dir() {
+    if fs::is_dir(&merged) {
       for entry in fs::read_dir(&merged)? {
         let path = entry?.path();
-        let is_output = path.is_file()
+        let is_output = fs::is_file(&path)
           && path
             .extension()
             .is_some_and(|extension| extension.eq_ignore_ascii_case(group.extension));
@@ -103,7 +103,7 @@ impl IncrementalMerge<'_> {
         }
       }
     }
-    if work.exists() {
+    if fs::exists(&work).unwrap_or(false) {
       fs::remove_dir_all(&work)?;
     }
     Ok((duplicates, outputs))

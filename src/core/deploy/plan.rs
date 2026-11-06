@@ -2,12 +2,12 @@
 
 use super::Result;
 use crate::core::source_cache::CachedFile;
+use crate::fs;
+use crate::fs::WalkDir;
 use std::{
   collections::{BTreeMap, BTreeSet},
-  fs,
   path::{Path, PathBuf},
 };
-use walkdir::WalkDir;
 
 /// The managed deployment files, each with its source and that source's path relative to its
 /// store: every merged YMAP/YBN, and each file the source cache moved out of its resource whose

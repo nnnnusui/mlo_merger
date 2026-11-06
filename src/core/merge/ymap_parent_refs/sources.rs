@@ -1,5 +1,6 @@
 use super::*;
 use crate::core::format::stream_file::StreamFile;
+use crate::fs;
 
 /// Original model and entity order.
 pub(in crate::core::merge) struct OriginalMap {
@@ -48,7 +49,7 @@ impl SourceMaps {
       warn_duplicate_map(namespace, name, &path);
       return Ok(());
     }
-    if !path.is_file() {
+    if !fs::is_file(&path) {
       warn_missing_map(namespace, name, &path);
       return Ok(());
     }
@@ -70,7 +71,7 @@ impl SourceMaps {
     let Some(path) = self.paths.get(&key) else {
       return Ok(None);
     };
-    if !path.is_file() {
+    if !fs::is_file(path) {
       warn_missing_map(
         key.0.as_deref(),
         path.file_name().and_then(|name| name.to_str()).unwrap_or("<unknown>"),
@@ -178,19 +179,19 @@ mod tests {
   #[test]
   fn duplicate_map_registration_keeps_the_first_file() {
     let root = std::env::temp_dir().join(format!("duplicate_ymap_{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&root);
-    std::fs::create_dir_all(&root).unwrap();
+    let _ = crate::fs::remove_dir_all(&root);
+    crate::fs::create_dir_all(&root).unwrap();
     let first = root.join("first.ymap");
     let second = root.join("second.ymap");
-    std::fs::write(&first, []).unwrap();
-    std::fs::write(&second, []).unwrap();
+    crate::fs::write(&first, []).unwrap();
+    crate::fs::write(&second, []).unwrap();
     let mut sources = SourceMaps::default();
     sources.register(Some("[gabz]/resource_a"), "map.ymap", first.clone()).unwrap();
     sources.register(Some("[gabz]/resource_a"), "map.ymap", second).unwrap();
 
     let key = (Some("[gabz]/resource_a".into()), reference_hash("map"));
     assert_eq!(sources.paths.get(&key), Some(&first));
-    std::fs::remove_dir_all(root).unwrap();
+    crate::fs::remove_dir_all(root).unwrap();
   }
 
   #[test]
@@ -205,14 +206,14 @@ mod tests {
   #[test]
   fn map_removed_after_registration_is_skipped_on_load() {
     let root = std::env::temp_dir().join(format!("removed_ymap_{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&root);
-    std::fs::create_dir_all(&root).unwrap();
+    let _ = crate::fs::remove_dir_all(&root);
+    crate::fs::create_dir_all(&root).unwrap();
     let path = root.join("map.ymap");
-    std::fs::write(&path, []).unwrap();
+    crate::fs::write(&path, []).unwrap();
     let mut sources = SourceMaps::default();
     sources.register(Some("resource"), "map.ymap", path.clone()).unwrap();
-    std::fs::remove_file(&path).unwrap();
+    crate::fs::remove_file(&path).unwrap();
     assert!(sources.get(Some("resource"), reference_hash("map")).unwrap().is_none());
-    std::fs::remove_dir_all(root).unwrap();
+    crate::fs::remove_dir_all(root).unwrap();
   }
 }

@@ -1,7 +1,7 @@
 //! Coordinates base archives, title updates and ordered DLC stages.
 
+use crate::fs;
 use std::collections::{BTreeMap, BTreeSet};
-use std::fs;
 use std::path::{Path, PathBuf};
 
 use super::{
@@ -31,12 +31,12 @@ pub struct BuildVanillaArchive {
 impl BuildVanillaArchive {
   /// Reads installed root RPFs and ordered DLCs, saving changed raw files by version.
   pub fn run(&self) -> Result<()> {
-    let game_dir = self.game_dir.canonicalize()?;
+    let game_dir = fs::canonicalize(&self.game_dir)?;
     let roots = base_archives(&game_dir)?;
     game_path(&game_dir, Path::new("update/update.rpf"))?;
     let executable = game_path(&game_dir, Path::new("GTA5.exe"))
       .map_err(|_| "GTA5.exe is required (GTA V Legacy archives only)")?;
-    if !self.magic.is_file() {
+    if !fs::is_file(&self.magic) {
       return Err(format!(
         "magic.dat is missing: {}. Copy CodeWalker.Core/Resources/magic.dat from the CodeWalker sources or specify --magic.",
         self.magic.display()
@@ -45,7 +45,7 @@ impl BuildVanillaArchive {
     }
     let keys = RpfKeys::load(&executable, &self.magic)?;
     let output_dir = reset_output_directory(&self.output_dir, &game_dir)?;
-    let staging_path = output_dir.join(format!(".staging-{}", std::process::id()));
+    let staging_path = output_dir.join(format!(".staging-{}", fs::process_id()));
     fs::create_dir(&staging_path)?;
     let staging = Staging(staging_path);
     let build = staging.0.join("cache");

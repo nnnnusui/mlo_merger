@@ -1,8 +1,6 @@
 use super::Result;
-use std::{
-  fs,
-  path::{Component, Path, PathBuf},
-};
+use crate::fs;
+use std::path::{Component, Path, PathBuf};
 
 pub(crate) fn reject_symlinks(path: &Path) -> Result<()> {
   for ancestor in path.ancestors() {
@@ -32,14 +30,14 @@ pub(crate) fn ensure_safe_path(
 }
 pub(crate) fn absolute_path(path: &Path) -> std::io::Result<PathBuf> {
   let absolute =
-    if path.is_absolute() { path.to_path_buf() } else { std::env::current_dir()?.join(path) };
+    if path.is_absolute() { path.to_path_buf() } else { fs::current_dir()?.join(path) };
   let mut normalized = PathBuf::new();
   for component in absolute.components() {
     match component {
       Component::CurDir => {}
       Component::ParentDir => {
-        if normalized.exists() {
-          normalized = normalized.canonicalize()?;
+        if fs::exists(&normalized).unwrap_or(false) {
+          normalized = fs::canonicalize(&normalized)?;
         }
         normalized.pop();
       }
@@ -48,7 +46,7 @@ pub(crate) fn absolute_path(path: &Path) -> std::io::Result<PathBuf> {
   }
   let mut ancestor = normalized;
   let mut missing = Vec::new();
-  while !ancestor.exists() {
+  while !fs::exists(&ancestor).unwrap_or(false) {
     missing.push(
       ancestor
         .file_name()
@@ -59,7 +57,7 @@ pub(crate) fn absolute_path(path: &Path) -> std::io::Result<PathBuf> {
     );
     ancestor.pop();
   }
-  let mut path = ancestor.canonicalize()?;
+  let mut path = fs::canonicalize(&ancestor)?;
   for component in missing.into_iter().rev() {
     path.push(component);
   }

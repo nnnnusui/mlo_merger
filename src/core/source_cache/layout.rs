@@ -3,7 +3,8 @@
 use super::{Result, types::ResourceInventory};
 use crate::common::changes::StoreChanges;
 use crate::common::{filesystem::move_file, path::ensure_safe_path};
-use std::{collections::BTreeSet, fs, path::Path};
+use crate::fs;
+use std::{collections::BTreeSet, path::Path};
 
 pub(super) fn stream_relative_path(path: &str) -> Result<&str> {
   path
@@ -35,7 +36,9 @@ pub(super) fn normalize_cached_layout(
   }
   let old_paths = moves.iter().map(|(old, ..)| old.as_str()).collect::<BTreeSet<_>>();
   for (old, new, _) in &moves {
-    if output.join(old).is_file() && output.join(new).exists() && !old_paths.contains(new.as_str())
+    if fs::is_file(output.join(old))
+      && fs::exists(output.join(new)).unwrap_or(false)
+      && !old_paths.contains(new.as_str())
     {
       return Err(
         format!("Cache layout migration would overwrite {}", output.join(new).display()).into(),
@@ -47,8 +50,8 @@ pub(super) fn normalize_cached_layout(
   for (old, new, sha256) in &moves {
     let source = output.join(old);
     let destination = output.join(new);
-    if source.is_file() {
-      if destination.exists() {
+    if fs::is_file(&source) {
+      if fs::exists(&destination).unwrap_or(false) {
         return Err(
           format!("Cache layout migration would overwrite {}", destination.display()).into(),
         );

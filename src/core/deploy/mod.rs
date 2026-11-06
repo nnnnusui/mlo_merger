@@ -8,10 +8,11 @@ mod plan;
 mod tests;
 
 use crate::core::vanilla::write_json;
+use crate::fs;
 use files::{copy_file, destination, prepare_output, remove_empty_stream_directories};
 use metadata::{CopiedFile, DeployMetadata, fingerprint, read_metadata};
 use plan::plan;
-use std::{collections::BTreeMap, fs, io::Write, path::PathBuf};
+use std::{collections::BTreeMap, io::Write, path::PathBuf};
 
 pub(crate) use check::check;
 
@@ -53,8 +54,8 @@ impl Deploy {
   /// # Ok::<(), Box<dyn std::error::Error>>(())
   /// ```
   pub fn run(&self) -> Result<DeploySummary> {
-    let merged = self.merged_dir.canonicalize()?;
-    let cache = self.source_cache_dir.canonicalize()?;
+    let merged = fs::canonicalize(&self.merged_dir)?;
+    let cache = fs::canonicalize(&self.source_cache_dir)?;
     let output = prepare_output(&self.output_dir, &[&merged, &cache])?;
     let cached = crate::core::source_cache::cached_files(&cache)?;
     let planned = plan(&merged, &cache, &cached)?;
@@ -63,7 +64,8 @@ impl Deploy {
     let moved_files = moved_files.join("\n");
     let moved_files_path = destination(&output, "files.txt")?;
     let metadata_path = destination(&output, "deploy_cache_info.json")?;
-    let previous = metadata_path.is_file().then(|| read_metadata(&metadata_path)).transpose()?;
+    let previous =
+      fs::is_file(&metadata_path).then(|| read_metadata(&metadata_path)).transpose()?;
     for relative in planned.keys().chain(previous.iter().flat_map(|metadata| metadata.files.keys()))
     {
       if !relative.starts_with("stream/") {
@@ -81,7 +83,7 @@ impl Deploy {
         old.filter(|file| file.source == *stored).map(|file| &file.input),
         self.force,
       )?;
-      let existing = if target.is_file() {
+      let existing = if fs::is_file(&target) {
         Some(fingerprint(&target, old.map(|file| &file.output), self.force)?)
       } else {
         None
@@ -117,7 +119,7 @@ impl Deploy {
           continue;
         }
         let target = destination(&output, relative)?;
-        if target.exists() {
+        if fs::exists(&target).unwrap_or(false) {
           let actual = fingerprint(&target, Some(&old.output), false)?;
           if actual.sha256 != old.output.sha256 {
             return Err(
@@ -135,15 +137,15 @@ impl Deploy {
       files,
     };
     if previous.as_ref().is_none_or(|previous| previous.files != metadata.files) {
-      let temporary = destination(&output, &format!(".deploy-cache-{}.tmp", std::process::id()))?;
-      if temporary.exists() {
+      let temporary = destination(&output, &format!(".deploy-cache-{}.tmp", fs::process_id()))?;
+      if fs::exists(&temporary).unwrap_or(false) {
         return Err("Deployment cache temporary file already exists".into());
       }
       write_json(&temporary, &metadata)?;
       fs::rename(temporary, metadata_path)?;
     }
     if fs::read_to_string(&moved_files_path).ok().as_deref() != Some(&moved_files) {
-      let temporary = destination(&output, &format!(".files-{}.tmp", std::process::id()))?;
+      let temporary = destination(&output, &format!(".files-{}.tmp", fs::process_id()))?;
       let mut writer = fs::OpenOptions::new().write(true).create_new(true).open(&temporary)?;
       writer.write_all(moved_files.as_bytes())?;
       writer.flush()?;

@@ -1,6 +1,6 @@
 //! Scratch cleanup, completed-cache publication and rollback.
 
-use std::fs;
+use crate::fs;
 use std::path::{Component, Path, PathBuf};
 
 use super::{
@@ -21,13 +21,13 @@ pub(super) fn reset_output_directory(
   game_dir: &Path,
 ) -> Result<PathBuf> {
   let output = normalize_absolute(output)?;
-  let game_dir = game_dir.canonicalize()?;
-  let current_dir = std::env::current_dir()?.canonicalize()?;
+  let game_dir = fs::canonicalize(game_dir)?;
+  let current_dir = fs::canonicalize(&fs::current_dir()?)?;
   validate_output_location(&output, &game_dir, &current_dir)?;
   let parent = output.parent().ok_or("Cache output has no parent directory")?;
   let name = output.file_name().ok_or("Cache output has no directory name")?;
   fs::create_dir_all(parent)?;
-  let parent = parent.canonicalize()?;
+  let parent = fs::canonicalize(parent)?;
   let output = parent.join(name);
   validate_output_location(&output, &game_dir, &current_dir)?;
   if let Ok(metadata) = fs::symlink_metadata(&output) {
@@ -40,12 +40,11 @@ pub(super) fn reset_output_directory(
     fs::remove_dir_all(&output)?;
   }
   fs::create_dir_all(&output)?;
-  Ok(output.canonicalize()?)
+  Ok(fs::canonicalize(&output)?)
 }
 
 fn normalize_absolute(path: &Path) -> Result<PathBuf> {
-  let path =
-    if path.is_absolute() { path.to_path_buf() } else { std::env::current_dir()?.join(path) };
+  let path = if path.is_absolute() { path.to_path_buf() } else { fs::current_dir()?.join(path) };
   let mut normalized = PathBuf::new();
   for component in path.components() {
     match component {
@@ -84,7 +83,7 @@ pub(super) fn publish_cache(
 ) -> Result<()> {
   for name in ["rpf_names.json", "hash_names.json", "cache_info.json"] {
     let metadata_path = output.join(name);
-    if metadata_path.exists() && !metadata_path.is_file() {
+    if fs::exists(&metadata_path).unwrap_or(false) && !fs::is_file(&metadata_path) {
       return Err(
         format!("Refusing to replace non-file cache metadata {}", metadata_path.display()).into(),
       );
@@ -92,7 +91,7 @@ pub(super) fn publish_cache(
   }
   for version in &manifest.versions {
     let destination = output.join(&version.id);
-    if destination.exists() {
+    if fs::exists(&destination).unwrap_or(false) {
       let existing: CacheVersion =
         crate::common::json::read_json(destination.join("version_info.json"))?;
       if existing.id != version.id {
@@ -110,7 +109,7 @@ pub(super) fn publish_cache(
   let result = (|| -> Result<()> {
     for version in &manifest.versions {
       let destination = output.join(&version.id);
-      let existed = destination.exists();
+      let existed = fs::exists(&destination).unwrap_or(false);
       if existed {
         fs::rename(&destination, backup.join(&version.id))?;
       }
@@ -119,11 +118,11 @@ pub(super) fn publish_cache(
     }
     for name in ["rpf_names.json", "hash_names.json", "cache_info.json"] {
       let source = build.join(name);
-      if !source.is_file() {
+      if !fs::is_file(&source) {
         continue;
       }
       let destination = output.join(name);
-      let existed = destination.exists();
+      let existed = fs::exists(&destination).unwrap_or(false);
       if existed {
         fs::rename(&destination, backup.join(name))?;
       }
@@ -135,7 +134,7 @@ pub(super) fn publish_cache(
   if result.is_err() {
     for (name, existed) in published_metadata.into_iter().rev() {
       let destination = output.join(name);
-      if destination.exists() {
+      if fs::exists(&destination).unwrap_or(false) {
         fs::rename(&destination, build.join(name))?;
       }
       if existed {
@@ -144,7 +143,7 @@ pub(super) fn publish_cache(
     }
     for (id, existed) in published.into_iter().rev() {
       let destination = output.join(&id);
-      if destination.exists() {
+      if fs::exists(&destination).unwrap_or(false) {
         fs::rename(&destination, build.join(&id))?;
       }
       if existed {

@@ -1,6 +1,6 @@
+use crate::fs;
 use std::{
   collections::{BTreeMap, BTreeSet},
-  fs,
   io::{BufReader, Read},
   path::{Component, Path, PathBuf},
 };

@@ -8,7 +8,7 @@ use crate::core::format::stream_file::{FileType, StreamFile};
 
 pub(crate) fn sample_ymap_xml(relative_path: &str) -> String {
   let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("docs/sample").join(relative_path);
-  std::fs::read_to_string(path).expect("sample YMAP XML is missing")
+  crate::fs::read_to_string(path).expect("sample YMAP XML is missing")
 }
 
 /// The model of a native sample YMAP under `docs/sample`, its names resolved with
@@ -16,7 +16,7 @@ pub(crate) fn sample_ymap_xml(relative_path: &str) -> String {
 pub(crate) fn sample_ymap(relative_path: &str) -> crate::core::format::ymap::model::Ymap {
   let base = Path::new(env!("CARGO_MANIFEST_DIR")).join("docs/sample");
   let names = crate::core::conversion::load_hash_names_or_empty(&base.join("hash_names.json"));
-  let bytes = std::fs::read(base.join(relative_path)).expect("sample YMAP is missing");
+  let bytes = crate::fs::read(base.join(relative_path)).expect("sample YMAP is missing");
   crate::core::format::ymap::binary::ymap_to_model(&bytes, &names).expect("sample YMAP is invalid")
 }
 
@@ -27,7 +27,7 @@ pub(crate) fn sample_ymap_catalog() -> &'static MetaSchemaCatalog {
     let mut catalog = MetaSchemaCatalog::default();
     for entry in ["docs/sample", "asset/extracted", "asset/vanilla-cache/latest/ymap"]
       .into_iter()
-      .flat_map(|directory| walkdir::WalkDir::new(base.join(directory)))
+      .flat_map(|directory| crate::fs::WalkDir::new(base.join(directory)))
     {
       let Ok(entry) = entry else {
         continue;
@@ -37,7 +37,7 @@ pub(crate) fn sample_ymap_catalog() -> &'static MetaSchemaCatalog {
       {
         continue;
       }
-      let Ok(bytes) = std::fs::read(entry.path()) else {
+      let Ok(bytes) = crate::fs::read(entry.path()) else {
         continue;
       };
       let Ok(resource) = Rsc7Resource::decode(&bytes) else {

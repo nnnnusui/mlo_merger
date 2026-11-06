@@ -30,21 +30,11 @@ pub(super) fn relative_link_target(
   relative
 }
 
-#[cfg(unix)]
 pub(super) fn create_file_symlink(
   target: &Path,
   link: &Path,
 ) -> Result<()> {
-  std::os::unix::fs::symlink(target, link)?;
-  Ok(())
-}
-
-#[cfg(windows)]
-pub(super) fn create_file_symlink(
-  target: &Path,
-  link: &Path,
-) -> Result<()> {
-  std::os::windows::fs::symlink_file(target, link)?;
+  fs::symlink_file(target, link)?;
   Ok(())
 }
 
@@ -53,8 +43,8 @@ pub(super) fn prepare_output_path(
   vanilla_dir: &Path,
 ) -> Result<PathBuf> {
   let absolute =
-    if output.is_absolute() { output.to_path_buf() } else { std::env::current_dir()?.join(output) };
-  let current_dir = std::env::current_dir()?.canonicalize()?;
+    if output.is_absolute() { output.to_path_buf() } else { fs::current_dir()?.join(output) };
+  let current_dir = fs::canonicalize(&fs::current_dir()?)?;
   if absolute == current_dir
     || current_dir.starts_with(&absolute)
     || absolute.starts_with(vanilla_dir)
@@ -65,19 +55,19 @@ pub(super) fn prepare_output_path(
   if fs::symlink_metadata(&absolute).is_ok_and(|metadata| metadata.file_type().is_symlink()) {
     return Err(format!("Refusing to replace symlink output {}", absolute.display()).into());
   }
-  if absolute.exists() && !absolute.is_dir() {
+  if fs::exists(&absolute).unwrap_or(false) && !fs::is_dir(&absolute) {
     return Err(format!("Vanilla-cache output is not a directory: {}", absolute.display()).into());
   }
   let parent = absolute.parent().ok_or("Vanilla-cache output has no parent")?;
   fs::create_dir_all(parent)?;
-  let parent = parent.canonicalize()?;
+  let parent = fs::canonicalize(parent)?;
   Ok(parent.join(absolute.file_name().ok_or("Vanilla-cache output has no name")?))
 }
 
 pub(super) fn create_staging_directory(output_dir: &Path) -> Result<PathBuf> {
   let parent = output_dir.parent().ok_or("Vanilla-cache output has no parent")?;
   let name = output_dir.file_name().ok_or("Vanilla-cache output has no name")?.to_string_lossy();
-  let staging = parent.join(format!(".{name}.staging-{}", std::process::id()));
+  let staging = parent.join(format!(".{name}.staging-{}", fs::process_id()));
   fs::create_dir(&staging)?;
   Ok(staging)
 }
@@ -89,9 +79,9 @@ pub(super) fn publish_directory(
   let backup = output.with_file_name(format!(
     ".{}.backup-{}",
     output.file_name().unwrap_or_default().to_string_lossy(),
-    std::process::id()
+    fs::process_id()
   ));
-  let existed = output.exists();
+  let existed = fs::exists(output).unwrap_or(false);
   if existed {
     fs::rename(output, &backup)?;
   }

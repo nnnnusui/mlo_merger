@@ -232,7 +232,7 @@ impl IncrementalMerge<'_> {
           current = false;
           break;
         }
-      } else if self.output.join(group.extension).join(name).exists() {
+      } else if fs::exists(self.output.join(group.extension).join(name)).unwrap_or(false) {
         current = false;
         break;
       }

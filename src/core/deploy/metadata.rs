@@ -1,11 +1,11 @@
 //! The deployment's record of the files it copied (`deploy_cache_info.json`).
 
 use super::Result;
+use crate::fs;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
   collections::BTreeMap,
-  fs,
   io::{BufReader, Read},
   path::{Path, PathBuf},
 };

@@ -56,6 +56,37 @@ round-trip tests compare conversion with CodeWalker hosted in-process, which nee
 (`CODEWALKER_CORE_DLL`, default `asset/CodeWalker.Core.dll`), from which `build.rs` builds
 `bridge/CodeWalker.Bridge`.
 
+## Browser Build
+
+`crates/web` runs `--pipeline` and `--read` in a browser page against an in-memory
+filesystem, so a page can show which files a run writes. It builds only for
+`wasm32-unknown-unknown`; the GUI, log files and downloads stay native-only.
+
+```bash
+rustup target add wasm32-unknown-unknown
+cargo build -p mlo_merger_web --release --target wasm32-unknown-unknown
+wasm-bindgen --target web --out-dir web/pkg \
+  target/wasm32-unknown-unknown/release/mlo_merger_web.wasm
+```
+
+`wasm-bindgen` comes from `cargo install wasm-bindgen-cli` at the version of the
+`wasm-bindgen` crate in `Cargo.lock`. The page fills the filesystem with
+`web/vfs.js`'s `addFile`, calls `run(args, onLog)`, and draws `snapshot()`. `onChange` reports
+each write as it happens.
+
+Library code reaches the filesystem only through `crate::fs`, which re-exports `std::fs` and
+`walkdir` natively and calls `web/vfs.js` in the browser. That means `fs::is_file(&path)`
+rather than `path.is_file()`, `fs::current_dir()` and `fs::process_id()` rather than their
+`std::env` and `std::process` versions, and no `std::time::SystemTime::now`. Native builds
+accept the `std` calls, which then fail only in the browser, so check the browser build:
+
+```bash
+CLIPPY_CONF_DIR=web cargo clippy -p mlo_merger --lib --target wasm32-unknown-unknown \
+  -- -D clippy::disallowed_methods -D clippy::disallowed_types
+```
+
+Tests and native-only code (`src/main.rs`, `src/gui`, `build.rs`) may use `std` directly.
+
 ## TypeScript Types
 
 TypeScript definitions are generated from Rust's Serde models. The optional `typescript`

@@ -40,7 +40,7 @@ impl MergeYmap {
     let mut registered_maps = HashSet::new();
     modded_ymaps_map.retain(|_, references| {
       references.retain(|reference| {
-        if !reference.mod_ymap_path.is_file() {
+        if !fs::is_file(&reference.mod_ymap_path) {
           tracing::warn!(
             "Source YMAP is missing for resource {}; skipping {}",
             reference.mod_name,
