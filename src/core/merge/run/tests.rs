@@ -36,6 +36,7 @@ fn latest_ymap_merge_writes_binary_without_xml() {
     rebuild_all: true,
     overwrites: Default::default(),
     vanilla_overwrites: Default::default(),
+    propagated: Vec::new(),
   };
   merge
     .run_with_latest_vanilla_files(
@@ -120,6 +121,7 @@ fn native_ymap_merge_deletion_wins_over_retained_entities_in_both_orders() {
     rebuild_all: true,
     overwrites: Default::default(),
     vanilla_overwrites: Default::default(),
+    propagated: Vec::new(),
   };
   for reverse in [false, true] {
     let mut sources =
@@ -182,6 +184,7 @@ fn merge_emits_only_edited_ymaps_when_rebuilding() {
     rebuild_all: true,
     overwrites: Default::default(),
     vanilla_overwrites: Default::default(),
+    propagated: Vec::new(),
   };
   let run = |sources: &[SourceYmap]| {
     merge.run_with_latest_vanilla_files(std::slice::from_ref(&vanilla), sources).unwrap()
@@ -237,6 +240,7 @@ fn merge_deletes_omitted_entities_and_detaches_dependent_children() {
     rebuild_all: false,
     overwrites: Default::default(),
     vanilla_overwrites: Default::default(),
+    propagated: Vec::new(),
   }
   .run_with_latest_vanilla_files(
     &vanilla,
@@ -330,6 +334,7 @@ fn sources_with_a_diff_document_merge_through_it_and_reject_stale_ones() {
     rebuild_all: true,
     overwrites: Default::default(),
     vanilla_overwrites: Default::default(),
+    propagated: Vec::new(),
   };
   let sources = [("resource".to_string(), source.clone(), Some(document.clone()))];
   merge.run_with_latest_vanilla_files(std::slice::from_ref(&vanilla), &sources).unwrap();
@@ -403,6 +408,7 @@ fn lod_light_removals_of_either_ymap_of_a_pair_are_made_in_both() {
     rebuild_all: true,
     overwrites: Default::default(),
     vanilla_overwrites: Default::default(),
+    propagated: Vec::new(),
   }
   .run_with_latest_vanilla_files(
     &vanilla,
@@ -419,5 +425,66 @@ fn lod_light_removals_of_either_ymap_of_a_pair_are_made_in_both() {
   assert_eq!(merged[0].lod_lights, expected);
   let expected = without(&distants, &[1, 3, 5, 7]).distant_lod_lights.items;
   assert_eq!(merged[1].distant_lod_lights.items, expected);
+  fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn propagated_changes_merge_into_vanilla_ymaps_and_reject_stale_documents() {
+  use crate::common::fingerprint::Fingerprint;
+  use crate::core::format::gamefile::test_support::sample_ymap;
+  use crate::core::format::ymap::compare::{YmapComparisonFile, YmapPropagatedDiff};
+  let root = std::env::temp_dir().join(format!("mlo_propagated_{}", std::process::id()));
+  let _ = fs::remove_dir_all(&root);
+  let vanilla = root.join("vanilla/parent.ymap");
+  copy_sample("vanilla_parent.ymap", &vanilla);
+  let model = sample_ymap("parent_refs/vanilla_parent.ymap");
+  let index = model.entities.iter().position(|entity| entity.guid == 200).unwrap();
+  let fingerprint = Fingerprint::read(&vanilla.canonicalize().unwrap(), None, false).unwrap();
+  let document = root.join("parent.ymap.diff.json");
+  let write_document = |sha256: &str, modified_seconds: u64| {
+    let carried = YmapPropagatedDiff {
+      schema_version: YmapPropagatedDiff::SCHEMA_VERSION,
+      resource: "resource".into(),
+      vanilla: YmapComparisonFile {
+        path: "latest/ymap/parent.ymap".into(),
+        sha256: sha256.into(),
+        size: fingerprint.size,
+        modified_seconds,
+        modified_nanos: fingerprint.modified_nanos,
+      },
+      origins: Vec::new(),
+      diffs: serde_json::from_value(serde_json::json!({ "entities": [{ "Removed": {
+        "index": index, "reason": "propagated from resource: old_parent.ymap entities[1]",
+      }}]}))
+      .unwrap(),
+    };
+    fs::write(&document, serde_json::to_vec(&carried).unwrap()).unwrap();
+  };
+  let output = root.join("output");
+  let merge = || {
+    MergeYmap {
+      vanilla_dir: root.join("vanilla"),
+      output_dir: output.clone(),
+      rebuild_all: false,
+      overwrites: Default::default(),
+      vanilla_overwrites: Default::default(),
+      propagated: vec![("resource".into(), "parent.ymap".into(), document.clone())],
+    }
+    .run_with_latest_vanilla_files(std::slice::from_ref(&vanilla), &[])
+  };
+
+  write_document(&fingerprint.sha256, fingerprint.modified_seconds);
+  merge().unwrap();
+  let parent = OriginalMap::load(&output.join("parent.ymap")).unwrap();
+  assert_eq!(parent.entities.iter().map(|entity| entity.guid).collect::<Vec<_>>(), [100]);
+  let duplicates: DuplicateReport =
+    crate::common::json::read_json(output.join(".duplicates.json")).unwrap();
+  assert!(duplicates.files.is_empty());
+
+  // A document written against another vanilla file is not merged; files of the recorded size
+  // and modification time are not hashed again, so the time differs too.
+  write_document(&"0".repeat(64), 0);
+  let error = merge().unwrap_err().to_string();
+  assert!(error.contains("rebuild the source cache"), "{error}");
   fs::remove_dir_all(root).unwrap();
 }

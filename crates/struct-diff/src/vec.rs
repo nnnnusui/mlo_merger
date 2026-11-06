@@ -41,6 +41,11 @@ pub enum ItemDiff<T, C> {
     index: usize,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     implied: bool,
+    /// Why the item is removed, when the removal was not taken from the later array itself,
+    /// such as one carried over from another array holding the same item.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "specta", specta(optional))]
+    reason: Option<String>,
   },
   /// Earlier item `index` is unpaired, and the later array has `item`, also unpaired, in its
   /// place.
@@ -54,6 +59,11 @@ pub enum ItemDiff<T, C> {
     before_index: usize,
     after_index: usize,
     changes: C,
+    /// Why the item is modified, when the changes were not taken from the later array itself;
+    /// see `Removed::reason`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "specta", specta(optional))]
+    reason: Option<String>,
   },
 }
 
@@ -212,6 +222,7 @@ impl<T: Clone, C> ItemDiff<T, C> {
       removals.extend(removed[replaced..].iter().map(|&index| Self::Removed {
         index,
         implied: false,
+        reason: None,
       }));
       let after_anchor = replaced.checked_sub(1).map_or(anchor, |last| Some(removed[last]));
       additions.extend(added[replaced..].iter().map(|&index| Self::Added {
@@ -231,6 +242,7 @@ impl<T: Clone, C> ItemDiff<T, C> {
     let removed = (0..before_len).map(|index| Self::Removed {
       index,
       implied: false,
+      reason: None,
     });
     let added = after.iter().map(|item| Self::Added {
       after: None,
@@ -252,6 +264,7 @@ impl<T: Clone, C> ItemDiff<T, C> {
           before_index,
           after_index,
           changes,
+          reason: None,
         });
       }
     }
@@ -299,6 +312,7 @@ impl<T, C> ItemDiff<T, C> {
         before_index,
         after_index,
         changes,
+        ..
       } => ItemChange::Modified {
         before_index: *before_index,
         after_index: *after_index,
@@ -463,6 +477,7 @@ mod tests {
       ItemDiff::Removed {
         index: 1,
         implied: false,
+        reason: None,
       },
       ItemDiff::Added {
         after: Some(1),
@@ -484,10 +499,12 @@ mod tests {
       ItemDiff::<i32, ()>::Removed {
         index: 0,
         implied: false,
+        reason: None,
       },
       ItemDiff::Removed {
         index: 0,
         implied: true,
+        reason: None,
       },
     ];
     let error = ItemDiff::apply_with(&mut vec![0], &twice, |_, _| Ok(())).unwrap_err();

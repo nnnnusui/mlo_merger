@@ -155,6 +155,41 @@ merging are written.
   two has its removals merged into the other's vanilla YMAP as well. Pairs whose vanilla
   YMAPs differ in light count are left alone.
 
+### Newer DLC Generations
+
+DLCs ship vanilla YMAPs again under a prefix of their own, such as `lodlights_medium031`,
+`hei_`, `apa_`, `vw_` and `m25_2_lodlights_medium031`, and the game loads every
+generation. A change a resource makes to one generation's item is therefore carried over
+to the same item of each newer generation, so a removed light or entity does not stay
+visible through another copy.
+
+- The vanilla cache groups YMAPs into generations by prefix and into families of the
+  same name apart from the prefix and a trailing number, such as every
+  `*distlodlights_small###`, since newer generations move items between those blocks.
+  Generations are ordered by the vanilla stage first shipping one of their YMAPs.
+- Items are the same when they are of one kind, within 0.01 of each other on every axis,
+  and identified alike: entities by archetype, LOD lights by color and LOD light hash, car
+  generators by model, box occluders by size and rotation, occlude models by flags,
+  triangle count and maximum corner, time cycle modifiers by name. An item is paired only
+  when exactly one item of the other generation fits, and no other item fits that one.
+- Each pair of generations of a family is stored as a unit,
+  `generation-units/{key}.json`, keyed by the contents of its YMAPs, and
+  `generations.json` lists the units of the selected game build. Units are kept across
+  rebuilds and game builds, so a rebuild pairs only the YMAPs that changed.
+- Source-cache generation writes `propagated/{resourceName}/{fileName}.diff.json`
+  (`YmapPropagatedDiff`) for each vanilla YMAP of a newer generation that the resource's
+  changes reach and that it does not ship. Each carried removal or modification names
+  the item it came from in `reason`, such as
+  `"propagated from resourceName: vw_lodlights_medium031.ymap lod_lights[14]"`. A
+  light removed from either YMAP of a LOD light pair is removed from both YMAPs of the
+  newer pairs.
+- Merge merges each document into its vanilla YMAP like one more resource diff, under
+  the same policy; a stale document fails the merge.
+- Only removals and modifications are carried. Additions and replacements, entity parent
+  changes and modifications of nested arrays such as occlude model triangles are not,
+  and neither are changes to items with no counterpart in a newer generation. When
+  several changes reach one item, a removal wins and otherwise the first is kept.
+
 ### Entity Parents
 
 - `parentIndex` is compared and merged as the entity it points at, read from the source
@@ -416,6 +451,10 @@ JSON reader. The definitions do not validate data at runtime.
   versions up to patchday27ng, before GameBuild 2699), and it needs a way to track
   differences exactly. The code writing vanilla YMAP version-to-version diffs is kept but
   not called; see [vanillaDiff.md](vanillaDiff.md).
+- Changes carried over to [newer DLC generations](#newer-dlc-generations) are taken from
+  the source cache's diff documents, so a resource overwrite leaving a change out of a
+  resource's diff does not leave it out of the newer generations. Changes are carried
+  only to newer generations, not to older ones.
 - `--get-diff SOURCE` writes the source YMAP's differences from the latest vanilla cache
   in the source cache's diff form; `--get-diff SOURCE TARGET` only prints a mock
   invocation.

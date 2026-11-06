@@ -160,6 +160,7 @@ pub fn replace_inexact_grass_batches(
       before_index,
       after_index,
       changes,
+      ..
     } = diff
     {
       let mut batch = before[*before_index].clone();

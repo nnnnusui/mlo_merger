@@ -67,6 +67,56 @@ impl YmapComparisonDiff {
   }
 }
 
+/// Changes a resource makes to items of vanilla YMAPs, carried over to the same items of a newer
+/// generation of those YMAPs, which the resource does not ship.
+///
+/// DLCs ship vanilla YMAPs again under prefixes of their own, and the game loads every
+/// generation, so an item a resource removes or modifies in one generation is removed or
+/// modified in the newer ones too. Each carried change records in its `reason` the item it was
+/// carried over from.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
+pub struct YmapPropagatedDiff {
+  /// Version of the document layout; documents of another version are regenerated.
+  pub schema_version: u32,
+  /// The resource making the changes, by its ID, its path relative to the source root.
+  pub resource: String,
+  /// The vanilla YMAP the changes are carried to, as it was when they were.
+  pub vanilla: YmapComparisonFile,
+  /// The resource's YMAPs the changes are carried over from.
+  pub origins: Vec<YmapPropagationOrigin>,
+  pub diffs: YmapDiffFields,
+}
+
+/// A YMAP of a resource that changes are carried over from, and its vanilla baseline.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
+pub struct YmapPropagationOrigin {
+  pub source: YmapComparisonFile,
+  pub vanilla: YmapComparisonFile,
+}
+
+impl YmapPropagatedDiff {
+  /// The current [`Self::schema_version`].
+  pub const SCHEMA_VERSION: u32 = 1;
+
+  /// Reads the document at `path` when it is of the current layout and was written against
+  /// `vanilla` as it is now; `None` otherwise.
+  ///
+  /// The origins are not checked; the source cache keeps them current.
+  pub fn read_current(
+    path: &Path,
+    vanilla: &Path,
+  ) -> Result<Option<Self>> {
+    let Ok(document) = crate::common::json::read_json::<Self>(path) else {
+      return Ok(None);
+    };
+    let current =
+      document.schema_version == Self::SCHEMA_VERSION && document.vanilla.describes(vanilla)?;
+    Ok(current.then_some(document))
+  }
+}
+
 /// A compared YMAP file and its fingerprint when the diff was taken.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "typescript", derive(specta::Type))]

@@ -26,6 +26,18 @@ impl IncrementalMerge<'_> {
     for source in self.inputs.ybn.iter().chain(&self.inputs.ymap) {
       sources.entry(source.file_name.to_ascii_lowercase()).or_default().push(source);
     }
+    // Carried-over changes are merged like a source into the vanilla file they change.
+    for source in &self.inputs.propagated {
+      let name = source.file_name.to_ascii_lowercase();
+      if baselines.contains_key(&name) {
+        sources.entry(name).or_default().push(source);
+      } else {
+        tracing::warn!(
+          "{} changes {name}, which is not a latest vanilla YMAP; not applied",
+          source.stored_path
+        );
+      }
+    }
     // A vanilla overwrite is merged like a source, even into a file no resource replaces.
     for name in self.overwrites.vanilla_files().keys() {
       if self.vanilla_overwrite(name).is_some() && baselines.contains_key(name) {
@@ -164,7 +176,8 @@ impl IncrementalMerge<'_> {
             )?,
             path: stored,
             resource: Some(source.resource.clone()),
-            original_path: Some(PathBuf::from(&source.source_path)),
+            // Carried-over changes replace no source file.
+            original_path: (!source.propagated).then(|| PathBuf::from(&source.source_path)),
             overwrite: self.overwrite(source).map(StreamFileOverwrite::digest),
           })
         })

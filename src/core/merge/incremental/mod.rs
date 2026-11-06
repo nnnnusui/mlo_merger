@@ -61,7 +61,7 @@ impl IncrementalMerge<'_> {
     &self,
     source: &MergeSourceFile,
   ) -> Option<&StreamFileOverwrite> {
-    if !source.file_name.to_ascii_lowercase().ends_with(".ymap") {
+    if source.propagated || !source.file_name.to_ascii_lowercase().ends_with(".ymap") {
       return None;
     }
     let resource = Path::new(&source.resource).file_name()?.to_str()?;

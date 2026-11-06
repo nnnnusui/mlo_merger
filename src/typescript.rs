@@ -23,13 +23,23 @@ pub fn export_types(output: &Path) -> Result<(), Box<dyn std::error::Error>> {
     &ExportConfiguration::new().bigint(BigIntExportBehavior::Number),
   )?;
   // Specta 1 makes every field of an enum variant required, but `ItemDiff::Removed` leaves out
-  // `implied` when it is false.
-  let types = fs::read_to_string(output)?;
-  let required = "{ Removed: { index: number; implied: boolean } }";
-  if !types.contains(required) {
-    return Err("Generated ItemDiff no longer spells Removed as expected".into());
+  // `implied` when it is false, and the removals and modifications of `ItemDiff` and
+  // `YmapEntityDiff` leave out `reason` when it is `None`.
+  let mut types = fs::read_to_string(output)?;
+  for (required, optional, count) in [
+    (
+      "{ Removed: { index: number; implied: boolean; reason: string | null } }",
+      "{ Removed: { index: number; implied?: boolean; reason?: string | null } }",
+      1,
+    ),
+    ("; reason: string | null } }", "; reason?: string | null } }", 3),
+  ] {
+    if types.matches(required).count() != count {
+      return Err(format!("Generated diff types no longer spell `{required}` as expected").into());
+    }
+    types = types.replace(required, optional);
   }
-  fs::write(output, types.replace(required, "{ Removed: { index: number; implied?: boolean } }"))?;
+  fs::write(output, types)?;
   let mut file = fs::OpenOptions::new().append(true).open(output)?;
   std::io::Write::write_all(&mut file, crate::core::overwrite::YMAP_DIFF_SKIP_TS.as_bytes())?;
   Ok(())
@@ -61,6 +71,10 @@ mod tests {
       "RTreeItem",
       "YmapComparisonDiff",
       "YmapComparisonFile",
+      "YmapPropagatedDiff",
+      "YmapPropagationOrigin",
+      "GenerationIndex",
+      "GenerationUnit",
       "VanillaYmapDiff",
       "VanillaYmapVersion",
       "VanillaYmapVersionIndex",
@@ -94,7 +108,11 @@ mod tests {
     assert!(actual.contains("ymap: RTreeItem[]"));
     assert!(actual.contains("minX: number"));
     assert!(actual.contains("originalPath?: string"));
-    assert!(actual.contains("{ Removed: { index: number; implied?: boolean } }"));
+    assert!(
+      actual.contains("{ Removed: { index: number; implied?: boolean; reason?: string | null } }")
+    );
+    assert!(actual.contains("{ Removed: { index: number; reason?: string | null } }"));
+    assert!(!actual.contains("reason: string | null"));
     assert!(actual.contains("partner?: YmapComparisonPartner | null"));
     assert!(actual.contains("export type Change = \"Added\" | \"Modified\" | \"Removed\""));
     assert!(actual.contains("tolerance?: MatchTolerances"));

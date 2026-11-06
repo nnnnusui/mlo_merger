@@ -165,6 +165,7 @@ impl<T, C> MergedItems<T, C> {
     let removed = self.removed.into_iter().map(|index| ItemDiff::Removed {
       index,
       implied: false,
+      reason: None,
     });
     let in_place = self.in_place.into_iter().map(move |(index, change)| match change {
       InPlace::Replaced(item) => ItemDiff::Replaced {
@@ -176,6 +177,7 @@ impl<T, C> MergedItems<T, C> {
         // Out-of-range vanilla indices are left for applying to reject.
         after_index: placed.get(&index).copied().unwrap_or(index),
         changes,
+        reason: None,
       },
     });
     let added = self.added.into_iter().map(|(after, item)| ItemDiff::Added {

@@ -148,6 +148,7 @@ fn shown_removals<T, C>(diffs: Option<&[ItemDiff<T, C>]>) -> BTreeSet<usize> {
       ItemDiff::Removed {
         index,
         implied: false,
+        ..
       } => Some(*index),
       _ => None,
     })
@@ -199,6 +200,7 @@ fn imply<T, C>(
   removals.extend(implied.iter().map(|&index| ItemDiff::Removed {
     index,
     implied: true,
+    reason: None,
   }));
   removals.sort_by_key(|diff| changed(diff).unwrap_or_default());
   let merged = removals.into_iter().chain(rest).collect::<Vec<_>>();

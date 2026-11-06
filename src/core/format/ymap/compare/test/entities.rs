@@ -132,6 +132,7 @@ fn reports_modified_removed_and_added_entities() {
     after_index: 0,
     changes,
     parent: None,
+    ..
   } = &diffs[0]
   else {
     panic!("{:?}", diffs[0]);
@@ -156,7 +157,8 @@ fn reports_modified_removed_and_added_entities() {
   assert!(matches!(
     &diffs[2],
     YmapEntityDiff::Removed {
-      index: 2
+      index: 2,
+      ..
     }
   ));
   assert!(

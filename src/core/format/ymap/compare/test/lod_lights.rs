@@ -53,10 +53,12 @@ fn compares_lights_as_a_multiset() {
       YmapLodLightDiff::Removed {
         index: 0,
         implied: false,
+        reason: None,
       },
       YmapLodLightDiff::Removed {
         index: 3,
         implied: false,
+        reason: None,
       },
       // The edited light takes the place of the first light the source lacks after it.
       YmapLodLightDiff::Replaced {

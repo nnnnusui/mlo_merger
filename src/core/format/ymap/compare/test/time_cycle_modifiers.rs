@@ -79,6 +79,7 @@ fn pairs_by_either_extent_and_thresholds_floats() {
           end_hour: Some(6),
           ..Default::default()
         },
+        reason: None,
       },
       YmapTimeCycleModifierDiff::Added {
         after: Some(1),

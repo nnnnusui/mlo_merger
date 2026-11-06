@@ -149,6 +149,22 @@ impl MergeYmap {
       }
       modded_ymaps_map.entry(name.to_string()).or_default();
     }
+    let mut propagated = self.propagated_diffs(&vanilla_map_paths)?;
+    for hash in propagated.keys() {
+      let merged =
+        modded_ymaps_map.keys().any(|name| reference_hash(name.trim_end_matches(".ymap")) == *hash);
+      if merged {
+        continue;
+      }
+      let name = vanilla_map_paths[hash]
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or("non-UTF8 vanilla filename")?;
+      if let Some(original) = sources.get(None, *hash)? {
+        references.register_entities(*hash, &original.entities);
+      }
+      modded_ymaps_map.entry(name.to_string()).or_default();
+    }
     let mut planned = BTreeMap::<u32, PlannedMap>::new();
     let mut duplicate_files = BTreeMap::new();
     for (ymap_name, mod_refs) in &modded_ymaps_map {
@@ -156,10 +172,12 @@ impl MergeYmap {
       let vanilla_ymap_path =
         vanilla_map_paths.get(&hash).cloned().unwrap_or_else(|| self.vanilla_dir.join(ymap_name));
       let vanilla_overwrite = vanilla_overwrites.get(&hash).copied();
-      // A YMAP of a LOD light pair may take removals from the other, so it is merged.
+      // A YMAP of a LOD light pair may take removals from the other, so it is merged, as is one
+      // taking changes carried over from an older generation.
       if !self.rebuild_all
         && vanilla_overwrite.is_none()
         && LightSide::of(ymap_name).is_none()
+        && !propagated.contains_key(&hash)
         && let [mod_ref] = mod_refs.as_slice()
       {
         tracing::info!("Processing YMAP: {}", vanilla_ymap_path.display());
@@ -259,6 +277,39 @@ impl MergeYmap {
         );
         log_diff_counts(&ymap_diff);
         leave_out(&mut ymap_diff, IgnoredChange::MERGE);
+        ymap_diffs.push(ymap_diff);
+      }
+      for (resource, path, mut ymap_diff) in propagated.remove(&hash).into_iter().flatten() {
+        tracing::info!(
+          "  Changes {resource} makes to the same items of an older generation (propagated)"
+        );
+        log_diff_counts(&ymap_diff);
+        leave_out(&mut ymap_diff, IgnoredChange::MERGE);
+        for diff in ymap_diff.entities.iter().flatten() {
+          let change = match diff {
+            YmapEntityDiff::Added {
+              ..
+            } => Change::Added,
+            YmapEntityDiff::Removed {
+              ..
+            } => Change::Removed,
+            YmapEntityDiff::Modified {
+              ..
+            } => Change::Modified,
+          };
+          let key = diff.guid(&original.entities);
+          duplicates.add(
+            diff,
+            key,
+            vanilla_originals.get(&key).map(|entity| (*entity).clone()),
+            Contribution {
+              resource: resource.clone(),
+              path: path.clone(),
+              change,
+              entity: None,
+            },
+          );
+        }
         ymap_diffs.push(ymap_diff);
       }
       // Merged as the last source, so the merge policy weighs it against the resources'. The

@@ -2,7 +2,7 @@ use super::duplicates::{Change, Collector, Contribution, DuplicateReport};
 use crate::core::format::ymap::compare::lod_light_pairs::LightSide;
 use crate::core::format::ymap::compare::{
   EntityParent, EntityParents, IgnoredChange, YmapComparisonDiff, YmapDiffContext, YmapDiffFields,
-  YmapEntityDiff, entities, entity_parents, leave_out, merge_diffs,
+  YmapEntityDiff, YmapPropagatedDiff, entities, entity_parents, leave_out, merge_diffs,
 };
 use crate::core::format::ymap::model::YmapEntity;
 use crate::core::format::ymap::model::ymap::Ymap;
@@ -21,6 +21,11 @@ use struct_diff::Diff;
 /// A source YMAP to merge: its resource, path and source-cache diff document, if any.
 pub type SourceYmap = (String, PathBuf, Option<PathBuf>);
 
+/// Changes a resource's YMAPs make, carried over to a newer generation of a vanilla YMAP the
+/// resource does not ship: the resource, the vanilla YMAP's file name and the source cache's
+/// `YmapPropagatedDiff` document.
+pub type PropagatedYmap = (String, String, PathBuf);
+
 #[derive(Debug, Clone)]
 pub struct MergeYmap {
   pub vanilla_dir: PathBuf,
@@ -31,6 +36,9 @@ pub struct MergeYmap {
   /// The overwrites of the latest vanilla files, keyed by lowercase file name, merged after the
   /// sources' diffs. A vanilla file with one is merged even when no source replaces it.
   pub vanilla_overwrites: HashMap<String, VanillaOverwrite>,
+  /// Changes carried over to newer generations of vanilla YMAPs, merged into those as the
+  /// resources' diffs are. A vanilla file with one is merged even when no source replaces it.
+  pub propagated: Vec<PropagatedYmap>,
 }
 
 impl MergeYmap {
@@ -52,6 +60,7 @@ mod inputs;
 mod light_pairs;
 mod output;
 mod plan;
+mod propagated;
 
 use inputs::{ModYmapReference, latest_ymap_paths};
 use plan::PlannedMap;

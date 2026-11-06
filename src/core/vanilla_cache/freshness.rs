@@ -42,6 +42,9 @@ pub(super) fn cache_is_current(
   if !output_dir.join("latest/ymap").is_dir() || !output_dir.join("latest/ybn").is_dir() {
     return Ok(false);
   }
+  if !generations::index_is_current(output_dir, revision, latest_version) {
+    return Ok(false);
+  }
   // Checked again once YMAP version diffs are generated; see `BuildVanillaCache::run_cache`.
   // if !ymap_diffs_are_current(output_dir, revision, latest_version) {
   //   return Ok(false);

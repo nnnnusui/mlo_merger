@@ -22,7 +22,8 @@ mod test;
 
 pub use context::{StreamFileRef, YmapComparisonContext, YmapParentRef};
 pub use diff::{
-  YmapComparisonDiff, YmapComparisonFile, YmapComparisonPartner, physics_dictionaries,
+  YmapComparisonDiff, YmapComparisonFile, YmapComparisonPartner, YmapPropagatedDiff,
+  YmapPropagationOrigin, physics_dictionaries,
 };
 pub use entities::YmapEntityDiff;
 pub use entity_parent::{

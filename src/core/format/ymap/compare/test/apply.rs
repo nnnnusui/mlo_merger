@@ -496,10 +496,12 @@ fn out_of_range_indices_are_rejected() {
       YmapBoxOccluderDiff::Removed {
         index: 0,
         implied: false,
+        reason: None,
       },
       YmapBoxOccluderDiff::Removed {
         index: 0,
         implied: false,
+        reason: None,
       },
     ]),
     ..Default::default()
@@ -511,6 +513,7 @@ fn out_of_range_indices_are_rejected() {
     box_occluders: Some(vec![YmapBoxOccluderDiff::Removed {
       index: 1,
       implied: false,
+      reason: None,
     }]),
     ..Default::default()
   };
@@ -543,6 +546,7 @@ fn additions_follow_their_vanilla_item_even_when_it_is_removed() {
       YmapBoxOccluderDiff::Removed {
         index: 1,
         implied: false,
+        reason: None,
       },
       added(Some(1), 150),
       added(None, -100),

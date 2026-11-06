@@ -99,6 +99,7 @@ fn pairs_by_center_and_thresholds_rotation() {
           i_height: Some(8),
           ..Default::default()
         },
+        reason: None,
       },
       YmapBoxOccluderDiff::Replaced {
         index: 2,

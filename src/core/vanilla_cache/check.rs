@@ -1,15 +1,18 @@
 //! Consistency of the derived vanilla cache with its metadata and the raw archive.
 
-use super::{CACHE_SCHEMA, DerivedManifest, Result};
+use super::{CACHE_SCHEMA, DerivedManifest, Result, generations::GenerationIndex};
 use crate::core::check::{CheckIssueKind, Findings};
 use std::{collections::BTreeSet, fs, path::Path};
 
 /// Entries of the cache directory besides `latest/`.
-const CACHE_ENTRIES: [&str; 6] = [
+const CACHE_ENTRIES: [&str; 8] = [
   "cache_info.json",
   "ymap_relationships.json",
   "stream_file_rtree.json",
   "latest",
+  "generations.json",
+  // Units of every game build built so far, which the index of the selected one names some of.
+  "generation-units",
   // Written once YMAP version diffs are generated again.
   "ymap_versions.json",
   "diff",
@@ -71,5 +74,19 @@ pub(crate) fn check(
     findings.recorded_file(dir, &object, None, &file.sha256, deep)?;
   }
   findings.unrecorded_below(dir, "latest", &recorded)?;
+  match GenerationIndex::load(dir) {
+    Ok(Some(index)) => {
+      for unit in index.families.values().flat_map(|family| &family.units) {
+        let path = format!("generation-units/{}.json", unit.key);
+        if !dir.join(&path).is_file() {
+          findings.add(CheckIssueKind::Missing, &path, None);
+        }
+      }
+    }
+    Ok(None) => {}
+    Err(error) => {
+      findings.add(CheckIssueKind::Unreadable, "generations.json", Some(error.to_string()));
+    }
+  }
   findings.unknown_entries(dir, &CACHE_ENTRIES)
 }

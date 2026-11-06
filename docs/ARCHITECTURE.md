@@ -73,13 +73,23 @@ carries the other's removals, marked implied, so its document records the other 
 The source cache also records which vanilla YMAPs a
 merge must read: the parents and children related to changed files.
 
+DLCs ship vanilla YMAPs again under prefixes of their own, and the game loads every
+generation. The vanilla cache pairs the items of each family's generations, one unit per
+older and newer generation, stored by a digest of its YMAPs so that rebuilds and game build
+switches reuse them, and indexes the selected build's units in `generations.json`. After
+taking the diffs, the source cache carries each resource's removals and modifications of
+vanilla items over to the paired items of newer generations it does not ship, as
+`propagated/` documents whose items name their origin in `reason`; they are derived from the
+diff record and the generation index alone, and are kept while both are unchanged.
+
 ## Merge
 
 1. Ensure the derived vanilla and source caches are current.
 2. Dispatch latest vanilla `.ybn` and `.ymap` files to separate merge handlers.
 3. For YMAPs, read each source's diff document, leave out the differences its
    resource overwrite selects, add the LOD light removals of resources shipping only
-   the other YMAP of a light pair, append the vanilla overwrite as the last source,
+   the other YMAP of a light pair and the changes carried over from older generations,
+   append the vanilla overwrite as the last source,
    combine the differences and apply them to the latest vanilla file. Combining keeps
    every change of its inputs; the merge stage first leaves name, flag, extent, block and
    distant LOD light count changes and physics dictionary removals out of each

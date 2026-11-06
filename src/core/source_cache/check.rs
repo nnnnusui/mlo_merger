@@ -1,11 +1,15 @@
 //! Consistency of the source cache with its inventory.
 
-use super::{Result, read_metadata, ymap_diff_path};
+use super::{
+  Result,
+  generate::propagate::{PROPAGATED_DIR, read_record},
+  read_metadata, ymap_diff_path,
+};
 use crate::core::check::{CheckIssueKind, Findings};
 use std::{collections::BTreeSet, path::Path};
 
 /// Entries of the cache directory.
-const CACHE_ENTRIES: [&str; 8] = [
+const CACHE_ENTRIES: [&str; 9] = [
   "cache_info.json",
   "stream_conflicts.json",
   "vanilla_ymaps_to_read.json",
@@ -13,6 +17,7 @@ const CACHE_ENTRIES: [&str; 8] = [
   "stream_file_rtree.json",
   "resources",
   "diff",
+  "propagated",
   // Archived history, which nothing reads.
   "_old",
 ];
@@ -50,5 +55,22 @@ pub(crate) fn check(
   }
   findings.unrecorded_below(dir, "resources", &cached)?;
   findings.unrecorded_below(dir, "diff", &diffs)?;
+  if dir.join(PROPAGATED_DIR).is_dir() {
+    let mut propagated = BTreeSet::from([format!("{PROPAGATED_DIR}/inputs.json")]);
+    match read_record(dir) {
+      Some(record) => {
+        for document in record.documents {
+          if !dir.join(&document.path).is_file() {
+            findings.add(CheckIssueKind::Missing, &document.path, None);
+          }
+          propagated.insert(document.path);
+        }
+      }
+      None => {
+        findings.add(CheckIssueKind::Unreadable, format!("{PROPAGATED_DIR}/inputs.json"), None)
+      }
+    }
+    findings.unrecorded_below(dir, PROPAGATED_DIR, &propagated)?;
+  }
   findings.unknown_entries(dir, &CACHE_ENTRIES)
 }

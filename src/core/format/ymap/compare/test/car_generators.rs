@@ -119,6 +119,7 @@ fn pairs_by_rounded_position_and_thresholds_floats() {
         car_model: Some("taxi".into()),
         ..Default::default()
       },
+      reason: None,
     }]
   );
 }

@@ -45,11 +45,13 @@ impl IncrementalMerge<'_> {
         return Ok((duplicates, Vec::new()));
       }
       let directory = work.join("ymap");
-      let ymap_sources = sources
+      let (propagated, stream_files): (Vec<&MergeSourceFile>, Vec<&MergeSourceFile>) =
+        sources.iter().copied().partition(|source| source.propagated);
+      let ymap_sources = stream_files
         .iter()
         .map(|source| (source.resource.clone(), source.path.clone(), source.diff_path.clone()))
         .collect::<Vec<_>>();
-      let overwrites = sources
+      let overwrites = stream_files
         .iter()
         .filter_map(|source| Some((source.path.clone(), self.overwrite(source)?.clone())))
         .collect();
@@ -59,6 +61,10 @@ impl IncrementalMerge<'_> {
         rebuild_all: true,
         overwrites,
         vanilla_overwrites,
+        propagated: propagated
+          .iter()
+          .map(|source| (source.resource.clone(), source.file_name.clone(), source.path.clone()))
+          .collect(),
       }
       .run_with_latest_vanilla_files(&vanilla, &ymap_sources)?;
       duplicates = crate::common::json::read_json(directory.join(".duplicates.json"))?;

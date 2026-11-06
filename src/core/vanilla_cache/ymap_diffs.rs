@@ -232,6 +232,7 @@ fn rewrite_inexact_arrays(
   if rebuilt.entities != current.entities {
     let removed = (0..previous.entities.len()).map(|index| YmapEntityDiff::Removed {
       index,
+      reason: None,
     });
     let added = current.entities.iter().map(|entity| YmapEntityDiff::Added {
       after: None,

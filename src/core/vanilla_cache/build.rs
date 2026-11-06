@@ -49,6 +49,14 @@ impl BuildVanillaCache {
       &current,
       &input_timestamps,
     )?;
+    write_generations(
+      &staging.0,
+      &output_dir,
+      &generation_sources(&vanilla_dir, &manifest, through_index, &current)?,
+      &manifest.versions.iter().map(|version| version.id.clone()).collect::<Vec<_>>(),
+      &revision,
+      &latest_version,
+    )?;
     // YMAP version diffs are not generated until vanilla version inference is implemented;
     // see "Limitations" in docs/reference.md.
     // // Forced rebuilds take every diff again.
@@ -151,4 +159,32 @@ impl BuildVanillaCache {
     )?;
     Ok(latest_files)
   }
+}
+
+/// The latest YMAPs of `current`, keyed by lowercase file name, with the first of the stages up
+/// to `through_index` shipping a YMAP of their name.
+fn generation_sources(
+  vanilla_dir: &Path,
+  manifest: &VanillaCacheManifest,
+  through_index: usize,
+  current: &BTreeMap<String, (String, CachedFile)>,
+) -> Result<BTreeMap<String, generations::SourceYmap>> {
+  let mut first_stages = BTreeMap::new();
+  for (stage, version) in manifest.versions.iter().enumerate().take(through_index + 1) {
+    for name in version.changes.keys() {
+      first_stages.entry(name.to_ascii_lowercase()).or_insert(stage);
+    }
+  }
+  current
+    .iter()
+    .filter(|(name, _)| name.ends_with(".ymap"))
+    .map(|(name, (_, file))| {
+      let source = generations::SourceYmap {
+        sha256: file.sha256.clone(),
+        path: existing_artifact_path(vanilla_dir, file)?,
+        first_stage: first_stages.get(name).copied().unwrap_or(through_index),
+      };
+      Ok((name.clone(), source))
+    })
+    .collect()
 }

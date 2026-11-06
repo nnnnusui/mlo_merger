@@ -40,6 +40,7 @@ fn ybn_version_change_reuses_current_ymap_groups() {
       file_name: name,
       diff_path: None,
       stream_path: String::new(),
+      propagated: false,
     }
   };
   let ymap = make_source("ymap");
@@ -81,6 +82,7 @@ fn ybn_version_change_reuses_current_ymap_groups() {
   let inputs = MergeInputs {
     ymap: vec![ymap],
     ybn: vec![ybn],
+    propagated: Vec::new(),
     vanilla_ymaps_to_read: BTreeSet::new(),
   };
   assert!(
@@ -126,6 +128,7 @@ fn dependency_groups_invalidate_connected_maps_but_not_independent_maps() {
     file_name: name.into(),
     diff_path: None,
     stream_path: String::new(),
+    propagated: false,
   };
   let parent = source("parent.ymap");
   let independent = source("independent.ymap");

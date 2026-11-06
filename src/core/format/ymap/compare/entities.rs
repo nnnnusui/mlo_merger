@@ -35,6 +35,11 @@ pub enum YmapEntityDiff {
   /// Present only in vanilla, at `index` of its entities.
   Removed {
     index: usize,
+    /// Why the entity is removed, when the removal was not taken from the modded YMAP itself;
+    /// see [`ItemDiff::Removed`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "typescript", specta(optional))]
+    reason: Option<String>,
   },
   /// Paired by GUID and differing beyond the tolerance, or pointing at another parent; the
   /// entity is vanilla's at `before_index` and the modded YMAP's at `after_index`.
@@ -45,6 +50,11 @@ pub enum YmapEntityDiff {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[cfg_attr(feature = "typescript", specta(optional))]
     parent: Option<EntityParent>,
+    /// Why the entity is modified, when the changes were not taken from the modded YMAP itself;
+    /// see [`ItemDiff::Modified`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "typescript", specta(optional))]
+    reason: Option<String>,
   },
 }
 
@@ -113,6 +123,7 @@ pub fn diff(
       if moved.contains(&before_index) {
         diffs.push(YmapEntityDiff::Removed {
           index: before_index,
+          reason: None,
         });
         additions.push((after_index, added(after_index)));
         continue;
@@ -127,12 +138,14 @@ pub fn diff(
           after_index,
           changes: changes.unwrap_or_default(),
           parent,
+          reason: None,
         });
       }
     }
     let paired = vanilla_indices.len().min(modded_indices.len());
     diffs.extend(vanilla_indices[paired..].iter().map(|&index| YmapEntityDiff::Removed {
       index,
+      reason: None,
     }));
     additions.extend(modded_indices[paired..].iter().map(|&index| (index, added(index))));
   }
@@ -275,6 +288,7 @@ pub(super) fn merge(
         ..
       } => vec![YmapEntityDiff::Removed {
         index,
+        reason: None,
       }],
       // Entity diffs never replace, since entities pair by GUID; spelled out for completeness.
       ItemDiff::Replaced {
@@ -283,6 +297,7 @@ pub(super) fn merge(
       } => vec![
         YmapEntityDiff::Removed {
           index,
+          reason: None,
         },
         YmapEntityDiff::Added {
           after: Some(index),
@@ -294,11 +309,13 @@ pub(super) fn merge(
         before_index,
         after_index,
         changes: (changes, parent),
+        ..
       } => vec![YmapEntityDiff::Modified {
         before_index,
         after_index,
         changes,
         parent,
+        reason: None,
       }],
     })
     .collect()
@@ -318,6 +335,7 @@ impl YmapEntityDiff {
       } => return entity.guid,
       Self::Removed {
         index,
+        ..
       } => *index,
       Self::Modified {
         before_index,

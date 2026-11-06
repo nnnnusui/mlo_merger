@@ -73,6 +73,14 @@ CodeWalker の読込・描画処理は有用な根拠ですが、GTA 本体の�
 特に、共有リンクにある接頭辞の説明は調査の出発点であり、ここでは確定した意味として採用していません。
 同名ファイルの置換関係は親子関係とも異なります。どの版が有効かは archive の mount・DLC・配信構成の問題です。
 
+接頭辞の付いた YMAP の多くは、DLC が既存 YMAP を作り直して別名で収録したものです。
+たとえば `lodlights_medium031` には `hei_`・`apa_`・`vw_`・`m25_2_` の版があります。
+新しい版は古い版とほとんど同じ要素を持ちますが、index は一致しません。
+要素の追加・削除があり、`m25_2_*lodlights_small*` のように光源がブロックをまたいで分け直されることもあります。
+各 DLC の `content.xml` で LOD 光源の changeset が invalidate するのは base の `platform:/levels/gta5/lodlights.rpf` だけで、それより前の DLC の `LODLights.rpf` を無効化する記述はありません。
+そのため、どの版が描画されるかは静的な設定だけでは確定できません。
+このツールは、版同士の同じ要素を位置で対応付けたうえで、resource の変更を新しい版にも伝播します（[reference.md](../reference.md#newer-dlc-generations)）。
+
 ### 2. YMAP と YTYP の関係
 
 YMAP は配置、YTYP はアーキタイプの定義を担当します。

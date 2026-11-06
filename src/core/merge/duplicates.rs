@@ -143,6 +143,7 @@ mod tests {
     };
     let removed = YmapEntityDiff::Removed {
       index: 0,
+      reason: None,
     };
     let source = |resource: &str, change| Contribution {
       resource: resource.into(),

@@ -131,7 +131,7 @@ fn repainted_grass_pairs_batches_by_overlapping_bounds() {
   let grass = &diffs.instanced_data.unwrap().grass_instance_list.unwrap();
   assert!(matches!(
     &grass[0],
-    crate::core::format::ymap::compare::YmapGrassBatchDiff::Modified { before_index: 0, after_index: 1, changes }
+    crate::core::format::ymap::compare::YmapGrassBatchDiff::Modified { before_index: 0, after_index: 1, changes, ..  }
       if changes.removed_instances == vec![0, 1] && changes.added_instances.len() == 1
   ));
 }
@@ -174,6 +174,7 @@ fn rebounded_batches_report_only_their_bounds() {
         batch_aabb: Some(bounds(5.0, 40.0)),
         ..Default::default()
       },
+      reason: None,
     }]
   );
 }
@@ -214,6 +215,7 @@ fn repainted_batches_pair_by_overlapping_bounds() {
         before_index,
         after_index,
         changes,
+        ..
       } => (
         *before_index,
         *after_index,
@@ -249,6 +251,7 @@ fn reports_attribute_changes_and_whole_batches() {
     before_index: 0,
     after_index: 0,
     changes,
+    ..
   } = &diffs[0]
   else {
     panic!("{diffs:?}");

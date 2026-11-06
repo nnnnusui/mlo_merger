@@ -115,10 +115,12 @@ fn pairs_by_rounded_position_and_reports_block_fields() {
           rgbi: Some("z".into()),
           ..Default::default()
         },
+        reason: None,
       },
       YmapDistantLodLightDiff::Removed {
         index: 2,
         implied: false,
+        reason: None,
       },
       // After the light the source puts before it, vanilla's first.
       YmapDistantLodLightDiff::Added {

@@ -102,6 +102,7 @@ fn lists_removed_and_replaced_triangles_by_before_index() {
           YmapTriangleDiff::Removed {
             index: 2,
             implied: false,
+            reason: None,
           },
           YmapTriangleDiff::Replaced {
             index: 1,
@@ -110,6 +111,7 @@ fn lists_removed_and_replaced_triangles_by_before_index() {
         ]),
         ..Default::default()
       },
+      reason: None,
     }]
   );
 }
