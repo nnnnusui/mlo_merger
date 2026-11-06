@@ -19,7 +19,7 @@ bpaf = "0.9.28"
 chrono = { version = "0.4.45", features = ["clock"] }
 deku = "0.20.3"
 eframe = "0.37.0"
-flate2 = { version = "1.1", default-features = false, features = ["zlib-rs"] }
+flate2 = { version = "1.1.11", default-features = false, features = ["zlib-rs"] }
 globset = "0.4.21"
 hex = "0.4"
 indexmap = { version = "2.14.2", features = ["serde"] }
@@ -39,7 +39,7 @@ tracing = "0.1"
 tracing-appender = "0.2"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 tracing-tree = { version = "0.4", features = ["time"] }
-toml = "1.2.0"
+toml = "1.2.1"
 ureq = "3.5.1"
 walkdir = "2.5.0"
 
