@@ -58,20 +58,24 @@ round-trip tests compare conversion with CodeWalker hosted in-process, which nee
 
 ## Browser Build
 
-`web/` is a static page that runs `--pipeline` and `--read` on the `web/sample` workspace in
-the browser and draws the files each run adds, modifies and removes. `crates/web` builds the
+`web/` is a static page that runs `--pipeline`, `--read` and `--restore-source-cache` on the
+`web/sample` workspace in the browser and draws the files each run adds, modifies and removes. `crates/web` builds the
 merger for `wasm32-unknown-unknown` against an in-memory filesystem; the GUI, log files and
 downloads stay native-only.
 
 ```bash
 rustup target add wasm32-unknown-unknown
 cargo install --locked wasm-bindgen-cli --version <wasm-bindgen version in Cargo.lock>
+# and wasm-opt from binaryen (https://github.com/WebAssembly/binaryen/releases)
 scripts/build_web.sh
 python3 -m http.server -d web/dist
 ```
 
 `scripts/build_web.sh` assembles `web/dist` from the page, the WebAssembly module and the
-samples; publish that directory as it is. The page runs the merger in `web/worker.js`, which
+samples; publish that directory as it is. `scripts/build_web.sh --bundle DIR` assembles the
+`web/` directory of `mlo_merger-all` instead, without the page; see [Browser build](web.md).
+`node scripts/test_web.mjs DIR` runs that build as a host resource does, and the release
+workflow runs it before packaging. The page runs the merger in `web/worker.js`, which
 seeds `/work` with the files `web/sample/files.json` lists through `web/vfs.js`'s `addFile`,
 calls `run(args, onLog)`, and sends back `snapshot()` and each write reported by `onChange`.
 
@@ -116,7 +120,7 @@ cargo test --features typescript --lib typescript::tests
 
 Every release archive, including `mlo_merger-all`, contains `third_party_notices.json`
 next to `LICENSE.md` and `release.json`. It lists the crates compiled into the released
-executables for any release target (the normal dependency graph; no build or dev
+executables for any release target, or into the browser build of `mlo_merger-all` (the normal dependency graph; no build or dev
 dependencies, and not this workspace's own crates), with their license texts.
 `THIRD_PARTY_NOTICES.md` renders the same data for reading. CodeWalker is not shipped and
 not listed.
@@ -146,7 +150,7 @@ it with [cargo-about](https://github.com/EmbarkStudios/cargo-about) (accepted li
 
 ```bash
 cargo install --locked cargo-about --version 0.9.3 --features cli
-for target in x86_64-pc-windows-msvc x86_64-unknown-linux-gnu x86_64-apple-darwin aarch64-apple-darwin; do
+for target in x86_64-pc-windows-msvc x86_64-unknown-linux-gnu x86_64-apple-darwin aarch64-apple-darwin wasm32-unknown-unknown; do
   cargo about generate --locked --fail --format json --target "$target" -o "target/about-$target.json"
 done
 python3 scripts/third_party_notices.py target/about-*.json \

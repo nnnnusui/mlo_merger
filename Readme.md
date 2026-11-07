@@ -8,6 +8,7 @@ Merges FiveM YMAP resources and conflicting YBN collision files against vanilla 
 |---|---|
 | [Command reference](docs/reference.md) | Every operation, its files and the merge behavior |
 | [FiveM integration](docs/usage.md) | Calling the executable from a resource, its JSON outputs and overwrite documents |
+| [Browser build](docs/web.md) | The WebAssembly build in `mlo_merger-all`: loading it, `run` and its output |
 | [Architecture](docs/ARCHITECTURE.md) | Workflow and design decisions |
 | [Development](docs/development.md) | Building, testing, type generation and third-party notices |
 | [Roadmap](docs/TODO.md) | Remaining work |

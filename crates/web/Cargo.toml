@@ -3,7 +3,7 @@ name = "mlo_merger_web"
 version = "2.3.0"
 edition = "2024"
 publish = false
-description = "Runs mlo_merger's --pipeline and --read in a browser page"
+description = "Runs mlo_merger's --pipeline, --read and --restore-source-cache in a browser page"
 
 [lib]
 crate-type = ["cdylib", "rlib"]

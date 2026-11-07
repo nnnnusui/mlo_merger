@@ -40,8 +40,9 @@ jobs:
 
       - name: Generate third-party notices
         run: |
-          # One run per release target; keep in sync with the build matrix.
-          for target in x86_64-pc-windows-msvc x86_64-unknown-linux-gnu x86_64-apple-darwin aarch64-apple-darwin; do
+          # One run per release target; keep in sync with the build matrix. wasm32 is the
+          # browser build in mlo_merger-all's web/.
+          for target in x86_64-pc-windows-msvc x86_64-unknown-linux-gnu x86_64-apple-darwin aarch64-apple-darwin wasm32-unknown-unknown; do
             cargo about generate --locked --fail --format json --target "$target" -o "about-$target.json"
           done
           mkdir notices
@@ -53,6 +54,52 @@ jobs:
         with:
           name: third-party-notices
           path: notices/*
+          if-no-files-found: error
+          retention-days: 7
+
+  web:
+    name: Build the browser build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      BINARYEN_VERSION: version_133
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Install Rust stable
+        run: |
+          rustup toolchain install stable --profile minimal --no-self-update
+          rustup default stable
+          rustup target add wasm32-unknown-unknown
+
+      - name: Install wasm-bindgen-cli and binaryen
+        run: |
+          version=$(sed -n '/^name = "wasm-bindgen"$/{n;s/^version = "\(.*\)"$/\1/p;}' Cargo.lock)
+          cargo install --locked wasm-bindgen-cli --version "$version"
+          archive="binaryen-$BINARYEN_VERSION-x86_64-linux.tar.gz"
+          url="https://github.com/WebAssembly/binaryen/releases/download/$BINARYEN_VERSION/$archive"
+          curl -fsSLO "$url"
+          curl -fsSL "$url.sha256" | sha256sum -c -
+          tar xzf "$archive"
+          echo "$PWD/binaryen-$BINARYEN_VERSION/bin" >> "$GITHUB_PATH"
+
+      - name: Build
+        run: |
+          scripts/build_web.sh --bundle web-build/web
+          version=$(wasm-bindgen --version | cut -d' ' -f2)
+          printf '{"target": "web", "version": "%s"}\n' "$version" > web-build/wasm_bindgen.json
+
+      - name: Test
+        run: node scripts/test_web.mjs web-build/web
+
+      - name: Upload browser build
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: web
+          path: web-build/
           if-no-files-found: error
           retention-days: 7
 
@@ -148,7 +195,7 @@ jobs:
           (package / "release.json").write_text(json.dumps(release, indent=2) + "\n", encoding="utf-8")
           for filename in ("Readme.md", "LICENSE.md", "asset/config.toml",
                            "docs/ARCHITECTURE.md", "docs/TODO.md", "docs/usage.md",
-                           "docs/reference.md", "docs/development.md",
+                           "docs/reference.md", "docs/development.md", "docs/web.md",
                            ".cargo/config.toml", "asset/gen_mlo_merger.ts"):
               destination = package / filename
               destination.parent.mkdir(parents=True, exist_ok=True)
@@ -171,7 +218,8 @@ jobs:
 
   release:
     name: Publish release
-    needs: build
+    # Without the browser build there is no mlo_merger-all, so nothing is released.
+    needs: [build, web]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -188,9 +236,16 @@ jobs:
           path: dist
           merge-multiple: true
 
+      - name: Download browser build
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          name: web
+          path: web-build
+
       - name: Package all platforms
         run: |
           python3 - <<'PY'
+          import hashlib
           import json
           from pathlib import Path
           import shutil
@@ -239,6 +294,19 @@ jobs:
                       destination.parent.mkdir(parents=True, exist_ok=True)
                       shutil.copy2(path, destination)
               release["targets"] = sorted(targets)
+              # The browser build; see docs/web.md.
+              web = Path("web-build/web")
+              if not (web / "pkg" / "mlo_merger_web_bg.wasm").is_file():
+                  raise SystemExit("The browser build is missing")
+              shutil.copytree(web, package / "web")
+              release["web"] = {
+                  "wasm_bindgen": json.loads(Path("web-build/wasm_bindgen.json").read_text(encoding="utf-8")),
+                  "files": {
+                      path.relative_to(package / "web").as_posix():
+                          hashlib.sha256(path.read_bytes()).hexdigest()
+                      for path in sorted((package / "web").rglob("*")) if path.is_file()
+                  },
+              }
               (package / "release.json").write_text(json.dumps(release, indent=2) + "\n", encoding="utf-8")
               shutil.make_archive(str(dist / name), "zip", root_dir=temporary, base_dir=name)
           PY

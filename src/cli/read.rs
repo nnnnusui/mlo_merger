@@ -84,13 +84,7 @@ pub fn parser() -> impl Parser<Read> {
   )
 }
 
-/// Writes the JSON and prints what was read as one line of JSON.
-pub fn run(command: Read) -> Result<(), Box<dyn std::error::Error>> {
-  println!("{}", report(command)?);
-  Ok(())
-}
-
-/// Writes the JSON and returns the one line of JSON [`run`] prints.
+/// Writes the JSON and returns what was read as the one line of JSON printed.
 pub fn report(command: Read) -> Result<String, Box<dyn std::error::Error>> {
   Ok(serde_json::to_string(&command.run()?)?)
 }

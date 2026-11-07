@@ -42,15 +42,15 @@ pub fn parser() -> impl Parser<RestoreSourceCache> {
   )
 }
 
-/// Restores source files without generating caches, merging or deploying.
-pub fn run(command: RestoreSourceCache) -> Result<(), Box<dyn std::error::Error>> {
+/// Restores source files without generating caches, merging or deploying, and returns the line
+/// printed.
+pub fn report(command: RestoreSourceCache) -> Result<String, Box<dyn std::error::Error>> {
   let restored = crate::core::source_cache::restore_source_cache(
     &command.cache_dir,
     &command.source_dir,
     &command.resources,
   )?;
-  println!("Restored {restored} source files.");
-  Ok(())
+  Ok(format!("Restored {restored} source files."))
 }
 
 #[cfg(test)]

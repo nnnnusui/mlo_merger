@@ -94,14 +94,35 @@ pub fn parse_args_from(args: &[&str]) -> Result<Command, String> {
   })
 }
 
+/// Runs `--pipeline`, `--read` or `--restore-source-cache` and returns exactly what the
+/// executable writes on standard output for it: one line, newline included.
+///
+/// The executable and the browser build both print through this, so their output is the same.
+/// Other operations are an error.
+pub fn stdout(command: Command) -> Result<String, Box<dyn std::error::Error>> {
+  let line = match command {
+    Command::Pipeline(command) => pipeline::report(command)?,
+    Command::Read(command) => read::report(command)?,
+    Command::RestoreSourceCache(command) => restore_source_cache::report(command)?,
+    _ => {
+      return Err("Only --pipeline, --read and --restore-source-cache return their output".into());
+    }
+  };
+  Ok(format!("{line}\n"))
+}
+
 /// Dispatches an operation to its implementation or placeholder.
 pub fn run(command: Command) -> Result<(), Box<dyn std::error::Error>> {
   match command {
-    Command::Pipeline(command) => pipeline::run(command)?,
+    command @ (Command::Pipeline(_) | Command::Read(_) | Command::RestoreSourceCache(_)) => {
+      use std::io::Write;
+      let mut out = std::io::stdout().lock();
+      out.write_all(stdout(command)?.as_bytes())?;
+      out.flush()?;
+    }
     Command::GenerateVanilla(command) => generate_vanilla::run(command)?,
     Command::GenerateVanillaCache(command) => generate_vanilla_cache::run(command)?,
     Command::GenerateSourceCache(command) => generate_source_cache::run(command)?,
-    Command::RestoreSourceCache(command) => restore_source_cache::run(command)?,
     Command::Merge(command) => merge::run(command)?,
     Command::Deploy(command) => deploy::run(command)?,
     Command::ToXml(command) => to_xml::run(command)?,
@@ -109,7 +130,6 @@ pub fn run(command: Command) -> Result<(), Box<dyn std::error::Error>> {
     Command::Find(command) => find::run(command)?,
     Command::Check(command) => check::run(command)?,
     Command::GetDiff(command) => get_diff::run(command)?,
-    Command::Read(command) => read::run(command)?,
   }
   Ok(())
 }

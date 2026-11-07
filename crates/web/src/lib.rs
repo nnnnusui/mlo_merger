@@ -1,10 +1,11 @@
-//! Runs `--pipeline` and `--read` in a browser page.
+//! Runs `--pipeline`, `--read` and `--restore-source-cache` in a browser page.
 //!
 //! The library's filesystem calls go to the page's virtual filesystem in `web/vfs.js`. The
 //! page fills that filesystem with resources, calls [`run`] with a command line, then reads
 //! the files the run wrote to draw them.
 //!
-//! A panic aborts the WebAssembly instance; the page must instantiate the module again.
+//! A panic aborts the WebAssembly instance; the page must load the module again; see
+//! `docs/web.md`.
 #![cfg(target_arch = "wasm32")]
 
 use std::{cell::RefCell, io};
@@ -32,12 +33,17 @@ fn log(
   });
 }
 
-/// Runs one command line and returns what the executable prints on standard output.
+/// Runs one command line and returns exactly what the executable writes on standard output,
+/// newline included.
 ///
-/// `args` leave out the executable name, as in `["--pipeline", "-i", "asset/source"]`; only
-/// `--pipeline` and `--read` are available. `on_log(level, message)` receives each log line
-/// at `info` and above as it is written. Relative paths resolve against `/`, or the directory
-/// given to [`set_current_dir`].
+/// `args` is the argument vector without the executable name, one argument per element, as in
+/// `["--pipeline", "-i", "/resources"]`; nothing is split or unquoted. Only `--pipeline`,
+/// `--read` and `--restore-source-cache` are available. `on_log(level, message)` receives each
+/// log line at `info` and above as it is written. Relative paths resolve against `/`, or the
+/// directory given to [`set_current_dir`]. A failure throws an `Error` with the message the
+/// executable prints on standard error before exiting with status 1.
+///
+/// `run` must not be called again from `on_log`; that panics.
 #[wasm_bindgen]
 pub fn run(
   args: Vec<String>,
@@ -60,12 +66,15 @@ pub fn run(
 
 fn execute(args: &[String]) -> Result<String, String> {
   let args = args.iter().map(String::as_str).collect::<Vec<_>>();
-  let output = match parse_args_from(&args)? {
-    Command::Pipeline(command) => cli::pipeline::report(command),
-    Command::Read(command) => cli::read::report(command),
-    _ => return Err("Only --pipeline and --read run in the browser".to_string()),
+  let command = match parse_args_from(&args)? {
+    command @ (Command::Pipeline(_) | Command::Read(_) | Command::RestoreSourceCache(_)) => command,
+    _ => {
+      return Err(
+        "Only --pipeline, --read and --restore-source-cache run in the browser".to_string(),
+      );
+    }
   };
-  output.map_err(|error| {
+  cli::command::stdout(command).map_err(|error| {
     tracing::error!("{error}");
     error.to_string()
   })
