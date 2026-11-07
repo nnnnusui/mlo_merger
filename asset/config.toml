@@ -1,11 +1,24 @@
+# Tolerances for comparing sources with vanilla. Tools round values differently when they save
+# a file (CodeWalker and OpenIV, for example, write the same position with slightly different
+# digits), so values a resource never touched can differ from vanilla by that rounding alone.
+# Differences within these tolerances are treated as no change, so such values are not
+# detected or merged as changes. Position tolerances end in _position.
 [tolerance]
-ybn = 0.05
+# YBN polygon coordinates and radii, per axis, in metres.
+ybn_position = 0.05
+# YMAP float values: entity positions, rotations, scales and LOD distances, and car generator,
+# time-cycle modifier and distant LOD light values.
 ymap = 0.001
-ymap_occlude_model = 0.01
-ymap_box_occluder = 1
+# XY extents of occlude models, in metres, when pairing them.
+ymap_occlude_model_position = 0.01
+# Box occluder centers, in stored units (a quarter metre).
+ymap_box_occluder_position = 1
+# Box occluder rotation (iCosZ/iSinZ), in stored units.
 ymap_box_occluder_rotation = 1
+# Decimal places car generator and distant LOD light positions are rounded to when pairing.
 ymap_car_generator_position_decimals = 3
 ymap_lod_light_position_decimals = 3
+# Grass instance positions, per axis, in metres.
 ymap_grass_position = 0.01
 
 # FiveM game builds for --gamebuild: the builds FiveM's launcher supports

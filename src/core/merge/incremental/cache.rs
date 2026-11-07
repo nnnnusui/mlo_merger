@@ -260,7 +260,7 @@ mod tests {
     let original = with_tolerances(defaults, || signature("ymap", &files).unwrap());
     for configured in [
       MatchTolerances {
-        ybn: 0.025,
+        ybn_position: 0.025,
         ..defaults
       },
       MatchTolerances {
@@ -268,11 +268,11 @@ mod tests {
         ..defaults
       },
       MatchTolerances {
-        ymap_occlude_model: 0.02,
+        ymap_occlude_model_position: 0.02,
         ..defaults
       },
       MatchTolerances {
-        ymap_box_occluder: 2,
+        ymap_box_occluder_position: 2,
         ..defaults
       },
     ] {

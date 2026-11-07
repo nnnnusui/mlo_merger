@@ -5,22 +5,34 @@ use serde::{Deserialize, Serialize};
 use std::{cell::Cell, io, path::Path};
 
 /// Coordinate and scalar tolerances used by collision and map comparisons.
+///
+/// Tools round values differently when they save a file: CodeWalker and OpenIV, for example,
+/// write the same position with slightly different digits. Without tolerances, values a
+/// resource never touched would differ from vanilla only by that rounding and be detected, and
+/// merged, as changes. Differences within these tolerances are treated as no change.
+///
+/// Position tolerances are named `*_position`. The names before that suffix was added (`ybn`,
+/// `ymap_occlude_model`, `ymap_box_occluder`) are still read.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[serde(default, deny_unknown_fields)]
 pub struct MatchTolerances {
-  /// Inclusive per-axis polygon coordinate and radius tolerance for YBNs.
+  /// Inclusive per-axis tolerance for YBN polygon coordinates and radii.
+  #[serde(alias = "ybn")]
   #[cfg_attr(feature = "typescript", specta(optional))]
-  pub ybn: f32,
-  /// Exclusive scalar tolerance for YMAP car generators and LOD lights.
+  pub ybn_position: f32,
+  /// Exclusive tolerance for YMAP float values: entity positions, rotations, scales and LOD
+  /// distances, and car generator, time-cycle modifier and distant LOD light values.
   #[cfg_attr(feature = "typescript", specta(optional))]
   pub ymap: f32,
-  /// Exclusive XY extent tolerance for YMAP occlude-model matching.
+  /// Exclusive tolerance for the XY extents of YMAP occlude models when pairing them.
+  #[serde(alias = "ymap_occlude_model")]
   #[cfg_attr(feature = "typescript", specta(optional))]
-  pub ymap_occlude_model: f32,
-  /// Exclusive integer center tolerance for YMAP box occluders, in stored units.
+  pub ymap_occlude_model_position: f32,
+  /// Exclusive tolerance for YMAP box occluder centers, in stored units (a quarter metre).
+  #[serde(alias = "ymap_box_occluder")]
   #[cfg_attr(feature = "typescript", specta(optional))]
-  pub ymap_box_occluder: i32,
+  pub ymap_box_occluder_position: i32,
   /// Inclusive tolerance for YMAP box occluder `i_cos_z`/`i_sin_z`, in stored units.
   #[cfg_attr(feature = "typescript", specta(optional))]
   pub ymap_box_occluder_rotation: i32,
@@ -38,10 +50,10 @@ pub struct MatchTolerances {
 impl Default for MatchTolerances {
   fn default() -> Self {
     Self {
-      ybn: 0.05,
+      ybn_position: 0.05,
       ymap: 0.001,
-      ymap_occlude_model: 0.01,
-      ymap_box_occluder: 1,
+      ymap_occlude_model_position: 0.01,
+      ymap_box_occluder_position: 1,
       ymap_box_occluder_rotation: 1,
       ymap_car_generator_position_decimals: 3,
       ymap_grass_position: 0.01,
@@ -57,7 +69,7 @@ impl MatchTolerances {
   pub fn ymap_exact() -> Self {
     Self {
       ymap: 0.0,
-      ymap_occlude_model: 0.0,
+      ymap_occlude_model_position: 0.0,
       ymap_box_occluder_rotation: 0,
       ymap_grass_position: 0.0,
       ..Self::default()
@@ -70,7 +82,7 @@ impl MatchTolerances {
   /// let tolerance = mlo_merger::core::config::matching::MatchTolerances::load(
   ///   std::path::Path::new("asset/config.toml"),
   /// )?;
-  /// assert!(tolerance.ybn > 0.0);
+  /// assert!(tolerance.ybn_position > 0.0);
   /// # Ok::<(), std::io::Error>(())
   /// ```
   pub fn load(path: &Path) -> io::Result<Self> {
@@ -86,9 +98,9 @@ impl MatchTolerances {
   fn parse(text: &str) -> io::Result<Self> {
     let value = super::Config::parse(text)?.tolerance;
     for (name, tolerance) in [
-      ("ybn", value.ybn),
+      ("ybn_position", value.ybn_position),
       ("ymap", value.ymap),
-      ("ymap_occlude_model", value.ymap_occlude_model),
+      ("ymap_occlude_model_position", value.ymap_occlude_model_position),
       ("ymap_grass_position", value.ymap_grass_position),
     ] {
       if !tolerance.is_finite() || tolerance <= 0.0 {
@@ -98,10 +110,10 @@ impl MatchTolerances {
         ));
       }
     }
-    if value.ymap_box_occluder <= 0 {
+    if value.ymap_box_occluder_position <= 0 {
       return Err(io::Error::new(
         io::ErrorKind::InvalidData,
-        "tolerance.ymap_box_occluder must be positive",
+        "tolerance.ymap_box_occluder_position must be positive",
       ));
     }
     if value.ymap_box_occluder_rotation < 0 {
@@ -166,10 +178,11 @@ mod tests {
   #[test]
   fn defaults_partial_config_and_invalid_values() {
     assert_eq!(MatchTolerances::parse("").unwrap(), MatchTolerances::default());
-    let configured = MatchTolerances::parse("[tolerance]\nybn = 0.025\nymap = 0.002").unwrap();
-    assert_eq!(configured.ybn, 0.025);
+    let configured =
+      MatchTolerances::parse("[tolerance]\nybn_position = 0.025\nymap = 0.002").unwrap();
+    assert_eq!(configured.ybn_position, 0.025);
     assert_eq!(configured.ymap, 0.002);
-    assert_eq!(configured.ymap_occlude_model, 0.01);
+    assert_eq!(configured.ymap_occlude_model_position, 0.01);
     assert_eq!(configured.ymap_box_occluder_rotation, 1);
     assert_eq!(configured.ymap_car_generator_position_decimals, 3);
     assert_eq!(configured.ymap_lod_light_position_decimals, 3);
@@ -181,11 +194,11 @@ mod tests {
     assert_eq!(exact.ymap_box_occluder_rotation, 0);
     assert_eq!(exact.ymap_car_generator_position_decimals, 0);
     for text in [
-      "[tolerance]\nybn = 0",
-      "[tolerance]\nybn = nan",
+      "[tolerance]\nybn_position = 0",
+      "[tolerance]\nybn_position = nan",
       "[tolerance]\nymap = inf",
-      "[tolerance]\nymap_occlude_model = -0.01",
-      "[tolerance]\nymap_box_occluder = 0",
+      "[tolerance]\nymap_occlude_model_position = -0.01",
+      "[tolerance]\nymap_box_occluder_position = 0",
       "[tolerance]\nymap_box_occluder_rotation = -1",
       "[tolerance]\nymap_car_generator_position_decimals = 7",
       "[tolerance]\nymap_lod_light_position_decimals = 7",
@@ -201,15 +214,28 @@ mod tests {
   }
 
   #[test]
+  fn position_tolerances_are_read_under_their_former_names_too() {
+    let former = MatchTolerances::parse(
+      "[tolerance]\nybn = 0.025\nymap_occlude_model = 0.02\nymap_box_occluder = 2",
+    )
+    .unwrap();
+    assert_eq!(former.ybn_position, 0.025);
+    assert_eq!(former.ymap_occlude_model_position, 0.02);
+    assert_eq!(former.ymap_box_occluder_position, 2);
+    assert!(MatchTolerances::parse("[tolerance]\nybn = 0").is_err());
+    assert!(MatchTolerances::parse("[tolerance]\nybn = 0.1\nybn_position = 0.1").is_err());
+  }
+
+  #[test]
   fn config_file_reads_values_and_reports_invalid_paths() {
     let path =
       std::env::temp_dir().join(format!("match_config_values_{}.toml", std::process::id()));
-    fs::write(&path, "[tolerance]\nybn = 0.025\nymap = 0.002").unwrap();
+    fs::write(&path, "[tolerance]\nybn_position = 0.025\nymap = 0.002").unwrap();
     let loaded = MatchTolerances::load(&path).unwrap();
-    assert_eq!(loaded.ybn, 0.025);
+    assert_eq!(loaded.ybn_position, 0.025);
     assert_eq!(loaded.ymap, 0.002);
-    assert_eq!(loaded.ymap_occlude_model, 0.01);
-    fs::write(&path, "[tolerance]\nybn = 0.0").unwrap();
+    assert_eq!(loaded.ymap_occlude_model_position, 0.01);
+    fs::write(&path, "[tolerance]\nybn_position = 0.0").unwrap();
     assert!(MatchTolerances::load(&path).unwrap_err().to_string().contains(path.to_str().unwrap()));
     fs::remove_file(path).unwrap();
   }
@@ -218,7 +244,7 @@ mod tests {
   fn operation_snapshot_is_nested_thread_local_and_restored_after_unwinding() {
     let defaults = current();
     let configured = MatchTolerances {
-      ybn: 0.025,
+      ybn_position: 0.025,
       ..defaults
     };
     with_tolerances(configured, || {

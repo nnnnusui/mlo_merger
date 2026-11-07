@@ -66,7 +66,7 @@ fn occlude_models_pair_within_the_xy_tolerance() {
     ..base()
   };
   let mut modded = vanilla.clone();
-  modded.occlude_models[0].bmin.x = 0.005; // within tolerance.ymap_occlude_model
+  modded.occlude_models[0].bmin.x = 0.005; // within tolerance.ymap_occlude_model_position
   modded.occlude_models[0].bmax.x = 10.005;
   let diffs = json(&vanilla, &modded);
   assert!(diffs["occlude_models"][0]["Modified"].is_object(), "{diffs}");

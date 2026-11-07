@@ -280,14 +280,22 @@ supports a new one.
 ## Matching Configuration
 
 Merge and diff-cache operations read [asset/config.toml](../asset/config.toml) once per
-operation. Missing files or omitted keys use these defaults:
+operation.
+
+The tolerances keep rounding from passing for a change. Tools round values differently when
+they save a file: CodeWalker and OpenIV, for example, write the same position with slightly
+different digits. A value a resource never touched can therefore differ from vanilla by that
+rounding alone, and would otherwise be detected, and merged, as a change. Differences within
+the tolerances are treated as no change.
+
+Missing files or omitted keys use these defaults:
 
 ```toml
 [tolerance]
-ybn = 0.05
+ybn_position = 0.05
 ymap = 0.001
-ymap_occlude_model = 0.01
-ymap_box_occluder = 1
+ymap_occlude_model_position = 0.01
+ymap_box_occluder_position = 1
 ymap_box_occluder_rotation = 1
 ymap_car_generator_position_decimals = 3
 ymap_lod_light_position_decimals = 3
@@ -296,15 +304,17 @@ ymap_grass_position = 0.01
 
 | Key | Meaning |
 |---|---|
-| `ybn` | Inclusive per-axis polygon coordinate and radius matching, for every supported polygon type |
+| `ybn_position` | Inclusive per-axis polygon coordinate and radius matching, for every supported polygon type |
 | `ymap` | Smallest change of a YMAP float field that counts: entity positions, rotations, scales and LOD distances, car generator, time cycle modifier and distant LOD light values |
-| `ymap_occlude_model` | Occlude model XY extent tolerance; corners compare exactly |
-| `ymap_box_occluder` | Box occluder tolerance, in integer stored-coordinate units |
+| `ymap_occlude_model_position` | Occlude model XY extent tolerance; corners compare exactly |
+| `ymap_box_occluder_position` | Box occluder center tolerance, in integer stored-coordinate units (a quarter metre) |
 | `ymap_box_occluder_rotation` | `iCosZ`/`iSinZ` changes up to and including this many stored units are ignored (0 compares exactly) |
 | `ymap_car_generator_position_decimals` | Decimal places (0 to 6) car generator positions are rounded to when pairing |
 | `ymap_lod_light_position_decimals` | The same for distant LOD light positions |
 | `ymap_grass_position` | Per-axis world-space distance, in metres, within which grass instances are the same one |
 
+- Position tolerances end in `_position`. The former names `ybn`, `ymap_occlude_model` and
+  `ymap_box_occluder` are still read.
 - YMAP comparisons are exclusive of the boundary; extents compare exactly. These settings
   do not change search radii.
 - All other values must be positive; floating values must also be finite. Unknown keys and
@@ -453,7 +463,7 @@ Schema documents, and it is not checked into the repository; see
 ```typescript
 import type { DuplicateReport, MatchingConfig } from "./asset/gen_mlo_merger";
 
-const config: MatchingConfig = { tolerance: { ybn: 0.05 } };
+const config: MatchingConfig = { tolerance: { ybn_position: 0.05 } };
 ```
 
 Types preserve JSON field names, nullability and optional inputs. Paths are strings; sets

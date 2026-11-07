@@ -45,14 +45,14 @@ impl YmapBoxOccluder {
       .map(|value| f64::from(value) / UNITS_PER_METRE)
   }
 
-  /// Whether `other` is the same occluder: centers within `tolerance.ymap_box_occluder` on every
+  /// Whether `other` is the same occluder: centers within `tolerance.ymap_box_occluder_position` on every
   /// axis, in stored units.
   pub fn matches(
     &self,
     other: &YmapBoxOccluder,
     tolerances: &MatchTolerances,
   ) -> bool {
-    let tolerance = tolerances.ymap_box_occluder;
+    let tolerance = tolerances.ymap_box_occluder_position;
     (self.i_center_x - other.i_center_x).abs() < tolerance
       && (self.i_center_y - other.i_center_y).abs() < tolerance
       && (self.i_center_z - other.i_center_z).abs() < tolerance
@@ -79,7 +79,7 @@ mod tests {
     changed.i_center_x = 1;
     assert!(!original.matches(&changed, &MatchTolerances::default()));
     let wider = MatchTolerances {
-      ymap_box_occluder: 2,
+      ymap_box_occluder_position: 2,
       ..Default::default()
     };
     assert!(original.matches(&changed, &wider));

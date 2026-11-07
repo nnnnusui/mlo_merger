@@ -451,7 +451,7 @@ fn configured_ybn_tolerance_removes_shifted_boxes_but_preserves_distinct_additio
   for (tolerance, expected) in [(0.005, 1), (0.05, 0)] {
     with_tolerances(
       MatchTolerances {
-        ybn: tolerance,
+        ybn_position: tolerance,
         ..Default::default()
       },
       || {
@@ -652,7 +652,7 @@ fn configured_ybn_tolerance_removes_reported_mirrorpark_box() {
   for (tolerance, expected) in [(0.005, 1), (0.05, 0)] {
     with_tolerances(
       MatchTolerances {
-        ybn: tolerance,
+        ybn_position: tolerance,
         ..Default::default()
       },
       || {

@@ -24,13 +24,13 @@ pub struct YmapOccludeModel {
 
 impl YmapOccludeModel {
   /// Whether `other` is the same model: minimum or maximum corners within
-  /// `tolerance.ymap_occlude_model` in XY.
+  /// `tolerance.ymap_occlude_model_position` in XY.
   pub fn matches(
     &self,
     other: &YmapOccludeModel,
     tolerances: &MatchTolerances,
   ) -> bool {
-    let tolerance = tolerances.ymap_occlude_model;
+    let tolerance = tolerances.ymap_occlude_model_position;
     let close =
       |p: &Position, q: &Position| (p.x - q.x).abs() < tolerance && (p.y - q.y).abs() < tolerance;
     close(&self.bmin, &other.bmin) || close(&self.bmax, &other.bmax)
@@ -54,7 +54,7 @@ mod tests {
     changed.bmax.x = 0.02;
     assert!(!original.matches(&changed, &MatchTolerances::default()));
     let wider = MatchTolerances {
-      ymap_occlude_model: 0.05,
+      ymap_occlude_model_position: 0.05,
       ..Default::default()
     };
     assert!(original.matches(&changed, &wider));

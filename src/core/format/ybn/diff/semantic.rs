@@ -63,7 +63,7 @@ impl YbnDiff {
     after: &Bound,
   ) -> io::Result<Self> {
     crate::core::config::matching::with_config(|| {
-      Self::with_tolerance(before, after, crate::core::config::matching::current().ybn)
+      Self::with_tolerance(before, after, crate::core::config::matching::current().ybn_position)
     })?
   }
 

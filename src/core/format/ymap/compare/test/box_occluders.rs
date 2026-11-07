@@ -57,7 +57,7 @@ fn box_occluders_follow_the_configured_tolerances() {
     }]
   ));
   let configured = MatchTolerances {
-    ymap_box_occluder: 3,
+    ymap_box_occluder_position: 3,
     ymap_box_occluder_rotation: 0,
     ..Default::default()
   };
