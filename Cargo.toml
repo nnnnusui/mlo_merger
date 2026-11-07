@@ -1,6 +1,6 @@
 [package]
 name = "mlo_merger"
-version = "3.0.0"
+version = "3.0.1"
 edition = "2024"
 default-run = "mlo_merger"
 publish = false
