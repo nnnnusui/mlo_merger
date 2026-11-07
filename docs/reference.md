@@ -352,7 +352,7 @@ Searches write XML to stdout without running the pipeline or modifying artifacts
 mlo_merger --read --resource brofx_mansion_06 apa_ch2_occl_05.ymap
 mlo_merger --read --resource '[gabz]/cfx-gabz-247'
 mlo_merger --read --vanilla apa_ch2_occl_05.ymap
-mlo_merger --read --vanilla mpheist hei_ch1_11.ymap
+mlo_merger --read --vanilla --gamebuild 2802 hei_ch1_11.ymap
 mlo_merger --read apa_ch2_occl_05.ymap
 mlo_merger --read apa_ch2_occl_05.ymap hei_ch1_11.ymap
 mlo_merger --read --all
@@ -363,21 +363,26 @@ and fingerprint of the file it was read from and of the `hash_names.json` that n
 hashes. A resource's file is written to
 `asset/read-cache/resources/{resourceName}/{stream-relative-path}.json` and a vanilla
 file to `asset/read-cache/vanilla/{version}/ymap/{fileName}.json`, where `{version}` is the
-version folder holding the file in the vanilla archive: the last version, up to the one
+version folder holding the file in the vanilla archive: the last version, up to the stage
 read, that changed it. Versions holding the same file share its document. A JSON still
 describing its file is not written again; `-f` writes it anyway.
+
+Vanilla files are read from the stage the vanilla cache was built for (`latest_version` in
+`asset/vanilla-cache/cache_info.json`, `--vanilla-cache` to change the cache), so they match
+the merge and the cache's `stream_file_rtree.json`; without a vanilla cache, or one built
+for a stage the archive lacks, from the last stage. `--gamebuild BUILD` reads them as of a
+game build instead, resolved as for the other commands (see [Game Builds](#game-builds)).
+`--gamebuild` changes only the vanilla files.
 
 - `--resource NAME [FILE...]` reads one resource, by name or source-relative ID, from the
   existing source cache. Without a file it reads all of the resource's YMAPs. A file name
   matching several of the resource's files is an error; give its stream-relative path
   instead.
-- `--vanilla [VERSION] [FILE...]` reads a version of the vanilla archive, the latest
-  without one. A version is its ID or the name after the number, such as `mpheist`.
-  Without a file it reads all of the version's YMAPs.
-- Files alone are read from every resource holding them and from the latest vanilla. If
-  any resource holds several files of one name, nothing is written.
-- `--all` reads every YMAP of every resource and of the latest vanilla version; it takes
-  no file names.
+- `--vanilla [FILE...]` reads vanilla files only. Without a file it reads all of the
+  stage's YMAPs.
+- Files alone are read from every resource holding them and from vanilla. If any resource
+  holds several files of one name, nothing is written.
+- `--all` reads every YMAP of every resource and of vanilla; it takes no file names.
 - Several files are read together in the order given; a file named twice is read once.
   If any name matches no file, nothing is written.
 - Files are read and written in parallel; the result keeps the order above.

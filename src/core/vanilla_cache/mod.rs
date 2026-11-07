@@ -127,6 +127,21 @@ use relationships::children_by_parent;
 pub(crate) use relationships::ymap_parent_hash;
 use source::*;
 pub use ymap_diffs::{VanillaYmapDiff, VanillaYmapHistory, VanillaYmapVersion, ymap_history};
+
+/// The vanilla stage the cache in `cache_dir` was built for, unless the cache is missing or
+/// unreadable.
+pub(crate) fn built_version(cache_dir: &Path) -> Option<String> {
+  read::read_derived(cache_dir).ok().map(|loaded| loaded.manifest.latest_version.clone())
+}
+
+/// The vanilla stage the cache targets for `gamebuild`: its last stage, or the last stage of
+/// the archive without one.
+pub(crate) fn target_version(
+  manifest: &VanillaCacheManifest,
+  gamebuild: Option<&GameBuild>,
+) -> Result<String> {
+  Ok(manifest.versions[resolve_through_version(manifest, gamebuild)?].id.clone())
+}
 // Generation is disabled; see `BuildVanillaCache::run_cache`.
 // use ymap_diffs::{write_ymap_diffs, ymap_diffs_are_current};
 

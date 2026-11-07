@@ -166,6 +166,12 @@ ID (and `originalPath`, relative to the source root, when moved into the cache) 
 files, and the `version` for
 vanilla files. Its `input` records the fingerprint of the metadata it was listed from.
 
+A vanilla item's `version` is the version folder holding the file, the same value `--read`
+reports as `origin.Vanilla.version`, so once read its document is
+`asset/read-cache/vanilla/{version}/ymap/{name}.json`. `--read` reads vanilla as of the stage
+the vanilla cache was built for, so the two agree whichever `--gamebuild` the pipeline ran
+with.
+
 An index is rewritten only when that metadata changed, or when the index is missing or of an
 earlier layout, so a run that reuses its store also creates the index of an existing store.
 An index that changed has a new `timestamp`; reload an index when its file changed. Source
@@ -182,8 +188,8 @@ mlo_merger --read hei_ch1_11.ymap
 mlo_merger --read hei_ch1_11.ymap hei_ch1_12.ymap
 ```
 
-Given only file names, `--read` reads each file from every resource holding it and from the
-latest vanilla version. The last stdout line is a `ReadResult`:
+Given only file names, `--read` reads each file from every resource holding it and from
+vanilla. The last stdout line is a `ReadResult`:
 
 ```json
 {"files":[
@@ -202,14 +208,17 @@ latest vanilla version. The last stdout line is a `ReadResult`:
 - For `origin.Resource`, `resource` (the resource directory name) and `stream_path`
   (the path below `stream/`) also key the diff document and the overwrite.
 - For `origin.Vanilla`, `version` is the version folder holding the file: the last version,
-  up to the latest, that changed it, not necessarily the latest itself. Its document sits
-  under that folder in `asset/read-cache/vanilla`.
+  up to the stage read, that changed it, not necessarily that stage itself. Its document
+  sits under that folder in `asset/read-cache/vanilla`.
+- Vanilla is read as of the stage the vanilla cache was built for, the game build the last
+  pipeline ran with, so it is the vanilla the merge used; pass `--gamebuild` to read another
+  build's.
 - If a resource holds several files with that name, the command fails and writes nothing.
   Read them individually with `--resource NAME stream/relative/path.ymap`.
 - Several names are read in one run, in the order given. If any name matches no file or is
   ambiguous, the whole command fails and writes nothing, so read names one at a time when
   some may be missing.
-- `--read --all` reads every YMAP of every resource and of the latest vanilla version, for
+- `--read --all` reads every YMAP of every resource and of vanilla, for
   tools that want all documents up front.
 
 ### Diff Documents

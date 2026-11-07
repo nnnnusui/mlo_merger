@@ -9,10 +9,12 @@
 mod tests;
 
 use crate::common::{Result, fingerprint::Fingerprint};
+use crate::core::config::gamebuild::GameBuild;
 use crate::core::conversion::load_hash_names_or_empty;
 use crate::core::format::ymap::{binary::ymap_to_model, model::ymap::Ymap};
 use crate::core::source_cache::{InventoriedFile, inventoried_files};
-use crate::core::vanilla::load_manifest;
+use crate::core::vanilla::{VanillaCacheManifest, load_manifest};
+use crate::core::vanilla_cache::{built_version, target_version};
 use crate::platform::fs;
 use crate::platform::progress::{ProgressBar, ProgressStyle};
 use rayon::prelude::*;
@@ -27,11 +29,11 @@ use std::time::Duration;
 pub enum ReadTarget {
   /// A resource's files, by resource name or source-relative resource ID.
   Resource(String),
-  /// A vanilla version's files; `None` is the latest.
-  Vanilla(Option<String>),
-  /// The named files in every resource and in the latest vanilla version.
+  /// The files of the vanilla stage [`Read::gamebuild`] selects.
+  Vanilla,
+  /// The named files in every resource and in that vanilla stage.
   Everywhere,
-  /// Every supported file of every resource and of the latest vanilla version.
+  /// Every supported file of every resource and of that vanilla stage.
   All,
 }
 
@@ -48,6 +50,12 @@ pub struct Read {
   pub source_cache_dir: PathBuf,
   /// Raw vanilla archive holding the versions and `hash_names.json`.
   pub vanilla_dir: PathBuf,
+  /// Vanilla cache whose target stage vanilla files are read from without [`Self::gamebuild`].
+  pub vanilla_cache_dir: PathBuf,
+  /// Game build whose last stage vanilla files are read from. Without one they are read from
+  /// the stage the vanilla cache was built for, or the last stage when there is no cache, so
+  /// they match the merge and the vanilla cache's index.
+  pub gamebuild: Option<GameBuild>,
   /// Where the JSON is written.
   pub output_dir: PathBuf,
   /// Writes every JSON again, even one still describing its file.
@@ -85,7 +93,7 @@ pub enum ReadOrigin {
     stream_path: String,
   },
   Vanilla {
-    /// The version whose folder holds the file: the last one, up to the version read, that
+    /// The version whose folder holds the file: the last one, up to the stage read, that
     /// changed it.
     version: String,
     file_name: String,
@@ -207,7 +215,7 @@ impl Read {
     let mut matched = vec![false; self.files.len()];
     let mut selected = match &self.target {
       ReadTarget::Resource(resource) => self.resource_files(Some(resource), &mut matched)?,
-      ReadTarget::Vanilla(version) => self.vanilla_files(version.as_deref(), &mut matched)?,
+      ReadTarget::Vanilla => self.vanilla_files(&mut matched)?,
       ReadTarget::Everywhere | ReadTarget::All => {
         match (&self.target, self.files.is_empty()) {
           (ReadTarget::Everywhere, true) => {
@@ -219,7 +227,7 @@ impl Read {
           _ => {}
         }
         let mut files = self.resource_files(None, &mut matched)?;
-        files.extend(self.vanilla_files(None, &mut matched)?);
+        files.extend(self.vanilla_files(&mut matched)?);
         files
       }
     };
@@ -394,35 +402,14 @@ impl Read {
     Ok(selected)
   }
 
-  /// The files of a vanilla version, the latest when `version` is `None`, matching
+  /// The files of the vanilla stage [`Self::vanilla_version`] selects, matching
   /// [`Self::files`], marking in `matched` the names that match.
   fn vanilla_files(
     &self,
-    version: Option<&str>,
     matched: &mut [bool],
   ) -> Result<Vec<Selected>> {
     let manifest = load_manifest(&self.vanilla_dir)?;
-    let version = match version {
-      None => manifest.versions.last().ok_or("The vanilla archive has no version")?.id.clone(),
-      Some(version) => {
-        let matching = manifest
-          .versions
-          .iter()
-          .filter(|candidate| {
-            candidate.id.eq_ignore_ascii_case(version)
-              || candidate
-                .id
-                .split_once('-')
-                .is_some_and(|(_, name)| name.eq_ignore_ascii_case(version))
-          })
-          .collect::<Vec<_>>();
-        match matching[..] {
-          [version] => version.id.clone(),
-          [] => return Err(format!("Unknown vanilla version {version}").into()),
-          _ => return Err(format!("Vanilla version {version} is ambiguous").into()),
-        }
-      }
-    };
+    let version = self.vanilla_version(&manifest)?;
     let files = manifest.resolve_version(&version)?;
     let mut selected = Vec::new();
     for (file_name, file) in files {
@@ -457,6 +444,26 @@ impl Read {
       });
     }
     Ok(selected)
+  }
+
+  /// The stage vanilla files are read from: the last stage of [`Self::gamebuild`], otherwise
+  /// the stage the vanilla cache was built for, otherwise the last stage.
+  fn vanilla_version(
+    &self,
+    manifest: &VanillaCacheManifest,
+  ) -> Result<String> {
+    if self.gamebuild.is_some() {
+      return target_version(manifest, self.gamebuild.as_ref());
+    }
+    if let Some(version) = built_version(&self.vanilla_cache_dir) {
+      if manifest.versions.iter().any(|candidate| candidate.id == version) {
+        return Ok(version);
+      }
+      tracing::warn!(
+        "The vanilla cache targets {version}, which the vanilla archive does not have; reading the last stage"
+      );
+    }
+    target_version(manifest, None)
   }
 
   /// The header of the document at `path`, unless it is missing or unreadable.

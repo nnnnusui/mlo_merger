@@ -4,10 +4,9 @@ use bpaf::*;
 
 use crate::core::read::{Read, ReadTarget};
 
-/// Parses `--read [--resource NAME | --vanilla [VERSION] | --all] [FILE...]`.
+/// Parses `--read [--resource NAME | --vanilla | --all] [--gamebuild BUILD] [FILE...]`.
 ///
-/// `--vanilla` takes an optional version, so `--vanilla map.ymap` reads `map.ymap` of the
-/// latest version: a value naming a file is taken as the first file.
+/// `--gamebuild` is resolved against `[gamebuild]` in `asset/config.toml` as it is parsed.
 pub fn parser() -> impl Parser<Read> {
   let command = long("read")
     .help("Write stream file models as JSON under read-cache, skipping current ones")
@@ -15,19 +14,15 @@ pub fn parser() -> impl Parser<Read> {
   let resource = long("resource")
     .help("Read from this resource (name or source-relative ID)")
     .argument::<String>("NAME")
-    .map(Some);
-  let vanilla_version = long("vanilla")
-    .help("Read from this vanilla version, or the latest without one")
-    .argument::<String>("VERSION")
-    .map(|version| Some(Some(version)));
-  let vanilla_latest = long("vanilla").req_flag(Some(None));
-  let vanilla = construct!([vanilla_version, vanilla_latest]);
-  let all = long("all")
-    .help("Read every resource and the latest vanilla version")
-    .req_flag(Some(ReadTarget::All));
-  let resource = resource.map(|resource| resource.map(ReadTarget::Resource));
-  let vanilla = vanilla.map(|version| version.map(ReadTarget::Vanilla));
-  let target = construct!([resource, vanilla, all]).fallback(None);
+    .map(ReadTarget::Resource);
+  let vanilla = long("vanilla").help("Read from vanilla").req_flag(ReadTarget::Vanilla);
+  let all = long("all").help("Read every resource and vanilla").req_flag(ReadTarget::All);
+  let target = construct!([resource, vanilla, all]).fallback(ReadTarget::Everywhere);
+  let gamebuild = long("gamebuild")
+    .help("Read vanilla as of this game build: a build number or DLC name from [gamebuild] in asset/config.toml (default: the vanilla cache's)")
+    .argument::<String>("BUILD")
+    .parse(|requested| super::common::gamebuild(Some(&requested)).map(Option::unwrap))
+    .optional();
   let files = positional::<String>("FILE").many();
   let source_dir = long("source")
     .help("Source resource directory, for resource files not moved into the source cache (default: asset/source)")
@@ -41,36 +36,52 @@ pub fn parser() -> impl Parser<Read> {
     .help("Vanilla archive directory (default: asset/vanilla)")
     .argument::<PathBuf>("DIR")
     .fallback(PathBuf::from("asset/vanilla"));
+  let vanilla_cache_dir = long("vanilla-cache")
+    .help("Vanilla cache whose game build vanilla is read as of without --gamebuild (default: asset/vanilla-cache)")
+    .argument::<PathBuf>("DIR")
+    .fallback(PathBuf::from("asset/vanilla-cache"));
   let output_dir = short('o')
     .long("output")
     .help("Output directory (default: asset/read-cache)")
     .argument::<PathBuf>("DIR")
     .fallback(PathBuf::from("asset/read-cache"));
   let force = short('f').long("force").help("Write every JSON again").switch();
-  construct!(command, target, source_dir, source_cache_dir, vanilla_dir, output_dir, force, files)
-    .map(|(_, target, source_dir, source_cache_dir, vanilla_dir, output_dir, force, mut files)| {
-      let target = match target {
-        Some(ReadTarget::Vanilla(Some(version))) if names_file(&version) => {
-          files.insert(0, version);
-          ReadTarget::Vanilla(None)
-        }
-        target => target.unwrap_or(ReadTarget::Everywhere),
-      };
-      Read {
-        target,
-        files,
-        source_dir,
-        source_cache_dir,
-        vanilla_dir,
-        output_dir,
-        force,
-      }
-    })
-}
-
-/// Whether a `--vanilla` value names a file rather than a version.
-fn names_file(value: &str) -> bool {
-  value.contains('.')
+  construct!(
+    command,
+    target,
+    gamebuild,
+    source_dir,
+    source_cache_dir,
+    vanilla_dir,
+    vanilla_cache_dir,
+    output_dir,
+    force,
+    files
+  )
+  .map(
+    |(
+      _,
+      target,
+      gamebuild,
+      source_dir,
+      source_cache_dir,
+      vanilla_dir,
+      vanilla_cache_dir,
+      output_dir,
+      force,
+      files,
+    )| Read {
+      target,
+      files,
+      source_dir,
+      source_cache_dir,
+      vanilla_dir,
+      vanilla_cache_dir,
+      gamebuild,
+      output_dir,
+      force,
+    },
+  )
 }
 
 /// Writes the JSON and prints what was read as one line of JSON.
@@ -93,25 +104,23 @@ mod tests {
   }
 
   #[test]
-  fn targets_resources_vanilla_versions_or_everything() {
+  fn targets_resources_vanilla_or_everything() {
     let read = parse(&["--read", "--resource", "[maps]/alpha", "map.ymap"]);
     assert_eq!(read.target, ReadTarget::Resource("[maps]/alpha".into()));
     assert_eq!(read.files, ["map.ymap"]);
     assert_eq!(read.output_dir, PathBuf::from("asset/read-cache"));
+    assert_eq!(read.vanilla_cache_dir, PathBuf::from("asset/vanilla-cache"));
+    assert!(read.gamebuild.is_none());
     assert!(!read.force);
     assert!(parse(&["--read", "--resource", "alpha"]).files.is_empty());
 
-    let read = parse(&["--read", "--vanilla", "map.ymap"]);
-    assert_eq!(read.target, ReadTarget::Vanilla(None));
-    assert_eq!(read.files, ["map.ymap"]);
-    let read = parse(&["--read", "--vanilla", "0012-mpheist", "map.ymap", "-f"]);
-    assert_eq!(read.target, ReadTarget::Vanilla(Some("0012-mpheist".into())));
+    let read = parse(&["--read", "--vanilla", "map.ymap", "-f"]);
+    assert_eq!(read.target, ReadTarget::Vanilla);
     assert_eq!(read.files, ["map.ymap"]);
     assert!(read.force);
-    assert_eq!(parse(&["--read", "--vanilla"]).target, ReadTarget::Vanilla(None));
-    let read = parse(&["--read", "--vanilla", "mpheist"]);
-    assert_eq!(read.target, ReadTarget::Vanilla(Some("mpheist".into())));
-    assert!(read.files.is_empty());
+    assert_eq!(parse(&["--read", "--vanilla"]).target, ReadTarget::Vanilla);
+    let read = parse(&["--read", "--vanilla", "a.ymap", "b.ymap"]);
+    assert_eq!(read.files, ["a.ymap", "b.ymap"]);
 
     let read = parse(&["--read", "map.ymap", "-o", "out", "--vanilla-dir", "v"]);
     assert_eq!(read.target, ReadTarget::Everywhere);
@@ -122,9 +131,6 @@ mod tests {
     assert_eq!(read.target, ReadTarget::Everywhere);
     assert_eq!(read.files, ["a.ymap", "b/c.ymap"]);
     assert!(read.force);
-    let read = parse(&["--read", "--vanilla", "a.ymap", "b.ymap"]);
-    assert_eq!(read.target, ReadTarget::Vanilla(None));
-    assert_eq!(read.files, ["a.ymap", "b.ymap"]);
     let read = parse(&["--read", "--resource", "alpha", "a.ymap", "b.ymap"]);
     assert_eq!(read.files, ["a.ymap", "b.ymap"]);
 
@@ -135,5 +141,14 @@ mod tests {
     assert!(read.files.is_empty());
     assert!(read.force);
     assert!(parser().to_options().run_inner(&["--read", "--all", "--vanilla"]).is_err());
+  }
+
+  #[test]
+  fn gamebuild_is_resolved_against_the_shipped_config() {
+    let read = parse(&["--read", "--vanilla", "--gamebuild", "xm18", "--vanilla-cache", "c"]);
+    assert_eq!(read.gamebuild.unwrap().build, 1604);
+    assert_eq!(read.vanilla_cache_dir, PathBuf::from("c"));
+    assert_eq!(parse(&["--read", "a.ymap", "--gamebuild", "2802"]).gamebuild.unwrap().build, 2802);
+    assert!(parser().to_options().run_inner(&["--read", "--gamebuild", "nothing"]).is_err());
   }
 }

@@ -88,21 +88,48 @@ impl Fixture {
     }
   }
 
-  fn read(
+  fn request(
     &self,
     target: ReadTarget,
     files: &[&str],
-  ) -> Result<ReadResult> {
+  ) -> Read {
     Read {
       target,
       files: files.iter().map(|file| file.to_string()).collect(),
       source_dir: self.root.join("source"),
       source_cache_dir: self.root.join("source-cache"),
       vanilla_dir: self.root.join("vanilla"),
+      vanilla_cache_dir: self.root.join("vanilla-cache"),
+      gamebuild: None,
       output_dir: self.root.join("read-cache"),
       force: false,
     }
-    .run()
+  }
+
+  fn read(
+    &self,
+    target: ReadTarget,
+    files: &[&str],
+  ) -> Result<ReadResult> {
+    self.request(target, files).run()
+  }
+
+  /// Records `version` as the stage the vanilla cache was built for.
+  fn build_vanilla_cache_for(
+    &self,
+    version: &str,
+  ) {
+    let cache = self.root.join("vanilla-cache");
+    fs::create_dir_all(&cache).unwrap();
+    fs::write(
+      cache.join("cache_info.json"),
+      serde_json::to_vec(&json!({
+        "format_version": 4, "vanilla_manifest_sha256": "", "latest_version": version,
+        "vanilla_input_timestamps": {}, "files": {},
+      }))
+      .unwrap(),
+    )
+    .unwrap();
   }
 
   fn outputs(result: &ReadResult) -> Vec<String> {
@@ -150,15 +177,7 @@ fn resource_files_are_written_once_as_minified_models_with_their_source() {
   assert!(!again.files[0].updated);
   let forced = Read {
     force: true,
-    ..Read {
-      target: ReadTarget::Resource("alpha".into()),
-      files: vec!["child.ymap".into()],
-      source_dir: fixture.root.join("source"),
-      source_cache_dir: fixture.root.join("source-cache"),
-      vanilla_dir: fixture.root.join("vanilla"),
-      output_dir: fixture.root.join("read-cache"),
-      force: false,
-    }
+    ..fixture.request(ReadTarget::Resource("alpha".into()), &["child.ymap"])
   }
   .run()
   .unwrap();
@@ -197,10 +216,10 @@ fn a_resource_reads_every_ymap_and_rejects_ambiguous_names() {
 }
 
 #[test]
-fn vanilla_files_are_read_from_the_named_or_latest_version() {
+fn vanilla_files_are_read_from_the_last_stage_without_a_vanilla_cache() {
   let fixture = Fixture::new("vanilla");
   // Each file is written after the version folder holding it, not the version read.
-  let latest = fixture.read(ReadTarget::Vanilla(None), &[]).unwrap();
+  let latest = fixture.read(ReadTarget::Vanilla, &[]).unwrap();
   assert_eq!(
     Fixture::outputs(&latest),
     ["vanilla/0001-update/ymap/child.ymap.json", "vanilla/0000-base/ymap/parent.ymap.json"]
@@ -212,13 +231,36 @@ fn vanilla_files_are_read_from_the_named_or_latest_version() {
       file_name: "parent.ymap".into(),
     }
   );
-  // The base version holds the same parent.ymap, so its document is already current.
-  let base = fixture.read(ReadTarget::Vanilla(Some("base".into())), &["parent.ymap"]).unwrap();
+  assert!(latest.files.iter().all(|file| file.updated));
+}
+
+#[test]
+fn vanilla_files_follow_the_vanilla_cache_or_the_requested_gamebuild() {
+  let fixture = Fixture::new("vanilla_stage");
+  fixture.read(ReadTarget::Vanilla, &[]).unwrap();
+
+  // A cache built for the base stage reads its files, which do not include child.ymap; the
+  // base stage holds the same parent.ymap, so its document is already current.
+  fixture.build_vanilla_cache_for("0000-base");
+  let base = fixture.read(ReadTarget::Vanilla, &[]).unwrap();
   assert_eq!(Fixture::outputs(&base), ["vanilla/0000-base/ymap/parent.ymap.json"]);
-  assert_eq!(base.files[0].origin, latest.files[1].origin);
   assert!(!base.files[0].updated);
-  assert!(fixture.read(ReadTarget::Vanilla(Some("base".into())), &["child.ymap"]).is_err());
-  assert!(fixture.read(ReadTarget::Vanilla(Some("9999".into())), &[]).is_err());
+  assert!(fixture.read(ReadTarget::Vanilla, &["child.ymap"]).is_err());
+
+  // A game build overrides the cache: build 1 ends at the title update, holding child.ymap.
+  let builds = crate::core::config::gamebuild::GameBuilds::parse("[gamebuild]\n1 = []").unwrap();
+  let request = Read {
+    gamebuild: Some(builds.resolve("1").unwrap()),
+    ..fixture.request(ReadTarget::Vanilla, &["child.ymap"])
+  };
+  assert_eq!(
+    Fixture::outputs(&request.run().unwrap()),
+    ["vanilla/0001-update/ymap/child.ymap.json"]
+  );
+
+  // A cache built for a stage the archive lacks falls back to the last stage.
+  fixture.build_vanilla_cache_for("9999-missing");
+  assert_eq!(fixture.read(ReadTarget::Vanilla, &[]).unwrap().files.len(), 2);
 }
 
 #[test]
@@ -278,7 +320,7 @@ fn several_files_are_read_together_and_each_must_match() {
       "vanilla/0001-update/ymap/child.ymap.json"
     ]
   );
-  let vanilla = fixture.read(ReadTarget::Vanilla(None), &["parent.ymap", "child.ymap"]).unwrap();
+  let vanilla = fixture.read(ReadTarget::Vanilla, &["parent.ymap", "child.ymap"]).unwrap();
   assert_eq!(Fixture::outputs(&vanilla).len(), 2);
 
   // A name matching nothing fails the whole read before anything is written.
