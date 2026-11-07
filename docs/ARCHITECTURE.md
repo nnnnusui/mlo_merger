@@ -55,8 +55,8 @@ same generation as `--generate-vanilla`, holding no generation logic of its own.
 ## Source Cache
 
 Source-cache generation moves vanilla-named inputs from resources into the cache,
-retaining original paths. Unmatched files stay in the resource; replacements
-archive prior cached files. Resource names must be unique, and colliding stream
+retaining original paths. Unmatched files stay in the resource, as do the
+directories the moved files leave empty; replacements archive prior cached files. Resource names must be unique, and colliding stream
 paths are rejected. Scoped updates retain other inventories for global conflict
 and relationship analysis. Missing cached inputs are errors, not silent deletions.
 
@@ -202,7 +202,8 @@ The explicit restore-source-cache operation returns recorded active cached files
 to their original resource-relative paths under the selected source root. It
 checks all paths and destination conflicts before moving files, preserves file
 modification times, and does not restore archived history or unrecorded files.
-Successful restoration invalidates source-cache indexes without modifying merge
+Cache directories the restored files leave empty are removed, recreating source
+directories as needed. Successful restoration invalidates source-cache indexes without modifying merge
 or deployment output. Restoring selected resources keeps the inventory, recording
 their files as in source again, so the other resources' cached files stay indexed;
 only the derived reports are invalidated, which keeps merges from running on an

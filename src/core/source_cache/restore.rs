@@ -6,7 +6,10 @@ use std::{
 };
 
 use super::{Result, types::SourceCacheMetadata};
-use crate::common::{filesystem::move_file, path::ensure_safe_path};
+use crate::common::{
+  filesystem::{move_file, remove_empty_parents},
+  path::ensure_safe_path,
+};
 
 /// Moves recorded active cache files back to their original resource-relative paths, for the
 /// resources named in `resources` (names or source-relative IDs) or every resource when it is
@@ -15,7 +18,7 @@ use crate::common::{filesystem::move_file, path::ensure_safe_path};
 /// All names, paths and existing destinations are checked before moving any files.
 /// Unknown or ambiguous names, different destination contents, missing inputs and symlinks
 /// are errors. Identical destination files are retained. History and unrecorded cache files
-/// remain untouched.
+/// remain untouched; cache directories the restored files leave empty are removed.
 ///
 /// Restoring every resource invalidates the source-cache indexes. Restoring some keeps the
 /// inventory, recording the restored files as being in source again, so the other resources'
@@ -131,6 +134,7 @@ pub fn restore_source_cache(
       fs::create_dir_all(destination.parent().ok_or("Restore destination has no parent")?)?;
       move_file(cached, destination)?;
     }
+    remove_empty_parents(cached, &cache)?;
   }
   if !resources.is_empty() {
     for (id, format, index) in restored {
@@ -321,7 +325,8 @@ mod tests {
 
     assert_eq!(restore_source_cache(&cache, &source, &["ALPHA".into()]).unwrap(), 1);
     assert_eq!(fs::read(source.join("[maps]/alpha/stream/map.ymap")).unwrap(), b"alpha");
-    assert!(!cache.join("resources/alpha/map.ymap").exists());
+    // The directory the restored file left empty is removed.
+    assert!(!cache.join("resources/alpha").exists());
     assert!(cache.join("resources/beta/map.ymap").is_file());
     assert!(!source.join("beta/stream/map.ymap").exists());
     assert!(!cache.join("stream_conflicts.json").exists());
@@ -341,6 +346,7 @@ mod tests {
     assert_eq!(restore_source_cache(&cache, &source, &["[maps]/alpha".into()]).unwrap(), 0);
     assert_eq!(restore_source_cache(&cache, &source, &["beta".into()]).unwrap(), 1);
     assert_eq!(fs::read(source.join("beta/stream/map.ymap")).unwrap(), b"beta");
+    assert!(!cache.join("resources").exists());
     assert!(manifest_path.is_file());
     fs::remove_dir_all(root).unwrap();
   }
