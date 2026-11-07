@@ -1,11 +1,14 @@
-// In-memory POSIX-like filesystem behind `crate::fs` in the browser build.
+// In-memory POSIX-like filesystem behind `crate::platform::fs` in the browser build.
 //
-// `src/fs/web.rs` imports the functions above "Page helpers" and expects their behaviour,
+// `src/platform/fs/web.rs` imports the functions above "Page helpers" and expects their behaviour,
 // including the `code` of thrown errors, to match Linux. The page uses the helpers to seed
 // files before a run and to draw the tree afterwards.
 //
 // Nodes are shared by every directory entry that links to them, so hard links and open file
 // descriptors follow a file through renames as on disk.
+//
+// wasm-bindgen bundles a copy of this module under `pkg/snippets`, so the state lives on
+// `globalThis`: the page's import and the copy share one filesystem.
 
 const READ = 1;
 const WRITE = 2;
@@ -17,11 +20,18 @@ const CREATE_NEW = 32;
 const KIND = { file: 0, dir: 1, symlink: 2 };
 const MAX_SYMLINK_HOPS = 40;
 
-let lastTime = 0;
+const state = (globalThis.__mloMergerVfs ??= {
+  root: undefined,
+  descriptors: new Map(),
+  nextFd: 3,
+  listeners: new Set(),
+  lastTime: 0,
+});
+
 /** Strictly increasing milliseconds, so later writes always look newer. */
 function now() {
-  lastTime = Math.max(Date.now(), lastTime + 0.001);
-  return lastTime;
+  state.lastTime = Math.max(Date.now(), state.lastTime + 0.001);
+  return state.lastTime;
 }
 
 function newDir() {
@@ -32,13 +42,10 @@ function newFile() {
   return { kind: "file", data: new Uint8Array(0), size: 0, mtime: now() };
 }
 
-let root = newDir();
-const descriptors = new Map();
-let nextFd = 3;
-const listeners = new Set();
+state.root ??= newDir();
 
 function emit(op, path, extra = {}) {
-  for (const listener of listeners) listener({ op, path, ...extra });
+  for (const listener of state.listeners) listener({ op, path, ...extra });
 }
 
 function fail(code, path, detail = "") {
@@ -59,7 +66,7 @@ function joinPath(base, name) {
 function locate(path, follow, hops = { count: 0 }) {
   if (typeof path !== "string" || !path.startsWith("/")) throw fail("EINVAL", path, "not absolute");
   const parts = path.split("/").filter((part) => part !== "" && part !== ".");
-  const stack = [{ node: root, name: "" }];
+  const stack = [{ node: state.root, name: "" }];
   const realPath = () => "/" + stack.slice(1).map((entry) => entry.name).join("/");
   for (let index = 0; index < parts.length; index++) {
     const part = parts[index];
@@ -274,13 +281,13 @@ export function open(path, flags) {
       emit("modify", location.path);
     }
   }
-  const fd = nextFd++;
-  descriptors.set(fd, { node, path, readable: (flags & READ) !== 0, writable });
+  const fd = state.nextFd++;
+  state.descriptors.set(fd, { node, path, readable: (flags & READ) !== 0, writable });
   return fd;
 }
 
 function descriptor(fd) {
-  const entry = descriptors.get(fd);
+  const entry = state.descriptors.get(fd);
   if (!entry) throw fail("EBADF", `fd ${fd}`);
   return entry;
 }
@@ -318,7 +325,7 @@ export function fdSetModified(fd, milliseconds) {
 }
 
 export function close(fd) {
-  descriptors.delete(fd);
+  state.descriptors.delete(fd);
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -326,8 +333,8 @@ export function close(fd) {
 
 /** Empties the filesystem. */
 export function reset() {
-  root = newDir();
-  descriptors.clear();
+  state.root = newDir();
+  state.descriptors.clear();
 }
 
 /**
@@ -364,6 +371,6 @@ export function snapshot(path = "/") {
  * `modify`, `remove` and `rename`. Returns a function that stops the calls.
  */
 export function onChange(listener) {
-  listeners.add(listener);
-  return () => listeners.delete(listener);
+  state.listeners.add(listener);
+  return () => state.listeners.delete(listener);
 }

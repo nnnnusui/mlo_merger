@@ -2,7 +2,7 @@ use super::BuildSourceCache;
 use super::{types::*, ymap_plan};
 use crate::core::vanilla::{CacheVersion, VanillaCacheManifest, write_json};
 use crate::core::vanilla_cache::{DerivedVanillaFile, YmapRelationshipIndex};
-use crate::fs;
+use crate::platform::fs;
 use std::collections::{BTreeMap, BTreeSet};
 
 /// Runs the vanilla cache step before `self`, as `--generate-source-cache` does.

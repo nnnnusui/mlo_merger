@@ -1,6 +1,6 @@
 //! Hash-name and YMAP entity archetype extraction for raw vanilla generation.
 
-use crate::fs;
+use crate::platform::fs;
 use std::{
   collections::{BTreeMap, BTreeSet},
   path::{Component, Path, PathBuf},

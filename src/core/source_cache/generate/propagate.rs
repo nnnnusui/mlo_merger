@@ -19,7 +19,7 @@
 //! so `propagated/inputs.json` records a digest of both, and the documents are kept while it
 //! matches. It also lists the documents for merges.
 
-use crate::fs;
+use crate::platform::fs;
 use std::{
   collections::{BTreeMap, BTreeSet, HashMap},
   path::Path,
@@ -562,7 +562,7 @@ mod tests {
     let output = std::env::temp_dir().join(format!("propagated_{}", std::process::id()));
     let _ = fs::remove_dir_all(&output);
     let source_cache = asset.join("source-cache");
-    for entry in crate::fs::WalkDir::new(source_cache.join("diff")) {
+    for entry in crate::platform::fs::WalkDir::new(source_cache.join("diff")) {
       let entry = entry.unwrap();
       let destination = output.join(entry.path().strip_prefix(&source_cache).unwrap());
       if entry.file_type().is_dir() {

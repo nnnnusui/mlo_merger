@@ -22,7 +22,6 @@ flate2 = { version = "1.1.11", default-features = false, features = ["zlib-rs"] 
 globset = "0.4.21"
 hex = "0.4"
 indexmap = { version = "2.14.2", features = ["serde"] }
-indicatif = "0.18"
 netcorehost = { version = "0.22.0", optional = true }
 quick-xml = { version = "0.42.0", features = ["serialize", "overlapped-lists"] }
 rayon = "1.12.0"
@@ -39,9 +38,10 @@ tracing-tree = { version = "0.4", features = ["time"] }
 toml = "1.2.1"
 walkdir = "2.5.0"
 
-# The GUI, log files and downloads exist only in the native executable.
+# The GUI, log files, downloads and terminal progress bars exist only natively.
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 eframe = "0.37.0"
+indicatif = "0.18"
 rfd = "0.17.2"
 tracing-appender = "0.2"
 ureq = "3.5.1"
@@ -62,3 +62,10 @@ required-features = ["codewalker"]
 name = "export-types"
 path = "src/bin/export_types.rs"
 required-features = ["typescript"]
+
+# The browser build (scripts/build_web.sh): smaller downloads over native speed.
+[profile.web]
+inherits = "release"
+opt-level = "z"
+lto = true
+codegen-units = 1

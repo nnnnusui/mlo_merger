@@ -3,7 +3,7 @@ use std::{
   path::{Path, PathBuf},
 };
 
-use crate::fs::WalkDir;
+use crate::platform::fs::WalkDir;
 
 use crate::core::format::stream_file::{FileType, StreamFile};
 

@@ -8,7 +8,8 @@ mod plan;
 mod tests;
 
 use crate::core::vanilla::write_json;
-use crate::fs;
+use crate::platform::fs;
+use crate::platform::process;
 use files::{copy_file, destination, prepare_output, remove_empty_stream_directories};
 use metadata::{CopiedFile, DeployMetadata, fingerprint, read_metadata};
 use plan::plan;
@@ -137,7 +138,7 @@ impl Deploy {
       files,
     };
     if previous.as_ref().is_none_or(|previous| previous.files != metadata.files) {
-      let temporary = destination(&output, &format!(".deploy-cache-{}.tmp", fs::process_id()))?;
+      let temporary = destination(&output, &format!(".deploy-cache-{}.tmp", process::id()))?;
       if fs::exists(&temporary).unwrap_or(false) {
         return Err("Deployment cache temporary file already exists".into());
       }
@@ -145,7 +146,7 @@ impl Deploy {
       fs::rename(temporary, metadata_path)?;
     }
     if fs::read_to_string(&moved_files_path).ok().as_deref() != Some(&moved_files) {
-      let temporary = destination(&output, &format!(".files-{}.tmp", fs::process_id()))?;
+      let temporary = destination(&output, &format!(".files-{}.tmp", process::id()))?;
       let mut writer = fs::OpenOptions::new().write(true).create_new(true).open(&temporary)?;
       writer.write_all(moved_files.as_bytes())?;
       writer.flush()?;

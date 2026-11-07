@@ -10,13 +10,16 @@ fn managed_output_cleanup_preserves_rebuilt_and_unmanaged_files() {
     std::env::temp_dir().join(format!("mlo_managed_output_cleanup_{}", std::process::id()));
   let input = temp.join("input");
   let output = temp.join("output");
-  crate::fs::create_dir_all(&input).unwrap();
-  crate::fs::create_dir_all(&output).unwrap();
-  crate::fs::write(input.join("_managed_ymaps.txt"), "clone.ymap\nrebuilt.ymap\nvanilla.ymap\n")
-    .unwrap();
-  crate::fs::write(input.join("rebuilt.ymap.xml"), "xml").unwrap();
+  crate::platform::fs::create_dir_all(&input).unwrap();
+  crate::platform::fs::create_dir_all(&output).unwrap();
+  crate::platform::fs::write(
+    input.join("_managed_ymaps.txt"),
+    "clone.ymap\nrebuilt.ymap\nvanilla.ymap\n",
+  )
+  .unwrap();
+  crate::platform::fs::write(input.join("rebuilt.ymap.xml"), "xml").unwrap();
   for name in ["clone.ymap", "rebuilt.ymap", "vanilla.ymap", "unmanaged.ymap"] {
-    crate::fs::write(output.join(name), "binary").unwrap();
+    crate::platform::fs::write(output.join(name), "binary").unwrap();
   }
   let prune = || super::prune_managed_ymap_outputs(&input, &output);
   prune().unwrap();
@@ -24,13 +27,14 @@ fn managed_output_cleanup_preserves_rebuilt_and_unmanaged_files() {
   assert!(!output.join("vanilla.ymap").exists());
   assert!(output.join("rebuilt.ymap").exists());
   assert!(output.join("unmanaged.ymap").exists());
-  crate::fs::write(input.join("_managed_ymaps.txt"), "unmanaged.ymap\n../escape.ymap\n").unwrap();
+  crate::platform::fs::write(input.join("_managed_ymaps.txt"), "unmanaged.ymap\n../escape.ymap\n")
+    .unwrap();
   assert!(prune().is_err());
   assert!(
     output.join("unmanaged.ymap").exists(),
     "validate the complete manifest before removing files"
   );
-  crate::fs::remove_dir_all(temp).unwrap();
+  crate::platform::fs::remove_dir_all(temp).unwrap();
 }
 
 fn assert_repeated_xml_conversion_is_stable(
@@ -79,7 +83,7 @@ fn assert_repeated_xml_conversion_is_stable(
 fn assert_ybn_fixture_conversion_is_stable(name: &str) {
   let base = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
   let path = base.join("docs/sample/ybn_conflicts").join(name);
-  let xml = crate::fs::read_to_string(&path).unwrap();
+  let xml = crate::platform::fs::read_to_string(&path).unwrap();
   assert_repeated_xml_conversion_is_stable(
     FileType::Ybn,
     &xml,
@@ -133,9 +137,9 @@ fn pso_batch_commands_preserve_suffix_and_template_format() {
   let input = temp.join("input");
   let xml_dir = temp.join("xml");
   let rebuilt_dir = temp.join("rebuilt");
-  crate::fs::create_dir_all(input.join("nested")).unwrap();
+  crate::platform::fs::create_dir_all(input.join("nested")).unwrap();
   let source = base.join("asset/vanilla/0000-base/ymap/cs1_railwyc.ymap");
-  crate::fs::copy(&source, input.join("nested/cs1_railwyc.ymap")).unwrap();
+  crate::platform::fs::copy(&source, input.join("nested/cs1_railwyc.ymap")).unwrap();
   assert_eq!(to_xml(&input, &xml_dir).unwrap(), (1, 0));
   assert!(xml_dir.join("nested/cs1_railwyc.ymap.pso.xml").is_file());
   assert_eq!(
@@ -144,14 +148,14 @@ fn pso_batch_commands_preserve_suffix_and_template_format() {
   );
   assert!(from_xml(&xml_dir, &rebuilt_dir, None).is_err());
   assert_eq!(from_xml(&xml_dir, &rebuilt_dir, Some(&input)).unwrap(), (1, 0));
-  let bytes = crate::fs::read(rebuilt_dir.join("nested/cs1_railwyc.ymap")).unwrap();
+  let bytes = crate::platform::fs::read(rebuilt_dir.join("nested/cs1_railwyc.ymap")).unwrap();
   assert!(bytes.starts_with(b"PSIN"));
   let xml = StreamFile::decode_to_xml(FileType::Ymap, &bytes, &HashMap::new()).unwrap();
   assert_eq!(
     xml,
-    crate::fs::read_to_string(xml_dir.join("nested/cs1_railwyc.ymap.pso.xml")).unwrap()
+    crate::platform::fs::read_to_string(xml_dir.join("nested/cs1_railwyc.ymap.pso.xml")).unwrap()
   );
-  crate::fs::remove_dir_all(temp).unwrap();
+  crate::platform::fs::remove_dir_all(temp).unwrap();
 }
 
 #[test]
@@ -162,7 +166,7 @@ fn ybn_xml_does_not_require_a_schema_directory() {
 
   assert_eq!(from_xml(&input, &output, None).unwrap(), (1, 0));
   assert!(output.join("resource_a.ybn").is_file());
-  crate::fs::remove_dir_all(output).unwrap();
+  crate::platform::fs::remove_dir_all(output).unwrap();
 }
 
 #[test]
@@ -171,15 +175,15 @@ fn discovers_matching_vanilla_ymap_schema_for_source_xml() {
   let input_dir = root.join("asset/source/resource/stream/ymap");
   let xml = input_dir.join("hei_sc1_18_strm_0.ymap.xml");
   let schema = root.join("asset/vanilla/ymap/hei_sc1_18_strm_0.ymap");
-  crate::fs::create_dir_all(&input_dir).unwrap();
-  crate::fs::create_dir_all(schema.parent().unwrap()).unwrap();
-  crate::fs::write(&xml, "<CMapData />").unwrap();
-  crate::fs::write(&schema, []).unwrap();
+  crate::platform::fs::create_dir_all(&input_dir).unwrap();
+  crate::platform::fs::create_dir_all(schema.parent().unwrap()).unwrap();
+  crate::platform::fs::write(&xml, "<CMapData />").unwrap();
+  crate::platform::fs::write(&schema, []).unwrap();
 
   let found = discover_schema_inputs(&xml, std::slice::from_ref(&xml)).unwrap();
 
   assert_eq!(found, vec![schema]);
-  crate::fs::remove_dir_all(root).unwrap();
+  crate::platform::fs::remove_dir_all(root).unwrap();
 }
 
 #[test]

@@ -1,7 +1,7 @@
 //! The deployment's record of the files it copied (`deploy_cache_info.json`).
 
 use super::Result;
-use crate::fs;
+use crate::platform::fs;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{

@@ -58,26 +58,32 @@ round-trip tests compare conversion with CodeWalker hosted in-process, which nee
 
 ## Browser Build
 
-`crates/web` runs `--pipeline` and `--read` in a browser page against an in-memory
-filesystem, so a page can show which files a run writes. It builds only for
-`wasm32-unknown-unknown`; the GUI, log files and downloads stay native-only.
+`web/` is a static page that runs `--pipeline` and `--read` on the `docs/sample` resources in
+the browser and draws the files each run adds, modifies and removes. `crates/web` builds the
+merger for `wasm32-unknown-unknown` against an in-memory filesystem; the GUI, log files and
+downloads stay native-only.
 
 ```bash
 rustup target add wasm32-unknown-unknown
-cargo build -p mlo_merger_web --release --target wasm32-unknown-unknown
-wasm-bindgen --target web --out-dir web/pkg \
-  target/wasm32-unknown-unknown/release/mlo_merger_web.wasm
+cargo install --locked wasm-bindgen-cli --version <wasm-bindgen version in Cargo.lock>
+scripts/build_web.sh
+python3 -m http.server -d web/dist
 ```
 
-`wasm-bindgen` comes from `cargo install wasm-bindgen-cli` at the version of the
-`wasm-bindgen` crate in `Cargo.lock`. The page fills the filesystem with
-`web/vfs.js`'s `addFile`, calls `run(args, onLog)`, and draws `snapshot()`. `onChange` reports
-each write as it happens.
+`scripts/build_web.sh` assembles `web/dist` from the page, the WebAssembly module and the
+samples; publish that directory as it is. The page runs the merger in `web/worker.js`, which
+seeds `/work` with `web/vfs.js`'s `addFile`, calls `run(args, onLog)`, and sends back
+`snapshot()` and each write reported by `onChange`. The vanilla data is `docs/sample/sample.ymap`
+published as version `0000-base` with a generated `cache_info.json`, so the pipeline reuses it
+instead of reading the game.
 
-Library code reaches the filesystem only through `crate::fs`, which re-exports `std::fs` and
-`walkdir` natively and calls `web/vfs.js` in the browser. That means `fs::is_file(&path)`
-rather than `path.is_file()`, `fs::current_dir()` and `fs::process_id()` rather than their
-`std::env` and `std::process` versions, and no `std::time::SystemTime::now`. Native builds
+Library code reaches the operating system only through `crate::platform` (`src/platform`),
+whose modules use `std`, `walkdir` and `indicatif` natively and the page in the browser. That
+means `platform::fs` rather than `std::fs`, `fs::is_file(&path)` rather than `path.is_file()`,
+`platform::process::current_dir()` and `process::id()` rather than their `std::env` and
+`std::process` versions, `platform::progress` for progress bars, and no
+`std::time::SystemTime::now`. The browser has no threads either: use rayon, which then runs on
+the calling thread, rather than `std::thread`. Native builds
 accept the `std` calls, which then fail only in the browser, so check the browser build:
 
 ```bash

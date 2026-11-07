@@ -1,6 +1,6 @@
 //! Generates TypeScript types from the same Rust models used by Serde.
 
-use crate::fs;
+use crate::platform::fs;
 use specta::ts::{BigIntExportBehavior, ExportConfiguration};
 use std::path::Path;
 

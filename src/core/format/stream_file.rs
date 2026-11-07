@@ -1,6 +1,6 @@
 //! Extension-based dispatch from native stream files to their typed models and XML.
 
-use crate::fs;
+use crate::platform::fs;
 use std::{collections::HashMap, io, path::Path};
 
 use crate::core::format::{

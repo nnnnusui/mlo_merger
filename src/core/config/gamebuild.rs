@@ -1,6 +1,6 @@
 //! FiveM game builds placed among vanilla stages by the DLCs they first include.
 
-use crate::fs;
+use crate::platform::fs;
 use std::{io, path::Path};
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;

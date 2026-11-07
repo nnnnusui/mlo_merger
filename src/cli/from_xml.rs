@@ -1,4 +1,4 @@
-use crate::fs;
+use crate::platform::fs;
 use std::path::PathBuf;
 
 use bpaf::*;

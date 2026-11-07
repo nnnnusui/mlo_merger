@@ -1,5 +1,6 @@
 use super::Result;
-use crate::fs;
+use crate::platform::fs;
+use crate::platform::process;
 use std::path::{Component, Path, PathBuf};
 
 pub(crate) fn reject_symlinks(path: &Path) -> Result<()> {
@@ -30,7 +31,7 @@ pub(crate) fn ensure_safe_path(
 }
 pub(crate) fn absolute_path(path: &Path) -> std::io::Result<PathBuf> {
   let absolute =
-    if path.is_absolute() { path.to_path_buf() } else { fs::current_dir()?.join(path) };
+    if path.is_absolute() { path.to_path_buf() } else { process::current_dir()?.join(path) };
   let mut normalized = PathBuf::new();
   for component in absolute.components() {
     match component {

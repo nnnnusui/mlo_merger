@@ -2,7 +2,7 @@
 
 use super::{CACHE_SCHEMA, DerivedManifest, Result, generations::GenerationIndex};
 use crate::core::check::{CheckIssueKind, Findings};
-use crate::fs;
+use crate::platform::fs;
 use std::{collections::BTreeSet, path::Path};
 
 /// Entries of the cache directory besides `latest/`.

@@ -1,4 +1,4 @@
-use crate::fs;
+use crate::platform::fs;
 use std::{
   collections::{BTreeMap, BTreeSet},
   io::{BufReader, Read},

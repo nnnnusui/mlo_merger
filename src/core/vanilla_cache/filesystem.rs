@@ -1,4 +1,5 @@
 use super::*;
+use crate::platform::process;
 
 pub(super) struct Staging(pub(super) PathBuf);
 
@@ -43,8 +44,8 @@ pub(super) fn prepare_output_path(
   vanilla_dir: &Path,
 ) -> Result<PathBuf> {
   let absolute =
-    if output.is_absolute() { output.to_path_buf() } else { fs::current_dir()?.join(output) };
-  let current_dir = fs::canonicalize(&fs::current_dir()?)?;
+    if output.is_absolute() { output.to_path_buf() } else { process::current_dir()?.join(output) };
+  let current_dir = fs::canonicalize(&process::current_dir()?)?;
   if absolute == current_dir
     || current_dir.starts_with(&absolute)
     || absolute.starts_with(vanilla_dir)
@@ -67,7 +68,7 @@ pub(super) fn prepare_output_path(
 pub(super) fn create_staging_directory(output_dir: &Path) -> Result<PathBuf> {
   let parent = output_dir.parent().ok_or("Vanilla-cache output has no parent")?;
   let name = output_dir.file_name().ok_or("Vanilla-cache output has no name")?.to_string_lossy();
-  let staging = parent.join(format!(".{name}.staging-{}", fs::process_id()));
+  let staging = parent.join(format!(".{name}.staging-{}", process::id()));
   fs::create_dir(&staging)?;
   Ok(staging)
 }
@@ -79,7 +80,7 @@ pub(super) fn publish_directory(
   let backup = output.with_file_name(format!(
     ".{}.backup-{}",
     output.file_name().unwrap_or_default().to_string_lossy(),
-    fs::process_id()
+    process::id()
   ));
   let existed = fs::exists(output).unwrap_or(false);
   if existed {

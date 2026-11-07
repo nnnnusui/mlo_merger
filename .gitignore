@@ -11,4 +11,4 @@ _
 
 # Archive key material from CodeWalker (not redistributable)
 /magic.dat
-/web/pkg
+/web/dist

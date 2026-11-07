@@ -1,9 +1,6 @@
 //! The operating system's filesystem.
 
-use std::{
-  io,
-  path::{Path, PathBuf},
-};
+use std::{io, path::Path};
 
 pub use std::fs::*;
 
@@ -39,14 +36,4 @@ pub fn symlink_file(
   link: impl AsRef<Path>,
 ) -> io::Result<()> {
   std::os::windows::fs::symlink_file(target, link)
-}
-
-/// The process's working directory, against which relative paths resolve.
-pub fn current_dir() -> io::Result<PathBuf> {
-  std::env::current_dir()
-}
-
-/// An identifier unique to this process, used to name staging files.
-pub fn process_id() -> u32 {
-  std::process::id()
 }

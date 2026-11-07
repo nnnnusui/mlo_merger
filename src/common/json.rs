@@ -1,5 +1,5 @@
 use super::Result;
-use crate::fs;
+use crate::platform::fs;
 use serde::{Serialize, de::DeserializeOwned};
 use std::{
   any::{Any, TypeId},

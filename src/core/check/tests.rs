@@ -1,5 +1,5 @@
 use super::*;
-use crate::fs;
+use crate::platform::fs;
 use std::collections::BTreeSet;
 
 /// An empty directory for one test.

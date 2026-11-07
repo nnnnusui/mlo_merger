@@ -1,6 +1,6 @@
 //! RPF extraction and physical/virtual DLC archive resolution.
 
-use crate::fs::{self, File};
+use crate::platform::fs::{self, File};
 use rayon::prelude::*;
 use serde::Deserialize;
 use sha2::{Digest, Sha256};

@@ -6,7 +6,7 @@ use super::{
 };
 use crate::common::path::ensure_safe_path;
 use crate::core::stream_conflicts::{StreamConflictReport, StreamFileConflict};
-use crate::fs;
+use crate::platform::fs;
 use std::{
   collections::{BTreeMap, BTreeSet},
   path::Path,
@@ -28,7 +28,7 @@ pub(super) fn conflicts(
     if !fs::is_dir(&root) {
       continue;
     }
-    for entry in crate::fs::WalkDir::new(&root).follow_links(false) {
+    for entry in crate::platform::fs::WalkDir::new(&root).follow_links(false) {
       let entry = entry?;
       if !entry.file_type().is_file() {
         continue;

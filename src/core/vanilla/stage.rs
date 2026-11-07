@@ -1,6 +1,6 @@
 //! Materializes one ordered vanilla cache stage.
 
-use crate::fs;
+use crate::platform::fs;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 

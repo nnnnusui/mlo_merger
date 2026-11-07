@@ -1,7 +1,7 @@
 //! Validated derived-cache metadata for downstream processing stages.
 
 use super::{CACHE_SCHEMA, DerivedManifest, Result, YmapRelationshipIndex};
-use crate::fs;
+use crate::platform::fs;
 use rayon::prelude::*;
 use serde::Deserialize;
 use sha2::{Digest, Sha256};

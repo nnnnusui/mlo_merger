@@ -1,9 +1,9 @@
-use crate::fs;
+use crate::platform::fs;
 use std::collections::{BTreeMap, BTreeSet};
 use std::io;
 use std::path::{Path, PathBuf};
 
-use crate::fs::WalkDir;
+use crate::platform::fs::WalkDir;
 use serde::{Deserialize, Serialize};
 
 use crate::common::function::get_resource_directories;
@@ -140,20 +140,20 @@ mod tests {
     let second_stream = temp_dir.join("resource_b/stream/other");
     let third_stream = temp_dir.join("resource_b/stream/ytyp");
     let unmanifested_stream = temp_dir.join("not_a_resource/stream");
-    crate::fs::create_dir_all(&first_stream).unwrap();
-    crate::fs::create_dir_all(&plural_stream).unwrap();
-    crate::fs::create_dir_all(&second_stream).unwrap();
-    crate::fs::create_dir_all(&third_stream).unwrap();
-    crate::fs::create_dir_all(&unmanifested_stream).unwrap();
-    crate::fs::write(temp_dir.join("resource_a/fxmanifest.lua"), []).unwrap();
-    crate::fs::write(temp_dir.join("resource_b/__resource.lua"), []).unwrap();
-    crate::fs::write(first_stream.join("mission.ymap"), []).unwrap();
-    crate::fs::write(plural_stream.join("mission.ymap"), []).unwrap();
-    crate::fs::write(second_stream.join("MISSION.YMAP"), []).unwrap();
-    crate::fs::write(first_stream.join("unique.ytyp"), []).unwrap();
-    crate::fs::write(first_stream.join("shared.ytyp"), []).unwrap();
-    crate::fs::write(third_stream.join("SHARED.YTYP"), []).unwrap();
-    crate::fs::write(unmanifested_stream.join("mission.ymap"), []).unwrap();
+    crate::platform::fs::create_dir_all(&first_stream).unwrap();
+    crate::platform::fs::create_dir_all(&plural_stream).unwrap();
+    crate::platform::fs::create_dir_all(&second_stream).unwrap();
+    crate::platform::fs::create_dir_all(&third_stream).unwrap();
+    crate::platform::fs::create_dir_all(&unmanifested_stream).unwrap();
+    crate::platform::fs::write(temp_dir.join("resource_a/fxmanifest.lua"), []).unwrap();
+    crate::platform::fs::write(temp_dir.join("resource_b/__resource.lua"), []).unwrap();
+    crate::platform::fs::write(first_stream.join("mission.ymap"), []).unwrap();
+    crate::platform::fs::write(plural_stream.join("mission.ymap"), []).unwrap();
+    crate::platform::fs::write(second_stream.join("MISSION.YMAP"), []).unwrap();
+    crate::platform::fs::write(first_stream.join("unique.ytyp"), []).unwrap();
+    crate::platform::fs::write(first_stream.join("shared.ytyp"), []).unwrap();
+    crate::platform::fs::write(third_stream.join("SHARED.YTYP"), []).unwrap();
+    crate::platform::fs::write(unmanifested_stream.join("mission.ymap"), []).unwrap();
 
     let report = scan_stream_conflicts(&temp_dir).unwrap();
     assert_eq!(report.scanned_file_count, 6);
@@ -163,6 +163,6 @@ mod tests {
     assert_eq!(report.conflicts[".ytyp"][0].file_name, "shared.ytyp");
     assert_eq!(report.conflicts[".ytyp"][0].paths.len(), 2);
 
-    crate::fs::remove_dir_all(temp_dir).unwrap();
+    crate::platform::fs::remove_dir_all(temp_dir).unwrap();
   }
 }

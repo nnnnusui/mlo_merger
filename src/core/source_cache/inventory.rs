@@ -1,8 +1,8 @@
-use crate::fs;
+use crate::platform::fs;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use crate::fs::WalkDir;
+use crate::platform::fs::WalkDir;
 use rayon::prelude::*;
 use sha2::{Digest, Sha256};
 

@@ -1,5 +1,5 @@
 use super::{Result, path::reject_symlinks};
-use crate::fs;
+use crate::platform::fs;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{

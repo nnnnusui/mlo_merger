@@ -9,7 +9,7 @@ mod findings;
 #[cfg(test)]
 mod tests;
 
-use crate::fs;
+use crate::platform::fs;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 

@@ -1,10 +1,11 @@
-use crate::fs;
+use crate::platform::fs;
+use crate::platform::process;
 use std::{
   collections::BTreeMap,
   path::{Path, PathBuf},
 };
 
-use crate::fs::WalkDir;
+use crate::platform::fs::WalkDir;
 
 use super::incremental::IncrementalMerge;
 use crate::common::changes::StoreChanges;
@@ -221,12 +222,12 @@ fn dispatch_vanilla_stream_files(latest_dir: &Path) -> Result<VanillaStreamFiles
 
 fn prepare_output_path(output: &Path) -> Result<PathBuf> {
   let absolute =
-    if output.is_absolute() { output.to_path_buf() } else { fs::current_dir()?.join(output) };
+    if output.is_absolute() { output.to_path_buf() } else { process::current_dir()?.join(output) };
   let parent = absolute.parent().ok_or("Merge output has no parent")?;
   fs::create_dir_all(parent)?;
   let output =
     fs::canonicalize(parent)?.join(absolute.file_name().ok_or("Merge output has no name")?);
-  let current_dir = fs::canonicalize(&fs::current_dir()?)?;
+  let current_dir = fs::canonicalize(&process::current_dir()?)?;
   if output == current_dir || current_dir.starts_with(&output) {
     return Err("Refusing to replace the workspace directory or one of its parents".into());
   }
@@ -242,7 +243,7 @@ fn prepare_output_path(output: &Path) -> Result<PathBuf> {
 fn create_staging_directory(output: &Path) -> Result<PathBuf> {
   let parent = output.parent().ok_or("Merge output has no parent")?;
   let name = output.file_name().ok_or("Merge output has no name")?.to_string_lossy();
-  let staging = parent.join(format!(".{name}.staging-{}", fs::process_id()));
+  let staging = parent.join(format!(".{name}.staging-{}", process::id()));
   fs::create_dir(&staging)?;
   Ok(staging)
 }
@@ -254,7 +255,7 @@ fn publish_directory(
   let backup = output.with_file_name(format!(
     ".{}.backup-{}",
     output.file_name().unwrap_or_default().to_string_lossy(),
-    fs::process_id()
+    process::id()
   ));
   if fs::exists(&backup).unwrap_or(false) {
     return Err(format!("Merge backup already exists: {}", backup.display()).into());

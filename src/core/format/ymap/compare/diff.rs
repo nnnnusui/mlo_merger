@@ -4,7 +4,7 @@
 //! `#[derive(Diff)]`: every field is optional and omitted when unchanged, so the documents list
 //! only changes.
 
-use crate::fs;
+use crate::platform::fs;
 use std::path::Path;
 
 use serde::{Deserialize, Serialize};

@@ -1,7 +1,8 @@
 use super::Result;
 #[cfg(test)]
 use super::types::{FileFingerprint, SourceCacheMetadata};
-use crate::fs;
+use crate::platform::fs;
+use crate::platform::process;
 use std::path::{Path, PathBuf};
 #[cfg(test)]
 use std::{collections::BTreeMap, io::BufReader};
@@ -73,12 +74,12 @@ pub(super) fn refresh_source_timestamps(
 
 pub(super) fn prepare_output_path(output: &Path) -> Result<PathBuf> {
   let absolute =
-    if output.is_absolute() { output.to_path_buf() } else { fs::current_dir()?.join(output) };
+    if output.is_absolute() { output.to_path_buf() } else { process::current_dir()?.join(output) };
   let parent = absolute.parent().ok_or("Source-cache output has no parent")?;
   fs::create_dir_all(parent)?;
   let parent = fs::canonicalize(parent)?;
   let output = parent.join(absolute.file_name().ok_or("Source-cache output has no name")?);
-  let current_dir = fs::canonicalize(&fs::current_dir()?)?;
+  let current_dir = fs::canonicalize(&process::current_dir()?)?;
   if output == current_dir || current_dir.starts_with(&output) {
     return Err("Refusing to replace the workspace directory or one of its parents".into());
   }
@@ -94,7 +95,7 @@ pub(super) fn prepare_output_path(output: &Path) -> Result<PathBuf> {
 pub(super) fn create_staging_directory(output: &Path) -> Result<PathBuf> {
   let parent = output.parent().ok_or("Source-cache output has no parent")?;
   let name = output.file_name().ok_or("Source-cache output has no name")?.to_string_lossy();
-  let staging = parent.join(format!(".{name}.staging-{}", fs::process_id()));
+  let staging = parent.join(format!(".{name}.staging-{}", process::id()));
   fs::create_dir(&staging)?;
   Ok(staging)
 }

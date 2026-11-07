@@ -10,10 +10,10 @@ use super::{
   file_from_position::{self, Candidate, stream_name},
 };
 use crate::common::fingerprint::Fingerprint;
-use crate::fs;
+use crate::platform::fs;
 #[cfg(not(test))]
-use indicatif::ProgressDrawTarget;
-use indicatif::{ProgressBar, ProgressStyle};
+use crate::platform::progress::ProgressDrawTarget;
+use crate::platform::progress::{ProgressBar, ProgressStyle};
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 #[cfg(not(test))]

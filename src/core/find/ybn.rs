@@ -454,7 +454,7 @@ mod tests {
     find::EntityQuery,
     format::ybn::{write_ybn, xml::read_xml},
   };
-  use crate::fs;
+  use crate::platform::fs;
   use sha2::{Digest, Sha256};
 
   fn fixture() -> Bound {

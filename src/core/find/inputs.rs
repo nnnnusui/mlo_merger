@@ -2,7 +2,7 @@
 
 use super::{FindEntity, Result};
 use crate::core::format::{stream_file::StreamFile, ymap::model::Ymap};
-use crate::fs;
+use crate::platform::fs;
 use globset::{GlobBuilder, GlobMatcher};
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
@@ -79,7 +79,7 @@ pub(super) fn search_inputs(
   let merged = fs::canonicalize(&search.merged_dir)?;
   let filter = filename_filter(search.filter.as_deref())?;
   let mut paths = BTreeMap::new();
-  for entry in crate::fs::WalkDir::new(&merged).follow_links(false) {
+  for entry in crate::platform::fs::WalkDir::new(&merged).follow_links(false) {
     let entry = entry?;
     if !entry.file_type().is_file() {
       continue;

@@ -1,6 +1,7 @@
 //! Coordinates base archives, title updates and ordered DLC stages.
 
-use crate::fs;
+use crate::platform::fs;
+use crate::platform::process;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
@@ -45,7 +46,7 @@ impl BuildVanillaArchive {
     }
     let keys = RpfKeys::load(&executable, &self.magic)?;
     let output_dir = reset_output_directory(&self.output_dir, &game_dir)?;
-    let staging_path = output_dir.join(format!(".staging-{}", fs::process_id()));
+    let staging_path = output_dir.join(format!(".staging-{}", process::id()));
     fs::create_dir(&staging_path)?;
     let staging = Staging(staging_path);
     let build = staging.0.join("cache");

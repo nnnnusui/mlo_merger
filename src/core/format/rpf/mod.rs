@@ -3,7 +3,7 @@
 //! The table of contents is decrypted with [`RpfKeys`]; nested `.rpf` entries are scanned
 //! recursively. Paths are lowercase, `/`-separated and start with the root archive's name.
 
-use crate::fs::File;
+use crate::platform::fs::File;
 use std::{
   io::{self, Read, Seek, SeekFrom, Write},
   path::Path,

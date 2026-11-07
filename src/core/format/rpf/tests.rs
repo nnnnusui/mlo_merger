@@ -57,9 +57,9 @@ fn reads_nested_archives_and_rebuilds_resource_headers() {
   ]);
   let archive = fixture(&[("outside.ymap", b"outer", false), ("nested.rpf", &nested, false)]);
   let directory = std::env::temp_dir().join(format!("rpf_fixture_{}", std::process::id()));
-  crate::fs::create_dir_all(&directory).unwrap();
+  crate::platform::fs::create_dir_all(&directory).unwrap();
   let input = directory.join("Fixture.rpf");
-  crate::fs::write(&input, archive).unwrap();
+  crate::platform::fs::write(&input, archive).unwrap();
   let keys = RpfKeys::unencrypted();
 
   let root = RpfArchive::open(&input, &keys).unwrap();
@@ -82,9 +82,9 @@ fn reads_nested_archives_and_rebuilds_resource_headers() {
     assert_eq!(decoded, payload);
   }
 
-  crate::fs::write(directory.join("invalid.rpf"), b"invalid archive").unwrap();
+  crate::platform::fs::write(directory.join("invalid.rpf"), b"invalid archive").unwrap();
   assert!(RpfArchive::open(&directory.join("invalid.rpf"), &keys).is_err());
-  crate::fs::remove_dir_all(directory).unwrap();
+  crate::platform::fs::remove_dir_all(directory).unwrap();
 }
 
 #[test]

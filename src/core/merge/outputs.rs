@@ -1,6 +1,6 @@
 //! The merged stream files a merge output records, for readers outside the merge.
 
-use crate::fs;
+use crate::platform::fs;
 use std::path::{Path, PathBuf};
 
 use super::incremental::{MergeMetadata, output_path};

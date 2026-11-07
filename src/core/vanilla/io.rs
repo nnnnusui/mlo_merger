@@ -1,6 +1,6 @@
 //! Buffered metadata I/O and native YMAP model conversion.
 
-use crate::fs;
+use crate::platform::fs;
 use std::collections::HashMap;
 use std::path::Path;
 

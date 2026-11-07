@@ -4,7 +4,7 @@ use crate::core::overwrite::IgnoredOverwrite;
 use crate::core::vanilla::{
   CacheVersion, CachedFile, FileChange, VanillaCacheManifest, write_json,
 };
-use crate::fs;
+use crate::platform::fs;
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 

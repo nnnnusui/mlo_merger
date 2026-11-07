@@ -9,7 +9,7 @@ use crate::core::source_cache::{
   inventory::{fingerprint, resource_id, source_fingerprints, source_inventory},
   layout::{normalize_cached_layout, stream_relative_path},
 };
-use crate::fs;
+use crate::platform::fs;
 use std::collections::BTreeMap;
 
 pub(super) fn update_selected_resources(

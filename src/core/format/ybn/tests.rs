@@ -9,7 +9,7 @@ use std::path::Path;
 
 fn sample(name: &str) -> Vec<u8> {
   let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("docs/sample/ybn_conflicts").join(name);
-  let xml = crate::fs::read_to_string(path).unwrap();
+  let xml = crate::platform::fs::read_to_string(path).unwrap();
   xml_to_ybn(&xml).unwrap()
 }
 
@@ -132,16 +132,19 @@ fn rebuild_replaces_source_only_fixup_pointers() {
 #[ignore = "requires local cs6_05_2 and ch1_04b_0 vanilla and source-cache files"]
 fn real_collision_rebuilds_have_relocated_fixup_tables() {
   let base = Path::new(env!("CARGO_MANIFEST_DIR"));
-  let source =
-    crate::fs::read(base.join("asset/source-cache/resources/tw-builder-map/cs6_05_2.ybn")).unwrap();
-  let second = crate::fs::read(
+  let source = crate::platform::fs::read(
+    base.join("asset/source-cache/resources/tw-builder-map/cs6_05_2.ybn"),
+  )
+  .unwrap();
+  let second = crate::platform::fs::read(
     base.join("asset/source-cache/resources/tw-builder-stream/_shared/map_mainzone/cs6_05_2.ybn"),
   )
   .unwrap();
-  let vanilla = crate::fs::read(base.join("asset/vanilla-cache/latest/ybn/cs6_05_2.ybn")).unwrap();
+  let vanilla =
+    crate::platform::fs::read(base.join("asset/vanilla-cache/latest/ybn/cs6_05_2.ybn")).unwrap();
   let merged = merge_ybn_deltas(&vanilla, &[&source, &second]).unwrap();
   assert_relocated_fixup_tables(&merged);
-  let route68 = crate::fs::read(base.join(
+  let route68 = crate::platform::fs::read(base.join(
     "asset/source-cache/resources/tstudio_ammunation/tstudio_location_11_route68/ch1_04b_0.ybn",
   ))
   .unwrap();
@@ -552,10 +555,13 @@ fn ybn_deletion_matches_box_volume_across_reference_vertex_changes() {
 #[ignore = "requires local sc1 vanilla, RFC and laundromat cached source YBNs"]
 fn sc1_laundromat_deletion_wins_over_rfc_reencoded_collision() {
   let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-  let vanilla = crate::fs::read(root.join("asset/vanilla-cache/latest/ybn/sc1_18_0.ybn")).unwrap();
-  let rfc = crate::fs::read(root.join("asset/source-cache/resources/rfc_taco_farmer/sc1_18_0.ybn"))
-    .unwrap();
-  let laundry = crate::fs::read(
+  let vanilla =
+    crate::platform::fs::read(root.join("asset/vanilla-cache/latest/ybn/sc1_18_0.ybn")).unwrap();
+  let rfc = crate::platform::fs::read(
+    root.join("asset/source-cache/resources/rfc_taco_farmer/sc1_18_0.ybn"),
+  )
+  .unwrap();
+  let laundry = crate::platform::fs::read(
     root.join("asset/source-cache/resources/tstudio_laundromat/dollar_pills_exterior/sc1_18_0.ybn"),
   )
   .unwrap();
@@ -597,14 +603,15 @@ fn configured_ybn_tolerance_removes_reported_mirrorpark_box() {
   use crate::core::config::matching::{MatchTolerances, with_tolerances};
   let root = Path::new(env!("CARGO_MANIFEST_DIR"));
   let vanilla =
-    crate::fs::read(root.join("asset/vanilla-cache/latest/ybn/id2_21_c_0.ybn")).unwrap();
-  let gabz = crate::fs::read(
+    crate::platform::fs::read(root.join("asset/vanilla-cache/latest/ybn/id2_21_c_0.ybn")).unwrap();
+  let gabz = crate::platform::fs::read(
     root.join("asset/source-cache/resources/cfx-gabz-mirrorpark1/vanilla/id2_21_c_0.ybn"),
   )
   .unwrap();
-  let hane =
-    crate::fs::read(root.join("asset/source-cache/resources/hane_data_mirrorpark/id2_21_c_0.ybn"))
-      .unwrap();
+  let hane = crate::platform::fs::read(
+    root.join("asset/source-cache/resources/hane_data_mirrorpark/id2_21_c_0.ybn"),
+  )
+  .unwrap();
   let count = |bytes: &[u8]| {
     let bounds = read_ybn_root(bytes).unwrap();
     bounds

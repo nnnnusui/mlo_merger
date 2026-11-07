@@ -2,8 +2,8 @@
 
 use super::Result;
 use crate::core::source_cache::CachedFile;
-use crate::fs;
-use crate::fs::WalkDir;
+use crate::platform::fs;
+use crate::platform::fs::WalkDir;
 use std::{
   collections::{BTreeMap, BTreeSet},
   path::{Path, PathBuf},

@@ -1,6 +1,6 @@
 use super::*;
 use crate::core::format::ymap::binary::ymap_to_model;
-use crate::fs;
+use crate::platform::fs;
 use entity::{FileResult, entity_data, search_result};
 use inputs::matches;
 use sha2::{Digest, Sha256};

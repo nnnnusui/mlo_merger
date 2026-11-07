@@ -6,7 +6,7 @@ use super::{
   read_metadata, ymap_diff_path,
 };
 use crate::core::check::{CheckIssueKind, Findings};
-use crate::fs;
+use crate::platform::fs;
 use std::{collections::BTreeSet, path::Path};
 
 /// Entries of the cache directory.

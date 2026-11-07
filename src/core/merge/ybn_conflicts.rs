@@ -1,6 +1,6 @@
 //! Merging same-named YBN overrides from several resources against their latest vanilla file.
 
-use crate::fs;
+use crate::platform::fs;
 use std::{collections::BTreeMap, io, path::PathBuf};
 
 use crate::core::format::ybn::merge_ybn_deltas;

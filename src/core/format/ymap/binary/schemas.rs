@@ -225,7 +225,7 @@ fn line(record: &impl Serialize) -> String {
 
 #[cfg(test)]
 mod tests {
-  use crate::fs;
+  use crate::platform::fs;
   use std::path::Path;
 
   use super::*;

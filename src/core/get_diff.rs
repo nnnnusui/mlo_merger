@@ -1,10 +1,10 @@
-use crate::fs;
+use crate::platform::fs;
 use std::{
   collections::HashMap,
   path::{Path, PathBuf},
 };
 
-use crate::fs::WalkDir;
+use crate::platform::fs::WalkDir;
 use struct_diff::Diff;
 
 use crate::core::{
@@ -39,7 +39,8 @@ fn generate(
   let vanilla_dir = vanilla_cache_dir.join("latest/ymap");
   let source_paths = by_reference(sources.iter().cloned());
   let vanilla_paths = by_reference(
-    crate::fs::read_dir(&vanilla_dir)?.filter_map(|entry| entry.ok().map(|entry| entry.path())),
+    crate::platform::fs::read_dir(&vanilla_dir)?
+      .filter_map(|entry| entry.ok().map(|entry| entry.path())),
   );
   let mut outputs = Vec::with_capacity(sources.len());
   for source_path in &sources {
@@ -67,7 +68,7 @@ fn generate(
     let diff = vanilla.diff(&source, &ctx).unwrap_or_default();
     let output = diff_output_path(source_input, source_path, sources.len(), output_path)?;
     if let Some(parent) = output.parent() {
-      crate::fs::create_dir_all(parent)?;
+      crate::platform::fs::create_dir_all(parent)?;
     }
     write_json(&output, &diff)?;
     outputs.push(output);

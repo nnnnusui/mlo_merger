@@ -2,8 +2,8 @@
 
 use super::{CheckIssue, CheckIssueKind, Result};
 use crate::common::fingerprint::Fingerprint;
-use crate::fs;
-use crate::fs::WalkDir;
+use crate::platform::fs;
+use crate::platform::fs::WalkDir;
 use std::{collections::BTreeSet, path::Path};
 
 /// The issues found in one store.

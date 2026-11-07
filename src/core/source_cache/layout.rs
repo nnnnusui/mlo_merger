@@ -3,7 +3,7 @@
 use super::{Result, types::ResourceInventory};
 use crate::common::changes::StoreChanges;
 use crate::common::{filesystem::move_file, path::ensure_safe_path};
-use crate::fs;
+use crate::platform::fs;
 use std::{collections::BTreeSet, path::Path};
 
 pub(super) fn stream_relative_path(path: &str) -> Result<&str> {

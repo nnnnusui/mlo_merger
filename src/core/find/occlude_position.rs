@@ -1,6 +1,6 @@
 use super::{FindEntity, Result, aabb_intersects_radius, file_from_position, read_ymap};
 use crate::core::format::ymap::model::{YmapBoxOccluder, YmapOccludeModel};
-use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
+use crate::platform::progress::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 use serde::Serialize;
 use std::time::Duration;
 

@@ -11,7 +11,7 @@ use crate::core::source_cache::{
   publication::{create_staging_directory, prepare_output_path},
 };
 use crate::core::{vanilla::load_manifest_with_revision, vanilla_cache::load_cache};
-use crate::fs;
+use crate::platform::fs;
 use std::{
   collections::{BTreeMap, BTreeSet},
   path::{Path, PathBuf},
@@ -126,7 +126,7 @@ pub(super) fn prepare(build: &BuildSourceCache) -> Result<Prepared> {
       let cached = output.join(&relative);
       ensure_safe_path(&output, &cached)?;
       if fs::exists(&cached).unwrap_or(false) {
-        for entry in crate::fs::WalkDir::new(&cached).follow_links(false) {
+        for entry in crate::platform::fs::WalkDir::new(&cached).follow_links(false) {
           let entry = entry?;
           ensure_safe_path(&output, entry.path())?;
         }

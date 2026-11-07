@@ -111,7 +111,7 @@ mod tests {
   use crate::core::vanilla::{
     CacheVersion, CachedFile, FileChange, VanillaCacheManifest, write_json,
   };
-  use crate::fs;
+  use crate::platform::fs;
   use std::collections::BTreeMap;
 
   #[test]

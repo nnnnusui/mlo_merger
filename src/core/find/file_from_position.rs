@@ -2,11 +2,12 @@ use super::{FindEntity, Input, MergeCache, Result, aabb_intersects_radius, searc
 use crate::core::format::{
   ybn::read_ybn_bound_tree, ymap::binary::ymap_entities_extents, ymap::model::Ymap,
 };
-use crate::fs;
-use crate::fs::WalkDir;
+use crate::platform::fs;
+use crate::platform::fs::WalkDir;
+use crate::platform::process;
 #[cfg(not(test))]
-use indicatif::ProgressDrawTarget;
-use indicatif::{ProgressBar, ProgressStyle};
+use crate::platform::progress::ProgressDrawTarget;
+use crate::platform::progress::{ProgressBar, ProgressStyle};
 use serde::{Deserialize, Serialize};
 #[cfg(not(test))]
 use std::io::IsTerminal;
@@ -430,7 +431,7 @@ impl SeenPaths {
   fn new() -> Self {
     Self {
       resolved: HashMap::new(),
-      working_dir: fs::current_dir().and_then(|directory| fs::canonicalize(&directory)).ok(),
+      working_dir: process::current_dir().and_then(|directory| fs::canonicalize(&directory)).ok(),
     }
   }
 
@@ -537,7 +538,7 @@ pub(super) fn spatial_bounds(candidate: &Candidate) -> Result<Option<SpatialBoun
   let failed = |error: std::io::Error| -> Box<dyn std::error::Error> {
     format!("Cannot read {} resource {}: {error}", candidate.stage, candidate.path.display()).into()
   };
-  let bytes = crate::fs::read(&candidate.path).map_err(failed)?;
+  let bytes = crate::platform::fs::read(&candidate.path).map_err(failed)?;
   let bounds = match candidate.extension {
     "ymap" => {
       let (minimum, maximum) =
@@ -569,7 +570,7 @@ pub(super) fn ymap_extents(model: &Ymap) -> ([f64; 3], [f64; 3]) {
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::fs;
+  use crate::platform::fs;
 
   #[test]
   fn all_candidates_include_source_moved_source_and_latest_vanilla_files() {

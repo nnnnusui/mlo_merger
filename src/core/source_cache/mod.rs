@@ -12,7 +12,7 @@ mod streams;
 mod types;
 mod ymap_plan;
 
-use crate::fs;
+use crate::platform::fs;
 use std::{
   collections::{BTreeMap, BTreeSet},
   path::{Component, Path, PathBuf},
@@ -236,8 +236,9 @@ pub(crate) fn write_test_inventory(
     },
     outputs: BTreeSet::new(),
   };
-  crate::fs::create_dir_all(cache_dir).unwrap();
-  crate::fs::write(cache_info_path(cache_dir), serde_json::to_vec(&metadata).unwrap()).unwrap();
+  crate::platform::fs::create_dir_all(cache_dir).unwrap();
+  crate::platform::fs::write(cache_info_path(cache_dir), serde_json::to_vec(&metadata).unwrap())
+    .unwrap();
 }
 
 /// Recorded source YMAP paths and the vanilla version the source cache was generated against.
@@ -457,7 +458,7 @@ struct Staging(PathBuf);
 
 impl Drop for Staging {
   fn drop(&mut self) {
-    let _ = crate::fs::remove_dir_all(&self.0);
+    let _ = crate::platform::fs::remove_dir_all(&self.0);
   }
 }
 

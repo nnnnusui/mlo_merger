@@ -12,7 +12,7 @@ use crate::core::conversion::load_hash_names_or_empty;
 use crate::core::format::ymap::{binary::ymap_to_model, model::ymap::Ymap};
 use crate::core::source_cache::{InventoriedFile, inventoried_files};
 use crate::core::vanilla::load_manifest;
-use crate::fs;
+use crate::platform::fs;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
 use std::io::{BufWriter, Write};

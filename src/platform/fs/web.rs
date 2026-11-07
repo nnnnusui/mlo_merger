@@ -2,12 +2,11 @@
 //!
 //! Every item mirrors its `std::fs` namesake, including the `io::ErrorKind` of failures, so
 //! library code behaves as it does on disk. Paths are absolute POSIX paths in the virtual
-//! filesystem; relative paths resolve against [`current_dir`].
+//! filesystem; relative paths resolve against [`process::current_dir`].
 
 mod walk_impl;
 
 use std::{
-  cell::RefCell,
   ffi::OsString,
   fmt, io,
   path::{Path, PathBuf},
@@ -15,6 +14,8 @@ use std::{
 };
 
 use wasm_bindgen::prelude::*;
+
+use crate::platform::process;
 
 /// Recursive directory traversal with the subset of the `walkdir` API the library uses.
 pub mod walk {
@@ -134,33 +135,10 @@ fn call<T>(result: Result<T, JsValue>) -> io::Result<T> {
   result.map_err(io_error)
 }
 
-thread_local! {
-  static CURRENT_DIR: RefCell<PathBuf> = RefCell::new(PathBuf::from("/"));
-}
-
-/// The virtual working directory, against which relative paths resolve; `/` at first.
-pub fn current_dir() -> io::Result<PathBuf> {
-  Ok(CURRENT_DIR.with(|current| current.borrow().clone()))
-}
-
-/// Changes the virtual working directory to an existing directory.
-pub fn set_current_dir(path: impl AsRef<Path>) -> io::Result<()> {
-  let path = canonicalize(path)?;
-  if !is_dir(&path) {
-    return Err(io::Error::new(io::ErrorKind::NotADirectory, path.display().to_string()));
-  }
-  CURRENT_DIR.with(|current| *current.borrow_mut() = path);
-  Ok(())
-}
-
-/// A constant: the page runs a single process.
-pub fn process_id() -> u32 {
-  1
-}
-
 /// The absolute virtual path of `path` as a string for `web/vfs.js`.
 fn resolve(path: &Path) -> io::Result<String> {
-  let absolute = if path.is_absolute() { path.to_path_buf() } else { current_dir()?.join(path) };
+  let absolute =
+    if path.is_absolute() { path.to_path_buf() } else { process::current_dir()?.join(path) };
   absolute.into_os_string().into_string().map_err(|path| {
     io::Error::new(io::ErrorKind::InvalidInput, format!("Path is not UTF-8: {path:?}"))
   })

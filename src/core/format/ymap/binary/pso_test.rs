@@ -10,7 +10,7 @@ fn read(name: &str) -> Ymap {
   let path = Path::new(env!("CARGO_MANIFEST_DIR"))
     .join("asset/vanilla-cache/latest/ymap")
     .join(format!("{name}.ymap"));
-  let resource = PsoResource::parse(&crate::fs::read(path).unwrap()).unwrap();
+  let resource = PsoResource::parse(&crate::platform::fs::read(path).unwrap()).unwrap();
   super::pso_to_ymap(&resource, &HashMap::new()).unwrap()
 }
 

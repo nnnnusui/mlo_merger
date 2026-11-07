@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>MLO Merger – Try it in the browser</title>
+    <link rel="stylesheet" href="style.css" />
+    <script type="module" src="main.js"></script>
+  </head>
+  <body>
+    <header>
+      <div>
+        <h1>MLO Merger</h1>
+        <p data-i18n="lead">
+          Runs the real merger on sample resources, entirely in your browser, and shows the files it writes.
+        </p>
+      </div>
+      <select id="language" aria-label="Language">
+        <option value="en">English</option>
+        <option value="ja">日本語</option>
+      </select>
+    </header>
+
+    <section class="controls">
+      <div class="presets">
+        <button data-args="--pipeline" data-i18n="pipeline" disabled>Run pipeline</button>
+        <button data-args="--pipeline --force" data-i18n="pipelineForce" disabled>Run pipeline again with --force</button>
+        <button data-args="--read" data-i18n="read" disabled>Read every YMAP as JSON (--read)</button>
+        <button id="reset" class="secondary" data-i18n="reset" disabled>Reset files</button>
+      </div>
+      <form id="command">
+        <label for="args"><code>mlo_merger</code></label>
+        <input id="args" type="text" spellcheck="false" autocomplete="off" value="--pipeline" />
+        <button type="submit" data-i18n="run" disabled>Run</button>
+      </form>
+      <p id="status" role="status" data-i18n="loading">Loading…</p>
+    </section>
+
+    <main>
+      <section class="panel tree-panel">
+        <div class="panel-header">
+          <h2 data-i18n="files">Files</h2>
+          <label><input id="changes-only" type="checkbox" /> <span data-i18n="changesOnly">Changes only</span></label>
+        </div>
+        <ul class="legend">
+          <li class="added" data-i18n="added">added</li>
+          <li class="modified" data-i18n="modified">modified</li>
+          <li class="removed" data-i18n="removed">removed</li>
+        </ul>
+        <div id="tree" class="tree"></div>
+      </section>
+
+      <section class="panel detail-panel">
+        <div class="tabs" role="tablist">
+          <button role="tab" data-tab="log" aria-selected="true" data-i18n="log">Log</button>
+          <button role="tab" data-tab="output" aria-selected="false" data-i18n="output">Output</button>
+          <button role="tab" data-tab="file" aria-selected="false" data-i18n="file">File</button>
+        </div>
+        <pre id="log" class="tab-body"></pre>
+        <pre id="output" class="tab-body" hidden></pre>
+        <div id="file" class="tab-body" hidden>
+          <p id="file-path" class="file-path" data-i18n="pickFile">Select a file in the tree.</p>
+          <pre id="file-body"></pre>
+        </div>
+      </section>
+    </main>
+
+    <footer data-i18n="footer">
+      Sample resources come from the repository's docs/sample. Nothing is uploaded; the files live in memory and vanish on reload.
+    </footer>
+  </body>
+</html>

@@ -1,6 +1,7 @@
 //! Scratch cleanup, completed-cache publication and rollback.
 
-use crate::fs;
+use crate::platform::fs;
+use crate::platform::process;
 use std::path::{Component, Path, PathBuf};
 
 use super::{
@@ -22,7 +23,7 @@ pub(super) fn reset_output_directory(
 ) -> Result<PathBuf> {
   let output = normalize_absolute(output)?;
   let game_dir = fs::canonicalize(game_dir)?;
-  let current_dir = fs::canonicalize(&fs::current_dir()?)?;
+  let current_dir = fs::canonicalize(&process::current_dir()?)?;
   validate_output_location(&output, &game_dir, &current_dir)?;
   let parent = output.parent().ok_or("Cache output has no parent directory")?;
   let name = output.file_name().ok_or("Cache output has no directory name")?;
@@ -44,7 +45,8 @@ pub(super) fn reset_output_directory(
 }
 
 fn normalize_absolute(path: &Path) -> Result<PathBuf> {
-  let path = if path.is_absolute() { path.to_path_buf() } else { fs::current_dir()?.join(path) };
+  let path =
+    if path.is_absolute() { path.to_path_buf() } else { process::current_dir()?.join(path) };
   let mut normalized = PathBuf::new();
   for component in path.components() {
     match component {

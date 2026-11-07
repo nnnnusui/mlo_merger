@@ -1,6 +1,6 @@
 //! Batch conversion between native stream files and CodeWalker-style XML.
 
-use crate::fs;
+use crate::platform::fs;
 use std::{
   collections::{BTreeSet, HashMap},
   error::Error,
@@ -8,7 +8,7 @@ use std::{
   path::{Path, PathBuf},
 };
 
-use crate::fs::WalkDir;
+use crate::platform::fs::WalkDir;
 
 use crate::core::format::{
   gamefile::{

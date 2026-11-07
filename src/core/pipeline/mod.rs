@@ -10,7 +10,8 @@ use super::{
 };
 use crate::common::path::absolute_path;
 use crate::core::config::gamebuild::GameBuild;
-use crate::fs;
+use crate::platform::fs;
+use crate::platform::process;
 use std::path::PathBuf;
 
 pub use report::{PipelineChanges, PipelineReport, PipelineSummary};
@@ -147,7 +148,7 @@ impl Pipeline {
     .into_iter()
     .map(|(name, path)| Ok((name, absolute_path(path)?)))
     .collect::<Result<Vec<_>, std::io::Error>>()?;
-    let workspace = fs::canonicalize(&fs::current_dir()?)?;
+    let workspace = fs::canonicalize(&process::current_dir()?)?;
     for (index, (name, path)) in paths.iter().enumerate() {
       if *name != "vanilla" && workspace.starts_with(path) {
         return Err(format!("Pipeline {name} output overlaps the workspace").into());

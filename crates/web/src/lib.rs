@@ -74,7 +74,8 @@ fn execute(args: &[String]) -> Result<String, String> {
 /// Changes the directory relative paths resolve against.
 #[wasm_bindgen]
 pub fn set_current_dir(path: &str) -> Result<(), JsError> {
-  mlo_merger::fs::set_current_dir(path).map_err(|error| JsError::new(&error.to_string()))
+  mlo_merger::platform::process::set_current_dir(path)
+    .map_err(|error| JsError::new(&error.to_string()))
 }
 
 /// Opens a [`LogWriter`] for each log line.

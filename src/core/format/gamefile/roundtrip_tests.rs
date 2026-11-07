@@ -23,7 +23,7 @@ fn sample_ymaps_survive_binary_xml_binary_xml() {
   let names: HashMap<u32, String> =
     crate::core::conversion::load_hash_names_or_empty(&base.join("hash_names.json"));
   for sample in SAMPLES {
-    let source = crate::fs::read(base.join(sample)).unwrap();
+    let source = crate::platform::fs::read(base.join(sample)).unwrap();
     let meta = MetaResource::parse(&Rsc7Resource::decode(&source).unwrap()).unwrap();
     let mut catalog = MetaSchemaCatalog::default();
     catalog.add_resource(&meta);

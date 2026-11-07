@@ -1,4 +1,4 @@
-use crate::fs;
+use crate::platform::fs;
 use std::{
   collections::{BTreeSet, HashMap, HashSet},
   path::{Path, PathBuf},

@@ -8,7 +8,7 @@
 //! inventory changed, or every resource when the rest changed, are checked file by file.
 
 use super::Result;
-use crate::fs;
+use crate::platform::fs;
 use crate::{
   common::{json::write_json, path::ensure_safe_path},
   core::config::matching::{self, MatchTolerances},
@@ -273,7 +273,7 @@ mod tests {
     let source_cache = asset.join("source-cache");
     let output = std::env::temp_dir().join(format!("ymap_diffs_{}", std::process::id()));
     let _ = fs::remove_dir_all(&output);
-    for entry in crate::fs::WalkDir::new(&source_cache) {
+    for entry in crate::platform::fs::WalkDir::new(&source_cache) {
       let entry = entry.unwrap();
       let destination = output.join(entry.path().strip_prefix(&source_cache).unwrap());
       if entry.file_type().is_dir() {
@@ -291,7 +291,7 @@ mod tests {
     )
     .unwrap()
     .written;
-    let files = crate::fs::WalkDir::new(output.join("diff"))
+    let files = crate::platform::fs::WalkDir::new(output.join("diff"))
       .into_iter()
       .filter_map(std::result::Result::ok)
       .filter(|entry| entry.file_name().to_string_lossy().ends_with(".ymap.diff.json"))

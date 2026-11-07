@@ -1,6 +1,6 @@
 //! Matching tolerances loaded once per operation and scoped to its comparisons.
 
-use crate::fs;
+use crate::platform::fs;
 use serde::{Deserialize, Serialize};
 use std::{cell::Cell, io, path::Path};
 
