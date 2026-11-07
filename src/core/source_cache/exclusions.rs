@@ -34,11 +34,11 @@ mod tests {
 
   #[test]
   fn matches_names_and_partial_paths_without_glob_interpretation() {
-    let patterns = parse_exclusions(" Resource_A, [GABZ]\\shops, Resource_A ").unwrap();
-    assert_eq!(patterns, ["resource_a", "[gabz]/shops"]);
+    let patterns = parse_exclusions(" Resource_A, [MAPS]\\shops, Resource_A ").unwrap();
+    assert_eq!(patterns, ["resource_a", "[maps]/shops"]);
     assert!(is_excluded("[group]/RESOURCE_A", &patterns));
-    assert!(is_excluded("[gabz]/shops/resource_b", &patterns));
-    assert!(!is_excluded("[gabz]/other/resource_b", &patterns));
+    assert!(is_excluded("[maps]/shops/resource_b", &patterns));
+    assert!(!is_excluded("[maps]/other/resource_b", &patterns));
     assert!(parse_exclusions(" ").unwrap().is_empty());
     assert!(parse_exclusions("resource_a,,resource_b").is_err());
   }

@@ -26,7 +26,7 @@ use crate::common::{filesystem::move_file, path::ensure_safe_path};
 /// let restored = mlo_merger::core::source_cache::restore_source_cache(
 ///   std::path::Path::new("asset/source-cache"),
 ///   std::path::Path::new("asset/source"),
-///   &["[gabz]/cfx-gabz-247".into()],
+///   &["[maps]/resource_b".into()],
 /// )?;
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```

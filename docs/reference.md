@@ -46,12 +46,12 @@ archive. `--gamebuild` selects the game build the vanilla cache, and so merge, t
 mlo_merger --generate-vanilla -i /mnt/gtav -o asset/vanilla --magic magic.dat
 mlo_merger --generate-vanilla-cache --vanilla asset/vanilla -o asset/vanilla-cache
 mlo_merger --generate-source-cache -i asset/source --vanilla-cache asset/vanilla-cache -o asset/source-cache
-mlo_merger --generate-source-cache --exclude 'resourceName,[gabz]/shops'
+mlo_merger --generate-source-cache --exclude 'resourceName,[maps]/shops'
 mlo_merger --merge --vanilla-cache asset/vanilla-cache --source-cache asset/source-cache -o asset/merged
 mlo_merger --deploy -i asset/merged --source-cache asset/source-cache -o asset/merged_mlo
 
 mlo_merger --restore-source-cache -i asset/source --source-cache asset/source-cache
-mlo_merger --restore-source-cache resourceName '[gabz]/cfx-gabz-247'
+mlo_merger --restore-source-cache resourceName '[maps]/resource_b'
 ```
 
 Each operation brings its prerequisites up to date first; `-f` applies only to the
@@ -349,8 +349,8 @@ Searches write XML to stdout without running the pipeline or modifying artifacts
 ## Read Stream File Models
 
 ```bash
-mlo_merger --read --resource brofx_mansion_06 apa_ch2_occl_05.ymap
-mlo_merger --read --resource '[gabz]/cfx-gabz-247'
+mlo_merger --read --resource resourceName apa_ch2_occl_05.ymap
+mlo_merger --read --resource '[maps]/resource_b'
 mlo_merger --read --vanilla apa_ch2_occl_05.ymap
 mlo_merger --read --vanilla --gamebuild 2802 hei_ch1_11.ymap
 mlo_merger --read apa_ch2_occl_05.ymap

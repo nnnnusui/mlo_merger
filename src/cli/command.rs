@@ -397,13 +397,13 @@ mod tests {
         "-i",
         "resources",
         "--exclude",
-        " resource_a, [GABZ]/shops ",
+        " resource_a, [MAPS]/shops ",
       ])
       .unwrap()
     else {
       panic!("Expected source cache command")
     };
-    assert_eq!(command.exclusions, Some(vec!["resource_a".into(), "[gabz]/shops".into()]));
+    assert_eq!(command.exclusions, Some(vec!["resource_a".into(), "[maps]/shops".into()]));
     assert_eq!(command.resource, None);
     let Command::Pipeline(command) = parser()
       .to_options()
@@ -415,12 +415,12 @@ mod tests {
     assert_eq!(command.exclusions, Some(vec!["resource_a".into(), "[group]/partial".into()]));
     let Command::Merge(command) = parser()
       .to_options()
-      .run_inner(&["--merge", "-i", "resources", "--exclude", " Resource_A, [GABZ]\\shops "])
+      .run_inner(&["--merge", "-i", "resources", "--exclude", " Resource_A, [MAPS]\\shops "])
       .unwrap()
     else {
       panic!("Expected merge command")
     };
-    assert_eq!(command.exclusions, Some(vec!["resource_a".into(), "[gabz]/shops".into()]));
+    assert_eq!(command.exclusions, Some(vec!["resource_a".into(), "[maps]/shops".into()]));
     let Command::Merge(command) = parser().to_options().run_inner(&["--merge"]).unwrap() else {
       panic!("Expected merge command")
     };

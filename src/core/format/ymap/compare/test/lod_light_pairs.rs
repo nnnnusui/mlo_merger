@@ -78,7 +78,7 @@ fn names_the_other_ymap_of_a_pair() {
 #[test]
 fn removals_of_either_side_are_implied_on_the_other() {
   let (lods, distants) = pair(6);
-  // As tw-builder-map does: more LOD lights removed than distant ones.
+  // As some resources do: more LOD lights removed than distant ones.
   let modded_lods = Ymap {
     lod_lights: without(&lods.lod_lights, &[1, 2, 4]),
     ..lods.clone()

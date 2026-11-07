@@ -128,27 +128,25 @@ fn rebuild_replaces_source_only_fixup_pointers() {
   assert_eq!(read_ybn_root(&rebuilt).unwrap().children.len(), 1);
 }
 
+/// The local file whose path, relative to the repository, the environment variable `variable`
+/// names, for tests of cached source files that cannot be shipped.
+fn local_source(variable: &str) -> Vec<u8> {
+  let path = std::env::var(variable).unwrap_or_else(|_| panic!("set {variable}"));
+  crate::platform::fs::read(Path::new(env!("CARGO_MANIFEST_DIR")).join(path)).unwrap()
+}
+
 #[test]
-#[ignore = "requires local cs6_05_2 and ch1_04b_0 vanilla and source-cache files"]
+#[ignore = "requires local cs6_05_2 and ch1_04b_0 vanilla files and cached source YBNs named by MLO_CS6_05_2_YBN, MLO_CS6_05_2_SECOND_YBN and MLO_CH1_04B_0_YBN"]
 fn real_collision_rebuilds_have_relocated_fixup_tables() {
   let base = Path::new(env!("CARGO_MANIFEST_DIR"));
-  let source = crate::platform::fs::read(
-    base.join("asset/source-cache/resources/tw-builder-map/cs6_05_2.ybn"),
-  )
-  .unwrap();
-  let second = crate::platform::fs::read(
-    base.join("asset/source-cache/resources/tw-builder-stream/_shared/map_mainzone/cs6_05_2.ybn"),
-  )
-  .unwrap();
+  let source = local_source("MLO_CS6_05_2_YBN");
+  let second = local_source("MLO_CS6_05_2_SECOND_YBN");
   let vanilla =
     crate::platform::fs::read(base.join("asset/vanilla-cache/latest/ybn/cs6_05_2.ybn")).unwrap();
   let merged = merge_ybn_deltas(&vanilla, &[&source, &second]).unwrap();
   assert_relocated_fixup_tables(&merged);
-  let route68 = crate::platform::fs::read(base.join(
-    "asset/source-cache/resources/tstudio_ammunation/tstudio_location_11_route68/ch1_04b_0.ybn",
-  ))
-  .unwrap();
-  let rebuilt = encode_ybn_bound(&read_ybn_root(&route68).unwrap()).unwrap();
+  let ch1_04b_0 = local_source("MLO_CH1_04B_0_YBN");
+  let rebuilt = encode_ybn_bound(&read_ybn_root(&ch1_04b_0).unwrap()).unwrap();
   assert_relocated_fixup_tables(&rebuilt);
 }
 
@@ -552,21 +550,16 @@ fn ybn_deletion_matches_box_volume_across_reference_vertex_changes() {
 }
 
 #[test]
-#[ignore = "requires local sc1 vanilla, RFC and laundromat cached source YBNs"]
-fn sc1_laundromat_deletion_wins_over_rfc_reencoded_collision() {
+#[ignore = "requires local sc1_18_0 vanilla and cached source YBNs named by MLO_SC1_18_0_REENCODED_YBN and MLO_SC1_18_0_DELETING_YBN"]
+fn sc1_18_0_deletion_wins_over_a_reencoded_collision() {
   let root = Path::new(env!("CARGO_MANIFEST_DIR"));
   let vanilla =
     crate::platform::fs::read(root.join("asset/vanilla-cache/latest/ybn/sc1_18_0.ybn")).unwrap();
-  let rfc = crate::platform::fs::read(
-    root.join("asset/source-cache/resources/rfc_taco_farmer/sc1_18_0.ybn"),
-  )
-  .unwrap();
-  let laundry = crate::platform::fs::read(
-    root.join("asset/source-cache/resources/tstudio_laundromat/dollar_pills_exterior/sc1_18_0.ybn"),
-  )
-  .unwrap();
+  // One source re-encodes the collision; the other deletes polygons from it.
+  let reencoded = local_source("MLO_SC1_18_0_REENCODED_YBN");
+  let deleting = local_source("MLO_SC1_18_0_DELETING_YBN");
   let baseline = read_ybn_root(&vanilla).unwrap();
-  let source = read_ybn_root(&rfc).unwrap();
+  let source = read_ybn_root(&reencoded).unwrap();
   let baseline_records = geometry_polygon_records(&baseline).unwrap();
   let source_geometry = source.children[1].geometry.as_ref().unwrap();
   let source_identity = |index| {
@@ -583,7 +576,9 @@ fn sc1_laundromat_deletion_wins_over_rfc_reencoded_collision() {
     baseline_lookup.insert(record.identity.clone());
   }
   assert!(baseline_lookup.contains(&wall), "box volume must match vanilla");
-  for mods in [[rfc.as_slice(), laundry.as_slice()], [laundry.as_slice(), rfc.as_slice()]] {
+  for mods in
+    [[reencoded.as_slice(), deleting.as_slice()], [deleting.as_slice(), reencoded.as_slice()]]
+  {
     let result = read_ybn_root(&merge_ybn_deltas(&vanilla, &mods).unwrap()).unwrap();
     let records = geometry_polygon_records(&result).unwrap();
     let mut retained = PolygonLookup::default();
@@ -591,27 +586,26 @@ fn sc1_laundromat_deletion_wins_over_rfc_reencoded_collision() {
       retained.insert(record.identity.clone());
     }
     for index in [109, 110, 111, 138, 104, 139] {
-      assert!(!retained.contains(&source_identity(index)), "RFC polygon {index} must not return");
+      assert!(
+        !retained.contains(&source_identity(index)),
+        "re-encoded polygon {index} must not return"
+      );
     }
     assert!(!records.is_empty(), "unrelated collision must remain");
   }
 }
 
 #[test]
-#[ignore = "requires local Mirror Park vanilla and cached source YBNs"]
+#[ignore = "requires local Mirror Park vanilla and cached source YBNs named by MLO_KEEPING_YBN and MLO_REMOVING_YBN"]
 fn configured_ybn_tolerance_removes_reported_mirrorpark_box() {
   use crate::core::config::matching::{MatchTolerances, with_tolerances};
   let root = Path::new(env!("CARGO_MANIFEST_DIR"));
   let vanilla =
     crate::platform::fs::read(root.join("asset/vanilla-cache/latest/ybn/id2_21_c_0.ybn")).unwrap();
-  let gabz = crate::platform::fs::read(
-    root.join("asset/source-cache/resources/cfx-gabz-mirrorpark1/vanilla/id2_21_c_0.ybn"),
-  )
-  .unwrap();
-  let hane = crate::platform::fs::read(
-    root.join("asset/source-cache/resources/hane_data_mirrorpark/id2_21_c_0.ybn"),
-  )
-  .unwrap();
+  // Two cached source copies of id2_21_c_0.ybn: one keeping the reported box and one removing
+  // it.
+  let keeping = local_source("MLO_KEEPING_YBN");
+  let removing = local_source("MLO_REMOVING_YBN");
   let count = |bytes: &[u8]| {
     let bounds = read_ybn_root(bytes).unwrap();
     bounds
@@ -653,8 +647,8 @@ fn configured_ybn_tolerance_removes_reported_mirrorpark_box() {
       .sum::<usize>()
   };
   assert_eq!(count(&vanilla), 1);
-  assert_eq!(count(&gabz), 1);
-  assert_eq!(count(&hane), 0);
+  assert_eq!(count(&keeping), 1);
+  assert_eq!(count(&removing), 0);
   for (tolerance, expected) in [(0.005, 1), (0.05, 0)] {
     with_tolerances(
       MatchTolerances {
@@ -662,7 +656,7 @@ fn configured_ybn_tolerance_removes_reported_mirrorpark_box() {
         ..Default::default()
       },
       || {
-        let merged = merge_ybn_deltas(&vanilla, &[&gabz, &hane]).unwrap();
+        let merged = merge_ybn_deltas(&vanilla, &[&keeping, &removing]).unwrap();
         let found = count(&merged);
         eprintln!("Mirror Park Box: tolerance={tolerance}, matches={found}");
         assert_eq!(found, expected);

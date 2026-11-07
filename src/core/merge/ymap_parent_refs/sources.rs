@@ -186,10 +186,10 @@ mod tests {
     crate::platform::fs::write(&first, []).unwrap();
     crate::platform::fs::write(&second, []).unwrap();
     let mut sources = SourceMaps::default();
-    sources.register(Some("[gabz]/resource_a"), "map.ymap", first.clone()).unwrap();
-    sources.register(Some("[gabz]/resource_a"), "map.ymap", second).unwrap();
+    sources.register(Some("[maps]/resource_a"), "map.ymap", first.clone()).unwrap();
+    sources.register(Some("[maps]/resource_a"), "map.ymap", second).unwrap();
 
-    let key = (Some("[gabz]/resource_a".into()), reference_hash("map"));
+    let key = (Some("[maps]/resource_a".into()), reference_hash("map"));
     assert_eq!(sources.paths.get(&key), Some(&first));
     crate::platform::fs::remove_dir_all(root).unwrap();
   }
