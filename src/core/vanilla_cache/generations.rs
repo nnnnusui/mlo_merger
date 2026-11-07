@@ -70,6 +70,64 @@ impl ItemKind {
   ];
 }
 
+/// A map from item kinds, with only the kinds it holds; `Partial<Record<ItemKind, V>>` in
+/// TypeScript, since specta writes a map keyed by a named enum as an index signature, which
+/// TypeScript rejects.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct ByKind<V>(pub BTreeMap<ItemKind, V>);
+
+impl<V> std::ops::Deref for ByKind<V> {
+  type Target = BTreeMap<ItemKind, V>;
+
+  fn deref(&self) -> &Self::Target {
+    &self.0
+  }
+}
+
+impl<V> std::ops::DerefMut for ByKind<V> {
+  fn deref_mut(&mut self) -> &mut Self::Target {
+    &mut self.0
+  }
+}
+
+#[cfg(feature = "typescript")]
+impl<V: specta::Type> specta::Type for ByKind<V> {
+  fn inline(
+    opts: specta::DefOpts,
+    generics: &[specta::DataType],
+  ) -> std::result::Result<specta::DataType, specta::ExportError> {
+    use specta::{DataType, DataTypeReference, DefOpts};
+    let key = ItemKind::reference(
+      DefOpts {
+        parent_inline: false,
+        type_map: opts.type_map,
+      },
+      &[],
+    )?;
+    let value = match generics.first() {
+      Some(value) => value.clone(),
+      None => V::reference(
+        DefOpts {
+          parent_inline: false,
+          type_map: opts.type_map,
+        },
+        &[],
+      )?,
+    };
+    let record = DataType::Reference(DataTypeReference {
+      name: "Record",
+      sid: specta::sid!(@with_specta_path; "Record"; specta),
+      generics: vec![key, value],
+    });
+    Ok(DataType::Reference(DataTypeReference {
+      name: "Partial",
+      sid: specta::sid!(@with_specta_path; "Partial"; specta),
+      generics: vec![record],
+    }))
+  }
+}
+
 /// The generations and units of the selected game build; see the module docs.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "typescript", derive(specta::Type))]
@@ -118,9 +176,9 @@ pub struct GenerationUnit {
   pub newer: Vec<UnitFile>,
   /// Per kind, `[older file, older index, newer file, newer index]` of each pair, files by their
   /// index in [`Self::older`] and [`Self::newer`].
-  pub pairs: BTreeMap<ItemKind, Vec<[u32; 4]>>,
+  pub pairs: ByKind<Vec<[u32; 4]>>,
   /// Per kind, how many older items fit no newer item, and how many fit several or share theirs.
-  pub unpaired: BTreeMap<ItemKind, UnpairedCounts>,
+  pub unpaired: ByKind<UnpairedCounts>,
 }
 
 /// A YMAP of a unit, with the contents it was paired from.
@@ -621,8 +679,8 @@ fn build_unit(
     family: family.to_owned(),
     older: older.to_vec(),
     newer: newer.to_vec(),
-    pairs: BTreeMap::new(),
-    unpaired: BTreeMap::new(),
+    pairs: ByKind::default(),
+    unpaired: ByKind::default(),
   };
   let collect = |files: &[UnitFile], kind: ItemKind| {
     files

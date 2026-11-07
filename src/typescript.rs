@@ -125,6 +125,12 @@ mod tests {
     assert!(actual.contains("vanilla_cache: StoreChanges"));
     assert!(actual.contains("added: string[]"));
     assert!(!actual.contains(": bigint"));
+    assert!(actual.contains("pairs: Partial<Record<ItemKind, number[][]>>"));
+    // TypeScript rejects an index signature keyed by a union of string literals.
+    for (offset, _) in actual.match_indices("[key: ") {
+      let key = &actual[offset + "[key: ".len()..];
+      assert!(key.starts_with("string]") || key.starts_with("number]"), "{}", &key[..40]);
+    }
     fs::remove_file(path).unwrap();
   }
 
