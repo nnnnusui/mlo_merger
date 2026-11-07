@@ -89,7 +89,9 @@ when another process spawns it; `onLog` receives the same events while `run` is 
 The level is fixed at `info`; `RUST_LOG` does not apply. The executable's log file
 (`asset/log/`, with debug events) has no counterpart.
 
-`onLog` must not call `run`; doing so panics.
+`onLog` must not call `run`; doing so panics. When `onLog` throws, `run` stops and throws that
+same error, a panic's `WebAssembly.RuntimeError` included; the run is cut short midway, so treat
+the instance as after a panic.
 
 ## Panics
 

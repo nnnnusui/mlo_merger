@@ -22,15 +22,20 @@ thread_local! {
   static ON_LOG: RefCell<Option<js_sys::Function>> = const { RefCell::new(None) };
 }
 
+/// Hands one log line to `on_log`. When `on_log` throws, the run stops by throwing that error on:
+/// a panic inside it, such as one from calling [`run`] again, has already lost the instance, and
+/// carrying on with any other error would hide it.
 fn log(
   level: &str,
   message: &str,
 ) {
-  ON_LOG.with(|callback| {
-    if let Some(callback) = &*callback.borrow() {
-      let _ = callback.call2(&JsValue::NULL, &level.into(), &message.into());
-    }
+  let error = ON_LOG.with(|callback| {
+    let callback = callback.borrow();
+    callback.as_ref()?.call2(&JsValue::NULL, &level.into(), &message.into()).err()
   });
+  if let Some(error) = error {
+    wasm_bindgen::throw_val(error);
+  }
 }
 
 /// Runs one command line and returns exactly what the executable writes on standard output,
@@ -43,7 +48,8 @@ fn log(
 /// directory given to [`set_current_dir`]. A failure throws an `Error` with the message the
 /// executable prints on standard error before exiting with status 1.
 ///
-/// `run` must not be called again from `on_log`; that panics.
+/// `run` must not be called again from `on_log`; that panics. When `on_log` throws, `run` stops
+/// and throws the same error, and the instance must not be used again, as after a panic.
 #[wasm_bindgen]
 pub fn run(
   args: Vec<String>,
