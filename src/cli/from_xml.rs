@@ -27,7 +27,7 @@ pub fn parser() -> impl Parser<FromXml> {
 }
 
 /// Converts the selected XML files through the core conversion workflow.
-pub fn run(command: FromXml) -> Result<(), Box<dyn std::error::Error>> {
+pub fn run(command: FromXml) -> Result<String, Box<dyn std::error::Error>> {
   let (converted, failed) = crate::core::conversion::from_xml(
     &command.input,
     &command.common.output,
@@ -35,6 +35,5 @@ pub fn run(command: FromXml) -> Result<(), Box<dyn std::error::Error>> {
       .unwrap_or(false)
       .then_some(command.common.vanilla.as_path()),
   )?;
-  println!("Converted {converted} XML files to binary; {failed} failed.");
-  Ok(())
+  Ok(format!("Converted {converted} XML files to binary; {failed} failed.\n"))
 }

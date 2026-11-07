@@ -22,8 +22,8 @@ pub fn parser() -> impl Parser<GenerateVanillaCache> {
   })
 }
 
-/// Builds the derived vanilla cache from versioned raw vanilla files.
-pub fn run(command: GenerateVanillaCache) -> Result<(), Box<dyn std::error::Error>> {
+/// Builds the derived vanilla cache from versioned raw vanilla files; prints nothing.
+pub fn run(command: GenerateVanillaCache) -> Result<String, Box<dyn std::error::Error>> {
   let result = crate::core::vanilla_cache::BuildVanillaCache {
     vanilla_dir: command.common.vanilla,
     output_dir: command.common.output,
@@ -32,7 +32,7 @@ pub fn run(command: GenerateVanillaCache) -> Result<(), Box<dyn std::error::Erro
   }
   .run()?;
   tracing::info!("{}", result.summary());
-  Ok(())
+  Ok(String::new())
 }
 
 /// Builds the vanilla cache for `--gamebuild` (the last stage when absent) when its inputs

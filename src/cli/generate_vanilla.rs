@@ -39,12 +39,13 @@ pub fn magic_parser() -> impl Parser<PathBuf> {
 }
 
 /// Generates the raw vanilla archive through the core workflow.
-pub fn run(command: GenerateVanilla) -> Result<(), Box<dyn std::error::Error>> {
+pub fn run(command: GenerateVanilla) -> Result<String, Box<dyn std::error::Error>> {
   crate::core::vanilla::GenerateVanilla {
     game_dir: command.game_dir,
     output_dir: command.common.output,
     magic: command.magic,
     reuse_existing: false,
   }
-  .run()
+  .run()?;
+  Ok(String::new())
 }

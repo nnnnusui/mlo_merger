@@ -28,7 +28,7 @@ pub fn parser() -> impl Parser<Deploy> {
 }
 
 /// Deploys only files whose contents need copying.
-pub fn run(command: Deploy) -> Result<(), Box<dyn std::error::Error>> {
+pub fn run(command: Deploy) -> Result<String, Box<dyn std::error::Error>> {
   let summary = crate::core::deploy::Deploy {
     merged_dir: command.merged_dir,
     source_cache_dir: command.common.source_cache,
@@ -36,9 +36,8 @@ pub fn run(command: Deploy) -> Result<(), Box<dyn std::error::Error>> {
     force: command.common.force,
   }
   .run()?;
-  println!(
-    "Deployed {} files; {} unchanged; {} removed.",
+  Ok(format!(
+    "Deployed {} files; {} unchanged; {} removed.\n",
     summary.copied, summary.skipped, summary.removed
-  );
-  Ok(())
+  ))
 }

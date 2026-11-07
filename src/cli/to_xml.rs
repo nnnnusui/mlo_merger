@@ -26,9 +26,8 @@ pub fn parser() -> impl Parser<ToXml> {
 }
 
 /// Converts the selected native files through the core conversion workflow.
-pub fn run(command: ToXml) -> Result<(), Box<dyn std::error::Error>> {
+pub fn run(command: ToXml) -> Result<String, Box<dyn std::error::Error>> {
   let (converted, failed) =
     crate::core::conversion::to_xml(&command.input, &command.common.output)?;
-  println!("Converted {converted} files to XML; {failed} failed.");
-  Ok(())
+  Ok(format!("Converted {converted} files to XML; {failed} failed.\n"))
 }

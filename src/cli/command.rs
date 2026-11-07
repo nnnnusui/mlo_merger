@@ -94,44 +94,62 @@ pub fn parse_args_from(args: &[&str]) -> Result<Command, String> {
   })
 }
 
-/// Runs `--pipeline`, `--read` or `--restore-source-cache` and returns exactly what the
-/// executable writes on standard output for it: one line, newline included.
+/// What an operation writes on standard output, and whether it then fails.
 ///
-/// The executable and the browser build both print through this, so their output is the same.
-/// Other operations are an error.
-pub fn stdout(command: Command) -> Result<String, Box<dyn std::error::Error>> {
-  let line = match command {
-    Command::Pipeline(command) => pipeline::report(command)?,
-    Command::Read(command) => read::report(command)?,
-    Command::RestoreSourceCache(command) => restore_source_cache::report(command)?,
-    _ => {
-      return Err("Only --pipeline, --read and --restore-source-cache return their output".into());
-    }
-  };
-  Ok(format!("{line}\n"))
+/// An operation can fail after printing, as `--check` prints its issues and then fails.
+pub struct Output {
+  /// Exactly the bytes written on standard output, newlines included; empty for an operation
+  /// that prints nothing.
+  pub stdout: String,
+  /// The error the executable prints on standard error before exiting with status 1.
+  pub result: Result<(), Box<dyn std::error::Error>>,
 }
 
-/// Dispatches an operation to its implementation or placeholder.
-pub fn run(command: Command) -> Result<(), Box<dyn std::error::Error>> {
-  match command {
-    command @ (Command::Pipeline(_) | Command::Read(_) | Command::RestoreSourceCache(_)) => {
-      use std::io::Write;
-      let mut out = std::io::stdout().lock();
-      out.write_all(stdout(command)?.as_bytes())?;
-      out.flush()?;
+impl From<Result<String, Box<dyn std::error::Error>>> for Output {
+  /// The output of an operation that prints only when it succeeds.
+  fn from(result: Result<String, Box<dyn std::error::Error>>) -> Self {
+    match result {
+      Ok(stdout) => Self {
+        stdout,
+        result: Ok(()),
+      },
+      Err(error) => Self {
+        stdout: String::new(),
+        result: Err(error),
+      },
     }
-    Command::GenerateVanilla(command) => generate_vanilla::run(command)?,
-    Command::GenerateVanillaCache(command) => generate_vanilla_cache::run(command)?,
-    Command::GenerateSourceCache(command) => generate_source_cache::run(command)?,
-    Command::Merge(command) => merge::run(command)?,
-    Command::Deploy(command) => deploy::run(command)?,
-    Command::ToXml(command) => to_xml::run(command)?,
-    Command::FromXml(command) => from_xml::run(command)?,
-    Command::Find(command) => find::run(command)?,
-    Command::Check(command) => check::run(command)?,
-    Command::GetDiff(command) => get_diff::run(command)?,
   }
-  Ok(())
+}
+
+/// Runs an operation and returns what the executable writes on standard output for it.
+///
+/// The executable and the browser build both print through this, so their output is the same.
+pub fn stdout(command: Command) -> Output {
+  match command {
+    Command::Pipeline(command) => pipeline::run(command).into(),
+    Command::GenerateVanilla(command) => generate_vanilla::run(command).into(),
+    Command::GenerateVanillaCache(command) => generate_vanilla_cache::run(command).into(),
+    Command::GenerateSourceCache(command) => generate_source_cache::run(command).into(),
+    Command::RestoreSourceCache(command) => restore_source_cache::run(command).into(),
+    Command::Merge(command) => merge::run(command).into(),
+    Command::Deploy(command) => deploy::run(command).into(),
+    Command::ToXml(command) => to_xml::run(command).into(),
+    Command::FromXml(command) => from_xml::run(command).into(),
+    Command::Find(command) => find::run(command).into(),
+    Command::Check(command) => check::run(command),
+    Command::GetDiff(command) => get_diff::run(command).into(),
+    Command::Read(command) => read::run(command).into(),
+  }
+}
+
+/// Runs an operation, writes its [`stdout`] and returns its result.
+pub fn run(command: Command) -> Result<(), Box<dyn std::error::Error>> {
+  use std::io::Write;
+  let output = stdout(command);
+  let mut out = std::io::stdout().lock();
+  out.write_all(output.stdout.as_bytes())?;
+  out.flush()?;
+  output.result
 }
 
 #[cfg(test)]

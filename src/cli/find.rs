@@ -1,6 +1,6 @@
 use crate::core::find::{EntityQuery, InputStores};
 use bpaf::*;
-use std::{io::Write, path::PathBuf};
+use std::path::PathBuf;
 
 /// Arguments for a read-only search of merged native files and optional source inputs.
 #[derive(Debug, Clone)]
@@ -160,7 +160,7 @@ fn search_parser() -> impl Parser<Find> {
 }
 
 /// Writes only the search result XML to standard output.
-pub fn run(command: Find) -> Result<(), Box<dyn std::error::Error>> {
+pub fn run(command: Find) -> Result<String, Box<dyn std::error::Error>> {
   let xml = crate::core::find::FindEntity {
     query: command.query,
     merged_dir: command.merged_dir,
@@ -169,9 +169,5 @@ pub fn run(command: Find) -> Result<(), Box<dyn std::error::Error>> {
     diff_all: command.diff_all,
   }
   .run()?;
-  let mut stdout = std::io::stdout().lock();
-  stdout.write_all(xml.as_bytes())?;
-  stdout.write_all(b"\n")?;
-  stdout.flush()?;
-  Ok(())
+  Ok(format!("{xml}\n"))
 }

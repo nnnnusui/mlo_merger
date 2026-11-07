@@ -31,26 +31,22 @@ pub fn parser() -> impl Parser<GetDiff> {
 }
 
 /// Prints a mock invocation without comparing files.
-pub fn run_mock(command: GetDiff) {
-  println!(
-    "mock: --get-diff {:?} {:?} options={:?}",
+pub fn run_mock(command: GetDiff) -> String {
+  format!(
+    "mock: --get-diff {:?} {:?} options={:?}\n",
     command.before, command.after, command.common
-  );
+  )
 }
 
 /// Generates a vanilla-relative diff for a single YMAP input.
-pub fn run(command: GetDiff) -> Result<(), Box<dyn std::error::Error>> {
+pub fn run(command: GetDiff) -> Result<String, Box<dyn std::error::Error>> {
   if command.after.is_some() {
-    run_mock(command);
-    return Ok(());
+    return Ok(run_mock(command));
   }
   let output = crate::core::get_diff::generate_ymap_diff(
     &command.before,
     &command.common.vanilla_cache,
     &command.common.output,
   )?;
-  for path in output {
-    println!("Wrote YMAP diff to {}", path.display());
-  }
-  Ok(())
+  Ok(output.iter().map(|path| format!("Wrote YMAP diff to {}\n", path.display())).collect())
 }

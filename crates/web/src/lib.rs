@@ -74,7 +74,8 @@ fn execute(args: &[String]) -> Result<String, String> {
       );
     }
   };
-  cli::command::stdout(command).map_err(|error| {
+  let output = cli::command::stdout(command);
+  output.result.map(|()| output.stdout).map_err(|error| {
     tracing::error!("{error}");
     error.to_string()
   })

@@ -53,11 +53,17 @@ pub fn parser() -> impl Parser<Check> {
 }
 
 /// Prints the issues as one line of JSON and fails when there are any.
-pub fn run(command: Check) -> Result<(), Box<dyn std::error::Error>> {
-  let report = command.run()?;
-  println!("{}", serde_json::to_string(&report)?);
-  match report.issues.len() {
-    0 => Ok(()),
-    count => Err(format!("{count} inconsistencies found").into()),
+pub fn run(command: Check) -> super::command::Output {
+  let report = command.run().and_then(|report| {
+    let line = serde_json::to_string(&report)?;
+    Ok((format!("{line}\n"), report.issues.len()))
+  });
+  match report {
+    Err(error) => Err(error).into(),
+    Ok((stdout, 0)) => Ok(stdout).into(),
+    Ok((stdout, count)) => super::command::Output {
+      stdout,
+      result: Err(format!("{count} inconsistencies found").into()),
+    },
   }
 }
