@@ -13,11 +13,13 @@ use crate::core::format::ymap::{binary::ymap_to_model, model::ymap::Ymap};
 use crate::core::source_cache::{InventoriedFile, inventoried_files};
 use crate::core::vanilla::load_manifest;
 use crate::platform::fs;
+use crate::platform::progress::{ProgressBar, ProgressStyle};
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::io::{BufWriter, Write};
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 /// Which stream files to read.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -237,9 +239,11 @@ impl Read {
     tracing::info!("Reading {} stream files", selected.len());
 
     // Each file's document header and fingerprint are read independently.
+    let progress = FileProgress::new(selected.len(), "Checked")?;
     let checked = selected
       .into_par_iter()
       .map(|selected| {
+        let _tick = progress.tick();
         let previous = self.header(&selected.output);
         let source = ReadFingerprint::read(
           &selected.input,
@@ -249,7 +253,9 @@ impl Read {
         .map_err(|error| error.to_string())?;
         Ok((selected, previous, source))
       })
-      .collect::<std::result::Result<Vec<_>, String>>()?;
+      .collect::<std::result::Result<Vec<_>, String>>();
+    progress.finish();
+    let checked = checked?;
 
     // Every document records the same `hash_names.json`; any previous document's record spares
     // hashing it again when it is unchanged.
@@ -281,9 +287,11 @@ impl Read {
 
     // Stale documents are converted and written independently; results keep the selection's
     // order.
+    let progress = FileProgress::new(checked.len(), "Wrote")?;
     let files = checked
       .into_par_iter()
       .map(|(selected, previous, source)| {
+        let _tick = progress.tick();
         let updated = stale(&previous, &source);
         if updated {
           let bytes = fs::read(&selected.input)
@@ -308,7 +316,9 @@ impl Read {
           updated,
         })
       })
-      .collect::<std::result::Result<Vec<_>, String>>()?;
+      .collect::<std::result::Result<Vec<_>, String>>();
+    progress.finish();
+    let files = files?;
     let written = files.iter().filter(|file| file.updated).count();
     tracing::info!("Read {} stream files; wrote {written} JSON", files.len());
     Ok(ReadResult {
@@ -504,6 +514,68 @@ fn supported(file_name: &str) -> Result<()> {
     Err(
       format!("--read supports {} files, not {file_name}", SUPPORTED_EXTENSIONS.join(", ")).into(),
     )
+  }
+}
+
+/// A progress bar over the files of one stage of [`Read::run`], drawn on a terminal and logged
+/// every thousand files elsewhere.
+struct FileProgress {
+  bar: ProgressBar,
+  total: usize,
+  /// What the log says of the files counted, such as `Checked`.
+  verb: &'static str,
+  log: bool,
+}
+
+impl FileProgress {
+  fn new(
+    total: usize,
+    verb: &'static str,
+  ) -> Result<Self> {
+    #[cfg(test)]
+    let (bar, log) = (ProgressBar::hidden(), false);
+    #[cfg(not(test))]
+    let (bar, log) = (
+      ProgressBar::with_draw_target(
+        Some(total as u64),
+        crate::platform::progress::ProgressDrawTarget::stderr(),
+      ),
+      !std::io::IsTerminal::is_terminal(&std::io::stderr()),
+    );
+    bar.set_style(
+      ProgressStyle::with_template(
+        "{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} {msg}",
+      )?
+      .progress_chars("##-"),
+    );
+    bar.set_message(format!("{verb} stream files"));
+    bar.enable_steady_tick(Duration::from_millis(100));
+    Ok(Self {
+      bar,
+      total,
+      verb,
+      log,
+    })
+  }
+
+  /// Counts one file when the returned guard drops, whether its work succeeded or not.
+  fn tick(&self) -> impl Drop + '_ {
+    struct Tick<'a>(&'a FileProgress);
+    impl Drop for Tick<'_> {
+      fn drop(&mut self) {
+        let progress = self.0;
+        progress.bar.inc(1);
+        let position = progress.bar.position();
+        if progress.log && position.is_multiple_of(1000) {
+          tracing::info!("{} {position}/{} stream files", progress.verb, progress.total);
+        }
+      }
+    }
+    Tick(self)
+  }
+
+  fn finish(&self) {
+    self.bar.finish_and_clear();
   }
 }
 
