@@ -4,7 +4,7 @@ use bpaf::*;
 
 use crate::core::read::{Read, ReadTarget};
 
-/// Parses `--read [--resource NAME | --vanilla [VERSION]] [FILE...]`.
+/// Parses `--read [--resource NAME | --vanilla [VERSION] | --all] [FILE...]`.
 ///
 /// `--vanilla` takes an optional version, so `--vanilla map.ymap` reads `map.ymap` of the
 /// latest version: a value naming a file is taken as the first file.
@@ -22,9 +22,12 @@ pub fn parser() -> impl Parser<Read> {
     .map(|version| Some(Some(version)));
   let vanilla_latest = long("vanilla").req_flag(Some(None));
   let vanilla = construct!([vanilla_version, vanilla_latest]);
+  let all = long("all")
+    .help("Read every resource and the latest vanilla version")
+    .req_flag(Some(ReadTarget::All));
   let resource = resource.map(|resource| resource.map(ReadTarget::Resource));
   let vanilla = vanilla.map(|version| version.map(ReadTarget::Vanilla));
-  let target = construct!([resource, vanilla]).fallback(None);
+  let target = construct!([resource, vanilla, all]).fallback(None);
   let files = positional::<String>("FILE").many();
   let source_dir = long("source")
     .help("Source resource directory, for resource files not moved into the source cache (default: asset/source)")
@@ -126,5 +129,11 @@ mod tests {
     assert_eq!(read.files, ["a.ymap", "b.ymap"]);
 
     assert!(parser().to_options().run_inner(&["--read", "--resource", "a", "--vanilla"]).is_err());
+
+    let read = parse(&["--read", "--all", "-f"]);
+    assert_eq!(read.target, ReadTarget::All);
+    assert!(read.files.is_empty());
+    assert!(read.force);
+    assert!(parser().to_options().run_inner(&["--read", "--all", "--vanilla"]).is_err());
   }
 }

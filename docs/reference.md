@@ -348,6 +348,7 @@ mlo_merger --read --vanilla apa_ch2_occl_05.ymap
 mlo_merger --read --vanilla mpheist hei_ch1_11.ymap
 mlo_merger --read apa_ch2_occl_05.ymap
 mlo_merger --read apa_ch2_occl_05.ymap hei_ch1_11.ymap
+mlo_merger --read --all
 ```
 
 `--read` writes each YMAP's model as minified JSON (`YmapReadDocument`), with the path
@@ -366,8 +367,11 @@ describing its file is not written again; `-f` writes it anyway.
   Without a file it reads all of the version's YMAPs.
 - Files alone are read from every resource holding them and from the latest vanilla. If
   any resource holds several files of one name, nothing is written.
+- `--all` reads every YMAP of every resource and of the latest vanilla version; it takes
+  no file names.
 - Several files are read together in the order given; a file named twice is read once.
   If any name matches no file, nothing is written.
+- Files are read and written in parallel; the result keeps the order above.
 
 The source cache and vanilla archive default to `asset/source-cache` and `asset/vanilla`
 (`--source-cache`, `--vanilla-dir`), and resource files not moved into the source cache are

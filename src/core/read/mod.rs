@@ -13,8 +13,9 @@ use crate::core::format::ymap::{binary::ymap_to_model, model::ymap::Ymap};
 use crate::core::source_cache::{InventoriedFile, inventoried_files};
 use crate::core::vanilla::load_manifest;
 use crate::platform::fs;
+use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::io::{BufWriter, Write};
 use std::path::{Path, PathBuf};
 
@@ -27,6 +28,8 @@ pub enum ReadTarget {
   Vanilla(Option<String>),
   /// The named files in every resource and in the latest vanilla version.
   Everywhere,
+  /// Every supported file of every resource and of the latest vanilla version.
+  All,
 }
 
 /// Writes the JSON of stream file models.
@@ -34,7 +37,7 @@ pub enum ReadTarget {
 pub struct Read {
   pub target: ReadTarget,
   /// File names, or resources' stream paths, to read; none reads every supported file of the
-  /// target. Required for [`ReadTarget::Everywhere`].
+  /// target. Required for [`ReadTarget::Everywhere`] and rejected for [`ReadTarget::All`].
   pub files: Vec<String>,
   /// Source root holding the resources' files that were not moved into the source cache.
   pub source_dir: PathBuf,
@@ -200,9 +203,15 @@ impl Read {
     let mut selected = match &self.target {
       ReadTarget::Resource(resource) => self.resource_files(Some(resource), &mut matched)?,
       ReadTarget::Vanilla(version) => self.vanilla_files(version.as_deref(), &mut matched)?,
-      ReadTarget::Everywhere => {
-        if self.files.is_empty() {
-          return Err("--read without --resource or --vanilla needs a file name".into());
+      ReadTarget::Everywhere | ReadTarget::All => {
+        match (&self.target, self.files.is_empty()) {
+          (ReadTarget::Everywhere, true) => {
+            return Err("--read without --resource, --vanilla or --all needs a file name".into());
+          }
+          (ReadTarget::All, false) => {
+            return Err("--read --all reads every file; leave out the file names".into());
+          }
+          _ => {}
         }
         let mut files = self.resource_files(None, &mut matched)?;
         files.extend(self.vanilla_files(None, &mut matched)?);
@@ -223,64 +232,85 @@ impl Read {
       return Err("The target has no supported stream file".into());
     }
     // A file named twice, by its name and by its stream path, is read once.
-    let mut outputs = std::collections::HashSet::new();
+    let mut outputs = HashSet::new();
     selected.retain(|selected| outputs.insert(selected.output.clone()));
+    tracing::info!("Reading {} stream files", selected.len());
+
+    // Each file's document header and fingerprint are read independently.
+    let checked = selected
+      .into_par_iter()
+      .map(|selected| {
+        let previous = self.header(&selected.output);
+        let source = ReadFingerprint::read(
+          &selected.input,
+          &selected.stored,
+          previous.as_ref().map(|it| &it.source),
+        )
+        .map_err(|error| error.to_string())?;
+        Ok((selected, previous, source))
+      })
+      .collect::<std::result::Result<Vec<_>, String>>()?;
+
+    // Every document records the same `hash_names.json`; any previous document's record spares
+    // hashing it again when it is unchanged.
     let names_path = self.vanilla_dir.join("hash_names.json");
-    let mut names: Option<HashMap<u32, String>> = None;
-    let mut files = Vec::with_capacity(selected.len());
-    for selected in selected {
-      let previous = self.header(&selected.output);
-      let source = ReadFingerprint::read(
-        &selected.input,
-        &selected.stored,
-        previous.as_ref().map(|it| &it.source),
-      )?;
-      let hash_names = fs::is_file(&names_path)
-        .then(|| {
-          ReadFingerprint::read(
-            &names_path,
-            "hash_names.json",
-            previous.as_ref().and_then(|it| it.hash_names.as_ref()),
-          )
+    let hash_names = fs::is_file(&names_path)
+      .then(|| {
+        let previous =
+          checked.iter().find_map(|(_, previous, _)| previous.as_ref()?.hash_names.as_ref());
+        ReadFingerprint::read(&names_path, "hash_names.json", previous)
+      })
+      .transpose()?;
+    let stale = |previous: &Option<Header>, source: &ReadFingerprint| {
+      self.force
+        || !previous.as_ref().is_some_and(|previous| {
+          previous.schema_version == YmapReadDocument::SCHEMA_VERSION
+            && previous.source.same_content(source)
+            && match (&previous.hash_names, &hash_names) {
+              (Some(previous), Some(current)) => previous.same_content(current),
+              (None, None) => true,
+              _ => false,
+            }
         })
-        .transpose()?;
-      let current = previous.as_ref().is_some_and(|previous| {
-        previous.schema_version == YmapReadDocument::SCHEMA_VERSION
-          && previous.source.same_content(&source)
-          && match (&previous.hash_names, &hash_names) {
-            (Some(previous), Some(current)) => previous.same_content(current),
-            (None, None) => true,
-            _ => false,
-          }
-      });
-      if !self.force && current {
-        files.push(ReadFileResult {
+    };
+    let names = if checked.iter().any(|(_, previous, source)| stale(previous, source)) {
+      load_hash_names_or_empty(&names_path)
+    } else {
+      HashMap::new()
+    };
+
+    // Stale documents are converted and written independently; results keep the selection's
+    // order.
+    let files = checked
+      .into_par_iter()
+      .map(|(selected, previous, source)| {
+        let updated = stale(&previous, &source);
+        if updated {
+          let bytes = fs::read(&selected.input)
+            .map_err(|error| format!("Cannot open {}: {error}", selected.input.display()))?;
+          let model = ymap_to_model(&bytes, &names)
+            .map_err(|error| format!("Cannot read {}: {error}", selected.input.display()))?;
+          write_minified(
+            &selected.output,
+            &YmapReadDocument {
+              schema_version: YmapReadDocument::SCHEMA_VERSION,
+              source,
+              hash_names: hash_names.clone(),
+              model,
+            },
+          )
+          .map_err(|error| error.to_string())?;
+        }
+        Ok(ReadFileResult {
           origin: selected.origin,
           input: selected.input,
           output: selected.output,
-          updated: false,
-        });
-        continue;
-      }
-      let names = names.get_or_insert_with(|| load_hash_names_or_empty(&names_path));
-      let model = ymap_to_model(&fs::read(&selected.input)?, names)
-        .map_err(|error| format!("Cannot read {}: {error}", selected.input.display()))?;
-      write_minified(
-        &selected.output,
-        &YmapReadDocument {
-          schema_version: YmapReadDocument::SCHEMA_VERSION,
-          source,
-          hash_names,
-          model,
-        },
-      )?;
-      files.push(ReadFileResult {
-        origin: selected.origin,
-        input: selected.input,
-        output: selected.output,
-        updated: true,
-      });
-    }
+          updated,
+        })
+      })
+      .collect::<std::result::Result<Vec<_>, String>>()?;
+    let written = files.iter().filter(|file| file.updated).count();
+    tracing::info!("Read {} stream files; wrote {written} JSON", files.len());
     Ok(ReadResult {
       files,
     })

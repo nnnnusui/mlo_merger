@@ -232,6 +232,30 @@ fn a_file_alone_is_read_from_every_resource_and_the_latest_vanilla() {
 }
 
 #[test]
+fn all_reads_every_resource_and_the_latest_vanilla_once() {
+  let fixture = Fixture::new("all");
+  let result = fixture.read(ReadTarget::All, &[]).unwrap();
+  let mut outputs = Fixture::outputs(&result);
+  outputs.sort();
+  assert_eq!(
+    outputs,
+    [
+      "resources/alpha/a/parent.ymap.json",
+      "resources/alpha/b/parent.ymap.json",
+      "resources/alpha/child.ymap.json",
+      "resources/beta/parent.ymap.json",
+      "vanilla/0001-update/ymap/child.ymap.json",
+      "vanilla/0001-update/ymap/parent.ymap.json",
+    ]
+  );
+  assert!(result.files.iter().all(|file| file.updated));
+  let again = fixture.read(ReadTarget::All, &[]).unwrap();
+  assert_eq!(Fixture::outputs(&again), Fixture::outputs(&result));
+  assert!(again.files.iter().all(|file| !file.updated));
+  assert!(fixture.read(ReadTarget::All, &["child.ymap"]).is_err());
+}
+
+#[test]
 fn several_files_are_read_together_and_each_must_match() {
   let fixture = Fixture::new("several");
   let result = fixture
