@@ -24,6 +24,7 @@
     <section class="controls">
       <div class="presets">
         <button data-args="--pipeline" data-i18n="pipeline" disabled>Run pipeline</button>
+        <button data-args="--pipeline --gamebuild 100" data-i18n="pipelineBuild" disabled>Run pipeline for build 100</button>
         <button data-args="--pipeline --force" data-i18n="pipelineForce" disabled>Run pipeline again with --force</button>
         <button data-args="--read --all" data-i18n="read" disabled>Read every YMAP as JSON (--read --all)</button>
         <button id="reset" class="secondary" data-i18n="reset" disabled>Reset files</button>
@@ -66,7 +67,7 @@
     </main>
 
     <footer data-i18n="footer">
-      Sample resources come from the repository's docs/sample. Nothing is uploaded; the files live in memory and vanish on reload.
+      The sample's vanilla files and resources are invented for this page (see web/sample in the repository). Nothing is uploaded; the files live in memory and vanish on reload.
     </footer>
   </body>
 </html>

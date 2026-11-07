@@ -1,0 +1,6 @@
+# The web sample's configuration. Its game builds are invented: build 100 first includes the
+# smpl_winter DLC and build 200 smpl_summer; build 1 stops at the title update.
+[gamebuild]
+1 = []
+100 = ["smpl_winter"]
+200 = ["smpl_summer"]

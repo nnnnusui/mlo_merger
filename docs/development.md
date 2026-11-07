@@ -58,7 +58,7 @@ round-trip tests compare conversion with CodeWalker hosted in-process, which nee
 
 ## Browser Build
 
-`web/` is a static page that runs `--pipeline` and `--read` on the `docs/sample` resources in
+`web/` is a static page that runs `--pipeline` and `--read` on the `web/sample` workspace in
 the browser and draws the files each run adds, modifies and removes. `crates/web` builds the
 merger for `wasm32-unknown-unknown` against an in-memory filesystem; the GUI, log files and
 downloads stay native-only.
@@ -72,10 +72,17 @@ python3 -m http.server -d web/dist
 
 `scripts/build_web.sh` assembles `web/dist` from the page, the WebAssembly module and the
 samples; publish that directory as it is. The page runs the merger in `web/worker.js`, which
-seeds `/work` with `web/vfs.js`'s `addFile`, calls `run(args, onLog)`, and sends back
-`snapshot()` and each write reported by `onChange`. The vanilla data is `docs/sample/sample.ymap`
-published as version `0000-base` with a generated `cache_info.json`, so the pipeline reuses it
-instead of reading the game.
+seeds `/work` with the files `web/sample/files.json` lists through `web/vfs.js`'s `addFile`,
+calls `run(args, onLog)`, and sends back `snapshot()` and each write reported by `onChange`.
+
+`web/sample` is an original vanilla archive and source resources, with every kind of YMAP item,
+LOD parents, DLC generations, game-build stages and collisions; see its `README.md`. The test
+module `src/core/web_sample` builds it and runs the pipeline on it; after changing either,
+regenerate the files:
+
+```bash
+MLO_WRITE_SAMPLES=1 cargo test --lib web_sample
+```
 
 Library code reaches the operating system only through `crate::platform` (`src/platform`),
 whose modules use `std`, `walkdir` and `indicatif` natively and the page in the browser. That

@@ -15,3 +15,5 @@ pub mod source_cache;
 pub mod stream_conflicts;
 pub mod vanilla;
 pub mod vanilla_cache;
+#[cfg(test)]
+mod web_sample;

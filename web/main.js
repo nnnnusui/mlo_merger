@@ -10,6 +10,7 @@ const TEXT = {
   en: {
     lead: "Runs the real merger on sample resources, entirely in your browser, and shows the files it writes.",
     pipeline: "Run pipeline",
+    pipelineBuild: "Run pipeline for build 100",
     pipelineForce: "Run pipeline again with --force",
     read: "Read every YMAP as JSON (--read --all)",
     reset: "Reset files",
@@ -25,8 +26,9 @@ const TEXT = {
     file: "File",
     pickFile: "Select a file in the tree.",
     footer:
-      "Sample resources come from the repository's docs/sample. Nothing is uploaded; the files live in memory and vanish on reload.",
-    ready: "Ready. The workspace holds two sample resources and a vanilla YMAP.",
+      "The sample's vanilla files and resources are invented for this page (see web/sample in the repository). Nothing is uploaded; the files live in memory and vanish on reload.",
+    ready:
+      "Ready. The workspace holds three sample resources and a five-stage vanilla archive; the sample's build 100 stops before its last stage.",
     running: (writes) => `Running… ${writes} writes`,
     done: (ms, writes, counts) =>
       `Finished in ${ms} ms: ${writes} writes, ${counts.added} added, ${counts.modified} modified, ${counts.removed} removed.`,
@@ -40,6 +42,7 @@ const TEXT = {
   ja: {
     lead: "サンプルのリソースに本物のマージ処理をブラウザ内だけで実行し、書き出されるファイルを表示します。",
     pipeline: "パイプラインを実行",
+    pipelineBuild: "ビルド 100 向けに実行",
     pipelineForce: "--force でもう一度実行",
     read: "全 YMAP を JSON で読む (--read --all)",
     reset: "ファイルを初期状態に戻す",
@@ -55,8 +58,9 @@ const TEXT = {
     file: "ファイル",
     pickFile: "ツリーからファイルを選んでください。",
     footer:
-      "サンプルのリソースはリポジトリの docs/sample のものです。アップロードは行わず、ファイルはメモリ上にだけあり、再読み込みで消えます。",
-    ready: "準備完了。ワークスペースにはサンプルのリソース 2 つと vanilla の YMAP があります。",
+      "サンプルの vanilla ファイルとリソースは、このページのために作った架空のものです（リポジトリの web/sample）。アップロードは行わず、ファイルはメモリ上にだけあり、再読み込みで消えます。",
+    ready:
+      "準備完了。ワークスペースにはサンプルのリソース 3 つと、5 ステージの vanilla があります。サンプルのビルド 100 は最後のステージの手前までです。",
     running: (writes) => `実行中… ${writes} 回の書き込み`,
     done: (ms, writes, counts) =>
       `${ms} ms で完了: 書き込み ${writes} 回、追加 ${counts.added}、変更 ${counts.modified}、削除 ${counts.removed}。`,
