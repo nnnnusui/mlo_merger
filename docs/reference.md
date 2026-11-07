@@ -355,7 +355,9 @@ mlo_merger --read --all
 and fingerprint of the file it was read from and of the `hash_names.json` that named its
 hashes. A resource's file is written to
 `asset/read-cache/resources/{resourceName}/{stream-relative-path}.json` and a vanilla
-file to `asset/read-cache/vanilla/{version}/ymap/{fileName}.json`. A JSON still
+file to `asset/read-cache/vanilla/{version}/ymap/{fileName}.json`, where `{version}` is the
+version folder holding the file in the vanilla archive: the last version, up to the one
+read, that changed it. Versions holding the same file share its document. A JSON still
 describing its file is not written again; `-f` writes it anyway.
 
 - `--resource NAME [FILE...]` reads one resource, by name or source-relative ID, from the

@@ -199,20 +199,24 @@ fn a_resource_reads_every_ymap_and_rejects_ambiguous_names() {
 #[test]
 fn vanilla_files_are_read_from_the_named_or_latest_version() {
   let fixture = Fixture::new("vanilla");
+  // Each file is written after the version folder holding it, not the version read.
   let latest = fixture.read(ReadTarget::Vanilla(None), &[]).unwrap();
   assert_eq!(
     Fixture::outputs(&latest),
-    ["vanilla/0001-update/ymap/child.ymap.json", "vanilla/0001-update/ymap/parent.ymap.json"]
+    ["vanilla/0001-update/ymap/child.ymap.json", "vanilla/0000-base/ymap/parent.ymap.json"]
   );
-  let base = fixture.read(ReadTarget::Vanilla(Some("base".into())), &["parent.ymap"]).unwrap();
-  assert_eq!(Fixture::outputs(&base), ["vanilla/0000-base/ymap/parent.ymap.json"]);
   assert_eq!(
-    base.files[0].origin,
+    latest.files[1].origin,
     ReadOrigin::Vanilla {
       version: "0000-base".into(),
       file_name: "parent.ymap".into(),
     }
   );
+  // The base version holds the same parent.ymap, so its document is already current.
+  let base = fixture.read(ReadTarget::Vanilla(Some("base".into())), &["parent.ymap"]).unwrap();
+  assert_eq!(Fixture::outputs(&base), ["vanilla/0000-base/ymap/parent.ymap.json"]);
+  assert_eq!(base.files[0].origin, latest.files[1].origin);
+  assert!(!base.files[0].updated);
   assert!(fixture.read(ReadTarget::Vanilla(Some("base".into())), &["child.ymap"]).is_err());
   assert!(fixture.read(ReadTarget::Vanilla(Some("9999".into())), &[]).is_err());
 }
@@ -244,8 +248,8 @@ fn all_reads_every_resource_and_the_latest_vanilla_once() {
       "resources/alpha/b/parent.ymap.json",
       "resources/alpha/child.ymap.json",
       "resources/beta/parent.ymap.json",
+      "vanilla/0000-base/ymap/parent.ymap.json",
       "vanilla/0001-update/ymap/child.ymap.json",
-      "vanilla/0001-update/ymap/parent.ymap.json",
     ]
   );
   assert!(result.files.iter().all(|file| file.updated));

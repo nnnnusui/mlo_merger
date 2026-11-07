@@ -1,8 +1,9 @@
 //! Writes stream file models as JSON for tools outside the merge, such as overwrite editors.
 //!
 //! A resource's file is written to `resources/{resource name}/{stream path}.json` and a vanilla
-//! version's to `vanilla/{version}/{file type}/{file name}.json`, each recording the file it was
-//! read from; a JSON still describing its file is not written again.
+//! file to `vanilla/{version}/{file type}/{file name}.json` after the version folder it is stored
+//! in, each recording the file it was read from; a JSON still describing its file is not written
+//! again.
 
 #[cfg(test)]
 mod tests;
@@ -84,6 +85,8 @@ pub enum ReadOrigin {
     stream_path: String,
   },
   Vanilla {
+    /// The version whose folder holds the file: the last one, up to the version read, that
+    /// changed it.
     version: String,
     file_name: String,
   },
@@ -438,20 +441,19 @@ impl Read {
       if !wanted {
         continue;
       }
-      let extension = extension(&file_name).to_ascii_lowercase();
+      // The file lives in the folder of the version that last changed it, such as
+      // `0000-base/ymap/{file name}`; its document mirrors that path, so every version holding
+      // the same file shares one document.
+      let stored = file.object.replace('\\', "/");
+      let holder = stored.split_once('/').map_or(version.as_str(), |(holder, _)| holder);
       selected.push(Selected {
-        output: self
-          .output_dir
-          .join("vanilla")
-          .join(&version)
-          .join(&extension)
-          .join(format!("{file_name}.json")),
+        output: self.output_dir.join("vanilla").join(format!("{stored}.json")),
         input: self.vanilla_dir.join(&file.object),
-        stored: file.object.replace('\\', "/"),
         origin: ReadOrigin::Vanilla {
-          version: version.clone(),
+          version: holder.to_string(),
           file_name,
         },
+        stored,
       });
     }
     Ok(selected)

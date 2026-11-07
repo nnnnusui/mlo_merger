@@ -190,9 +190,9 @@ latest vanilla version. The last stdout line is a `ReadResult`:
   {"origin":{"Resource":{"resource":"sample_resource_a","stream_path":"hei_ch1_11.ymap"}},
    "input":"asset/source-cache/resources/sample_resource_a/hei_ch1_11.ymap",
    "output":"asset/read-cache/resources/sample_resource_a/hei_ch1_11.ymap.json","updated":true},
-  {"origin":{"Vanilla":{"version":"0099-mpsum2","file_name":"hei_ch1_11.ymap"}},
-   "input":"asset/vanilla/...",
-   "output":"asset/read-cache/vanilla/0099-mpsum2/ymap/hei_ch1_11.ymap.json","updated":false}
+  {"origin":{"Vanilla":{"version":"0012-mpheist","file_name":"hei_ch1_11.ymap"}},
+   "input":"asset/vanilla/0012-mpheist/ymap/hei_ch1_11.ymap",
+   "output":"asset/read-cache/vanilla/0012-mpheist/ymap/hei_ch1_11.ymap.json","updated":false}
 ]}
 ```
 
@@ -201,11 +201,16 @@ latest vanilla version. The last stdout line is a `ReadResult`:
   It is still valid to read.
 - For `origin.Resource`, `resource` (the resource directory name) and `stream_path`
   (the path below `stream/`) also key the diff document and the overwrite.
+- For `origin.Vanilla`, `version` is the version folder holding the file: the last version,
+  up to the latest, that changed it, not necessarily the latest itself. Its document sits
+  under that folder in `asset/read-cache/vanilla`.
 - If a resource holds several files with that name, the command fails and writes nothing.
   Read them individually with `--resource NAME stream/relative/path.ymap`.
 - Several names are read in one run, in the order given. If any name matches no file or is
   ambiguous, the whole command fails and writes nothing, so read names one at a time when
   some may be missing.
+- `--read --all` reads every YMAP of every resource and of the latest vanilla version, for
+  tools that want all documents up front.
 
 ### Diff Documents
 
