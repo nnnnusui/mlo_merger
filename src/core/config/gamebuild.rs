@@ -8,7 +8,9 @@ type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 /// The `[gamebuild]` table: FiveM build numbers in ascending order, each with the DLC names
 /// that identify it. A build without names adds no DLC to the build before it.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct GameBuilds(Vec<(u32, Vec<String>)>);
+pub struct GameBuilds {
+  builds: Vec<(u32, Vec<String>)>,
+}
 
 /// A requested game build, resolved against the table that places it among vanilla stages.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -40,8 +42,9 @@ impl GameBuilds {
   /// Parses `[gamebuild]` from TOML configuration text.
   pub fn parse(text: &str) -> io::Result<Self> {
     let invalid = |message: String| io::Error::new(io::ErrorKind::InvalidData, message);
+    let config = super::Config::parse(text)?;
     let mut builds = Vec::new();
-    for (key, names) in super::Config::parse(text)?.gamebuild {
+    for (key, names) in config.gamebuild {
       let build = key
         .parse::<u32>()
         .ok()
@@ -54,23 +57,35 @@ impl GameBuilds {
         .push((build, names.into_iter().map(|name| name.trim().to_ascii_lowercase()).collect()));
     }
     builds.sort_by_key(|(build, _)| *build);
-    Ok(Self(builds))
+    Ok(Self {
+      builds,
+    })
   }
 
-  /// Resolves a build number or a DLC name listed in the table. A name listed under several
-  /// builds resolves to the latest of them.
+  /// Resolves a build number or a DLC name, as FiveM's `sv_enforceGameBuild` does.
+  ///
+  /// Names are matched as [`fivem_name`] spells them; a DLC listed under several builds
+  /// resolves to the latest of them. A number missing from the table resolves, with a warning,
+  /// to the closest listed build below it.
   pub fn resolve(
     &self,
     requested: &str,
   ) -> Result<GameBuild> {
     let requested = requested.trim().to_ascii_lowercase();
-    let build = if let Ok(build) = requested.parse::<u32>() {
-      self.0.iter().any(|(listed, _)| *listed == build).then_some(build)
-    } else {
-      self.0.iter().rev().find(|(_, names)| names.contains(&requested)).map(|(build, _)| *build)
+    let build = match requested.parse::<u32>() {
+      Ok(number) => self.closest_build(number),
+      Err(_) => {
+        let name = fivem_name(&requested);
+        self
+          .builds
+          .iter()
+          .rev()
+          .find(|(_, names)| names.iter().any(|listed| fivem_name(listed) == name))
+          .map(|(build, _)| *build)
+      }
     };
     let build = build.ok_or_else(|| {
-      let known = self.0.iter().map(|(build, _)| build.to_string()).collect::<Vec<_>>();
+      let known = self.builds.iter().map(|(build, _)| build.to_string()).collect::<Vec<_>>();
       format!(
         "Unknown gamebuild: {requested}; expected a build number or DLC name from [gamebuild] in config.toml (builds: {})",
         if known.is_empty() { "none".into() } else { known.join(", ") }
@@ -81,6 +96,37 @@ impl GameBuilds {
       builds: self.clone(),
     })
   }
+
+  /// `number` when listed, otherwise the closest listed build below it, with a warning.
+  fn closest_build(
+    &self,
+    number: u32,
+  ) -> Option<u32> {
+    let (listed, _) = self.builds.iter().rev().find(|(listed, _)| *listed <= number)?;
+    if *listed != number {
+      tracing::warn!(
+        "gamebuild {number} is not listed under [gamebuild] in config.toml; using {listed}, the closest build below it"
+      );
+    }
+    Some(*listed)
+  }
+}
+
+/// Spells a build name as FiveM's `sv_enforceGameBuild` does before matching it: `xmNN` becomes
+/// `mpchristmas20NN`, `hN` becomes `mpheistN`, and a name without `mp` gets it, so `xm18`,
+/// `h4` and `sum` mean `mpchristmas2018`, `mpheist4` and `mpsum`.
+fn fivem_name(name: &str) -> String {
+  let mut name = name.trim().to_ascii_lowercase();
+  if name.len() == 4 && name.starts_with("xm") {
+    name = format!("christmas20{}", &name[2..]);
+  }
+  if name.len() == 2 && name.starts_with('h') {
+    name = format!("mpheist{}", &name[1..]);
+  }
+  if !name.starts_with("mp") {
+    name = format!("mp{name}");
+  }
+  name
 }
 
 impl GameBuild {
@@ -98,7 +144,7 @@ impl GameBuild {
       labels.iter().position(|label| *label == "update").ok_or("Vanilla stages have no update")?;
     let starts = self
       .builds
-      .0
+      .builds
       .iter()
       .map(|(build, names)| {
         let start = labels
@@ -184,8 +230,30 @@ mod tests {
   }
 
   #[test]
+  fn names_are_spelled_as_fivem_accepts_them() {
+    // `christmas2018` and `heist4` gain `mp`; `h4` becomes `mpheist4`; `xm18` becomes
+    // `mpchristmas2018`, whichever spelling the table lists.
+    assert_eq!(last("christmas2018").unwrap(), 3);
+    assert_eq!(last("heist4").unwrap(), 8);
+    assert_eq!(last("TUNER").unwrap(), 9);
+    let canonical = GameBuilds::parse("[gamebuild]\n1604 = [\"mpchristmas2018\"]").unwrap();
+    assert_eq!(canonical.resolve("xm18").unwrap().build, 1604);
+    assert_eq!(fivem_name("h4"), "mpheist4");
+    assert_eq!(fivem_name("2023_01"), "mp2023_01");
+  }
+
+  #[test]
+  fn a_missing_number_uses_the_closest_build_below_it() {
+    assert_eq!(GameBuilds::parse(TABLE).unwrap().resolve("2000").unwrap().build, 1604);
+    assert_eq!(last("2000").unwrap(), 3);
+    assert_eq!(GameBuilds::parse(TABLE).unwrap().resolve("9999").unwrap().build, 2372);
+    let without_base = GameBuilds::parse("[gamebuild]\n1604 = [\"mpchristmas2018\"]").unwrap();
+    assert!(without_base.resolve("1000").is_err());
+  }
+
+  #[test]
   fn unknown_builds_names_and_contradicting_orders_are_rejected() {
-    for requested in ["2000", "0", "mpheist3", "0005-mpsum", ""] {
+    for requested in ["0", "mpheist3", "0005-mpsum", ""] {
       assert!(last(requested).is_err(), "{requested}");
     }
     let missing = GameBuilds::parse(TABLE).unwrap().resolve("2372").unwrap();
@@ -205,7 +273,29 @@ mod tests {
   #[test]
   fn shipped_config_lists_builds_and_dlc_names() {
     let builds = GameBuilds::load(Path::new("asset/config.toml")).unwrap();
-    assert_eq!(builds.resolve("mp2023_02").unwrap().build, 3095);
-    assert_eq!(builds.resolve("3323").unwrap().build, 3323);
+    // FiveM's names (GameBuilds.h) and builds (GameCache.cpp).
+    for (name, build) in [
+      ("xm18", 1604),
+      ("sum", 2060),
+      ("h4", 2189),
+      ("tuner", 2372),
+      ("security", 2545),
+      ("mpg9ec", 2612),
+      ("mpsum2", 2699),
+      ("mpchristmas3", 2802),
+      ("mp2023_01", 2944),
+      ("mp2023_02", 3095),
+      ("mp2024_01", 3258),
+      ("mp2024_02", 3407),
+      ("mp2025_01", 3570),
+      ("mp2025_02", 3751),
+      ("mp2026_01", 3889),
+    ] {
+      assert_eq!(builds.resolve(name).unwrap().build, build, "{name}");
+    }
+    for build in [1604, 2060, 3179, 3323, 3788, 3889] {
+      assert_eq!(builds.resolve(&build.to_string()).unwrap().build, build);
+    }
+    assert_eq!(builds.resolve("3200").unwrap().build, 3179);
   }
 }

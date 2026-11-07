@@ -252,12 +252,19 @@ absent; existing manifests are never overwritten.
 
 ## Game Builds
 
-`--gamebuild` takes a FiveM game build number (`sv_enforceGameBuild`) or a DLC name
-listed for one under `[gamebuild]` in [asset/config.toml](../asset/config.toml), such as
-`3095` or `mp2023_02`. Stage IDs and positions are not accepted. The table follows the
-[FiveM documentation](https://docs.fivem.net/docs/server-manual/server-commands/#sv_enforcegamebuild-build);
-add a build there when FiveM supports a new one.
+`--gamebuild` takes a FiveM game build number (`sv_enforceGameBuild`) or a DLC name listed
+for one under `[gamebuild]` in [asset/config.toml](../asset/config.toml), such as `3095` or
+`mp2023_02`. Names are spelled as
+`sv_enforceGameBuild` accepts them: `xm18`, `h4` and `sum` mean `mpchristmas2018`,
+`mpheist4` and `mpsum`. Stage IDs and positions are not accepted. The table follows FiveM's
+sources (the builds in `code/client/launcher/GameCache.cpp` and the names in
+`code/components/citizen-server-impl/include/GameBuilds.h`); add a build there when FiveM
+supports a new one.
 
+- A build number missing from the table uses the closest listed build below it, with a
+  warning, so a build newer than the table targets the newest one listed.
+- A build that adds no DLC pack is given by its number: FiveM's name for it, such as
+  `mp2026_patch_01` for 3788, is not a stage and is not accepted.
 - A build ends at the last stage before the next build's first listed DLC in
   `dlclist.xml` order, so it includes its own patch and `_g9ec` stages; a name listed
   under several builds selects the latest. A build without DLC names (such as 3323)
