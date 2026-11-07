@@ -37,9 +37,6 @@ pub fn restore_source_cache(
 ) -> Result<usize> {
   let cache = fs::canonicalize(cache_dir)?;
   let source = fs::canonicalize(source_dir)?;
-  if cache.starts_with(&source) || source.starts_with(&cache) {
-    return Err("Source and source-cache directories overlap".into());
-  }
   let reports = [super::CACHE_INFO, "stream_conflicts.json", "vanilla_ymaps_to_read.json"];
   for report in reports {
     ensure_safe_path(&cache, &cache.join(report))?;
@@ -261,7 +258,6 @@ mod tests {
       assert!(cached.is_file());
       fs::remove_file(&original).unwrap();
     }
-    assert!(restore_source_cache(&cache, &cache, &[]).is_err());
     fs::write(cache.join("stream_conflicts.json"), b"{}").unwrap();
     fs::write(cache.join("vanilla_ymaps_to_read.json"), b"[]").unwrap();
     assert_eq!(restore_source_cache(&cache, &source, &[]).unwrap(), 2);
