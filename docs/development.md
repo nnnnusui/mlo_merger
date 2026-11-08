@@ -108,7 +108,7 @@ Tests and native-only code (`src/main.rs`, `src/gui`, `build.rs`) may use `std` 
 
 TypeScript definitions are generated from Rust's Serde models. The optional `typescript`
 feature is required only for generation and verification, not for normal builds. The
-release workflow regenerates `asset/gen_mlo_merger.ts` before packaging.
+release workflow regenerates `asset/gen_mlo_merger.ts`.
 
 ```bash
 cargo export-types
@@ -150,7 +150,7 @@ it with [cargo-about](https://github.com/EmbarkStudios/cargo-about) (accepted li
 
 ```bash
 cargo install --locked cargo-about --version 0.9.3 --features cli
-for target in x86_64-pc-windows-msvc x86_64-unknown-linux-gnu x86_64-apple-darwin aarch64-apple-darwin wasm32-unknown-unknown; do
+for target in x86_64-pc-windows-msvc x86_64-unknown-linux-gnu aarch64-apple-darwin wasm32-unknown-unknown; do
   cargo about generate --locked --fail --format json --target "$target" -o "target/about-$target.json"
 done
 python3 scripts/third_party_notices.py target/about-*.json \

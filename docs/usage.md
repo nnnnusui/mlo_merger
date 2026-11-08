@@ -20,7 +20,7 @@ Release archives also contain `release.json`, naming the build they hold:
   "commit": "<commit SHA>",
   "repository": "https://github.com/nnnnusui/mlo_merger",
   "release_url": "https://github.com/nnnnusui/mlo_merger/releases/tag/v2.0.0",
-  "targets": ["aarch64-apple-darwin", "x86_64-apple-darwin", "x86_64-pc-windows-msvc", "x86_64-unknown-linux-gnu"]
+  "targets": ["aarch64-apple-darwin", "x86_64-pc-windows-msvc", "x86_64-unknown-linux-gnu"]
 }
 ```
 
