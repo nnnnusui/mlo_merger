@@ -1,0 +1,23 @@
+[
+  {
+    "target": "x86_64-pc-windows-msvc",
+    "os": "windows-latest",
+    "executable": "mlo_merger.exe",
+    "archive": "zip",
+    "platform": "windows"
+  },
+  {
+    "target": "x86_64-unknown-linux-gnu",
+    "os": "ubuntu-22.04",
+    "executable": "mlo_merger",
+    "archive": "gztar",
+    "platform": "linux"
+  },
+  {
+    "target": "aarch64-apple-darwin",
+    "os": "macos-15",
+    "executable": "mlo_merger",
+    "archive": "gztar",
+    "platform": "macos-arm64"
+  }
+]

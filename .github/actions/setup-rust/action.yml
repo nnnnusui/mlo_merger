@@ -1,0 +1,19 @@
+name: Set up Rust
+description: Installs the stable Rust toolchain, with the given extra targets.
+inputs:
+  targets:
+    description: Space-separated targets to add, such as wasm32-unknown-unknown.
+    required: false
+    default: ''
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        TARGETS: ${{ inputs.targets }}
+      run: |
+        rustup toolchain install stable --profile minimal --no-self-update
+        rustup default stable
+        for target in $TARGETS; do
+          rustup target add "$target"
+        done

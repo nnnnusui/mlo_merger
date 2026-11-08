@@ -116,6 +116,22 @@ cargo export-types -o /tmp/mlo_merger.ts
 cargo test --features typescript --lib typescript::tests
 ```
 
+## Releases
+
+Pushing a `v*` tag runs `.github/workflows/release.yml` on the tagged commit, with that commit's
+workflow. It first checks the tag against `Cargo.toml`'s version, then builds every target
+`.github/release-targets.json` lists (runner, executable, archive format and the executable's
+name in `mlo_merger-all`), and the browser build. `scripts/package_release.py` packages the
+archives; with the builds in place, it runs locally too:
+
+```bash
+python3 scripts/package_release.py check v3.1.1   # fails unless Cargo.toml says 3.1.1
+python3 scripts/package_release.py --help
+```
+
+Add or drop a target in `.github/release-targets.json`; the build matrix, the third-party
+notices and `mlo_merger-all` follow it.
+
 ## Third-Party Notices
 
 Every release archive, including `mlo_merger-all`, contains `third_party_notices.json`
@@ -150,7 +166,7 @@ it with [cargo-about](https://github.com/EmbarkStudios/cargo-about) (accepted li
 
 ```bash
 cargo install --locked cargo-about --version 0.9.3 --features cli
-for target in x86_64-pc-windows-msvc x86_64-unknown-linux-gnu aarch64-apple-darwin wasm32-unknown-unknown; do
+for target in $(jq -r '.[].target' .github/release-targets.json) wasm32-unknown-unknown; do
   cargo about generate --locked --fail --format json --target "$target" -o "target/about-$target.json"
 done
 python3 scripts/third_party_notices.py target/about-*.json \

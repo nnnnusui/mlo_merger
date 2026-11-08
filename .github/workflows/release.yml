@@ -20,8 +20,29 @@ defaults:
     shell: bash
 
 jobs:
+  # Fails a mistagged release in seconds, before any build, and hands every job the targets.
+  check:
+    name: Check the tag
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      targets: ${{ steps.targets.outputs.targets }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Check the tag against Cargo.toml
+        run: python3 scripts/package_release.py check "$GITHUB_REF_NAME"
+
+      - name: Read the release targets
+        id: targets
+        run: echo "targets=$(jq -c . .github/release-targets.json)" >> "$GITHUB_OUTPUT"
+
   notices:
     name: Collect third-party notices
+    needs: check
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -30,19 +51,16 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Install Rust stable
-        run: |
-          rustup toolchain install stable --profile minimal --no-self-update
-          rustup default stable
+      - name: Set up Rust
+        uses: ./.github/actions/setup-rust
 
       - name: Install cargo-about
         run: cargo install --locked cargo-about --version 0.9.3 --features cli
 
       - name: Generate third-party notices
         run: |
-          # One run per release target; keep in sync with the build matrix. wasm32 is the
-          # browser build in mlo_merger-all's web/.
-          for target in x86_64-pc-windows-msvc x86_64-unknown-linux-gnu aarch64-apple-darwin wasm32-unknown-unknown; do
+          # One run per release target, and wasm32 for the browser build in mlo_merger-all's web/.
+          for target in $(jq -r '.[].target' .github/release-targets.json) wasm32-unknown-unknown; do
             cargo about generate --locked --fail --format json --target "$target" -o "about-$target.json"
           done
           mkdir notices
@@ -59,6 +77,7 @@ jobs:
 
   types:
     name: Generate TypeScript bindings
+    needs: check
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -67,10 +86,8 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Install Rust stable
-        run: |
-          rustup toolchain install stable --profile minimal --no-self-update
-          rustup default stable
+      - name: Set up Rust
+        uses: ./.github/actions/setup-rust
 
       # The bindings describe the JSON every platform's executable reads and writes, so one run
       # serves every archive.
@@ -87,6 +104,7 @@ jobs:
 
   web:
     name: Build the browser build
+    needs: check
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
@@ -97,11 +115,10 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Install Rust stable
-        run: |
-          rustup toolchain install stable --profile minimal --no-self-update
-          rustup default stable
-          rustup target add wasm32-unknown-unknown
+      - name: Set up Rust
+        uses: ./.github/actions/setup-rust
+        with:
+          targets: wasm32-unknown-unknown
 
       - name: Install wasm-bindgen-cli and binaryen
         run: |
@@ -133,40 +150,27 @@ jobs:
 
   build:
     name: Build ${{ matrix.target }}
-    needs: [notices, types]
+    needs: [check, notices, types]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - os: windows-latest
-            target: x86_64-pc-windows-msvc
-            executable: mlo_merger.exe
-            archive: zip
-          - os: ubuntu-22.04
-            target: x86_64-unknown-linux-gnu
-            executable: mlo_merger
-            archive: gztar
-          - os: macos-15
-            target: aarch64-apple-darwin
-            executable: mlo_merger
-            archive: gztar
+        # .github/release-targets.json
+        include: ${{ fromJSON(needs.check.outputs.targets) }}
     env:
       TARGET: ${{ matrix.target }}
       EXECUTABLE: ${{ matrix.executable }}
-      ARCHIVE_FORMAT: ${{ matrix.archive }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
 
-      - name: Install Rust stable
-        run: |
-          rustup toolchain install stable --profile minimal --no-self-update
-          rustup default stable
-          rustup target add "$TARGET"
+      - name: Set up Rust
+        uses: ./.github/actions/setup-rust
+        with:
+          targets: ${{ matrix.target }}
 
       - name: Build executable
         run: cargo build --locked --release --bin mlo_merger --target "$TARGET"
@@ -192,47 +196,7 @@ jobs:
           if [[ "$RUNNER_OS" == "Windows" ]]; then
             python_command=python
           fi
-          cargo metadata --locked --no-deps --format-version 1 > cargo-metadata.json
-          "$python_command" - <<'PY'
-          import json
-          import os
-          from pathlib import Path
-          import shutil
-
-          target = os.environ["TARGET"]
-          name = f"mlo_merger-{target}"
-          package = Path("package") / name
-          package.mkdir(parents=True)
-          shutil.copy2(Path("target") / target / "release" / os.environ["EXECUTABLE"], package)
-          metadata = json.loads(Path("cargo-metadata.json").read_text(encoding="utf-8"))
-          (crate,) = (crate for crate in metadata["packages"] if crate["name"] == "mlo_merger")
-          tag = os.environ["GITHUB_REF_NAME"]
-          if tag != f"v{crate['version']}":
-              raise SystemExit(f"Tag {tag} does not match Cargo.toml version {crate['version']}")
-          repository = f"{os.environ['GITHUB_SERVER_URL']}/{os.environ['GITHUB_REPOSITORY']}"
-          release = {
-              "name": crate["name"],
-              "version": crate["version"],
-              "tag": tag,
-              "commit": os.environ["GITHUB_SHA"],
-              "repository": repository,
-              "release_url": f"{repository}/releases/tag/{tag}",
-              "targets": [target],
-          }
-          (package / "release.json").write_text(json.dumps(release, indent=2) + "\n", encoding="utf-8")
-          for filename in ("Readme.md", "LICENSE.md", "asset/config.toml",
-                           "docs/ARCHITECTURE.md", "docs/TODO.md", "docs/usage.md",
-                           "docs/reference.md", "docs/development.md", "docs/web.md",
-                           ".cargo/config.toml", "asset/gen_mlo_merger.ts"):
-              destination = package / filename
-              destination.parent.mkdir(parents=True, exist_ok=True)
-              shutil.copy2(filename, destination)
-          for filename in ("third_party_notices.json", "THIRD_PARTY_NOTICES.md"):
-              shutil.copy2(Path("notices") / filename, package)
-          Path("dist").mkdir()
-          shutil.make_archive(str(Path("dist") / name), os.environ["ARCHIVE_FORMAT"],
-                              root_dir="package", base_dir=name)
-          PY
+          "$python_command" scripts/package_release.py platform "$TARGET" "$GITHUB_REF_NAME"
 
       - name: Upload build artifact
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -256,6 +220,11 @@ jobs:
       GH_REPO: ${{ github.repository }}
       RELEASE_TAG: ${{ github.ref_name }}
     steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
       - name: Download build artifacts
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
@@ -270,72 +239,7 @@ jobs:
           path: web-build
 
       - name: Package all platforms
-        run: |
-          python3 - <<'PY'
-          import hashlib
-          import json
-          from pathlib import Path
-          import shutil
-          import tempfile
-
-          platforms = {
-              "x86_64-pc-windows-msvc": "windows",
-              "x86_64-unknown-linux-gnu": "linux",
-              "aarch64-apple-darwin": "macos-arm64",
-          }
-          dist = Path("dist")
-          archives = sorted(dist.glob("mlo_merger-*.zip")) + sorted(dist.glob("mlo_merger-*.tar.gz"))
-          if not archives:
-              raise SystemExit("No platform archives to combine")
-          name = "mlo_merger-all"
-          with tempfile.TemporaryDirectory() as temporary:
-              package = Path(temporary) / name
-              package.mkdir()
-              release = None
-              targets = []
-              for archive in archives:
-                  extracted = Path(temporary) / "extracted" / archive.name
-                  shutil.unpack_archive(archive, extracted)
-                  (root,) = extracted.iterdir()
-                  platform = platforms[root.name.removeprefix("mlo_merger-")]
-                  # Every platform's release.json describes the same build but its own target.
-                  own = json.loads((root / "release.json").read_text(encoding="utf-8"))
-                  targets += own.pop("targets")
-                  if release is None:
-                      release = own
-                  elif own != release:
-                      raise SystemExit(f"{archive.name} was built from another release")
-                  for path in sorted(root.rglob("*")):
-                      if not path.is_file():
-                          continue
-                      relative = path.relative_to(root)
-                      if relative == Path("release.json"):
-                          continue
-                      if relative.name in ("mlo_merger", "mlo_merger.exe") and len(relative.parts) == 1:
-                          destination = package / f"mlo_merger-{platform}{relative.suffix}"
-                      else:
-                          destination = package / relative
-                          if destination.exists():
-                              continue
-                      destination.parent.mkdir(parents=True, exist_ok=True)
-                      shutil.copy2(path, destination)
-              release["targets"] = sorted(targets)
-              # The browser build; see docs/web.md.
-              web = Path("web-build/web")
-              if not (web / "pkg" / "mlo_merger_web_bg.wasm").is_file():
-                  raise SystemExit("The browser build is missing")
-              shutil.copytree(web, package / "web")
-              release["web"] = {
-                  "wasm_bindgen": json.loads(Path("web-build/wasm_bindgen.json").read_text(encoding="utf-8")),
-                  "files": {
-                      path.relative_to(package / "web").as_posix():
-                          hashlib.sha256(path.read_bytes()).hexdigest()
-                      for path in sorted((package / "web").rglob("*")) if path.is_file()
-                  },
-              }
-              (package / "release.json").write_text(json.dumps(release, indent=2) + "\n", encoding="utf-8")
-              shutil.make_archive(str(dist / name), "zip", root_dir=temporary, base_dir=name)
-          PY
+        run: python3 scripts/package_release.py all
 
       - name: Generate checksums
         run: |
