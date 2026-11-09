@@ -30,6 +30,52 @@ pub(super) struct DlcPaths {
   pub(super) items: Vec<String>,
 }
 
+/// A DLC pack's `setup2.xml`, at the root of its `dlc.rpf`.
+#[derive(Deserialize)]
+struct DlcSetup {
+  #[serde(rename = "subPackCount")]
+  sub_pack_count: Option<ValueAttribute>,
+}
+
+#[derive(Deserialize)]
+struct ValueAttribute {
+  #[serde(rename = "@value")]
+  value: u32,
+}
+
+/// How many subpacks (`dlc1.rpf`, `dlc2.rpf`, …) the DLC pack whose `dlc.rpf` `extracted` was
+/// taken from has, as its `setup2.xml` declares; `directory` holds the extracted files. Packs
+/// such as `mpheist4` keep most of their maps in subpacks, which the game, and CodeWalker,
+/// mount with the pack.
+pub(super) fn sub_pack_count(
+  extracted: &[ExtractedFile],
+  directory: &Path,
+) -> Result<u32> {
+  let Some(setup) = extracted.iter().find(|file| is_dlc_setup(&file.source)) else {
+    return Ok(0);
+  };
+  let setup: DlcSetup =
+    quick_xml::de::from_reader(std::io::BufReader::new(File::open(directory.join(&setup.stored))?))
+      .map_err(|error| format!("{}: {error}", setup.source))?;
+  Ok(setup.sub_pack_count.map_or(0, |count| count.value))
+}
+
+/// Whether `source`, an extracted file's game path, is a DLC pack's `setup2.xml`: at the root of
+/// its `dlc.rpf`.
+fn is_dlc_setup(source: &str) -> bool {
+  source.to_ascii_lowercase().ends_with("/dlc.rpf/setup2.xml")
+}
+
+/// The game path of subpack `index` of the DLC pack whose `dlc.rpf` is at `relative`:
+/// `dlc{index}.rpf` beside it.
+pub(super) fn dlc_subpack(
+  relative: &str,
+  index: u32,
+) -> String {
+  let directory = relative.rsplit_once('/').map_or("", |(directory, _)| directory);
+  format!("{directory}/dlc{index}.rpf")
+}
+
 pub(super) fn dlc_archive(item: &str) -> Result<PathBuf> {
   let normalized = item.trim().replace('\\', "/").to_ascii_lowercase();
   let (mount, path) = normalized.split_once(':').ok_or("DLC path has no mount prefix")?;
@@ -73,8 +119,8 @@ pub(crate) fn game_path(
   Ok(path)
 }
 
-/// Extracts YMAPs, YBNs and dlclist.xml recursively into `output`, preserving archive
-/// provenance, and collects every entry's name stem into `rpf_names`.
+/// Extracts YMAPs, YBNs, dlclist.xml and a root setup2.xml recursively into `output`, preserving
+/// archive provenance, and collects every entry's name stem into `rpf_names`.
 ///
 /// `subtree` limits extraction to one nested archive's full virtual path. Files are
 /// numbered in table-of-contents order, each archive's own files before its children's.
@@ -105,6 +151,7 @@ pub(super) fn extract(
       if file.path.ends_with(".ymap")
         || file.path.ends_with(".ybn")
         || file.path.ends_with("/common/data/dlclist.xml")
+        || (file.path.matches('/').count() == 1 && file.path.ends_with("/setup2.xml"))
       {
         selected.push((archive, file));
       }

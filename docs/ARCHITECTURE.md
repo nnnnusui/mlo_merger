@@ -242,14 +242,15 @@ another matching policy. They do not change search radii.
 
 ## Vanilla Archive And Derived Cache
 
-The raw vanilla archive preserves ordered YMAP/YBN overlays from the base game,
-title update and DLCs, stored by version and extension, with a global hash-name
-table. The derived cache selects the latest files through the last stage of the
-chosen game build and indexes YMAP parent/child relationships. A game build is placed
-among the stages by the `[gamebuild]` table in configuration, which names the DLCs
-each FiveM build first includes. It can be recreated from the raw archive
-without re-extracting the game. An existing raw archive is not checked against
-changes to the installed game.
+The raw vanilla archive preserves ordered YMAP/YBN overlays from the base game, title
+update and DLCs, stored by version and extension, with a global hash-name table. A DLC
+pack's stage reads its `dlc.rpf`, then the subpacks (`dlc1.rpf`, …) its `setup2.xml`
+declares, as the game mounts them, then its title-update patch. The derived cache selects
+the latest files through the last stage of the chosen game build and indexes YMAP
+parent/child relationships. A game build is placed among the stages by the `[gamebuild]`
+table in configuration, which names the DLCs each FiveM build first includes. It can be
+recreated from the raw archive without re-extracting the game. An existing raw archive is
+not checked against changes to the installed game.
 
 Generation of the following YMAP version diffs is currently disabled, together with
 vanilla version inference (see [Limitations](reference.md#limitations)). When enabled, the derived cache also

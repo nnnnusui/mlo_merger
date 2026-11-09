@@ -8,7 +8,8 @@ use std::path::{Path, PathBuf};
 use super::{
   Result,
   archives::{
-    DlcList, base_archives, dlc_archive, extract, game_path, patch_dlc, platform_archives,
+    DlcList, base_archives, dlc_archive, dlc_subpack, extract, game_path, patch_dlc,
+    platform_archives, sub_pack_count,
   },
   hash_index::write_hash_index,
   io::write_json,
@@ -145,14 +146,29 @@ impl BuildVanillaArchive {
           };
         let extracted =
           extract(keys, game_dir, &physical, &directory, subtree.as_deref(), &mut rpf_names)?;
+        // Subpacks are mounted with the pack, after its dlc.rpf, as CodeWalker does.
+        let sub_packs = if subtree.is_none() { sub_pack_count(&extracted, &directory)? } else { 0 };
         let mut files: Vec<_> =
           extracted.into_iter().map(|file| (file, directory.clone())).collect();
+        let mut sub_pack_archives = Vec::new();
+        for index in 1..=sub_packs {
+          let sub_pack = dlc_subpack(&physical, index);
+          if game_path(game_dir, Path::new(&sub_pack)).is_err() {
+            tracing::warn!("{physical} declares {sub_packs} subpacks, but {sub_pack} is missing");
+            continue;
+          }
+          let sub_directory = directory.join(format!("dlc{index}"));
+          let extracted = extract(keys, game_dir, &sub_pack, &sub_directory, None, &mut rpf_names)?;
+          files.extend(extracted.into_iter().map(|file| (file, sub_directory.clone())));
+          sub_pack_archives.push(sub_pack);
+        }
         let patches: Vec<_> = update
           .iter()
           .filter(|file| patch_dlc(&file.source) == Some(label.as_str()))
           .cloned()
           .collect();
         let mut archives = vec![subtree.unwrap_or(physical)];
+        archives.extend(sub_pack_archives);
         if !patches.is_empty() {
           archives.push(format!("update/update.rpf/dlc_patch/{label}"));
           files.extend(patches.into_iter().map(|file| (file, update_dir.clone())));

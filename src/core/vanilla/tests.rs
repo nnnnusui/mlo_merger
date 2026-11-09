@@ -8,7 +8,8 @@ use std::path::{Path, PathBuf};
 use super::*;
 use super::{
   archives::{
-    DlcList, ExtractedFile, base_archives, dlc_archive, patch_dlc, platform_virtual_path,
+    DlcList, ExtractedFile, base_archives, dlc_archive, dlc_subpack, patch_dlc,
+    platform_virtual_path, sub_pack_count,
   },
   publication::{Staging, publish_cache, reset_output_directory},
   stage::stage,
@@ -94,6 +95,40 @@ fn dlclist_keeps_order_and_normalizes_mounts() {
   );
   assert!(dlc_archive("dlcpacks:/../escape/").is_err());
   assert!(dlc_archive("unknown:/mpbeach/").is_err());
+}
+
+#[test]
+fn dlc_setup_declares_subpacks_beside_dlc_rpf() {
+  let directory = std::env::temp_dir().join(format!("dlc_setup_{}", std::process::id()));
+  let _ = fs::remove_dir_all(&directory);
+  fs::create_dir_all(&directory).unwrap();
+  let setup = |source: &str| ExtractedFile {
+    name: "setup2.xml".into(),
+    source: source.into(),
+    stored: "00000000.xml".into(),
+    sha256: String::new(),
+  };
+  fs::write(
+    directory.join("00000000.xml"),
+    "<?xml version=\"1.0\"?>\n<SSetupData>\n  <deviceName>dlc_mpHeist4</deviceName>\n  <subPackCount value=\"2\" />\n</SSetupData>",
+  )
+  .unwrap();
+  let relative = "update/x64/dlcpacks/mpheist4/dlc.rpf";
+  assert_eq!(sub_pack_count(&[setup(&format!("{relative}/setup2.xml"))], &directory).unwrap(), 2);
+  // Only the setup2.xml at the root of dlc.rpf declares subpacks.
+  assert_eq!(sub_pack_count(&[], &directory).unwrap(), 0);
+  assert_eq!(
+    sub_pack_count(&[setup(&format!("{relative}/x64/data/setup2.xml"))], &directory).unwrap(),
+    0
+  );
+  fs::write(
+    directory.join("00000000.xml"),
+    "<SSetupData><deviceName>dlc_x</deviceName></SSetupData>",
+  )
+  .unwrap();
+  assert_eq!(sub_pack_count(&[setup(&format!("{relative}/setup2.xml"))], &directory).unwrap(), 0);
+  assert_eq!(dlc_subpack(relative, 2), "update/x64/dlcpacks/mpheist4/dlc2.rpf");
+  fs::remove_dir_all(directory).unwrap();
 }
 
 #[test]
