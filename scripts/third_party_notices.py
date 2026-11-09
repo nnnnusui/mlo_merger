@@ -15,8 +15,9 @@ The written `third_party_notices.json` is read by other projects; keep its forma
     {"parts": ["mlo_merger"],
      "notices": [{"license": SPDX id, "text": license text,
                   "packages": [{"name", "version", "repository"}]}]}
-There is one notice per distinct license text, packages sorted by name and notices by
-their first package's name.
+There is one notice per distinct license text, compared with runs of whitespace collapsed
+so that differently wrapped copies of a license merge; a notice shows the variant used by
+the most packages. Packages are sorted by name and notices by their first package's name.
 """
 
 import argparse
@@ -32,6 +33,10 @@ def normalize(text):
     return text.replace("\r\n", "\n").strip()
 
 
+def whitespace_key(text):
+    return " ".join(text.split())
+
+
 def repository(package):
     for key in ("repository", "homepage"):
         if package.get(key):
@@ -44,9 +49,13 @@ def package_key(package):
 
 
 def collect(documents):
-    """Returns {crate key: package} and {normalized text: (license id, {crate key})}."""
+    """Returns {crate key: package} and {normalized text: (license id, {crate key})}.
+
+    Texts differing only in whitespace are merged under the variant used by the most
+    crates (the smallest text on a tie).
+    """
     packages = {}
-    texts = {}
+    groups = {}
     for document in documents:
         for crate in document["crates"]:
             package = crate["package"]
@@ -58,11 +67,16 @@ def collect(documents):
             text = normalize(license["text"])
             if not text:
                 continue
-            license_id, keys = texts.setdefault(text, (license["id"], set()))
+            license_id, variants = groups.setdefault(whitespace_key(text), (license["id"], {}))
             if license_id != license["id"]:
                 sys.exit(f"The same license text is identified as both {license_id} and {license['id']}")
+            keys = variants.setdefault(text, set())
             for used in license["used_by"]:
                 keys.add(package_key(used["crate"]))
+    texts = {}
+    for license_id, variants in groups.values():
+        text = min(variants, key=lambda variant: (-len(variants[variant] & packages.keys()), variant))
+        texts[text] = (license_id, set().union(*variants.values()))
     return packages, texts
 
 

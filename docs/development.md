@@ -155,8 +155,10 @@ not listed.
 ```
 
 - Each notice holds one distinct license text (CRLF normalized to LF, trimmed), with
-  copyright lines included, and every package distributed under exactly that text,
-  sorted by name. Notices are sorted by their first package's name.
+  copyright lines included, and every package distributed under that text, sorted by
+  name. Texts that differ only in whitespace (line wrapping, indentation) count as one;
+  the notice shows the variant used by the most packages. Notices are sorted by their
+  first package's name.
 - `license` is the SPDX identifier of the text; MIT is preferred for dual-licensed crates.
 - `repository` falls back to the crate's homepage, then its crates.io page.
 
