@@ -575,8 +575,11 @@ fn added_ymaps_merge_every_version_without_shared_additions() {
     files["files"]["custom.ymap"]["shipped_by"],
     serde_json::json!(["resource_a", "resource_b", "resource_c"])
   );
-  // The overwrite cache records each entity left out by its resource and index, with the one
-  // kept in its place.
+  // The merge's duplicate report leaves them to the overwrite cache, which records each entity
+  // left out by its resource and index, with the one kept in its place.
+  let duplicates: serde_json::Value =
+    serde_json::from_reader(fs::File::open(output.join("duplicates.json")).unwrap()).unwrap();
+  assert!(duplicates["files"].get("custom.ymap").is_none(), "{duplicates}");
   let entity_left_out = files["files"]["custom.ymap"]["left_out"]
     .as_array()
     .unwrap()

@@ -395,8 +395,10 @@ impl MergeYmap {
         }
         added::union_extents(&mut ymap_diffs);
       }
+      // What the versions of an added YMAP share is recorded by the overwrite cache instead
+      // (`added_ymaps.json`), with the additions placed alike that GUIDs do not pair.
       let duplicates = duplicates.finish();
-      if !duplicates.is_empty() {
+      if !duplicates.is_empty() && !self.added.contains(&ymap_name.to_ascii_lowercase()) {
         duplicate_files.insert(ymap_name.to_ascii_lowercase(), duplicates);
       }
       let merged_diff = merge_diffs(vanilla_ymap, &ymap_diffs);

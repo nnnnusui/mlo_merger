@@ -112,8 +112,8 @@ resource paths under `-i`, preserving modification times.
 ## Merge
 
 Merge writes native files under `ymap/` and `ybn/`, plus `_omit.txt` for replaced source
-paths and `duplicates.json` for competing YMAP entity changes. It rebuilds only changed
-or invalid groups. Failed merges leave the prior output intact.
+paths and `duplicates.json` for competing entity changes to vanilla YMAPs. It rebuilds only
+changed or invalid groups. Failed merges leave the prior output intact.
 
 Merge applies every source's differences from the latest vanilla file together to
 vanilla. YMAP differences are read from the source cache's

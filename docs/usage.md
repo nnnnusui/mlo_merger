@@ -345,7 +345,7 @@ version is merged:
 - The extents cover every version's. Name, flags and block come from the first version.
 - Leave out what remains doubled with a resource overwrite written from that resource's
   source-cache diff document, as for any source, or leave a version out with `ignore`.
-- `added_ymaps.json` lists each addition left out in the YMAP's `left_out`: the stream file
+- `added_ymaps.json` lists each addition left out in the YMAP's `left_out`. It names the stream file
   and the item, by its array (as diff documents name it) and its index in that file, with the
   item of an earlier version kept in its place:
 

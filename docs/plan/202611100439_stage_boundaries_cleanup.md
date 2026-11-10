@@ -44,9 +44,9 @@ every test passing.
 
 ### 4. One record of what added YMAPs leave out
 
-- [ ] Leave added YMAPs out of `duplicates.json`; their thinned additions are recorded in
+- [x] Leave added YMAPs out of `duplicates.json`; their thinned additions are recorded in
   `added_ymaps.json` only.
-- [ ] Document it in reference.md and usage.md.
+- [x] Document it in reference.md and usage.md.
 
 ### 5. Reads of the latest vanilla files from the vanilla cache
 
