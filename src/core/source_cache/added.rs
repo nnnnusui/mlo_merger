@@ -1,10 +1,12 @@
-//! The YMAPs resources add, which replace no vanilla YMAP.
+//! The stream files resources add, which replace no vanilla file.
 //!
-//! A YMAP no vanilla YMAP is named after is compared, like the others, with a baseline: an
-//! empty YMAP ([`Ymap::empty`]), kept in memory, so that each of the source's items, and its
-//! name, flags, extents and block, are differences an overwrite can leave out. Diff documents
-//! record it as [`empty_baseline_file`]. Several resources adding a YMAP of the same name are not
-//! combined here: the merge decides which to take (see [`crate::core::merge`]).
+//! A stream file no vanilla file is named after is compared, like the others, with a baseline:
+//! an empty file of its format, so that everything in it is a difference an overwrite can leave
+//! out. The formats whose added files are merged are [`ADDED_FORMATS`]. For a YMAP, the
+//! baseline is [`Ymap::empty`], kept in memory, and its name, flags, extents and block are
+//! differences too; diff documents record it as [`empty_baseline_file`]. Several resources
+//! adding a file of the same name are combined by the merge, as the overwrite cache records (see
+//! [`crate::core::overwrite_cache`]).
 //!
 //! `added_ymap_relationships.json` groups the added YMAPs under the parent each declares, as
 //! the vanilla cache's `ymap_relationships.json` does for vanilla YMAPs, naming each added YMAP
@@ -47,12 +49,16 @@ impl AddedYmapRelationships {
   }
 }
 
-/// Whether a YMAP is one a resource adds: one no vanilla YMAP is named after.
-pub(super) fn is_added_ymap(
+/// The formats, by extension, whose stream files resources add are merged.
+pub(super) const ADDED_FORMATS: &[&str] = &[".ymap"];
+
+/// Whether `file`, of `format`, is a stream file a resource adds that the merge takes: one no
+/// vanilla file is named after, of one of [`ADDED_FORMATS`].
+pub(super) fn is_added_stream_file(
   format: &str,
   file: &super::types::SourceFile,
 ) -> bool {
-  format == ".ymap" && file.vanilla.is_none()
+  ADDED_FORMATS.contains(&format) && file.vanilla.is_none()
 }
 
 /// The encoded [`Ymap::empty`] the added YMAPs are compared with.
@@ -79,7 +85,7 @@ pub(super) fn added_names(metadata: &SourceCacheMetadata) -> BTreeSet<String> {
     .resources
     .values()
     .flat_map(|inventory| inventory.files_by_format.get(".ymap").into_iter().flatten())
-    .filter(|file| file.cached_path.is_some() && is_added_ymap(".ymap", file))
+    .filter(|file| file.cached_path.is_some() && is_added_stream_file(".ymap", file))
     .map(|file| file.file_name.to_ascii_lowercase())
     .collect()
 }
@@ -87,7 +93,7 @@ pub(super) fn added_names(metadata: &SourceCacheMetadata) -> BTreeSet<String> {
 /// Writes `added_ymap_relationships.json` for the published inventory, or removes it when no
 /// resource adds a YMAP. `vanilla_names` are the lowercase file names of the latest vanilla
 /// YMAPs, which added YMAPs may declare as parents. An unchanged file is kept.
-pub(super) fn write_added_ymaps(
+pub(super) fn write_added_stream_files(
   output: &Path,
   vanilla_names: &BTreeSet<String>,
 ) -> Result<()> {
@@ -108,7 +114,7 @@ pub(super) fn write_added_ymaps(
       .to_string_lossy()
       .to_ascii_lowercase();
     for file in inventory.files_by_format.get(".ymap").into_iter().flatten() {
-      if file.cached_path.is_none() || !is_added_ymap(".ymap", file) {
+      if file.cached_path.is_none() || !is_added_stream_file(".ymap", file) {
         continue;
       }
       let parent =

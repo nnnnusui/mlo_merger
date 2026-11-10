@@ -73,7 +73,9 @@ pub fn collect(
     }
     let source = sources.get(&file_key);
     let vanilla = match source {
-      Some(source) if inputs.added_ymaps.contains(&source.file_name.to_ascii_lowercase()) => {
+      Some(source)
+        if inputs.added_stream_files.contains(&source.file_name.to_ascii_lowercase()) =>
+      {
         Some(OverwriteFingerprint::empty_baseline()?)
       }
       Some(source) => latest

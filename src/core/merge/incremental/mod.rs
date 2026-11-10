@@ -44,8 +44,8 @@ pub(super) struct IncrementalMerge<'a> {
   pub inputs: &'a MergeInputs,
   /// The overwrites applied to the source YMAPs' diffs.
   pub overwrites: &'a Overwrites,
-  /// How each YMAP resources add is merged, keyed by lowercase file name.
-  pub added: &'a BTreeMap<String, crate::core::overwrite_cache::AddedYmap>,
+  /// How each stream file resources add is merged, keyed by lowercase file name.
+  pub added: &'a BTreeMap<String, crate::core::overwrite_cache::AddedStreamFile>,
   pub force: bool,
 }
 

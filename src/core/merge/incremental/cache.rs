@@ -82,7 +82,7 @@ pub(in crate::core::merge) struct FileRecord {
   pub merge_sources: Vec<InputFile>,
   pub vanilla: Option<InputFile>,
   pub dependencies: BTreeSet<String>,
-  /// Whether other resources ship this added YMAP too, so it is written to replace theirs.
+  /// Whether other resources ship this added stream file too, so it is written to replace theirs.
   #[serde(default, skip_serializing_if = "std::ops::Not::not")]
   #[cfg_attr(feature = "typescript", specta(optional))]
   pub replaces_other_resources: bool,

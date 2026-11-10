@@ -104,9 +104,10 @@ diff record and the generation index alone, and are kept while both are unchange
 4. Write merged native stream files under extension subdirectories (`ymap/`, `ybn/`),
    `_omit.txt` and `duplicates.json` at the selected output root.
 
-An added YMAP is merged from every resource's version that no overwrite ignores, as the
-overwrite cache records them, each compared with the empty YMAP; its name, flags, extents
-and block are kept. Versions are merged from the resource whose name sorts last, the one
+A stream file that resources add, named after no vanilla file, is merged from every
+resource's version that no overwrite ignores, as the overwrite cache records them, each
+compared with an empty file of its format; YMAPs are the only format merged this way so far.
+For an added YMAP, its name, flags, extents and block are kept. Versions are merged from the resource whose name sorts last, the one
 loaded last, and the additions an earlier version makes already are left out before the
 diffs are combined (`core::format::ymap::compare::added`): entities by GUID or by type,
 archetype, LOD level and position, other items by equality within the matching tolerances
@@ -146,8 +147,9 @@ Overwrites are user edits applied to merge inputs without changing source or
 cache bytes; besides the sources, they are the only input written from outside the tool.
 The source cache never reads them: it keeps the sources and preprocesses them for reading.
 What the overwrites call for is derived into the overwrite cache, as the source cache is
-from the sources, by its own stage before the merge: the stream files each YMAP that
-resources add is merged from, in merge order (`added_ymaps.json`), and the overwrites that
+from the sources, by its own stage before the merge: the resources' files each stream file
+that resources add is merged from, in merge order (`added_stream_files.json`), and the
+overwrites that
 no longer match (`warnings.json`). The
 cache records a digest of the source and vanilla caches and every overwrite, and a merge
 reading one that no longer matches fails.

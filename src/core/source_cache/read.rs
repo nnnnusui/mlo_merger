@@ -69,7 +69,7 @@ impl MergeSourceFile {
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct MergeInputs {
   /// Changed or conflicting source YMAPs with a latest vanilla baseline, and every YMAP a
-  /// resource adds, named in [`Self::added_ymaps`].
+  /// resource adds, named in [`Self::added_stream_files`].
   pub ymap: Vec<MergeSourceFile>,
   /// Conflicting source YBNs with a latest vanilla baseline.
   pub ybn: Vec<MergeSourceFile>,
@@ -78,9 +78,10 @@ pub struct MergeInputs {
   pub propagated: Vec<MergeSourceFile>,
   /// Latest vanilla YMAP filenames required by the source load plan.
   pub vanilla_ymaps_to_read: BTreeSet<String>,
-  /// The lowercase file names of the YMAPs resources add, which replace no vanilla YMAP and
-  /// whose diff documents are taken against an empty YMAP ([`super::empty_baseline_file`]).
-  pub added_ymaps: BTreeSet<String>,
+  /// The lowercase file names of the stream files resources add, which replace no vanilla file,
+  /// and whose diff documents are taken against an empty file of their format (for YMAPs,
+  /// [`super::empty_baseline_file`]).
+  pub added_stream_files: BTreeSet<String>,
 }
 
 impl MergeInputs {
@@ -395,7 +396,7 @@ pub fn load_merge_inputs(
       for file in files {
         // Every added YMAP is merged against its baseline; one whose diff could not be taken,
         // as it cannot be read, is left as it is.
-        let added = added::is_added_ymap(&extension, &file)
+        let added = added::is_added_stream_file(&extension, &file)
           && file.cached_path.is_some()
           && fs::is_file(
             cache_dir.join(DIFF_DIR).join(ymap_diff_path(&resource.source, &file.path)?),
@@ -404,7 +405,7 @@ pub fn load_merge_inputs(
           continue;
         }
         if added {
-          inputs.added_ymaps.insert(file.file_name.to_ascii_lowercase());
+          inputs.added_stream_files.insert(file.file_name.to_ascii_lowercase());
         }
         let relative_source = slash_path(&resource.source.join(&file.path));
         let original_path = source_dir.join(&relative_source);

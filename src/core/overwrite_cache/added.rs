@@ -1,9 +1,9 @@
-//! Which stream files each YMAP that resources add is merged from, and the additions the merge
-//! leaves out of them as an earlier one makes them already (`added_ymaps.json`).
+//! Which resources' files each stream file that resources add is merged from, and the additions
+//! the merge leaves out of them as an earlier one makes them already (`added_stream_files.json`).
 //!
-//! Every resource's version of a YMAP that resources add is merged, each compared with the
-//! empty YMAP, and the additions an earlier one makes already are left out (see
-//! [`crate::core::format::ymap::compare::added`]). They are merged from the resource whose name
+//! Every resource's version of a stream file that resources add is merged, each compared with an
+//! empty file of its format, and the additions an earlier one makes already are left out; YMAPs
+//! are the only format merged so far (see [`crate::core::format::ymap::compare::added`]). They are merged from the resource whose name
 //! sorts last, as the one loaded last, so its version wins where they conflict. A stream file
 //! whose resource overwrite sets `ignore` is left out.
 
@@ -18,12 +18,12 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::BTreeMap;
 
-/// How one YMAP that resources add is merged.
+/// How one stream file that resources add is merged.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "typescript", derive(specta::Type))]
-pub struct AddedYmap {
+pub struct AddedStreamFile {
   /// The stream files merged, in merge order: the one loaded last first.
-  pub sources: Vec<AddedYmapSource>,
+  pub sources: Vec<AddedStreamFileSource>,
   /// The names of every resource shipping the YMAP, ignored ones included, in load order. When
   /// there are several, the merged YMAP is always written, so that it replaces theirs.
   pub shipped_by: Vec<String>,
@@ -34,7 +34,7 @@ pub struct AddedYmap {
   pub left_out: Vec<LeftOutAddition>,
 }
 
-impl AddedYmap {
+impl AddedStreamFile {
   /// Whether several resources ship it, so the merged YMAP is always written to replace theirs.
   pub fn replaces_others(&self) -> bool {
     self.shipped_by.len() > 1
@@ -49,7 +49,7 @@ impl AddedYmap {
   }
 }
 
-/// An addition the merge leaves out of a YMAP that resources add, as an earlier source in merge
+/// An addition the merge leaves out of a stream file that resources add, as an earlier source in merge
 /// order makes it already.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "typescript", derive(specta::Type))]
@@ -61,7 +61,7 @@ pub struct LeftOutAddition {
   pub kept: AddedItem,
 }
 
-/// An item of one stream file of a YMAP that resources add.
+/// An item of one resource's file of a stream file that resources add.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "typescript", derive(specta::Type))]
 pub struct AddedItem {
@@ -76,25 +76,25 @@ pub struct AddedItem {
   pub index: usize,
 }
 
-/// One stream file of a YMAP that resources add.
+/// One resource's file of a stream file that resources add.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "typescript", derive(specta::Type))]
-pub struct AddedYmapSource {
+pub struct AddedStreamFileSource {
   /// The resource's ID, its path relative to the source root.
   pub resource: String,
   /// The path below the resource's `stream` directory.
   pub stream_path: String,
 }
 
-/// The stream files of `inputs` each added YMAP is merged from; see the module docs.
+/// The files of `inputs` each added stream file is merged from; see the module docs.
 pub(super) fn resolve(
   inputs: &MergeInputs,
   overwrites: &Overwrites,
-) -> BTreeMap<String, AddedYmap> {
+) -> BTreeMap<String, AddedStreamFile> {
   let mut shippers = BTreeMap::<String, Vec<&MergeSourceFile>>::new();
   for source in &inputs.ymap {
     let name = source.file_name.to_ascii_lowercase();
-    if inputs.added_ymaps.contains(&name) {
+    if inputs.added_stream_files.contains(&name) {
       shippers.entry(name).or_default().push(source);
     }
   }
@@ -110,13 +110,13 @@ pub(super) fn resolve(
         let ignored = overwrites.for_source(source).is_some_and(|overwrite| overwrite.ignore);
         if ignored {
           tracing::info!(
-            "Added YMAP {name} of {} is ignored by its overwrite",
+            "Added stream file {name} of {} is ignored by its overwrite",
             source.resource_name()
           );
         }
         !ignored
       })
-      .map(|source| AddedYmapSource {
+      .map(|source| AddedStreamFileSource {
         resource: source.resource.clone(),
         stream_path: source.stream_path.replace('\\', "/"),
       })
@@ -126,7 +126,7 @@ pub(super) fn resolve(
     }
     files.insert(
       name,
-      AddedYmap {
+      AddedStreamFile {
         sources: merged,
         shipped_by,
         left_out: Vec::new(),
@@ -140,7 +140,7 @@ pub(super) fn resolve(
 /// thinning their source-cache diff documents, with their overwrites applied, as it does (see
 /// [`crate::core::format::ymap::compare::added`]).
 pub(super) fn record_left_out(
-  files: &mut BTreeMap<String, AddedYmap>,
+  files: &mut BTreeMap<String, AddedStreamFile>,
   inputs: &MergeInputs,
   overwrites: &Overwrites,
 ) -> Result<()> {
@@ -155,9 +155,11 @@ pub(super) fn record_left_out(
           crate::core::source_cache::resource_name(&entry.resource).to_ascii_lowercase(),
           stream_key(&entry.stream_path),
         ))
-        .ok_or_else(|| format!("Source {} of added YMAP {name} is not cached", entry.resource))?;
+        .ok_or_else(|| {
+          format!("Source {} of added stream file {name} is not cached", entry.resource)
+        })?;
       let path = source.diff_path.as_ref().ok_or_else(|| {
-        format!("Source {} of added YMAP {name} has no diff document", entry.resource)
+        format!("Source {} of added stream file {name} has no diff document", entry.resource)
       })?;
       let document: YmapComparisonDiff = read_json(path)?;
       let mut diffs = document.diffs.clone();

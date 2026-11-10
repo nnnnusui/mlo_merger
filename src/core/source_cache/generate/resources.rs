@@ -240,12 +240,12 @@ pub(super) fn update_selected_resources(
 }
 
 /// Whether the source cache moves `file`, of `format`, out of its resource: every file named
-/// after a vanilla file, and every YMAP, as the YMAPs resources add are merged too.
+/// after a vanilla file, and every stream file a resource adds that the merge takes.
 fn is_collected(
   format: &str,
   file: &crate::core::source_cache::types::SourceFile,
 ) -> bool {
-  file.vanilla.is_some() || format == ".ymap"
+  file.vanilla.is_some() || crate::core::source_cache::added::is_added_stream_file(format, file)
 }
 
 pub(super) fn remove_missing_resources(

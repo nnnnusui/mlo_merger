@@ -527,9 +527,11 @@ fn added_ymaps_merge_every_version_without_shared_additions() {
   let read = |path: &Path| ymap_to_model(&fs::read(path).unwrap(), &catalog.hash_names).unwrap();
   let guids = |model: &Ymap| model.entities.iter().map(|entity| entity.guid).collect::<Vec<_>>();
   let merged = || read(&output.join("ymap/custom.ymap"));
-  let added_ymaps = || -> serde_json::Value {
-    serde_json::from_reader(fs::File::open(overwrite_cache.join("added_ymaps.json")).unwrap())
-      .unwrap()
+  let added_stream_files = || -> serde_json::Value {
+    serde_json::from_reader(
+      fs::File::open(overwrite_cache.join("added_stream_files.json")).unwrap(),
+    )
+    .unwrap()
   };
   let document = |path: &Path| -> YmapComparisonDiff {
     serde_json::from_reader(fs::File::open(path).unwrap()).unwrap()
@@ -539,7 +541,11 @@ fn added_ymaps_merge_every_version_without_shared_additions() {
     fs::create_dir_all(path.parent().unwrap()).unwrap();
     write_json(&path, &overwrite).unwrap();
   };
+  // A file of an earlier format of the overwrite cache is removed when it is rebuilt.
+  fs::create_dir_all(&overwrite_cache).unwrap();
+  fs::write(overwrite_cache.join("added_ymaps.json"), b"{}").unwrap();
   let first_run = merge.run_after_caches(&vanilla).unwrap();
+  assert!(!overwrite_cache.join("added_ymaps.json").exists());
 
   // The added YMAPs are moved into the source cache and compared with an empty YMAP.
   assert!(source_cache.join("resources/resource_a/custom.ymap").is_file());
@@ -561,7 +567,7 @@ fn added_ymaps_merge_every_version_without_shared_additions() {
   assert_eq!(guids(&model), [100, 200, 1300, 0, 1200, 1250]);
   assert_eq!(model.entities[0].position.x, third.entities[0].position.x);
   assert_eq!(model.streaming_extents_max.x, second.streaming_extents_max.x);
-  let files = added_ymaps();
+  let files = added_stream_files();
   assert_eq!(
     files["files"]["custom.ymap"]["sources"]
       .as_array()

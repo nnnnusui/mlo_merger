@@ -85,7 +85,7 @@ fn ybn_version_change_reuses_current_ymap_groups() {
     ybn: vec![ybn],
     propagated: Vec::new(),
     vanilla_ymaps_to_read: BTreeSet::new(),
-    added_ymaps: BTreeSet::new(),
+    added_stream_files: BTreeSet::new(),
   };
   assert!(
     IncrementalMerge {

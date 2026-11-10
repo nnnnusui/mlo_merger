@@ -123,26 +123,32 @@ or stale document fails the merge instead of being recomputed, so rebuild the so
 first (`--merge` and the pipeline do). Only YMAPs that still differ from vanilla after
 merging are written.
 
-### Added YMAPs
+### Added Stream Files
 
-A YMAP no vanilla YMAP is named after, one a resource adds, is diffed and merged like the
-others against an empty YMAP, so every item of the source is an addition, and its name,
-flags, extents and block are kept.
+A stream file no vanilla file is named after, one a resource adds, is diffed and merged like
+the others against an empty file of its format, so everything in the source is an addition.
+YMAPs are the only format whose added files are merged so far; the others are deployed as
+they are.
 
-- Of resources adding a YMAP of the same name, every version is merged, from the resource
-  whose name sorts last (the one loaded last), so its version wins conflicts. An addition
-  an earlier version makes already is left out: an entity with the same GUID or of the
+- Of resources adding a file of the same name, every version is merged, from the resource
+  whose name sorts last (the one loaded last), so its version wins conflicts, and an addition
+  an earlier version makes already is left out. The merged file is always written, so it
+  replaces the others. The overwrite cache's `added_stream_files.json` (`AddedStreamFiles`)
+  records each added file's sources in merge order and the additions left out, each with the
+  item kept in its place.
+- A resource overwrite with `ignore` leaves its stream file out of the merge.
+- An added file only one resource ships is written only when the merge changes it, for
+  example through an overwrite or a repaired parent reference; otherwise the resource's
+  file is deployed as it is.
+
+For an added YMAP:
+
+- The empty baseline has no name, flags, extents or block, so the source's are kept.
+- An addition an earlier version makes already is an entity with the same GUID or of the
   same type, archetype and LOD level at the same position (within the `ymap`
   [matching tolerance](#matching-configuration)), its children then pointing at the kept
   one, or another item equal within the matching tolerances; LOD lights and distant LOD
   lights are kept. The extents cover every version's.
-  The merged YMAP is always written, so it replaces the others. The overwrite cache's
-  `added_ymaps.json` (`AddedYmaps`) records each added YMAP's sources in merge order and the additions left out, each
-  with the item kept in its place.
-- A resource overwrite with `ignore` leaves its stream file out of the merge.
-- An added YMAP only one resource ships is written only when the merge changes it, for
-  example through an overwrite or a repaired parent reference; otherwise the resource's
-  file is deployed as it is.
 - The source cache's `added_ymap_relationships.json` lists the added YMAPs, as
   `{resource}/{fileName}`, under the parent each declares, as the vanilla cache's
   `ymap_relationships.json` does; related YMAPs are merged together.
@@ -248,7 +254,7 @@ Overwrites are the only inputs written from outside the tool besides the sources
 read from `--overwrite` (default: `asset/overwrite`), and what they call for is derived
 into the overwrite cache (`--overwrite-cache`, default `asset/overwrite-cache`) by
 `--generate-overwrite-cache`, which `--merge` and `--pipeline` run first. The merge always
-reads it, even with no overwrites, since it also records which resources each added YMAP is
+reads it, even with no overwrites, since it also records which resources each added stream file is
 merged from; a missing one, or one older than the source and vanilla caches or the
 overwrites, fails the merge. Overwrites currently only apply to
 YMAPs.
@@ -256,7 +262,8 @@ YMAPs.
 - `resources/{resourceName}/{stream_path}.diff.json` (`StreamFileOverwrite`), one per
   stream file, lists the differences of that file's diff document to leave out of the
   merge, or sets `ignore` to leave the file out whole. The diff document is the source
-  cache's, against vanilla or, for an [added YMAP](#added-ymaps), an empty YMAP.
+  cache's, against vanilla or, for an [added stream file](#added-stream-files), an empty file of
+  its format.
 - `vanilla/latest/ymap/{fileName}.diff.json` (`VanillaOverwrite`) holds differences
   written directly against a latest vanilla YMAP. They are merged as one more source
   after every resource's, under the same merge policy, and also into vanilla YMAPs no
@@ -498,8 +505,8 @@ YBN conversion does not require an external schema directory.
 The release archives contain `asset/gen_mlo_merger.ts`, generated from the Rust Serde
 models: merge diagnostics, vanilla/source/merge/deploy caches, stream conflicts,
 diff-cache reports, source-cache YMAP diff documents (`YmapComparisonDiff`), overwrite
-documents (`StreamFileOverwrite`, `VanillaOverwrite`), the overwrite cache's added YMAPs and
-warnings (`AddedYmaps`, `OverwriteWarnings`), `--read` documents and results (`YmapReadDocument`,
+documents (`StreamFileOverwrite`, `VanillaOverwrite`), the overwrite cache's added stream files
+and warnings (`AddedStreamFiles`, `OverwriteWarnings`), `--read` documents and results (`YmapReadDocument`,
 `ReadResult`), pipeline output (`PipelineReport`), version listings and
 matching configuration. It does not include YBN difference payloads or JSON
 Schema documents, and it is not checked into the repository; see

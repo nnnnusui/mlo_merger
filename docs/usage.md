@@ -37,7 +37,7 @@ in `web/`, described under `web` in its `release.json`; see [Browser build](web.
 | Changes carried to newer DLC generations | `YmapPropagatedDiff`, `YmapPropagationOrigin` |
 | Vanilla YMAP generations | `GenerationIndex`, `GenerationUnit` |
 | Overwrite documents | `StreamFileOverwrite`, `OverwriteFingerprint`, `YmapDiffSkip`, `VanillaOverwrite` |
-| Overwrite cache | `AddedYmaps`, `AddedYmap`, `AddedYmapSource`, `LeftOutAddition`, `AddedItem`, `OverwriteWarnings`, `SourceUpdate`, `SourceVersion`, `SourceUpdateOutcome` |
+| Overwrite cache | `AddedStreamFiles`, `AddedStreamFile`, `AddedStreamFileSource`, `LeftOutAddition`, `AddedItem`, `OverwriteWarnings`, `SourceUpdate`, `SourceVersion`, `SourceUpdateOutcome` |
 | Pipeline stdout | `PipelineReport`, `PipelineChanges`, `StoreChanges`, `OverwriteWarnings`, `IgnoredOverwrite`, `IgnoredOverwriteReason` |
 | Merge diagnostics | `DuplicateReport` |
 
@@ -150,7 +150,7 @@ source root.
 | Inspect changes carried to newer DLC generations | none; written by source-cache generation | | `asset/source-cache/propagated/{resource}/{file_name}.diff.json` (`YmapPropagatedDiff`); each carried item's `reason` names the item it came from |
 | Inspect vanilla version differences | none; vanilla-cache generation would write them, but it is currently disabled | | `asset/vanilla-cache/ymap_versions.json` (`VanillaYmapVersionIndex`), then `asset/vanilla-cache/diff/{version}/ymap/{name}.diff.json` (`VanillaYmapDiff`) for each version after a YMAP's first |
 | Apply overwrites | `--pipeline`, or `--merge` then `--deploy` | `PipelineReport` (pipeline only) | `asset/merged/duplicates.json` (`DuplicateReport`) |
-| Check overwrites | `--generate-overwrite-cache`; also run by `--merge` and `--pipeline` | | `asset/overwrite-cache/warnings.json` (`OverwriteWarnings`), `asset/overwrite-cache/added_ymaps.json` (`AddedYmaps`) |
+| Check overwrites | `--generate-overwrite-cache`; also run by `--merge` and `--pipeline` | | `asset/overwrite-cache/warnings.json` (`OverwriteWarnings`), `asset/overwrite-cache/added_stream_files.json` (`AddedStreamFiles`) |
 
 ### Stream-File Bounds Indexes
 
@@ -231,7 +231,7 @@ vanilla. The last stdout line is a `ReadResult`:
 
 Source-cache generation writes one diff document for every source YMAP: against the vanilla
 YMAP it replaces, or, for a YMAP the resource adds, against its baseline (see
-[Added YMAPs](reference.md#added-ymaps)):
+[Added Stream Files](reference.md#added-stream-files)):
 
 ```text
 asset/source-cache/diff/{resource}/{stream_path}.diff.json
@@ -324,16 +324,17 @@ asset/overwrite/vanilla/latest/ymap/{file_name}.diff.json
 - An overwrite whose `vanilla` no longer matches the latest vanilla file is not applied and is
   listed in the pipeline's `ignored_overwrites`. Rewrite it after a vanilla update.
 
-### Added YMAPs Several Resources Ship
+### Added Stream Files Several Resources Ship
 
-A YMAP no vanilla YMAP is named after is compared with an empty YMAP, so its source-cache
-diff document lists everything in it as additions. When several resources ship one, every
-version is merged:
+A stream file no vanilla file is named after is compared with an empty file of its format, so
+its source-cache diff document lists everything in it as additions. When several resources ship
+one, every version is merged (YMAPs only, so far):
 
 - Versions are merged from the resource whose name sorts last (the one loaded last), which
-  wins where they conflict. `asset/overwrite-cache/added_ymaps.json` (`AddedYmaps`) lists
-  each added YMAP's `sources` in that order and every resource shipping it (`shipped_by`).
-- An addition an earlier version makes already is left out:
+  wins where they conflict. `asset/overwrite-cache/added_stream_files.json`
+  (`AddedStreamFiles`) lists each added file's `sources` in that order and every resource
+  shipping it (`shipped_by`).
+- An addition an earlier version makes already is left out; for a YMAP:
 
   | Item | Left out when an earlier version adds |
   |---|---|
@@ -345,7 +346,7 @@ version is merged:
 - The extents cover every version's. Name, flags and block come from the first version.
 - Leave out what remains doubled with a resource overwrite written from that resource's
   source-cache diff document, as for any source, or leave a version out with `ignore`.
-- `added_ymaps.json` lists each addition left out in the YMAP's `left_out`. It names the stream file
+- `added_stream_files.json` lists each addition left out in the file's `left_out`. It names the stream file
   and the item, by its array (as diff documents name it) and its index in that file, with the
   item of an earlier version kept in its place:
 
