@@ -64,7 +64,8 @@ impl GameBuilds {
 
   /// Resolves a build number or a DLC name, as FiveM's `sv_enforceGameBuild` does.
   ///
-  /// Names are matched as [`fivem_name`] spells them; a DLC listed under several builds
+  /// Names are matched as FiveM spells them, so `xm18`, `h4` and `sum` mean `mpchristmas2018`,
+  /// `mpheist4` and `mpsum`; a DLC listed under several builds
   /// resolves to the latest of them. A number missing from the table resolves, with a warning,
   /// to the closest listed build below it.
   pub fn resolve(

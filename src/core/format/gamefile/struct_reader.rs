@@ -5,7 +5,8 @@
 
 use std::{fmt, io};
 
-/// A structure field's name and its hash, the key schemas store; see [`field!`].
+/// A structure field's name and its hash, the key schemas store; the crate's `field!` macro
+/// hashes a literal at compile time.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct FieldName {
   pub name: &'static str,
