@@ -1,4 +1,11 @@
 {
+  "base": {
+    "modified_nanos": 0,
+    "modified_seconds": 0,
+    "path": "latest/ymap/smpl_block_01.ymap",
+    "sha256": "edbc473156d8677f3c7aafd60e5d6a76f619f013577092055a3451becb82abb8",
+    "size": 3038
+  },
   "diffs": {
     "car_generators": [
       {
@@ -118,7 +125,7 @@
     ]
   },
   "schema_version": 12,
-  "source": {
+  "target": {
     "modified_nanos": 0,
     "modified_seconds": 0,
     "path": "resources/smpl_street_tweaks/smpl_block_01.ymap",
@@ -134,12 +141,5 @@
     "ymap_grass_position": 0.01,
     "ymap_lod_light_position_decimals": 3,
     "ymap_occlude_model_position": 0.01
-  },
-  "vanilla": {
-    "modified_nanos": 0,
-    "modified_seconds": 0,
-    "path": "latest/ymap/smpl_block_01.ymap",
-    "sha256": "edbc473156d8677f3c7aafd60e5d6a76f619f013577092055a3451becb82abb8",
-    "size": 3038
   }
 }

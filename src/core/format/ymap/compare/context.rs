@@ -192,8 +192,8 @@ impl YmapComparisonContext {
           }
         }
         Some(YmapComparisonPartner {
-          source: self.comparison_file(&partner, None)?,
-          vanilla: self.comparison_file(&partner_baseline, None)?,
+          target: self.comparison_file(&partner, None)?,
+          base: self.comparison_file(&partner_baseline, None)?,
         })
       }
       None => None,
@@ -203,8 +203,8 @@ impl YmapComparisonContext {
       tolerances: ctx.tolerances,
       partner,
       diffs,
-      source: self.comparison_file(file, None)?,
-      vanilla: self.comparison_file(&baseline, None)?,
+      target: self.comparison_file(file, None)?,
+      base: self.comparison_file(&baseline, None)?,
     })
   }
 
@@ -289,10 +289,10 @@ impl YmapComparisonContext {
     Ok(match (current, partner) {
       (None, None) => true,
       (Some((_, current, current_baseline)), Some(partner)) => {
-        self.comparison_file(&current, Some(&partner.source))?.same_content(&partner.source)
+        self.comparison_file(&current, Some(&partner.target))?.same_content(&partner.target)
           && self
-            .comparison_file(&current_baseline, Some(&partner.vanilla))?
-            .same_content(&partner.vanilla)
+            .comparison_file(&current_baseline, Some(&partner.base))?
+            .same_content(&partner.base)
       }
       _ => false,
     })

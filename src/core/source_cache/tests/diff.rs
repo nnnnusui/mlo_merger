@@ -118,8 +118,8 @@ impl Fixture {
     let document = serde_json::json!({
       "schema_version": schema_version,
       "tolerances": tolerances,
-      "source": file(&self.source_ymap),
-      "vanilla": file(&self.vanilla_ymap.canonicalize().unwrap()),
+      "target": file(&self.source_ymap),
+      "base": file(&self.vanilla_ymap.canonicalize().unwrap()),
       "diffs": { "name": "kept" },
     });
     fs::create_dir_all(self.diff_path().parent().unwrap()).unwrap();

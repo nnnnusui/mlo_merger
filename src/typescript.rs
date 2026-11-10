@@ -133,7 +133,7 @@ mod tests {
     assert!(actual.contains("modified_seconds: number"));
     assert!(actual.contains("algorithm_versions?: { [key: string]: number }"));
     assert!(actual.contains("entities?: YmapEntityDiff[]"));
-    assert!(actual.contains("ignore?: boolean; source?: OverwriteFingerprint | null"));
+    assert!(actual.contains("ignore?: boolean; target?: OverwriteFingerprint | null"));
     assert!(actual.contains("skip?: YmapDiffSkip | null"));
     assert!(actual.contains("vanilla_cache: StoreChanges"));
     assert!(actual.contains("added: string[]"));

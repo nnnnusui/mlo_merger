@@ -131,10 +131,10 @@ fn generate_diffs(
     };
     // The source cache moved the source into itself; the sample names where it came from.
     clean(
-      &mut document.source,
+      &mut document.target,
       format!("docs/sample/source/{}/stream/{}", source.resource, source.stream_path),
     );
-    clean(&mut document.vanilla, "docs/sample/sample.ymap".into());
+    clean(&mut document.base, "docs/sample/sample.ymap".into());
     diffs.insert(name, document);
   }
   diffs
@@ -181,8 +181,8 @@ fn sample_sources_and_overwrites_are_current_and_apply_cleanly() {
       StreamFileOverwrite {
         schema_version: StreamFileOverwrite::SCHEMA_VERSION,
         ignore: false,
-        source: Some(fingerprint(&document.source)),
-        vanilla: Some(fingerprint(&document.vanilla)),
+        target: Some(fingerprint(&document.target)),
+        base: Some(fingerprint(&document.base)),
         skip: Some(source.skip.clone()),
       },
     );
@@ -224,8 +224,8 @@ fn sample_sources_and_overwrites_are_current_and_apply_cleanly() {
       sha256: file.sha256.clone(),
       size: file.size,
     };
-    assert_eq!(overwrite.source, Some(fingerprint(&document.source)), "{name}");
-    assert_eq!(overwrite.vanilla, Some(fingerprint(&document.vanilla)), "{name}");
+    assert_eq!(overwrite.target, Some(fingerprint(&document.target)), "{name}");
+    assert_eq!(overwrite.base, Some(fingerprint(&document.base)), "{name}");
     let mut diff = document.diffs.clone();
     let unmatched = skip_diffs(&mut diff, overwrite.skip.as_ref().unwrap()).unwrap();
     assert!(unmatched.is_empty(), "{name}: {unmatched:?}");

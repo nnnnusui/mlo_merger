@@ -324,8 +324,8 @@ fn sources_with_a_diff_document_merge_through_it_and_reject_stale_ones() {
     &document,
     serde_json::to_vec(&YmapComparisonDiff {
       schema_version: YmapComparisonDiff::SCHEMA_VERSION,
-      source: recorded(&source),
-      vanilla: recorded(&vanilla),
+      target: recorded(&source),
+      base: recorded(&vanilla),
       tolerances: Default::default(),
       partner: None,
       diffs: crate::core::format::ymap::compare::YmapDiffFields {
@@ -457,7 +457,7 @@ fn propagated_changes_merge_into_vanilla_ymaps_and_reject_stale_documents() {
     let carried = YmapPropagatedDiff {
       schema_version: YmapPropagatedDiff::SCHEMA_VERSION,
       resource: "resource".into(),
-      vanilla: YmapComparisonFile {
+      base: YmapComparisonFile {
         path: "latest/ymap/parent.ymap".into(),
         sha256: sha256.into(),
         size: fingerprint.size,

@@ -277,7 +277,7 @@ YMAPs; one of another format is reported as `unsupported_format` and not applied
   [YMAP Fields](#ymap-fields)).
 
 An overwrite leaving out differences applies only while the files it was written against are current: its
-`source` and `vanilla` fingerprints (`sha256` and `size`) must match. Otherwise it is
+`target` and `base` fingerprints (`sha256` and `size`) must match. Otherwise it is
 left out whole with a warning, and the pipeline lists it in `ignored_overwrites` on every
 run until it is rewritten. A resource overwrite whose source alone changed is first
 followed to the new version: the overwrite cache compares the diff document of the version it

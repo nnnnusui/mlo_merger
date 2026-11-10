@@ -46,8 +46,8 @@ impl MergeYmap {
           )
         })?;
         let fingerprints = (
-          OverwriteFingerprint::from(&document.source),
-          OverwriteFingerprint::from(&document.vanilla),
+          OverwriteFingerprint::from(&document.target),
+          OverwriteFingerprint::from(&document.base),
         );
         (document.diffs, Some(fingerprints))
       }

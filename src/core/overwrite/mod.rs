@@ -46,20 +46,20 @@ const DOCUMENT_EXTENSION: &str = ".diff.json";
 pub struct StreamFileOverwrite {
   /// Version of the document layout.
   pub schema_version: u32,
-  /// Leaves the stream file out of the merge whole, whatever it holds; `source`, `vanilla` and
+  /// Leaves the stream file out of the merge whole, whatever it holds; `target`, `base` and
   /// `skip` are then not needed.
   #[serde(default, skip_serializing_if = "std::ops::Not::not")]
   pub ignore: bool,
-  /// The source file this overwrite was written against.
+  /// The source file this overwrite was written against, the diff document's `target`.
   #[serde(default, skip_serializing_if = "Option::is_none")]
   #[cfg_attr(feature = "typescript", specta(optional))]
-  pub source: Option<OverwriteFingerprint>,
-  /// The baseline of the diff document this overwrite was written against, its `vanilla`: the
+  pub target: Option<OverwriteFingerprint>,
+  /// The baseline of the diff document this overwrite was written against, its `base`: the
   /// latest vanilla file, the empty YMAP a YMAP resources add is compared with, or the base
   /// source's YMAP.
   #[serde(default, skip_serializing_if = "Option::is_none")]
   #[cfg_attr(feature = "typescript", specta(optional))]
-  pub vanilla: Option<OverwriteFingerprint>,
+  pub base: Option<OverwriteFingerprint>,
   /// The differences to leave out of the merge, in the shape of the diff document's `diffs`.
   ///
   /// In an object, `true` leaves out the field's whole difference and a nested selector only
@@ -155,9 +155,9 @@ impl StreamFileOverwrite {
   ) -> Option<IgnoredOverwriteReason> {
     if self.ignore {
       None
-    } else if self.source.as_ref() != Some(source) {
+    } else if self.target.as_ref() != Some(source) {
       Some(IgnoredOverwriteReason::SourceChanged)
-    } else if self.vanilla.as_ref() != Some(vanilla) {
+    } else if self.base.as_ref() != Some(vanilla) {
       Some(IgnoredOverwriteReason::VanillaChanged)
     } else {
       None
@@ -312,10 +312,10 @@ fn load_resources(directory: &Path) -> Result<ResourceOverwrites> {
       );
     }
     if !overwrite.ignore
-      && (overwrite.source.is_none() || overwrite.vanilla.is_none() || overwrite.skip.is_none())
+      && (overwrite.target.is_none() || overwrite.base.is_none() || overwrite.skip.is_none())
     {
       return Err(
-        format!("{} needs source, vanilla and skip unless it sets ignore", path.display()).into(),
+        format!("{} needs target, base and skip unless it sets ignore", path.display()).into(),
       );
     }
     if !supports(stream_path) {

@@ -323,8 +323,8 @@ impl Propagation<'_> {
           continue;
         };
         let origin = YmapPropagationOrigin {
-          source: document.source.clone(),
-          vanilla: document.vanilla.clone(),
+          target: document.target.clone(),
+          base: document.base.clone(),
         };
         let reached =
           self.carry(&resource_name, &file.file_name, &document, &shipped, &mut targets)?;
@@ -350,7 +350,7 @@ impl Propagation<'_> {
         let document = YmapPropagatedDiff {
           schema_version: YmapPropagatedDiff::SCHEMA_VERSION,
           resource: resource_id.clone(),
-          vanilla,
+          base: vanilla,
           origins: target.origins.clone(),
           diffs: serde_json::from_value(target.diffs())
             .map_err(|error| format!("Carried diff of {file_name} for {resource_name}: {error}"))?,

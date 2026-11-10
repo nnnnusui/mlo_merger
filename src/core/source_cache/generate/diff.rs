@@ -65,8 +65,8 @@ struct DiffInputs {
   schema_version: u32,
   #[serde(default)]
   tolerances: Option<MatchTolerances>,
-  source: YmapComparisonFile,
-  vanilla: YmapComparisonFile,
+  target: YmapComparisonFile,
+  base: YmapComparisonFile,
   #[serde(default)]
   partner: Option<YmapComparisonPartner>,
 }
@@ -255,7 +255,7 @@ fn is_current(
   inputs.schema_version == YmapComparisonDiff::SCHEMA_VERSION
     && inputs.tolerances == Some(matching::current())
     && context
-      .is_diff_current(file, &inputs.source, &inputs.vanilla, inputs.partner.as_ref())
+      .is_diff_current(file, &inputs.target, &inputs.base, inputs.partner.as_ref())
       .unwrap_or(false)
 }
 

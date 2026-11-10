@@ -239,10 +239,11 @@ asset/source-cache/diff/{resource}/{stream_path}.diff.json
 
 - `diffs` holds the resource's differences from vanilla. Overwrite `skip` selectors pick
   entries from it.
-- Copy `source.sha256`/`size` and `vanilla.sha256`/`size` into the overwrite unchanged.
-  `source.path` and `vanilla.path` name the files relative to their stores, such as
+- `target` is the source YMAP and `base` its baseline, the YMAP the differences are taken
+  from. Copy `target.sha256`/`size` and `base.sha256`/`size` into the overwrite unchanged.
+  `target.path` and `base.path` name the files relative to their stores, such as
   `resources/{resource}/{stream_path}` and `latest/ymap/{file_name}`. For an added YMAP,
-  `vanilla.path` is empty: it is compared with an empty YMAP.
+  `base.path` is empty: it is compared with an empty YMAP.
 - Array differences are `Added`, `Removed`, `Modified` (and `Replaced` for non-entity arrays).
   `base_index` indexes the baseline (vanilla) model and `target_index` the source model:
   `Removed` and `Replaced` name their item by `base_index`, `Modified` by both, and `Added`
@@ -267,8 +268,8 @@ asset/overwrite/resources/{resource}/{stream_path}.diff.json
 ```json
 {
   "schema_version": 2,
-  "source":  { "sha256": "<diff document source.sha256>",  "size": 5638 },
-  "vanilla": { "sha256": "<diff document vanilla.sha256>", "size": 5675 },
+  "target": { "sha256": "<diff document target.sha256>", "size": 5638 },
+  "base":   { "sha256": "<diff document base.sha256>",   "size": 5675 },
   "skip": {
     "entities": [
       { "Modified": { "base_index": 0, "changes": { "position": true } } },
@@ -290,7 +291,7 @@ asset/overwrite/resources/{resource}/{stream_path}.diff.json
   only the parts it names.
 - In an array, a selector leaves out the entries whose written fields all match. With
   `changes`, only the named changes are left out rather than the whole entry.
-- An overwrite whose `source` or `vanilla` no longer matches the current files is not
+- An overwrite whose `target` or `base` no longer matches the current files is not
   applied. The pipeline lists it in `ignored_overwrites` (see
   [Pipeline Output](#pipeline-output)) on every run until it is rewritten from the new diff
   document.
@@ -306,7 +307,7 @@ asset/overwrite/vanilla/latest/ymap/{file_name}.diff.json
 ```json
 {
   "schema_version": 2,
-  "vanilla": { "sha256": "<latest vanilla file sha256>", "size": 5675 },
+  "base": { "sha256": "<latest vanilla file sha256>", "size": 5675 },
   "diffs": {
     "entities": [{ "Removed": { "base_index": 3 } }]
   }
@@ -325,7 +326,7 @@ asset/overwrite/vanilla/latest/ymap/{file_name}.diff.json
   differences from the resource's diff document into the vanilla overwrite. The value is
   tied only to the vanilla file, so it is not updated when the resource changes.
 - A vanilla YMAP with an overwrite is merged even when no resource replaces it.
-- An overwrite whose `vanilla` no longer matches the latest vanilla file is not applied and is
+- An overwrite whose `base` no longer matches the latest vanilla file is not applied and is
   listed in the pipeline's `ignored_overwrites`. Rewrite it after a vanilla update.
 
 ### Added Stream Files Several Resources Ship
@@ -484,8 +485,8 @@ or removed (`PipelineChanges`), and the [overwrite warnings](#overwrite-warnings
   | `reason` | Meaning |
   |---|---|
   | `unsupported_format` | `file` is of a format overwrites do not support yet (only YMAPs are supported) |
-  | `source_changed` | The source stream file differs from `source` |
-  | `vanilla_changed` | The latest vanilla file differs from `vanilla` (the source, if any, is unchanged) |
+  | `source_changed` | The source stream file differs from `target` |
+  | `vanilla_changed` | The latest vanilla file differs from `base` (the source, if any, is unchanged) |
   | `missing_source` | The resource merges no stream file at `file`, for example after it was removed or excluded |
   | `missing_vanilla` | No latest vanilla file is named `file` |
 - Deployment is not included; its counts are logged on stderr.
@@ -536,8 +537,8 @@ export interface InspectedFile {
 export interface SkipRequest {
   resource: string;
   streamPath: string;
-  source: OverwriteFingerprint;
-  vanilla: OverwriteFingerprint;
+  target: OverwriteFingerprint;
+  base: OverwriteFingerprint;
   skip: YmapDiffSkip;
 }
 ```
@@ -672,12 +673,12 @@ window.addEventListener("message", ({ data }: MessageEvent<{ type: string; files
 });
 
 function skip(file: InspectedFile, selector: YmapDiffSkip): void {
-  const { sha256, size } = file.diff!.source;
+  const { target, base } = file.diff!;
   const request: SkipRequest = {
     resource: file.resource,
     streamPath: file.streamPath,
-    source: { sha256, size },
-    vanilla: { sha256: file.diff!.vanilla.sha256, size: file.diff!.vanilla.size },
+    target: { sha256: target.sha256, size: target.size },
+    base: { sha256: base.sha256, size: base.size },
     skip: selector,
   };
   fetch(`https://${GetParentResourceName()}/skip`, { method: "POST", body: JSON.stringify(request) });
@@ -717,7 +718,7 @@ onNet("mlo:skip", async (request: SkipRequest, gameBuild: number) => {
 
   // Keep earlier selectors only while they were written against the same files.
   const sameFiles =
-    current?.source?.sha256 === request.source.sha256 && current?.vanilla?.sha256 === request.vanilla.sha256;
+    current?.target?.sha256 === request.target.sha256 && current?.base?.sha256 === request.base.sha256;
   const previous: Exclude<YmapDiffSkip, true> =
     sameFiles && current?.skip && current.skip !== true ? current.skip : {};
   const entities = [
@@ -725,9 +726,9 @@ onNet("mlo:skip", async (request: SkipRequest, gameBuild: number) => {
     ...(request.skip !== true && request.skip.entities !== true ? request.skip.entities ?? [] : []),
   ];
   const overwrite: StreamFileOverwrite = {
-    schema_version: 1,
-    source: request.source,
-    vanilla: request.vanilla,
+    schema_version: 2,
+    target: request.target,
+    base: request.base,
     skip: { ...previous, entities },
   };
 

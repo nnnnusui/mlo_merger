@@ -118,8 +118,8 @@ fn applies_only_against_the_files_it_was_written_for() {
   let overwrite = StreamFileOverwrite {
     schema_version: StreamFileOverwrite::SCHEMA_VERSION,
     ignore: false,
-    source: Some(fingerprint("source")),
-    vanilla: Some(fingerprint("vanilla")),
+    target: Some(fingerprint("source")),
+    base: Some(fingerprint("vanilla")),
     skip: Some(json!({"content_flags": true})),
   };
   let mut diff = diff();
@@ -147,8 +147,8 @@ fn loads_resource_files_keyed_case_insensitively() {
   fs::create_dir_all(root.join("resources/Cfx-Map/Vanilla")).unwrap();
   let file = json!({
     "schema_version": 2,
-    "source": {"sha256": "a", "size": 1},
-    "vanilla": {"sha256": "b", "size": 2},
+    "target": {"sha256": "a", "size": 1},
+    "base": {"sha256": "b", "size": 2},
     "skip": {"content_flags": true}
   });
   fs::write(root.join("resources/Cfx-Map/Vanilla/Map.ymap.diff.json"), file.to_string()).unwrap();
@@ -158,7 +158,7 @@ fn loads_resource_files_keyed_case_insensitively() {
   let overwrites = Overwrites::load(&root).unwrap();
   assert_eq!(overwrites.keys().collect::<Vec<_>>(), [("cfx-map", "vanilla/map.ymap")]);
   let overwrite = overwrites.stream_file("cfx-map", "vanilla/MAP.ymap").unwrap();
-  assert_eq!(overwrite.vanilla.as_ref().unwrap().size, 2);
+  assert_eq!(overwrite.base.as_ref().unwrap().size, 2);
 
   // One leaving the file out whole needs nothing else, and always applies.
   fs::write(

@@ -26,8 +26,8 @@ triangle 11:
 `sample_resource_b` adds an entity and removes triangle 20. Its overwrite drops
 the added entity by its index in the source (`{"Added": {"target_index": 1}}`).
 
-`source` and `vanilla` record the files each overwrite was written against
-(the `sha256` and `size` of the diff document's `source` and `vanilla`); an
+`target` and `base` record the files each overwrite was written against
+(the `sha256` and `size` of the diff document's `target` and `base`); an
 overwrite whose files have changed is not applied.
 
 These files are generated and checked by `core::overwrite::test::samples`; rerun it

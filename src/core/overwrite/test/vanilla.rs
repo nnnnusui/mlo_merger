@@ -6,7 +6,7 @@ fn vanilla_overwrites_are_read_from_latest_ymaps_only() {
   let _ = fs::remove_dir_all(&root);
   let file = serde_json::json!({
     "schema_version": VanillaOverwrite::SCHEMA_VERSION,
-    "vanilla": {"sha256": "a", "size": 1},
+    "base": {"sha256": "a", "size": 1},
     "diffs": {"flags": 1},
   });
   let write = |path: &str| {

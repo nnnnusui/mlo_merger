@@ -115,7 +115,7 @@ pub(super) fn review(
     let Some(overwrite) = overwrites.stream_file(resource, stream_path) else {
       continue;
     };
-    let (Some(written), false) = (&overwrite.source, overwrite.ignore) else {
+    let (Some(written), false) = (&overwrite.target, overwrite.ignore) else {
       continue;
     };
     let Some(source) = sources.get(&(resource.to_string(), stream_path.to_string())) else {
@@ -178,7 +178,7 @@ pub(super) fn review(
         update.reasons = rebased.reasons;
         if update.reasons.is_empty() {
           let rewritten = StreamFileOverwrite {
-            source: Some(current.clone()),
+            target: Some(current.clone()),
             skip: Some(rebased.skip),
             ..overwrite.clone()
           };
@@ -241,8 +241,8 @@ fn rebase(
     };
   let (before_full, reverted, _) = left_out(before, skip)?;
   let mut reasons = Vec::new();
-  if overwrite.vanilla.as_ref() != Some(&fingerprint(&before.vanilla))
-    || fingerprint(&before.vanilla) != fingerprint(&after.vanilla)
+  if overwrite.base.as_ref() != Some(&fingerprint(&before.base))
+    || fingerprint(&before.base) != fingerprint(&after.base)
   {
     reasons.push("its baseline changed too".into());
     return Ok(Rebased {

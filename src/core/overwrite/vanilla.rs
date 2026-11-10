@@ -23,7 +23,7 @@ pub struct VanillaOverwrite {
   /// Version of the document layout.
   pub schema_version: u32,
   /// The vanilla file these differences were written against.
-  pub vanilla: OverwriteFingerprint,
+  pub base: OverwriteFingerprint,
   /// The differences from that vanilla file, in the shape of a diff document's `diffs`.
   pub diffs: YmapDiffFields,
 }
@@ -45,7 +45,7 @@ impl VanillaOverwrite {
     label: &str,
   ) -> Option<&YmapDiffFields> {
     // `Merge` reports this with every other overwrite it leaves out.
-    if self.vanilla != *vanilla {
+    if self.base != *vanilla {
       tracing::debug!(
         "Vanilla overwrite of {label} was written against another vanilla file; not applied"
       );

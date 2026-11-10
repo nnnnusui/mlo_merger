@@ -19,10 +19,11 @@ use crate::core::config::matching::MatchTolerances;
 pub struct YmapComparisonDiff {
   /// Version of the document layout; documents of another version are regenerated.
   pub schema_version: u32,
-  /// The source YMAP the differences were taken from.
-  pub source: YmapComparisonFile,
-  /// The vanilla YMAP used as the baseline.
-  pub vanilla: YmapComparisonFile,
+  /// The YMAP the differences lead to: the source YMAP.
+  pub target: YmapComparisonFile,
+  /// The YMAP the differences are taken from: the vanilla YMAP of the same name, the empty
+  /// YMAP for one no vanilla YMAP is named after, or the base source's YMAP.
+  pub base: YmapComparisonFile,
   /// The matching tolerances the differences were taken with.
   pub tolerances: MatchTolerances,
   /// For one YMAP of a LOD light pair, the other one, whose removals `diffs` also makes as
@@ -37,8 +38,8 @@ pub struct YmapComparisonDiff {
 #[cfg_attr(feature = "typescript", derive(specta::Type))]
 pub struct YmapComparisonPartner {
   /// The source's own YMAP of that name, or the vanilla one when the source has none.
-  pub source: YmapComparisonFile,
-  pub vanilla: YmapComparisonFile,
+  pub target: YmapComparisonFile,
+  pub base: YmapComparisonFile,
 }
 
 impl YmapComparisonDiff {
@@ -62,8 +63,8 @@ impl YmapComparisonDiff {
     };
     let current = document.schema_version == Self::SCHEMA_VERSION
       && document.tolerances == *tolerances
-      && document.source.describes(source)?
-      && document.vanilla.describes(vanilla)?;
+      && document.target.describes(source)?
+      && document.base.describes(vanilla)?;
     Ok(current.then_some(document))
   }
 }
@@ -83,7 +84,7 @@ pub struct YmapPropagatedDiff {
   /// The resource making the changes, by its ID, its path relative to the source root.
   pub resource: String,
   /// The vanilla YMAP the changes are carried to, as it was when they were.
-  pub vanilla: YmapComparisonFile,
+  pub base: YmapComparisonFile,
   /// The resource's YMAPs the changes are carried over from.
   pub origins: Vec<YmapPropagationOrigin>,
   pub diffs: YmapDiffFields,
@@ -93,8 +94,8 @@ pub struct YmapPropagatedDiff {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "typescript", derive(specta::Type))]
 pub struct YmapPropagationOrigin {
-  pub source: YmapComparisonFile,
-  pub vanilla: YmapComparisonFile,
+  pub target: YmapComparisonFile,
+  pub base: YmapComparisonFile,
 }
 
 impl YmapPropagatedDiff {
@@ -113,7 +114,7 @@ impl YmapPropagatedDiff {
       return Ok(None);
     };
     let current =
-      document.schema_version == Self::SCHEMA_VERSION && document.vanilla.describes(vanilla)?;
+      document.schema_version == Self::SCHEMA_VERSION && document.base.describes(vanilla)?;
     Ok(current.then_some(document))
   }
 }

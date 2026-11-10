@@ -166,8 +166,8 @@ pub(super) fn record_left_out(
       if let Some(overwrite) = overwrites.for_source(source) {
         overwrite.apply(
           &mut diffs,
-          &OverwriteFingerprint::from(&document.source),
-          &OverwriteFingerprint::from(&document.vanilla),
+          &OverwriteFingerprint::from(&document.target),
+          &OverwriteFingerprint::from(&document.base),
           name,
         )?;
       }

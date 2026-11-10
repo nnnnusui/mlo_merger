@@ -103,10 +103,10 @@ fn get_diff_fingerprints_both_files_and_derives_their_differences() {
     use sha2::{Digest, Sha256};
     hex::encode(Sha256::digest(bytes))
   };
-  assert_eq!(document["source"]["sha256"], json!(sha256(&modded_bytes)));
-  assert_eq!(document["source"]["size"], json!(modded_bytes.len()));
-  assert_eq!(document["vanilla"]["sha256"], json!(sha256(&vanilla_bytes)));
-  assert!(document["source"]["path"].as_str().unwrap().ends_with(&cached));
+  assert_eq!(document["target"]["sha256"], json!(sha256(&modded_bytes)));
+  assert_eq!(document["target"]["size"], json!(modded_bytes.len()));
+  assert_eq!(document["base"]["sha256"], json!(sha256(&vanilla_bytes)));
+  assert!(document["target"]["path"].as_str().unwrap().ends_with(&cached));
   assert_eq!(document["diffs"]["flags"], json!(modded.flags));
   assert_eq!(
     document["diffs"]["entities"],
@@ -145,8 +145,8 @@ fn only_documents_of_the_current_files_and_tolerances_are_read() {
   };
   let document = YmapComparisonDiff {
     schema_version: YmapComparisonDiff::SCHEMA_VERSION,
-    source: file(&source),
-    vanilla: file(&vanilla),
+    target: file(&source),
+    base: file(&vanilla),
     tolerances: MatchTolerances::default(),
     partner: None,
     diffs: Default::default(),

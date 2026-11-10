@@ -108,7 +108,7 @@ pub fn collect(
   }
   for (name, overwrite) in overwrites.vanilla_files() {
     let reason = match latest.get(name) {
-      Some(vanilla) => (overwrite.vanilla != OverwriteFingerprint::read(vanilla)?)
+      Some(vanilla) => (overwrite.base != OverwriteFingerprint::read(vanilla)?)
         .then_some(IgnoredOverwriteReason::VanillaChanged),
       None => Some(IgnoredOverwriteReason::MissingVanilla),
     };

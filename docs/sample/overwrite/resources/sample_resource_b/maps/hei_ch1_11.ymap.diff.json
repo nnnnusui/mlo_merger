@@ -1,10 +1,10 @@
 {
   "schema_version": 2,
-  "source": {
+  "target": {
     "sha256": "e210d419dd9e211fc0e4fce05164cb2b9335a96c26a98d6be06daedd59e2fd6f",
     "size": 4354
   },
-  "vanilla": {
+  "base": {
     "sha256": "5ec1c9f8c018d3773fb30efcbe32bf199d57fac8a9468df49143baa9e52d0d13",
     "size": 5675
   },

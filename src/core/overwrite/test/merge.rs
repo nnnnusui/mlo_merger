@@ -111,13 +111,13 @@ fn overwrites_skip_source_diffs_written_against_the_current_files() {
     let overwrite = StreamFileOverwrite {
       schema_version: StreamFileOverwrite::SCHEMA_VERSION,
       ignore: false,
-      source: Some(OverwriteFingerprint {
+      target: Some(OverwriteFingerprint {
         sha256: source_sha256.into(),
-        size: document.source.size,
+        size: document.target.size,
       }),
-      vanilla: Some(OverwriteFingerprint {
-        sha256: document.vanilla.sha256.clone(),
-        size: document.vanilla.size,
+      base: Some(OverwriteFingerprint {
+        sha256: document.base.sha256.clone(),
+        size: document.base.size,
       }),
       skip: Some(serde_json::json!({"content_flags": true})),
     };
@@ -126,7 +126,7 @@ fn overwrites_skip_source_diffs_written_against_the_current_files() {
   };
 
   // A changed overwrite merges again, without the skipped difference.
-  write_overwrite(&document.source.sha256);
+  write_overwrite(&document.target.sha256);
   assert!(merge.run_after_caches(&vanilla).unwrap().warnings.ignored_overwrites.is_empty());
   let skipped = merged();
   assert_eq!(skipped.content_flags, vanilla_model.content_flags);
@@ -171,8 +171,8 @@ fn overwrites_skip_source_diffs_written_against_the_current_files() {
     &StreamFileOverwrite {
       schema_version: StreamFileOverwrite::SCHEMA_VERSION,
       ignore: true,
-      source: None,
-      vanilla: None,
+      target: None,
+      base: None,
       skip: None,
     },
   )
@@ -244,13 +244,13 @@ fn overwrites_follow_their_source_to_its_next_version() {
   let written = StreamFileOverwrite {
     schema_version: StreamFileOverwrite::SCHEMA_VERSION,
     ignore: false,
-    source: Some(OverwriteFingerprint {
-      sha256: document.source.sha256.clone(),
-      size: document.source.size,
+    target: Some(OverwriteFingerprint {
+      sha256: document.target.sha256.clone(),
+      size: document.target.size,
     }),
-    vanilla: Some(OverwriteFingerprint {
-      sha256: document.vanilla.sha256.clone(),
-      size: document.vanilla.size,
+    base: Some(OverwriteFingerprint {
+      sha256: document.base.sha256.clone(),
+      size: document.base.size,
     }),
     skip: Some(serde_json::json!({"entities": [
       {"Modified": {"base_index": 0, "changes": {"position": true}}},
@@ -282,7 +282,7 @@ fn overwrites_follow_their_source_to_its_next_version() {
   assert!(rewritten.warnings.is_empty(), "{:?}", rewritten.warnings);
   assert_eq!(guids(&merged()), [100, 200, 2000, 3000]);
   assert_eq!(merged().entities[0].position.x, vanilla_model.entities[0].position.x);
-  let before = &document.source.sha256;
+  let before = &document.target.sha256;
   // The source cache keeps the earlier version, with its diff document.
   assert!(source_cache.join(format!("history/resource/map.ymap/{before}.ymap")).is_file());
   assert!(source_cache.join(format!("history/resource/map.ymap/{before}.diff.json")).is_file());
@@ -302,7 +302,7 @@ fn overwrites_follow_their_source_to_its_next_version() {
       {"Modified": {"base_index": 0, "changes": {"position": true}}}
     ]}))
   );
-  assert_ne!(on_disk.source, written.source);
+  assert_ne!(on_disk.target, written.target);
   // `--read --version` reads the earlier version from the history.
   let read = crate::core::read::Read {
     target: crate::core::read::ReadTarget::Resource("resource".into()),
@@ -345,7 +345,7 @@ fn overwrites_follow_their_source_to_its_next_version() {
   let manual = merge.run_after_caches(&vanilla).unwrap();
   assert_eq!(manual.warnings.ignored_overwrites.len(), 1);
   assert_eq!(merged().entities[0].position.x, third.entities[0].position.x);
-  let update = record(&on_disk.source.as_ref().unwrap().sha256);
+  let update = record(&on_disk.target.as_ref().unwrap().sha256);
   assert_eq!(update.outcome, SourceUpdateOutcome::Manual);
   assert!(
     update.reasons.iter().any(|reason| reason.contains("differs now")),
@@ -400,7 +400,7 @@ fn vanilla_overwrites_merge_after_the_sources() {
   let write_overwrite = |sha256: &str| {
     let overwrite = VanillaOverwrite {
       schema_version: VanillaOverwrite::SCHEMA_VERSION,
-      vanilla: OverwriteFingerprint {
+      base: OverwriteFingerprint {
         sha256: sha256.into(),
         size: bytes.len() as u64,
       },
@@ -581,7 +581,7 @@ fn added_ymaps_merge_every_version_without_shared_additions() {
     serde_json::json!(["resource_a/solo.ymap"])
   );
   let solo_document = document(&source_cache.join("diff/resource_a/solo.ymap.diff.json"));
-  assert_eq!(solo_document.vanilla, crate::core::source_cache::empty_baseline_file().unwrap());
+  assert_eq!(solo_document.base, crate::core::source_cache::empty_baseline_file().unwrap());
 
   // Every version is merged, the one loaded last first: an entity an earlier version adds
   // already, by GUID or as placed, is left out, so the third's entity 100 wins over the
@@ -650,8 +650,8 @@ fn added_ymaps_merge_every_version_without_shared_additions() {
     StreamFileOverwrite {
       schema_version: StreamFileOverwrite::SCHEMA_VERSION,
       ignore: true,
-      source: None,
-      vanilla: None,
+      target: None,
+      base: None,
       skip: None,
     },
   );
@@ -668,19 +668,19 @@ fn added_ymaps_merge_every_version_without_shared_additions() {
 
   // A resource overwrite leaves an addition of the second's diff, against the empty YMAP, out.
   let second_document = document(&source_cache.join("diff/resource_b/custom.ymap.diff.json"));
-  assert_eq!(second_document.vanilla, crate::core::source_cache::empty_baseline_file().unwrap());
+  assert_eq!(second_document.base, crate::core::source_cache::empty_baseline_file().unwrap());
   write_overwrite(
     "resource_b/custom.ymap.diff.json",
     StreamFileOverwrite {
       schema_version: StreamFileOverwrite::SCHEMA_VERSION,
       ignore: false,
-      source: Some(OverwriteFingerprint {
-        sha256: second_document.source.sha256,
-        size: second_document.source.size,
+      target: Some(OverwriteFingerprint {
+        sha256: second_document.target.sha256,
+        size: second_document.target.size,
       }),
-      vanilla: Some(OverwriteFingerprint {
-        sha256: second_document.vanilla.sha256,
-        size: second_document.vanilla.size,
+      base: Some(OverwriteFingerprint {
+        sha256: second_document.base.sha256,
+        size: second_document.base.size,
       }),
       skip: Some(serde_json::json!({"entities": [{"Added": {"entity": {"guid": 1200}}}]})),
     },

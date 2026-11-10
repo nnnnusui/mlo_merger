@@ -59,7 +59,7 @@ pub(super) fn earlier_versions() -> &'static [(String, Vec<u8>)] {
       )
       .unwrap();
       // Modification times are the run's; the documents are compared by content.
-      for file in ["source", "vanilla"] {
+      for file in ["target", "base"] {
         document[file]["modified_seconds"] = 0.into();
         document[file]["modified_nanos"] = 0.into();
       }
@@ -71,8 +71,8 @@ pub(super) fn earlier_versions() -> &'static [(String, Vec<u8>)] {
       };
       let overwrite = serde_json::json!({
         "schema_version": crate::core::overwrite::StreamFileOverwrite::SCHEMA_VERSION,
-        "source": fingerprint("source"),
-        "vanilla": fingerprint("vanilla"),
+        "target": fingerprint("target"),
+        "base": fingerprint("base"),
         "skip": skip,
       });
       files.push((format!("asset/source-cache/{history}"), bytes));

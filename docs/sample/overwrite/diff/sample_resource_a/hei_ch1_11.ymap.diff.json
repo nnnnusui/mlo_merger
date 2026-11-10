@@ -1,13 +1,13 @@
 {
   "schema_version": 12,
-  "source": {
+  "target": {
     "path": "docs/sample/source/[maps]/sample_resource_a/stream/hei_ch1_11.ymap",
     "sha256": "51733c11529b45028cb9854e41d81fc52ede13de6d81f5733c6c171879ec0719",
     "size": 4236,
     "modified_seconds": 0,
     "modified_nanos": 0
   },
-  "vanilla": {
+  "base": {
     "path": "docs/sample/sample.ymap",
     "sha256": "5ec1c9f8c018d3773fb30efcbe32bf199d57fac8a9468df49143baa9e52d0d13",
     "size": 5675,

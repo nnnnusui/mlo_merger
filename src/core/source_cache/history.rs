@@ -57,7 +57,7 @@ pub(super) fn archive(
   }
   let diff = output.join(super::diff_document_path(resource, stream_path));
   let describes = crate::common::json::read_json::<YmapComparisonDiff>(&diff)
-    .is_ok_and(|document| document.source.sha256 == sha256);
+    .is_ok_and(|document| document.target.sha256 == sha256);
   if describes {
     fs::copy(&diff, output.join(diff_path(resource, stream_path, sha256)))?;
   }
