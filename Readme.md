@@ -81,6 +81,7 @@ Each stream file type is supported at one of three levels:
 | [Build the vanilla cache](docs/reference.md#game-builds) | `--generate-vanilla-cache` |
 | [Build the source cache](docs/reference.md#source-cache) | `--generate-source-cache` |
 | [Move cached files back](docs/reference.md#restoring-resources) | `--restore-source-cache` |
+| [Build the overwrite cache](docs/reference.md#overwrites) | `--generate-overwrite-cache` |
 | [Merge](docs/reference.md#merge) | `--merge` |
 | [Deploy](docs/reference.md#deploy) | `--deploy` |
 | [Search merged data](docs/reference.md#inspect-existing-data) | `--find` |

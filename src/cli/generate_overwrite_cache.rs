@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use bpaf::*;
 
@@ -43,27 +43,36 @@ pub fn parser() -> impl Parser<GenerateOverwriteCache> {
   )
 }
 
+/// Builds the vanilla cache, the source cache and the overwrite cache at `output_dir` from the
+/// overwrites at `overwrite_dir` when their inputs changed, as prerequisites of later steps;
+/// returns whether the overwrite cache was written.
+pub(crate) fn update(
+  common: &CommonOptions,
+  source_dir: &Path,
+  exclusions: Option<Vec<String>>,
+  overwrite_dir: &Path,
+  output_dir: &Path,
+) -> Result<bool, Box<dyn std::error::Error>> {
+  super::generate_source_cache::update(common, source_dir, exclusions)?;
+  crate::core::overwrite_cache::BuildOverwriteCache {
+    source_dir: source_dir.to_path_buf(),
+    source_cache_dir: common.source_cache.clone(),
+    vanilla_cache_dir: common.vanilla_cache.clone(),
+    overwrite_dir: Some(overwrite_dir.to_path_buf()),
+    output_dir: output_dir.to_path_buf(),
+  }
+  .run()
+}
+
 /// Updates the vanilla and source caches, then builds or reuses the overwrite cache.
 pub fn run(command: GenerateOverwriteCache) -> Result<String, Box<dyn std::error::Error>> {
-  super::generate_vanilla_cache::update(&command.common)?;
-  crate::core::source_cache::BuildSourceCache {
-    source_dir: command.source_dir.clone(),
-    output_dir: command.common.source_cache.clone(),
-    vanilla_dir: command.common.vanilla,
-    vanilla_cache_dir: command.common.vanilla_cache.clone(),
-    resource: None,
-    exclusions: command.exclusions,
-    force: false,
-  }
-  .run()?;
-  let written = crate::core::overwrite_cache::BuildOverwriteCache {
-    source_dir: command.source_dir,
-    source_cache_dir: command.common.source_cache,
-    vanilla_cache_dir: command.common.vanilla_cache,
-    overwrite_dir: Some(command.overwrite_dir),
-    output_dir: command.common.output,
-  }
-  .run()?;
+  let written = update(
+    &command.common,
+    &command.source_dir,
+    command.exclusions,
+    &command.overwrite_dir,
+    &command.common.output,
+  )?;
   Ok(
     if written {
       "Generated overwrite cache.\n"
