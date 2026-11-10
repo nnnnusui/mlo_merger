@@ -37,8 +37,8 @@ in `web/`, described under `web` in its `release.json`; see [Browser build](web.
 | Changes carried to newer DLC generations | `YmapPropagatedDiff`, `YmapPropagationOrigin` |
 | Vanilla YMAP generations | `GenerationIndex`, `GenerationUnit` |
 | Overwrite documents | `StreamFileOverwrite`, `OverwriteFingerprint`, `YmapDiffSkip`, `VanillaOverwrite`, `AddedYmapOverwrite` |
-| Overwrite cache | `AddedYmaps`, `AddedYmap`, `AddedYmapSource`, `AddedYmapChoice` |
-| Pipeline stdout | `PipelineReport`, `PipelineChanges`, `StoreChanges`, `IgnoredOverwrite`, `IgnoredOverwriteReason` |
+| Overwrite cache | `AddedYmaps`, `AddedYmap`, `AddedYmapSource`, `AddedYmapChoice`, `OverwriteWarnings`, `AddedYmapWithoutBase`, `UnmatchedBaseSource` |
+| Pipeline stdout | `PipelineReport`, `PipelineChanges`, `StoreChanges`, `OverwriteWarnings`, `IgnoredOverwrite`, `IgnoredOverwriteReason` |
 | Merge diagnostics | `DuplicateReport` |
 
 ```typescript
@@ -150,6 +150,7 @@ source root.
 | Inspect changes carried to newer DLC generations | none; written by source-cache generation | | `asset/source-cache/propagated/{resource}/{file_name}.diff.json` (`YmapPropagatedDiff`); each carried item's `reason` names the item it came from |
 | Inspect vanilla version differences | none; vanilla-cache generation would write them, but it is currently disabled | | `asset/vanilla-cache/ymap_versions.json` (`VanillaYmapVersionIndex`), then `asset/vanilla-cache/diff/{version}/ymap/{name}.diff.json` (`VanillaYmapDiff`) for each version after a YMAP's first |
 | Apply overwrites | `--pipeline`, or `--merge` then `--deploy` | `PipelineReport` (pipeline only) | `asset/merged/duplicates.json` (`DuplicateReport`) |
+| Check overwrites | `--generate-overwrite-cache`; also run by `--merge` and `--pipeline` | | `asset/overwrite-cache/warnings.json` (`OverwriteWarnings`), `asset/overwrite-cache/added_ymaps.json` (`AddedYmaps`) |
 
 ### Stream-File Bounds Indexes
 
@@ -362,8 +363,9 @@ mlo_merger --pipeline -y -i <resources directory> -o <deployed resource> --gameb
 The pipeline updates the source cache, merges and deploys only what changed. Overwrites are
 part of merge freshness, so `-f` is not needed. Use `--merge` alone to update only
 `asset/merged`. Overwrites that are not applied are listed in the pipeline's
-`ignored_overwrites`; both commands also log each one on stderr as a warning starting with
-`Overwrite of`.
+`ignored_overwrites` and in `asset/overwrite-cache/warnings.json` (see
+[Overwrite Warnings](#overwrite-warnings)); both commands also log each one on stderr as a
+warning starting with `Overwrite of`.
 
 #### When Source Or Vanilla Files Change
 
@@ -381,10 +383,43 @@ not partially applied, and the overwrite document is not changed. The merge does
   `Overwrite of ... skips ..., which is not among the differences`; the rest of that
   overwrite still applies.
 
+### Overwrite Warnings
+
+`--generate-overwrite-cache` (and so `--merge` and `--pipeline`) writes
+`asset/overwrite-cache/warnings.json` (`OverwriteWarnings`): what the overwrites leave to
+defaults or no longer match, against the current source and vanilla caches. It is rewritten
+whenever the caches or the overwrites change, the merge logs every entry on stderr on each
+run, and the pipeline prints the same lists (see [Pipeline Output](#pipeline-output)).
+
+```json
+{
+  "added_ymaps_without_base": [
+    {
+      "file": "example_added.ymap",
+      "base": "resource_c",
+      "shipped_by": ["resource_a", "resource_b", "resource_c"]
+    }
+  ],
+  "unmatched_base_sources": [
+    { "file": "other_added.ymap", "base_source": "resource_x", "base": "resource_b" }
+  ],
+  "ignored_overwrites": [
+    { "resource": "resource_a", "file": "hei_ch1_11.ymap", "reason": "source_changed" },
+    { "file": "hei_ch1_12.ymap", "reason": "vanilla_changed" }
+  ]
+}
+```
+
+| List | Entry | Clear it by |
+|---|---|---|
+| `added_ymaps_without_base` | A YMAP several resources add with no [added YMAP overwrite](#added-ymap-overwrite-documents); `base` is the resource whose YMAP wins, the one loaded last | Writing `added/ymap/{file}.json`, or ignoring all but one stream file |
+| `unmatched_base_sources` | An added YMAP overwrite whose `base_source` does not ship the YMAP or is ignored; `base` is the resource used instead, absent when no resource merges the YMAP | Fixing `base_source`, or removing the document |
+| `ignored_overwrites` | An overwrite not applied after a source or vanilla update; see [the reasons](#pipeline-output) | Rewriting the overwrite from the current diff document, or removing it |
+
 ### Pipeline Output
 
 The pipeline prints one line of `PipelineReport`: the files its cached stages added, modified
-or removed (`PipelineChanges`), and the overwrites the merge did not apply:
+or removed (`PipelineChanges`), and the [overwrite warnings](#overwrite-warnings):
 
 ```json
 {
@@ -395,6 +430,8 @@ or removed (`PipelineChanges`), and the overwrites the merge did not apply:
     "removed": []
   },
   "merged": { "added": [], "modified": ["asset/merged/ymap/hei_ch1_11.ymap"], "removed": [] },
+  "added_ymaps_without_base": [],
+  "unmatched_base_sources": [],
   "ignored_overwrites": [
     { "resource": "sample_resource_a", "file": "hei_ch1_11.ymap", "reason": "source_changed" },
     { "file": "hei_ch1_12.ymap", "reason": "vanilla_changed" }
@@ -409,7 +446,9 @@ or removed (`PipelineChanges`), and the overwrites the merge did not apply:
   Metadata, indexes and diff documents are not listed.
 - Only content changes count: a forced rebuild that writes the same bytes lists nothing, and a
   run that changes nothing prints empty lists.
-- `ignored_overwrites` is the current state, not a change: it lists every overwrite that does
+- `added_ymaps_without_base`, `unmatched_base_sources` and `ignored_overwrites` are the
+  current state, not changes, as `warnings.json` records them.
+- `ignored_overwrites` lists every overwrite that does
   not apply to the current files, on every run. An entry with `resource` is the resource
   overwrite `resources/{resource}/{file}.diff.json`; one without is the vanilla overwrite
   `vanilla/latest/ymap/{file}.diff.json`. Both names are lowercase; documents are matched

@@ -7,9 +7,8 @@
 //! source's own overwrite as removals from it. See [`crate::core::overwrite_cache`].
 
 use super::operation::Result;
-use crate::core::overwrite::OverwriteFingerprint;
 use crate::core::overwrite_cache::AddedYmap;
-use crate::core::source_cache::{MergeInputs, MergeSourceFile};
+use crate::core::source_cache::MergeInputs;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
@@ -73,31 +72,4 @@ pub(super) fn apply(
     }
   }
   Ok(plans)
-}
-
-/// The fingerprint the overwrite of `source` is written against as its diff's baseline, when
-/// `source` is a source of an added YMAP in `plans`: the empty YMAP for a base source, the base
-/// source's YMAP for one merged into it.
-pub(super) fn overwrite_vanilla(
-  plans: &BTreeMap<String, AddedPlan>,
-  inputs: &MergeInputs,
-  source: &MergeSourceFile,
-) -> Result<Option<OverwriteFingerprint>> {
-  let name = source.file_name.to_ascii_lowercase();
-  let Some(plan) = plans.get(&name) else {
-    return Ok(None);
-  };
-  if source.resource == plan.base {
-    let empty = crate::core::source_cache::empty_baseline_file()?;
-    return Ok(Some(OverwriteFingerprint {
-      sha256: empty.sha256,
-      size: empty.size,
-    }));
-  }
-  let base = inputs
-    .ymap
-    .iter()
-    .find(|other| other.resource == plan.base && other.file_name.to_ascii_lowercase() == name)
-    .ok_or("Base source of an added YMAP is missing")?;
-  Ok(Some(OverwriteFingerprint::read(&base.path)?))
 }

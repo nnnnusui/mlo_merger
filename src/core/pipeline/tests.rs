@@ -9,21 +9,24 @@ use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 
 #[test]
-fn report_adds_ignored_overwrites_to_the_changes() {
+fn report_adds_overwrite_warnings_to_the_changes() {
   use crate::core::overwrite::IgnoredOverwriteReason;
   let report = PipelineReport {
     changes: PipelineChanges::default(),
-    ignored_overwrites: vec![IgnoredOverwrite {
-      resource: Some("resource".into()),
-      file: "maps/map.ymap".into(),
-      reason: IgnoredOverwriteReason::SourceChanged,
-    }],
+    warnings: crate::core::overwrite_cache::OverwriteWarnings {
+      ignored_overwrites: vec![IgnoredOverwrite {
+        resource: Some("resource".into()),
+        file: "maps/map.ymap".into(),
+        reason: IgnoredOverwriteReason::SourceChanged,
+      }],
+      ..Default::default()
+    },
   };
   let empty = r#"{"added":[],"modified":[],"removed":[]}"#;
   assert_eq!(
     serde_json::to_string(&report).unwrap(),
     format!(
-      r#"{{"vanilla_cache":{empty},"source_cache":{empty},"merged":{empty},"ignored_overwrites":[{{"resource":"resource","file":"maps/map.ymap","reason":"source_changed"}}]}}"#
+      r#"{{"vanilla_cache":{empty},"source_cache":{empty},"merged":{empty},"added_ymaps_without_base":[],"unmatched_base_sources":[],"ignored_overwrites":[{{"resource":"resource","file":"maps/map.ymap","reason":"source_changed"}}]}}"#
     )
   );
 }

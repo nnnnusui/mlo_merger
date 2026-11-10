@@ -144,7 +144,8 @@ The source cache never reads them: it keeps the sources and preprocesses them fo
 What the overwrites call for is derived into the overwrite cache, as the source cache is
 from the sources, by its own stage before the merge: which resource's YMAP wins for each
 YMAP that resources add (`added_ymaps.json`), the other resources' diffs against a base
-source an overwrite names, and the base source's own overwrite as removals from it. The
+source an overwrite names, the base source's own overwrite as removals from it, and the
+warnings of what the overwrites leave to defaults or no longer match (`warnings.json`). The
 cache records a digest of the source and vanilla caches and every overwrite, and a merge
 reading one that no longer matches fails.
 
@@ -154,8 +155,9 @@ Array items are selected by content rather than position. An entry leaving out
 differences applies only while the source file and the diff document's baseline match the
 fingerprints it was written against; otherwise it is skipped with a warning, as are
 selectors that match no difference.
-Merge checks every overwrite against the current files on each run, including runs
-that reuse their output, and returns those it leaves out; the pipeline prints them as
+The overwrite cache checks every overwrite against the current files whenever its inputs
+change and records those that do not apply in `warnings.json`; merge logs and returns them
+on each run, including runs that reuse their output, and the pipeline prints them as
 `ignored_overwrites`.
 
 `overwrite/vanilla/latest/ymap/{fileName}.diff.json` holds differences written

@@ -7,6 +7,7 @@ use crate::core::format::ymap::compare::YmapComparisonDiff;
 use crate::core::format::ymap::model::ymap::Ymap;
 use crate::core::format::ymap::reference_hash;
 use crate::core::merge::Merge;
+use crate::core::overwrite_cache::{AddedYmapWithoutBase, OverwriteWarnings, UnmatchedBaseSource};
 use crate::core::vanilla::{
   CacheVersion, CachedFile, FileChange, VanillaCacheManifest, write_json,
 };
@@ -127,7 +128,7 @@ fn overwrites_skip_source_diffs_written_against_the_current_files() {
 
   // A changed overwrite merges again, without the skipped difference.
   write_overwrite(&document.source.sha256);
-  assert!(merge.run_after_caches(&vanilla).unwrap().ignored_overwrites.is_empty());
+  assert!(merge.run_after_caches(&vanilla).unwrap().warnings.ignored_overwrites.is_empty());
   let skipped = merged();
   assert_eq!(skipped.content_flags, vanilla_model.content_flags);
   assert_eq!(skipped.entities[0].position.x, edited.entities[0].position.x);
@@ -144,18 +145,18 @@ fn overwrites_skip_source_diffs_written_against_the_current_files() {
     file: "maps/map.ymap".into(),
     reason: IgnoredOverwriteReason::SourceChanged,
   }];
-  assert_eq!(merge.run_after_caches(&vanilla).unwrap().ignored_overwrites, stale);
+  assert_eq!(merge.run_after_caches(&vanilla).unwrap().warnings.ignored_overwrites, stale);
   assert_eq!(merged().content_flags, edited.content_flags);
   let reused = merge.run_after_caches(&vanilla).unwrap();
   assert!(reused.changes.added.is_empty() && reused.changes.modified.is_empty());
-  assert_eq!(reused.ignored_overwrites, stale);
+  assert_eq!(reused.warnings.ignored_overwrites, stale);
 
   // One naming a stream file the resource does not merge is reported too.
   fs::create_dir_all(overwrite_dir.join("resources/resource/maps")).unwrap();
   fs::rename(&overwrite_path, overwrite_dir.join("resources/resource/maps/other.ymap.diff.json"))
     .unwrap();
   assert_eq!(
-    merge.run_after_caches(&vanilla).unwrap().ignored_overwrites,
+    merge.run_after_caches(&vanilla).unwrap().warnings.ignored_overwrites,
     vec![IgnoredOverwrite {
       resource: Some("resource".into()),
       file: "maps/other.ymap".into(),
@@ -257,7 +258,7 @@ fn vanilla_overwrites_merge_after_the_sources() {
   // One written against another vanilla file is not applied.
   write_overwrite("stale");
   assert_eq!(
-    merge.run_after_caches(&vanilla).unwrap().ignored_overwrites,
+    merge.run_after_caches(&vanilla).unwrap().warnings.ignored_overwrites,
     vec![IgnoredOverwrite {
       resource: None,
       file: "map.ymap".into(),
@@ -372,7 +373,7 @@ fn added_ymaps_merge_from_their_base_sources() {
     vanilla: None,
     skip: None,
   };
-  merge.run_after_caches(&vanilla).unwrap();
+  let first = merge.run_after_caches(&vanilla).unwrap();
 
   // The added YMAPs are moved into the source cache and compared with an empty YMAP.
   assert!(source_cache.join("resources/resource_a/custom.ymap").is_file());
@@ -400,6 +401,17 @@ fn added_ymaps_merge_from_their_base_sources() {
     winners["files"]["custom.ymap"]["shipped_by"],
     serde_json::json!(["resource_a", "resource_b", "resource_c"])
   );
+  // The overwrite cache lists it, as the merge reports, as having no base source.
+  let without_base = vec![AddedYmapWithoutBase {
+    file: "custom.ymap".into(),
+    base: "resource_c".into(),
+    shipped_by: vec!["resource_a".into(), "resource_b".into(), "resource_c".into()],
+  }];
+  assert_eq!(first.warnings.added_ymaps_without_base, without_base);
+  let warnings: OverwriteWarnings =
+    serde_json::from_reader(fs::File::open(overwrite_cache.join("warnings.json")).unwrap())
+      .unwrap();
+  assert_eq!(warnings, first.warnings);
 
   // A stream file an overwrite ignores is left out of the choice.
   write_overwrite("resource_c/custom.ymap.diff.json", ignore.clone());
@@ -422,7 +434,8 @@ fn added_ymaps_merge_from_their_base_sources() {
   assert!(stale.contains("stale"), "{stale}");
   fs::remove_file(overwrite_dir.join("resources/resource_c/custom.ymap.diff.json")).unwrap();
   write_overwrite("resource_b/custom.ymap.diff.json", ignore);
-  merge.run_after_caches(&vanilla).unwrap();
+  let named = merge.run_after_caches(&vanilla).unwrap();
+  assert!(named.warnings.is_empty(), "{:?}", named.warnings);
   assert_eq!(merged(), [100, 200, 1300]);
   let winners = added_ymaps();
   assert_eq!(winners["files"]["custom.ymap"]["base"]["resource"], "resource_a");
@@ -445,21 +458,23 @@ fn added_ymaps_merge_from_their_base_sources() {
     skip(document(&source_cache.join("diff/resource_a/custom.ymap.diff.json")), 100),
   );
   write_overwrite("resource_a/solo.ymap.diff.json", skip(solo_document, 200));
-  assert!(merge.run_after_caches(&vanilla).unwrap().ignored_overwrites.is_empty());
+  assert!(merge.run_after_caches(&vanilla).unwrap().warnings.ignored_overwrites.is_empty());
   assert_eq!(merged(), [200, 1300]);
   assert!(overwrite_cache.join("base/resource_a/custom.ymap.diff.json").is_file());
   let solo_merged = read(&output.join("ymap/solo.ymap"));
   assert_eq!(guids(&solo_merged), [100]);
   assert_eq!(reference_hash(&solo_merged.parent), reference_hash("custom"));
   write_overwrite("resource_c/custom.ymap.diff.json", skip(document(&other_path), 1300));
-  assert!(merge.run_after_caches(&vanilla).unwrap().ignored_overwrites.is_empty());
+  assert!(merge.run_after_caches(&vanilla).unwrap().warnings.ignored_overwrites.is_empty());
   assert_eq!(merged(), [200]);
 
   // Without the base source, the resource loaded last wins again: the first's overwrite names no
   // merged source, and the third's was written against another baseline.
   fs::remove_file(overwrite_dir.join("added/ymap/Custom.ymap.json")).unwrap();
-  let ignored = merge.run_after_caches(&vanilla).unwrap().ignored_overwrites;
+  let warnings = merge.run_after_caches(&vanilla).unwrap().warnings;
+  let ignored = warnings.ignored_overwrites;
   assert_eq!(merged(), [100, 200, 1300]);
+  assert_eq!(warnings.added_ymaps_without_base[0].base, "resource_c");
   assert_eq!(
     ignored,
     vec![
@@ -476,6 +491,26 @@ fn added_ymaps_merge_from_their_base_sources() {
     ]
   );
   assert!(!other_path.exists());
+
+  // An overwrite naming a base source that does not ship the YMAP is listed with the one used.
+  write_json(
+    &overwrite_dir.join("added/ymap/custom.ymap.json"),
+    &AddedYmapOverwrite {
+      schema_version: AddedYmapOverwrite::SCHEMA_VERSION,
+      base_source: "resource_x".into(),
+    },
+  )
+  .unwrap();
+  let warnings = merge.run_after_caches(&vanilla).unwrap().warnings;
+  assert_eq!(
+    warnings.unmatched_base_sources,
+    vec![UnmatchedBaseSource {
+      file: "custom.ymap".into(),
+      base_source: "resource_x".into(),
+      base: Some("resource_c".into()),
+    }]
+  );
+  assert_eq!(merged(), [100, 200, 1300]);
   fs::remove_dir_all(root).unwrap();
 }
 

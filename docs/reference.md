@@ -129,7 +129,8 @@ flags, extents and block are kept.
 - Of resources adding a YMAP of the same name, one wins, and the others' are not deployed:
   by default the resource whose name sorts last, as the one loaded last, with a warning.
   The merged YMAP is always written, so it replaces the others. The overwrite cache's
-  `added_ymaps.json` (`AddedYmaps`) records each added YMAP's winner and why it won.
+  `added_ymaps.json` (`AddedYmaps`) records each added YMAP's winner and why it won, and
+  its `warnings.json` lists those chosen by default.
 - An [added YMAP overwrite](#overwrites) names the base source instead, and the choice is
   only logged. The base source's YMAP then takes the place of vanilla: every other
   resource's differences from it, written to
@@ -268,7 +269,10 @@ YMAPs.
 An overwrite leaving out differences applies only while the files it was written against are current: its
 `source` and `vanilla` fingerprints (`sha256` and `size`) must match. Otherwise it is
 left out whole with a warning, and the pipeline lists it in `ignored_overwrites` on every
-run until it is rewritten. The document formats, selectors and what happens when files
+run until it is rewritten. The overwrite cache's `warnings.json` (`OverwriteWarnings`)
+lists these, added YMAPs no overwrite names the base source of, and added YMAP overwrites
+whose base source does not ship the YMAP; see
+[usage.md](usage.md#overwrite-warnings). The document formats, selectors and what happens when files
 change are described in [usage.md](usage.md#overwrite-documents); complete examples are in
 [docs/sample/overwrite](sample/overwrite/README.md).
 

@@ -118,7 +118,7 @@ pub fn run(command: Pipeline) -> Result<String, Box<dyn std::error::Error>> {
   );
   let report = crate::core::pipeline::PipelineReport {
     changes: result.changes,
-    ignored_overwrites: result.ignored_overwrites,
+    warnings: result.warnings,
   };
   Ok(format!("{}\n", serde_json::to_string(&report)?))
 }

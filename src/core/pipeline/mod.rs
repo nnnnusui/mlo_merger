@@ -146,7 +146,7 @@ impl Pipeline {
         source_cache: source_cache.changes.under(&self.source_cache_dir),
         merged: merged.changes.under(&self.merged_dir),
       },
-      ignored_overwrites: merged.ignored_overwrites,
+      warnings: merged.warnings,
       deploy,
     })
   }

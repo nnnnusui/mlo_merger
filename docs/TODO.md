@@ -10,7 +10,7 @@ Resource overwrites (`overwrite/resources/{resourceName}/{stream_path}.diff.json
 
 - [ ] Let a vanilla overwrite take precedence over resources' changes to the same items, if the merge policy gains configured priorities.
 - [ ] Support YBN overwrites.
-- [ ] Report selectors that match no difference, and unsupported or ambiguous overwrite changes, in the pipeline output, as `ignored_overwrites` does for missing and stale overwrites; they are only logged now.
+- [ ] Report selectors that match no difference, unsupported or ambiguous overwrite changes, and overwrite files that are not read (such as the earlier `resources/{resourceName}.json` layout), in the overwrite cache's `warnings.json`, as `ignored_overwrites` does for missing and stale overwrites; they are only logged now.
 
 ## Architecture
 

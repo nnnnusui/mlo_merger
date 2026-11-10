@@ -11,6 +11,9 @@
 //!   apply as against source-cache diff documents.
 //! - `base/{resource}/{stream path}.diff.json`: the base source's own resource overwrite, written
 //!   against the empty YMAP, as removals from its YMAP, merged as the first source.
+//! - `warnings.json` ([`OverwriteWarnings`]): added YMAPs no overwrite names the base source of,
+//!   added YMAP overwrites whose base source does not ship the YMAP, and overwrites that no
+//!   longer match their files. The merge logs them on every run.
 //!
 //! Without an overwrite naming its base source, a YMAP that several resources add is taken from
 //! the resource whose name sorts last, as the one loaded last, with a warning. A stream file
@@ -30,6 +33,12 @@ use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
+mod warnings;
+
+pub use warnings::{
+  AddedYmapWithoutBase, OverwriteWarnings, UnmatchedBaseSource, collect as warnings,
+};
+
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
 /// File name of the [`AddedYmaps`] record.
@@ -38,8 +47,10 @@ const ADDED_YMAPS: &str = "added_ymaps.json";
 const DIFF_DIR: &str = "diff";
 /// The directory of the base sources' overwrites as removals.
 const BASE_DIR: &str = "base";
+/// File name of the [`OverwriteWarnings`].
+const WARNINGS: &str = "warnings.json";
 /// Bump when what the cache holds or what [`AddedYmaps::inputs`] covers changes.
-const FORMAT_VERSION: u32 = 1;
+const FORMAT_VERSION: u32 = 2;
 
 /// Which resource's YMAP wins for each YMAP that resources add (`added_ymaps.json`).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -130,7 +141,8 @@ impl BuildOverwriteCache {
       inputs_digest(&source_cache_dir, &vanilla_cache_dir, self.overwrite_dir.as_deref())?;
     if read_json::<AddedYmaps>(output.join(ADDED_YMAPS)).is_ok_and(|previous| {
       previous.format_version == FORMAT_VERSION && previous.inputs == inputs_digest
-    }) {
+    }) && read_json::<OverwriteWarnings>(output.join(WARNINGS)).is_ok()
+    {
       tracing::info!("Overwrite cache is current; nothing to do");
       return Ok(false);
     }
@@ -194,7 +206,9 @@ impl BuildOverwriteCache {
     for directory in [DIFF_DIR, BASE_DIR] {
       remove_unwritten(&output.join(directory), &written)?;
     }
+    let warnings = warnings::collect(&inputs, &overwrites, &files, &vanilla_cache_dir)?;
     fs::create_dir_all(output)?;
+    write_json(&output.join(WARNINGS), &warnings)?;
     write_json(
       &output.join(ADDED_YMAPS),
       &AddedYmaps {
@@ -204,18 +218,27 @@ impl BuildOverwriteCache {
       },
     )?;
     tracing::info!("Wrote the overwrite cache to {}", output.display());
+    if !warnings.is_empty() {
+      tracing::info!(
+        "{} lists {} added YMAPs without a base source, {} unmatched base sources and {} ignored overwrites",
+        output.join(WARNINGS).display(),
+        warnings.added_ymaps_without_base.len(),
+        warnings.unmatched_base_sources.len(),
+        warnings.ignored_overwrites.len()
+      );
+    }
     Ok(true)
   }
 }
 
-/// The added YMAPs the overwrite cache at `cache_dir` records, which must have been built from
-/// the current source and vanilla caches and overwrites.
+/// The added YMAPs and warnings the overwrite cache at `cache_dir` records, which must have been
+/// built from the current source and vanilla caches and overwrites.
 pub fn load(
   cache_dir: &Path,
   source_cache_dir: &Path,
   vanilla_cache_dir: &Path,
   overwrite_dir: Option<&Path>,
-) -> Result<AddedYmaps> {
+) -> Result<(AddedYmaps, OverwriteWarnings)> {
   let path = cache_dir.join(ADDED_YMAPS);
   let added = read_json::<AddedYmaps>(&path).map_err(|error| {
     format!("Cannot read {}: {error}; build the overwrite cache", path.display())
@@ -231,7 +254,11 @@ pub fn load(
       .into(),
     );
   }
-  Ok(added)
+  let path = cache_dir.join(WARNINGS);
+  let warnings = read_json::<OverwriteWarnings>(&path).map_err(|error| {
+    format!("Cannot read {}: {error}; build the overwrite cache", path.display())
+  })?;
+  Ok((added, warnings))
 }
 
 /// The added YMAPs of `inputs` without an overwrite cache: each one's winner, by default or as
@@ -296,7 +323,7 @@ fn resolve(
         .find(|source| resource_name(&source.resource).eq_ignore_ascii_case(&overwrite.base_source))
         .copied();
       if found.is_none() {
-        tracing::warn!(
+        tracing::debug!(
           "Overwrite of added YMAP {name} names base source {}, which does not ship it or is ignored; using {}, which loads last of {listed}",
           overwrite.base_source,
           resource_name(&last.resource)
@@ -329,7 +356,7 @@ fn resolve(
       }
       None => {
         let chosen_by = if shipped_by.len() > 1 {
-          tracing::warn!(
+          tracing::debug!(
             "Added YMAP {name} is shipped by {listed}; using {}, which loads last. Name the base source in added/ymap/{name}.json of the overwrites to choose another",
             resource_name(&last.resource)
           );

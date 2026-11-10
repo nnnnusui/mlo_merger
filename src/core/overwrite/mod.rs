@@ -74,12 +74,13 @@ impl StreamFileOverwrite {
 
 /// An overwrite the merge leaves out, as the files it names are missing or differ from those it
 /// was written against.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "typescript", derive(specta::Type))]
 pub struct IgnoredOverwrite {
   /// The resource of a resource overwrite, in lowercase; absent for a vanilla overwrite.
   #[serde(skip_serializing_if = "Option::is_none")]
   #[cfg_attr(feature = "typescript", specta(optional))]
+  #[serde(default)]
   pub resource: Option<String>,
   /// The overwritten file, in lowercase: a resource overwrite's stream path, such as
   /// `vanilla/hei_ch1_11.ymap`, or the vanilla overwrite's file name, such as `hei_ch1_11.ymap`.
@@ -88,7 +89,7 @@ pub struct IgnoredOverwrite {
 }
 
 /// Why an overwrite is left out of the merge.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 #[cfg_attr(feature = "typescript", derive(specta::Type))]
 pub enum IgnoredOverwriteReason {
@@ -201,6 +202,11 @@ impl Overwrites {
     file_name: &str,
   ) -> Option<&AddedYmapOverwrite> {
     self.added.get(&file_name.to_ascii_lowercase())
+  }
+
+  /// Every added YMAP overwrite, keyed by lowercase file name.
+  pub fn added_files(&self) -> &BTreeMap<String, AddedYmapOverwrite> {
+    &self.added
   }
 
   /// The overwrite of the stream file at `stream_path` below the `stream` directory of the
