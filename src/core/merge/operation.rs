@@ -2,8 +2,6 @@ use crate::platform::fs;
 use crate::platform::process;
 use std::path::{Path, PathBuf};
 
-use crate::platform::fs::WalkDir;
-
 use super::incremental::IncrementalMerge;
 use crate::common::changes::StoreChanges;
 use crate::core::overwrite::Overwrites;
@@ -88,7 +86,7 @@ impl Merge {
     merge_inputs
       .ymap
       .retain(|source| !overwrites.for_source(source).is_some_and(|overwrite| overwrite.ignore));
-    let latest_files = dispatch_vanilla_stream_files(&vanilla_cache_dir.join("latest"))?;
+    let latest_files = latest_vanilla_stream_files(&vanilla_cache_dir)?;
     let output_dir = prepare_output_path(&self.output_dir)?;
     let staging = Staging(create_staging_directory(&output_dir)?);
     let staged = IncrementalMerge {
@@ -129,29 +127,17 @@ pub struct MergeSummary {
   pub warnings: OverwriteWarnings,
 }
 
-fn dispatch_vanilla_stream_files(latest_dir: &Path) -> Result<VanillaStreamFiles> {
+/// The latest vanilla YMAPs and YBNs the vanilla cache at `vanilla_cache_dir` records.
+fn latest_vanilla_stream_files(vanilla_cache_dir: &Path) -> Result<VanillaStreamFiles> {
   let mut files = VanillaStreamFiles {
     ymap: Vec::new(),
     ybn: Vec::new(),
   };
-  for entry in WalkDir::new(latest_dir).follow_links(false) {
-    let entry = entry?;
-    let path = entry.path();
-    if !fs::is_file(path) {
-      continue;
-    }
-    match path.extension().and_then(|extension| extension.to_str()) {
-      Some(extension) if extension.eq_ignore_ascii_case("ymap") => {
-        files.ymap.push(path.to_path_buf());
-      }
-      Some(extension) if extension.eq_ignore_ascii_case("ybn") => {
-        files.ybn.push(path.to_path_buf());
-      }
-      Some(extension) => tracing::debug!(
-        "Skipping unsupported vanilla stream extension .{extension}: {}",
-        path.display()
-      ),
-      None => tracing::debug!("Skipping extensionless vanilla stream file: {}", path.display()),
+  for file in crate::core::vanilla_cache::latest_files(vanilla_cache_dir)? {
+    match Path::new(&file.name).extension().and_then(|extension| extension.to_str()) {
+      Some(extension) if extension.eq_ignore_ascii_case("ymap") => files.ymap.push(file.path),
+      Some(extension) if extension.eq_ignore_ascii_case("ybn") => files.ybn.push(file.path),
+      _ => {}
     }
   }
   files.ymap.sort();

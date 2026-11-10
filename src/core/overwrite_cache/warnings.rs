@@ -5,10 +5,9 @@ use crate::core::overwrite::{
   IgnoredOverwrite, IgnoredOverwriteReason, OverwriteFingerprint, Overwrites,
 };
 use crate::core::source_cache::MergeInputs;
-use crate::platform::fs;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 /// What does not take effect of the overwrites, against the current source and vanilla caches.
 /// It is current state, not a change: each entry is listed until the overwrites or the files
@@ -57,7 +56,11 @@ pub fn collect(
   vanilla_cache_dir: &Path,
 ) -> Result<OverwriteWarnings> {
   let mut warnings = OverwriteWarnings::default();
-  let latest = latest_ymaps(&vanilla_cache_dir.join("latest"))?;
+  let latest = crate::core::vanilla_cache::latest_files(vanilla_cache_dir)?
+    .into_iter()
+    .map(|file| (file.name.to_ascii_lowercase(), file.path))
+    .filter(|(name, _)| name.ends_with(".ymap"))
+    .collect::<BTreeMap<_, _>>();
   let sources = inputs.ymap_by_key();
   for (resource, stream_path) in overwrites.keys() {
     let Some(overwrite) = overwrites.stream_file(resource, stream_path) else {
@@ -108,24 +111,4 @@ pub fn collect(
     }
   }
   Ok(warnings)
-}
-
-/// The latest vanilla YMAPs below `latest_dir`, keyed by lowercase file name.
-fn latest_ymaps(latest_dir: &Path) -> Result<BTreeMap<String, PathBuf>> {
-  let mut files = BTreeMap::new();
-  if !fs::is_dir(latest_dir) {
-    return Ok(files);
-  }
-  for entry in crate::platform::fs::WalkDir::new(latest_dir).follow_links(false) {
-    let entry = entry?;
-    let path = entry.path();
-    let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
-      continue;
-    };
-    let name = name.to_ascii_lowercase();
-    if name.ends_with(".ymap") && fs::is_file(path) {
-      files.insert(name, path.to_path_buf());
-    }
-  }
-  Ok(files)
 }

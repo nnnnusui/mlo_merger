@@ -15,7 +15,7 @@ Resource overwrites (`overwrite/resources/{resourceName}/{stream_path}.diff.json
 
 ## Architecture
 
-- [ ] Give each data owner its own read and freshness-check APIs (`core::vanilla`, `core::vanilla_cache`, `core::source_cache`, …), so merge and other consumers stop walking those directories or reading their files directly. For example, merge still enumerates `vanilla-cache/latest` itself.
+- [ ] Give each data owner its own read and freshness-check APIs (`core::vanilla`, `core::vanilla_cache`, `core::source_cache`, …), so merge and other consumers stop walking those directories or reading their files directly.
 
 ## Merge Policy
 

@@ -50,8 +50,10 @@ every test passing.
 
 ### 5. Reads of the latest vanilla files from the vanilla cache
 
-- [ ] `vanilla_cache::latest_stream_files`, listing the latest vanilla YMAPs and YBNs, replacing
-  the merge's `dispatch_vanilla_stream_files` and the overwrite warnings' `latest_ymaps`.
+- [x] List the latest vanilla YMAPs and YBNs with the existing `vanilla_cache::latest_files`,
+  which reads the vanilla cache's metadata, replacing the merge's
+  `dispatch_vanilla_stream_files` and the overwrite warnings' `latest_ymaps`, which walked
+  `vanilla-cache/latest`.
 
 ### 6. Split modules that hold several concerns
 
