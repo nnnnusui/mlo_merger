@@ -25,6 +25,7 @@ This document contains meta-guidelines that cannot be expressed through automate
    - This file (`.github/copilot-instructions.md`): Meta-guidelines
    - Keep `Readme.md` and `docs/ARCHITECTURE.md` concise and focused on current usage, workflows, and design constraints; do not use them as change logs or validation-history notes
    - Keep architecture documentation at the workflow/design level rather than describing source internals in detail
+   - In every document, describe only the current behavior: when a change removes or moves behavior, delete its old description instead of noting what no longer happens or where it moved (e.g. not "`duplicates.json` leaves added YMAPs out"). Wording about runtime state, such as an overwrite whose source no longer matches, is current behavior and stays
 
 3. **Documentation Updates**
    - Update `docs/TODO.md` when tasks change or complete
@@ -32,6 +33,12 @@ This document contains meta-guidelines that cannot be expressed through automate
    - Update this file when new meta-guidelines emerge
    - Put necessary, non-obvious implementation rationale in a doc comment at the code that owns it
    - Omit doc-comment details already clear from names, types, or struct fields
+
+#### Implementation Plans
+
+Before making a large change, write its implementation plan to `docs/plan/{timestamp}_{plan_name}.md`
+(e.g. `docs/plan/202610230935_mlomerger_cargenerator.md`), with `{timestamp}` as `YYYYMMDDHHmm` and `{plan_name}` in snake_case.
+Once every step of a plan is done, rename it to `docs/plan/{timestamp}_done_{plan_name}.md`, keeping its timestamp.
 
 ## Version Control
 
