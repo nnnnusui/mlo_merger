@@ -19,8 +19,12 @@
 //!
 //! The resources edit those files: two resources change `smpl_block_01.ymap` and its collision,
 //! one removes a LOD entity from the parent so the children's parent indices are repaired, one
-//! removes a LOD light pair, and one ships its own map and collision. Edits to
-//! `smpl_block_01.ymap` carry over to its DLC generations.
+//! removes a LOD light pair, and one ships its own map, a child map of it and collision. A later
+//! version of that resource ships the map again, so the merge combines both versions: the sign
+//! they share is kept once, and the crate placed again under another GUID too, its child
+//! following the kept one. Edits to `smpl_block_01.ymap` carry over to its DLC generations.
+//!
+//! Every stream file covers [`EVERY_FILE_POSITION`].
 //!
 //! The test checks that `web/sample` holds what this module builds and that the pipeline runs
 //! on it; run it with `MLO_WRITE_SAMPLES=1` to write the samples instead.
@@ -65,7 +69,14 @@ mod guid {
   pub const BIRCH: u32 = 0x5A5A_0002;
   pub const SIGN: u32 = 0x5A5A_0101;
   pub const CRATE: u32 = 0x5A5A_0102;
+  pub const CRATE_LABEL: u32 = 0x5A5A_0103;
+  pub const CRATE_V2: u32 = 0x5A5A_0202;
+  pub const BARREL: u32 = 0x5A5A_0203;
 }
+
+/// A point every stream file of the sample covers: inside each YMAP's entity extents and each
+/// YBN's bounds, so a file-from-position search there lists them all.
+pub const EVERY_FILE_POSITION: [f32; 3] = [-7090.0, 7092.0, 20.5];
 
 /// One file of the sample workspace, by its path below the workspace.
 struct SampleFile {
@@ -166,10 +177,10 @@ fn summer_block_01() -> Ymap {
 fn block_02(changes: usize) -> Ymap {
   let mut map = ymap("smpl_block_02", "", 0, 1);
   map.entities = vec![
-    entity("smpl_tree_oak", guid::OAK_1, position(-7110.0, 7040.0, 20.0), 0.0),
-    entity("smpl_tree_oak", guid::OAK_2, position(-7095.0, 7035.0, 20.0), 45.0),
-    entity("smpl_tree_oak", guid::OAK_3, position(-7080.0, 7042.0, 20.0), 90.0),
-    entity("smpl_fountain", guid::FOUNTAIN, position(-7095.0, 7050.0, 20.0), 0.0),
+    entity("smpl_tree_oak", guid::OAK_1, position(-7110.0, 7080.0, 20.0), 0.0),
+    entity("smpl_tree_oak", guid::OAK_2, position(-7095.0, 7075.0, 20.0), 45.0),
+    entity("smpl_tree_oak", guid::OAK_3, position(-7080.0, 7082.0, 20.0), 90.0),
+    entity("smpl_fountain", guid::FOUNTAIN, position(-7095.0, 7090.0, 20.0), 0.0),
   ];
   if changes >= 1 {
     map.entities[0].position.x += 2.0;
@@ -178,13 +189,13 @@ fn block_02(changes: usize) -> Ymap {
     map.entities.push(entity(
       "smpl_bench",
       guid::PARK_BENCH,
-      position(-7100.0, 7050.0, 20.0),
+      position(-7100.0, 7090.0, 20.0),
       270.0,
     ));
   }
   if changes >= 3 {
     map.entities.remove(1);
-    map.entities.push(entity("smpl_kiosk", guid::KIOSK, position(-7085.0, 7055.0, 20.0), 180.0));
+    map.entities.push(entity("smpl_kiosk", guid::KIOSK, position(-7085.0, 7095.0, 20.0), 180.0));
   }
   fit_extents(&mut map);
   map
@@ -207,6 +218,8 @@ fn lod_lights(
   fit_extents(&mut distant);
   lights.streaming_extents_min = distant.streaming_extents_min.clone();
   lights.streaming_extents_max = distant.streaming_extents_max.clone();
+  lights.entities_extents_min = distant.entities_extents_min.clone();
+  lights.entities_extents_max = distant.entities_extents_max.clone();
   (lights, distant)
 }
 
@@ -287,25 +300,56 @@ fn block_rework() -> Vec<(&'static str, Vec<u8>)> {
   ]
 }
 
-/// Resource `smpl_custom_props`: its own map and collision, and a birch in the park as
-/// `smpl_summer` left it.
-fn custom_props() -> Vec<(&'static str, Vec<u8>)> {
+/// The custom map as `smpl_custom_props` ships it: a sign and a crate.
+fn custom_01() -> Ymap {
   let mut custom = ymap("smpl_custom_01", "", 0, 1);
-  let mut sign = entity("smpl_sign_board", guid::SIGN, position(-7130.0, 7100.0, 20.0), 90.0);
+  let mut sign = entity("smpl_sign_board", guid::SIGN, position(-7094.0, 7097.0, 20.0), 90.0);
   sign.extensions.push(light_effect("smpl_sign_light", [255, 80, 80]));
   custom.entities =
-    vec![sign, entity("smpl_crate", guid::CRATE, position(-7128.0, 7094.0, 20.0), 15.0)];
+    vec![sign, entity("smpl_crate", guid::CRATE, position(-7091.0, 7095.0, 20.0), 15.0)];
   fit_extents(&mut custom);
+  custom
+}
+
+/// Resource `smpl_custom_props`: its own map, a child map whose label points at the map's crate,
+/// the map's collision, and a birch in the park as `smpl_summer` left it.
+fn custom_props() -> Vec<(&'static str, Vec<u8>)> {
+  let custom = custom_01();
+  let mut detail = ymap("smpl_custom_02", "smpl_custom_01", 0, 1);
+  let mut label =
+    entity("smpl_crate_label", guid::CRATE_LABEL, position(-7091.0, 7094.5, 20.5), 15.0);
+  label.parent_index = find(&custom, guid::CRATE) as i32;
+  detail.entities = vec![label];
+  fit_extents(&mut detail);
   let mut park = block_02(3);
-  park.entities.push(entity("smpl_tree_birch", guid::BIRCH, position(-7070.0, 7035.0, 20.0), 0.0));
+  park.entities.push(entity("smpl_tree_birch", guid::BIRCH, position(-7070.0, 7075.0, 20.0), 0.0));
   fit_extents(&mut park);
-  let mut collision = Geometry::ground([-7135.0, 7090.0], [-7125.0, 7105.0], 19.9);
-  collision.add_box([-7129.0, 7093.0, 19.9], [-7127.0, 7095.0, 21.0]);
+  let mut collision = Geometry::ground([-7096.0, 7090.0], [-7086.0, 7100.0], 19.9);
+  collision.add_box([-7092.0, 7094.0, 19.9], [-7090.0, 7096.0, 21.0]);
   vec![
     ("stream/smpl_custom_01.ymap", ymap_bytes(&custom)),
+    ("stream/smpl_custom_02.ymap", ymap_bytes(&detail)),
     ("stream/smpl_custom_01.ybn", ybn_bytes(&[Child::Geometry(collision)])),
     ("stream/smpl_block_02.ymap", ymap_bytes(&park)),
   ]
+}
+
+/// Resource `smpl_custom_props_v2`, a later version of `smpl_custom_props` loaded after it: the
+/// same custom map with a barrel first, the sign recoloured, and the crate placed again under
+/// another GUID and turned.
+fn custom_props_v2() -> Vec<(&'static str, Vec<u8>)> {
+  let mut custom = custom_01();
+  let sign = find(&custom, guid::SIGN);
+  custom.entities[sign].extensions = vec![light_effect("smpl_sign_light", [80, 160, 255])];
+  let mut crate_v2 = custom.entities.remove(find(&custom, guid::CRATE));
+  crate_v2.guid = guid::CRATE_V2;
+  crate_v2.rotation = heading(45.0);
+  custom
+    .entities
+    .insert(0, entity("smpl_barrel", guid::BARREL, position(-7088.0, 7096.0, 20.0), 0.0));
+  custom.entities.push(crate_v2);
+  fit_extents(&mut custom);
+  vec![("stream/smpl_custom_01.ymap", ymap_bytes(&custom))]
 }
 
 /// Every name the sample hashes, so `hash_names.json` resolves them all.
@@ -320,6 +364,7 @@ const NAMES: &[&str] = &[
   "winter_lodlights_small001",
   "winter_distlodlights_small001",
   "smpl_custom_01",
+  "smpl_custom_02",
   "smpl_house_a",
   "smpl_house_b",
   "smpl_house_a_lod",
@@ -339,6 +384,8 @@ const NAMES: &[&str] = &[
   "smpl_tree_birch",
   "smpl_sign_board",
   "smpl_crate",
+  "smpl_crate_label",
+  "smpl_barrel",
   "smpl_door_main",
   "smpl_door_audio",
   "smpl_lamp_light",
@@ -472,6 +519,7 @@ fn sample_files() -> Vec<SampleFile> {
     ("[smpl]/smpl_street_tweaks", street_tweaks()),
     ("smpl_block_rework", block_rework()),
     ("smpl_custom_props", custom_props()),
+    ("smpl_custom_props_v2", custom_props_v2()),
   ] {
     files.push(SampleFile {
       path: format!("asset/source/{resource}/fxmanifest.lua"),

@@ -39,8 +39,7 @@ pub struct Merge {
   /// User edits of the merge (see [`crate::core::overwrite`]); `None` applies none.
   pub overwrite_dir: Option<PathBuf>,
   /// What the overwrites call for, built from them beforehand (see
-  /// [`crate::core::overwrite_cache`]); `None` derives the choices of added YMAPs here, which
-  /// works only while no overwrite names a base source.
+  /// [`crate::core::overwrite_cache`]); `None` derives it here.
   pub overwrite_cache_dir: Option<PathBuf>,
   /// Rebuilds merge groups regardless of freshness.
   pub force: bool,
@@ -87,21 +86,15 @@ impl Merge {
         (added.files, warnings)
       }
       None => {
-        let files =
-          crate::core::overwrite_cache::resolve_without_cache(&merge_inputs, &overwrites)?;
-        let warnings = crate::core::overwrite_cache::warnings(
-          &merge_inputs,
-          &overwrites,
-          &files,
-          &vanilla_cache_dir,
-        )?;
+        let files = crate::core::overwrite_cache::resolve_without_cache(&merge_inputs, &overwrites);
+        let warnings =
+          crate::core::overwrite_cache::warnings(&merge_inputs, &overwrites, &vanilla_cache_dir)?;
         (files, warnings)
       }
     };
     // Logged on every run, as a merge reusing its previous output does not look at overwrites.
     warnings.log();
-    let added =
-      super::added::apply(&added_files, &mut merge_inputs, self.overwrite_cache_dir.as_deref())?;
+    let added = super::added::plans(&added_files);
     // A stream file an overwrite ignores is left out of the merge whole.
     merge_inputs.ymap.retain(|source| {
       stream_file_key(source).is_none_or(|(resource, stream_path)| {

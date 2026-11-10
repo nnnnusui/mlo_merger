@@ -126,20 +126,16 @@ A YMAP no vanilla YMAP is named after, one a resource adds, is diffed and merged
 others against an empty YMAP, so every item of the source is an addition, and its name,
 flags, extents and block are kept.
 
-- Of resources adding a YMAP of the same name, one wins, and the others' are not deployed:
-  by default the resource whose name sorts last, as the one loaded last, with a warning.
+- Of resources adding a YMAP of the same name, every version is merged, from the resource
+  whose name sorts last (the one loaded last), so its version wins conflicts. An addition
+  an earlier version makes already is left out: an entity with the same GUID or of the
+  same type, archetype and LOD level at the same position (within the `ymap`
+  [matching tolerance](#matching-configuration)), its children then pointing at the kept
+  one, or another item equal within the matching tolerances; LOD lights and distant LOD
+  lights are kept. The extents cover every version's.
   The merged YMAP is always written, so it replaces the others. The overwrite cache's
-  `added_ymaps.json` (`AddedYmaps`) records each added YMAP's winner and why it won, and
-  its `warnings.json` lists those chosen by default.
-- An [added YMAP overwrite](#overwrites) names the base source instead, and the choice is
-  only logged. The base source's YMAP then takes the place of vanilla: every other
-  resource's differences from it, written to
-  `{overwrite cache}/diff/{resource}/{stream_path}.diff.json`, are merged into it under the
-  [merge policy](#combining-sources), and resource overwrites can leave them out. The base
-  source's own resource overwrite still applies: the items it leaves out are removed first,
-  as `{overwrite cache}/base/...` records.
-- A resource overwrite with `ignore` leaves its stream file out of the choice and of the
-  merge.
+  `added_ymaps.json` (`AddedYmaps`) records each added YMAP's sources in merge order.
+- A resource overwrite with `ignore` leaves its stream file out of the merge.
 - An added YMAP only one resource ships is written only when the merge changes it, for
   example through an overwrite or a repaired parent reference; otherwise the resource's
   file is deployed as it is.
@@ -254,24 +250,19 @@ YMAPs.
 - `resources/{resourceName}/{stream_path}.diff.json` (`StreamFileOverwrite`), one per
   stream file, lists the differences of that file's diff document to leave out of the
   merge, or sets `ignore` to leave the file out whole. The diff document is the source
-  cache's, against vanilla or, for an [added YMAP](#added-ymaps), an empty YMAP; or the
-  overwrite cache's, against an added YMAP's base source.
+  cache's, against vanilla or, for an [added YMAP](#added-ymaps), an empty YMAP.
 - `vanilla/latest/ymap/{fileName}.diff.json` (`VanillaOverwrite`) holds differences
   written directly against a latest vanilla YMAP. They are merged as one more source
   after every resource's, under the same merge policy, and also into vanilla YMAPs no
   resource replaces. Unlike resources' changes, their name, flags, extents, block,
   distant LOD light count and physics dictionary changes apply (see
   [YMAP Fields](#ymap-fields)).
-- `added/ymap/{fileName}.json` (`AddedYmapOverwrite`) names the base source of a YMAP
-  that several resources add (see [Added YMAPs](#added-ymaps)). One naming a resource that
-  does not ship the YMAP, or whose file is ignored, is left out with a warning.
 
 An overwrite leaving out differences applies only while the files it was written against are current: its
 `source` and `vanilla` fingerprints (`sha256` and `size`) must match. Otherwise it is
 left out whole with a warning, and the pipeline lists it in `ignored_overwrites` on every
 run until it is rewritten. The overwrite cache's `warnings.json` (`OverwriteWarnings`)
-lists these, added YMAPs no overwrite names the base source of, and added YMAP overwrites
-whose base source does not ship the YMAP; see
+lists these; see
 [usage.md](usage.md#overwrite-warnings). The document formats, selectors and what happens when files
 change are described in [usage.md](usage.md#overwrite-documents); complete examples are in
 [docs/sample/overwrite](sample/overwrite/README.md).
@@ -494,8 +485,8 @@ YBN conversion does not require an external schema directory.
 The release archives contain `asset/gen_mlo_merger.ts`, generated from the Rust Serde
 models: merge diagnostics, vanilla/source/merge/deploy caches, stream conflicts,
 diff-cache reports, source-cache YMAP diff documents (`YmapComparisonDiff`), overwrite
-documents (`StreamFileOverwrite`, `VanillaOverwrite`, `AddedYmapOverwrite`), the overwrite
-cache's added YMAPs (`AddedYmaps`), `--read` documents and results (`YmapReadDocument`,
+documents (`StreamFileOverwrite`, `VanillaOverwrite`), the overwrite cache's added YMAPs and
+warnings (`AddedYmaps`, `OverwriteWarnings`), `--read` documents and results (`YmapReadDocument`,
 `ReadResult`), pipeline output (`PipelineReport`), version listings and
 matching configuration. It does not include YBN difference payloads or JSON
 Schema documents, and it is not checked into the repository; see

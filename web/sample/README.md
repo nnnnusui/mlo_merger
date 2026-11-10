@@ -42,9 +42,27 @@ names, by which the merger pairs them.
 - `smpl_block_rework` brightens the time-cycle modifier, removes the occlude model's roof and
   the bin, recolours the lamp; removes the unused SLOD from `smpl_block_01_lod.ymap`, so the
   houses' parent indices move; removes the bollard's collision.
-- `smpl_custom_props` ships its own map and collision, and adds a birch to the park as
-  `smpl_summer` left it.
+- `smpl_custom_props` ships its own map `smpl_custom_01.ymap` (a sign and a crate), a child map
+  `smpl_custom_02.ymap` whose label points at the crate, and the map's collision, and adds a
+  birch to the park as `smpl_summer` left it.
+- `smpl_custom_props_v2`, a later version of it, ships `smpl_custom_01.ymap` again: a barrel
+  first, the sign recoloured, and the crate placed again under another GUID and turned. No
+  vanilla YMAP has that name, so the merge combines both versions, the one loaded last
+  (`smpl_custom_props_v2`) first: the sign, by its GUID, and the crate, by its archetype, LOD
+  level and position, are kept once, from `smpl_custom_props_v2`, and the label's parent index
+  follows the crate it kept.
 
 Edits to `smpl_block_01.ymap` and the LOD lights carry over to their DLC generations. The
 resources' collisions predate `smpl_summer`, so merging against the last stage removes the
 kiosk's collision, while `--gamebuild 100` merges against the stage they were made for.
+
+## A Position Every File Covers
+
+Every stream file here, YMAP or YBN, of every stage and resource, covers
+**(-7090, 7092, 20.5)**: it lies inside each YMAP's entity extents (the sample takes each
+archetype to reach 10 m from its entity) and each YBN's bounds. A file-from-position search
+there lists every file the stores hold:
+
+```bash
+mlo_merger --find file-from-position -7090,7092,20.5 --all
+```

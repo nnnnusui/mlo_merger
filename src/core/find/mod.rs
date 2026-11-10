@@ -8,7 +8,7 @@ mod query;
 pub(crate) mod rtree;
 #[cfg(test)]
 mod tests;
-mod ybn;
+pub(crate) mod ybn;
 
 use inputs::{Input, MergeCache, filename_filter, read_input, read_ymap, search_inputs};
 use query::aabb_intersects_radius;

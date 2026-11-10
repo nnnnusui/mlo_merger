@@ -165,17 +165,6 @@ impl YmapComparisonContext {
       resource_name: None,
       ..file.clone()
     };
-    self.get_diff_against(file, &baseline)
-  }
-
-  /// Returns the differences of `file` from `baseline`: the vanilla YMAP of the same name, as
-  /// [`Self::get_diff`] takes them, or another resource's YMAP of that name.
-  pub fn get_diff_against(
-    &self,
-    file: &StreamFileRef,
-    baseline: &StreamFileRef,
-  ) -> Result<YmapComparisonDiff> {
-    let baseline = baseline.clone();
     let vanilla = self.get_cache(&baseline)?;
     let modded = self.get_cache(file)?;
     let vanilla_parent = self.parent_map(&baseline, &vanilla)?;
@@ -186,30 +175,29 @@ impl YmapComparisonContext {
       (&modded, modded_parent.as_ref().map(|parent| parent.entities.as_slice())),
     );
     let mut diffs = vanilla.diff(&modded, &ctx).unwrap_or_default();
-    let partner =
-      match self.partner_of(file, &vanilla)?.filter(|_| baseline.resource_name.is_none()) {
-        Some((side, partner, partner_baseline)) => {
-          if partner.resource_name.is_some() {
-            let (partner_vanilla, partner_modded) =
-              (self.get_cache(&partner_baseline)?, self.get_cache(&partner)?);
-            let partner_removed =
-              side.other().removed_between(&partner_vanilla, &partner_modded, &ctx.tolerances);
-            let implied = side.imply_removals(&mut diffs, &partner_removed);
-            if implied > 0 {
-              tracing::info!(
-                "{}: {implied} lights removed only from {} are removed here too",
-                file.file_name,
-                partner.file_name
-              );
-            }
+    let partner = match self.partner_of(file, &vanilla)? {
+      Some((side, partner, partner_baseline)) => {
+        if partner.resource_name.is_some() {
+          let (partner_vanilla, partner_modded) =
+            (self.get_cache(&partner_baseline)?, self.get_cache(&partner)?);
+          let partner_removed =
+            side.other().removed_between(&partner_vanilla, &partner_modded, &ctx.tolerances);
+          let implied = side.imply_removals(&mut diffs, &partner_removed);
+          if implied > 0 {
+            tracing::info!(
+              "{}: {implied} lights removed only from {} are removed here too",
+              file.file_name,
+              partner.file_name
+            );
           }
-          Some(YmapComparisonPartner {
-            source: self.comparison_file(&partner, None)?,
-            vanilla: self.comparison_file(&partner_baseline, None)?,
-          })
         }
-        None => None,
-      };
+        Some(YmapComparisonPartner {
+          source: self.comparison_file(&partner, None)?,
+          vanilla: self.comparison_file(&partner_baseline, None)?,
+        })
+      }
+      None => None,
+    };
     Ok(YmapComparisonDiff {
       schema_version: YmapComparisonDiff::SCHEMA_VERSION,
       tolerances: ctx.tolerances,
@@ -286,27 +274,10 @@ impl YmapComparisonContext {
       resource_name: None,
       ..file.clone()
     };
-    self.is_diff_current_against(file, &baseline, source, vanilla, partner)
-  }
-
-  /// Whether a diff of `file` taken from `source` against `vanilla`, the file `baseline`
-  /// resolved to, still describes those files; see [`Self::is_diff_current`].
-  pub fn is_diff_current_against(
-    &self,
-    file: &StreamFileRef,
-    baseline: &StreamFileRef,
-    source: &YmapComparisonFile,
-    vanilla: &YmapComparisonFile,
-    partner: Option<&YmapComparisonPartner>,
-  ) -> Result<bool> {
-    let baseline = baseline.clone();
     if !self.comparison_file(file, Some(source))?.same_content(source)
       || !self.comparison_file(&baseline, Some(vanilla))?.same_content(vanilla)
     {
       return Ok(false);
-    }
-    if baseline.resource_name.is_some() {
-      return Ok(partner.is_none());
     }
     if LightSide::of(&file.file_name).is_none() {
       return Ok(partner.is_none());
@@ -325,19 +296,6 @@ impl YmapComparisonContext {
       }
       _ => false,
     })
-  }
-
-  /// The vanilla cache version the YMAPs are compared at, which every [`StreamFileRef`] names.
-  pub fn vanilla_version(&self) -> &str {
-    &self.vanilla_version
-  }
-
-  /// Fingerprints the file that `file` resolves to, named relative to the store holding it.
-  pub(crate) fn comparison_file_of(
-    &self,
-    file: &StreamFileRef,
-  ) -> Result<YmapComparisonFile> {
-    self.comparison_file(file, None)
   }
 
   /// Fingerprints the file that `file` resolves to, named relative to the store holding it,

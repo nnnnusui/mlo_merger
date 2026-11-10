@@ -101,6 +101,16 @@ pub trait Diff {
     &mut self,
     diff: &Self::Output,
   ) -> Result<(), ApplyError>;
+
+  /// Whether `other` differs from `self` by nothing [`Self::diff`] records under `ctx`: equal,
+  /// within the tolerances `ctx` sets.
+  fn same_as(
+    &self,
+    other: &Self,
+    ctx: &Self::Context,
+  ) -> bool {
+    self.diff(other, ctx).is_none()
+  }
 }
 
 /// Changes that do not fit the value they are applied to.

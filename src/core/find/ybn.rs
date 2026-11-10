@@ -92,7 +92,7 @@ pub(super) fn bounds_overlap(
   bounds_overlap_inner(root, &mut Vec::new(), root.transform, position, radius)
 }
 
-pub(super) fn world_bounds(root: &Bound) -> Result<Option<([f64; 3], [f64; 3])>> {
+pub(crate) fn world_bounds(root: &Bound) -> Result<Option<([f64; 3], [f64; 3])>> {
   let mut bounds = WorldBounds {
     minimum: [f64::INFINITY; 3],
     maximum: [f64::NEG_INFINITY; 3],

@@ -238,7 +238,12 @@ fn append_cached_candidates(
   if let Some(input) = &record.vanilla {
     push_candidate(candidates, paths, provenance_candidate(name, extension, input, "vanilla"));
   }
-  for input in &record.merge_sources {
+  // Changes carried over to a newer generation are merged from diff documents, not stream files.
+  for input in record
+    .merge_sources
+    .iter()
+    .filter(|input| !input.path.to_string_lossy().ends_with(".diff.json"))
+  {
     push_candidate(candidates, paths, provenance_candidate(name, extension, input, "source"));
   }
   Ok(())

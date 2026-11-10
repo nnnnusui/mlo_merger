@@ -36,8 +36,8 @@ in `web/`, described under `web` in its `release.json`; see [Browser build](web.
 | Source-cache diff documents | `YmapComparisonDiff`, `YmapComparisonFile`, `YmapDiffFields`, `YmapEntityDiff`, `YmapEntityFieldDiff` |
 | Changes carried to newer DLC generations | `YmapPropagatedDiff`, `YmapPropagationOrigin` |
 | Vanilla YMAP generations | `GenerationIndex`, `GenerationUnit` |
-| Overwrite documents | `StreamFileOverwrite`, `OverwriteFingerprint`, `YmapDiffSkip`, `VanillaOverwrite`, `AddedYmapOverwrite` |
-| Overwrite cache | `AddedYmaps`, `AddedYmap`, `AddedYmapSource`, `AddedYmapChoice`, `OverwriteWarnings`, `AddedYmapWithoutBase`, `UnmatchedBaseSource` |
+| Overwrite documents | `StreamFileOverwrite`, `OverwriteFingerprint`, `YmapDiffSkip`, `VanillaOverwrite` |
+| Overwrite cache | `AddedYmaps`, `AddedYmap`, `AddedYmapSource`, `OverwriteWarnings` |
 | Pipeline stdout | `PipelineReport`, `PipelineChanges`, `StoreChanges`, `OverwriteWarnings`, `IgnoredOverwrite`, `IgnoredOverwriteReason` |
 | Merge diagnostics | `DuplicateReport` |
 
@@ -321,38 +321,28 @@ asset/overwrite/vanilla/latest/ymap/{file_name}.diff.json
 - An overwrite whose `vanilla` no longer matches the latest vanilla file is not applied and is
   listed in the pipeline's `ignored_overwrites`. Rewrite it after a vanilla update.
 
-### Added YMAP Overwrite Documents
+### Added YMAPs Several Resources Ship
 
-```text
-asset/overwrite/added/ymap/{file_name}.json
-```
+A YMAP no vanilla YMAP is named after is compared with an empty YMAP, so its source-cache
+diff document lists everything in it as additions. When several resources ship one, every
+version is merged:
 
-```json
-{ "schema_version": 1, "base_source": "sample_resource_b" }
-```
+- Versions are merged from the resource whose name sorts last (the one loaded last), which
+  wins where they conflict. `asset/overwrite-cache/added_ymaps.json` (`AddedYmaps`) lists
+  each added YMAP's `sources` in that order and every resource shipping it (`shipped_by`).
+- An addition an earlier version makes already is left out:
 
-- Without a document, of resources adding a YMAP of the same name the one whose name sorts
-  last wins, with a warning on every merge. `asset/overwrite-cache/added_ymaps.json`
-  (`AddedYmaps`) lists each added YMAP's winner (`base`), why it won (`chosen_by`: `only`,
-  `last_loaded` or `overwrite`) and every resource shipping it (`shipped_by`).
-- With one, the YMAP of `base_source` (required) takes the place of vanilla, and the choice
-  is only logged. Every other resource's differences from it are written to
-  `asset/overwrite-cache/diff/{resource}/{stream_path}.diff.json` and merged into it, as
-  resources' changes to a vanilla YMAP are: a removal wins, and otherwise the first change.
-  Leave some out with a resource overwrite of that resource's `stream_path` written from it,
-  as from a source-cache diff document, or leave a resource out with `ignore`. Its `vanilla`
-  is the base source's YMAP, so the overwrite is ignored as `vanilla_changed` when the base
-  source changes.
-- An item of the base source that another resource lacks is a removal in that resource's
-  diff, and removals win, so leave such removals out unless the item should go.
-- The base source's own resource overwrite, written against its source-cache diff document,
-  still applies: its YMAP without the items it leaves out is what the others' differences
-  are merged into.
-- The overwrite cache is derived by `--generate-overwrite-cache`, which `--merge` and
-  `--pipeline` run first; run it alone after writing the document to get the diffs to write
-  overwrites from. A merge reading an overwrite cache older than the overwrites fails.
-- Resource names are directory names, matched case-insensitively. A base source that does
-  not ship the YMAP, or whose file is ignored, is left out with a warning.
+  | Item | Left out when an earlier version adds |
+  |---|---|
+  | Entity | An entity with the same GUID, even with other values; or one of the same type, archetype and LOD level at the same position, within the `ymap` [matching tolerance](reference.md#matching-configuration), whatever its rotation, scale and GUID. Children pointing at it, in its YMAP or another, point at the kept one. One with a GUID is kept when the earlier entity has none, which children could not point at |
+  | Box occluder, occlude model, grass batch, time-cycle modifier, car generator | An equal item, within the [matching tolerances](reference.md#matching-configuration) |
+  | Physics dictionary, prop instance name | The same name (as for every merge) |
+  | LOD light, distant LOD light | Never: they pair by index across the two YMAPs of a LOD light pair |
+
+- The extents cover every version's. Name, flags and block come from the first version.
+- Leave out what remains doubled with a resource overwrite written from that resource's
+  source-cache diff document, as for any source, or leave a version out with `ignore`.
+- The merge logs, for each such YMAP, how many additions it left out.
 
 ### Applying Overwrites
 
@@ -386,23 +376,13 @@ not partially applied, and the overwrite document is not changed. The merge does
 ### Overwrite Warnings
 
 `--generate-overwrite-cache` (and so `--merge` and `--pipeline`) writes
-`asset/overwrite-cache/warnings.json` (`OverwriteWarnings`): what the overwrites leave to
-defaults or no longer match, against the current source and vanilla caches. It is rewritten
+`asset/overwrite-cache/warnings.json` (`OverwriteWarnings`): the overwrites that no longer
+match the current source and vanilla caches. It is rewritten
 whenever the caches or the overwrites change, the merge logs every entry on stderr on each
 run, and the pipeline prints the same lists (see [Pipeline Output](#pipeline-output)).
 
 ```json
 {
-  "added_ymaps_without_base": [
-    {
-      "file": "example_added.ymap",
-      "base": "resource_c",
-      "shipped_by": ["resource_a", "resource_b", "resource_c"]
-    }
-  ],
-  "unmatched_base_sources": [
-    { "file": "other_added.ymap", "base_source": "resource_x", "base": "resource_b" }
-  ],
   "ignored_overwrites": [
     { "resource": "resource_a", "file": "hei_ch1_11.ymap", "reason": "source_changed" },
     { "file": "hei_ch1_12.ymap", "reason": "vanilla_changed" }
@@ -412,8 +392,6 @@ run, and the pipeline prints the same lists (see [Pipeline Output](#pipeline-out
 
 | List | Entry | Clear it by |
 |---|---|---|
-| `added_ymaps_without_base` | A YMAP several resources add with no [added YMAP overwrite](#added-ymap-overwrite-documents); `base` is the resource whose YMAP wins, the one loaded last | Writing `added/ymap/{file}.json`, or ignoring all but one stream file |
-| `unmatched_base_sources` | An added YMAP overwrite whose `base_source` does not ship the YMAP or is ignored; `base` is the resource used instead, absent when no resource merges the YMAP | Fixing `base_source`, or removing the document |
 | `ignored_overwrites` | An overwrite not applied after a source or vanilla update; see [the reasons](#pipeline-output) | Rewriting the overwrite from the current diff document, or removing it |
 
 ### Pipeline Output
@@ -430,8 +408,6 @@ or removed (`PipelineChanges`), and the [overwrite warnings](#overwrite-warnings
     "removed": []
   },
   "merged": { "added": [], "modified": ["asset/merged/ymap/hei_ch1_11.ymap"], "removed": [] },
-  "added_ymaps_without_base": [],
-  "unmatched_base_sources": [],
   "ignored_overwrites": [
     { "resource": "sample_resource_a", "file": "hei_ch1_11.ymap", "reason": "source_changed" },
     { "file": "hei_ch1_12.ymap", "reason": "vanilla_changed" }
@@ -446,8 +422,7 @@ or removed (`PipelineChanges`), and the [overwrite warnings](#overwrite-warnings
   Metadata, indexes and diff documents are not listed.
 - Only content changes count: a forced rebuild that writes the same bytes lists nothing, and a
   run that changes nothing prints empty lists.
-- `added_ymaps_without_base`, `unmatched_base_sources` and `ignored_overwrites` are the
-  current state, not changes, as `warnings.json` records them.
+- `ignored_overwrites` is the current state, not a change, as `warnings.json` records it.
 - `ignored_overwrites` lists every overwrite that does
   not apply to the current files, on every run. An entry with `resource` is the resource
   overwrite `resources/{resource}/{file}.diff.json`; one without is the vanilla overwrite

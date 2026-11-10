@@ -378,6 +378,23 @@ impl MergeYmap {
         continue;
       }
 
+      // Several resources' versions of a YMAP they add are all additions to the empty YMAP:
+      // those an earlier version makes already are left out, and the extents cover them all.
+      if self.added.contains(&ymap_name.to_ascii_lowercase()) && ymap_diffs.len() > 1 {
+        let tolerances = crate::core::config::matching::current();
+        let thinned = added::thin_additions(&mut ymap_diffs, &tolerances);
+        if thinned.left_out > 0 {
+          tracing::info!(
+            "  Left out {} additions an earlier version makes already",
+            thinned.left_out
+          );
+        }
+        // Children of an entity left out point at the one kept in its place.
+        for (left_out, kept) in thinned.aliases {
+          references.alias(hash, left_out, kept)?;
+        }
+        added::union_extents(&mut ymap_diffs);
+      }
       let duplicates = duplicates.finish();
       if !duplicates.is_empty() {
         duplicate_files.insert(ymap_name.to_ascii_lowercase(), duplicates);

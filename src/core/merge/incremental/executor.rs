@@ -27,32 +27,15 @@ impl IncrementalMerge<'_> {
       files: BTreeMap::new(),
     };
     let work = self.staging.join(format!(".group-{index}"));
-    // A YMAP resources add is merged against an empty YMAP, or against its base source's when it
-    // has additional sources.
+    // A YMAP resources add is merged against an empty YMAP.
     let plans =
       group.names.iter().filter_map(|name| Some((name, self.added.get(name)?))).collect::<Vec<_>>();
-    for (name, plan) in &plans {
-      if plan.additional.is_empty() {
-        let path = work.join("added").join(name);
-        fs::create_dir_all(path.parent().ok_or("Baseline path has no parent")?)?;
-        fs::write(&path, crate::core::source_cache::empty_baseline_bytes()?)?;
-        vanilla.push(path);
-      } else {
-        let base = sources
-          .iter()
-          .find(|source| {
-            source.resource == plan.base && source.file_name.eq_ignore_ascii_case(name)
-          })
-          .ok_or_else(|| format!("Base source of added YMAP {name} is missing"))?;
-        vanilla.push(base.path.clone());
-      }
+    for (name, _) in &plans {
+      let path = work.join("added").join(name);
+      fs::create_dir_all(path.parent().ok_or("Baseline path has no parent")?)?;
+      fs::write(&path, crate::core::source_cache::empty_baseline_bytes()?)?;
+      vanilla.push(path);
     }
-    let is_base_with_additional = |source: &MergeSourceFile| {
-      self
-        .added
-        .get(&source.file_name.to_ascii_lowercase())
-        .is_some_and(|plan| !plan.additional.is_empty() && plan.base == source.resource)
-    };
     let merged = if group.extension == "ybn" {
       MergeYbnConflicts {
         source_dir: self.source_cache.to_path_buf(),
@@ -73,25 +56,20 @@ impl IncrementalMerge<'_> {
       let directory = work.join("ymap");
       let (propagated, stream_files): (Vec<&MergeSourceFile>, Vec<&MergeSourceFile>) =
         sources.iter().copied().partition(|source| source.propagated);
-      // A base source with additional sources is merged through its overwrite as removals from
-      // its own YMAP, which the overwrite cache holds; its overwrite is applied there already.
+      // The versions of a YMAP resources add are merged in the order the overwrite cache
+      // records, the one loaded last first.
+      let mut stream_files = stream_files;
+      stream_files.sort_by_key(|source| {
+        self.added.get(&source.file_name.to_ascii_lowercase()).map_or(0, |plan| {
+          plan.resources.iter().position(|resource| *resource == source.resource).unwrap_or(0)
+        })
+      });
       let ymap_sources = stream_files
         .iter()
-        .map(|source| {
-          let diff_path = if is_base_with_additional(source) {
-            self
-              .added
-              .get(&source.file_name.to_ascii_lowercase())
-              .and_then(|plan| plan.base_diff.clone())
-          } else {
-            source.diff_path.clone()
-          };
-          (source.resource.clone(), source.path.clone(), diff_path)
-        })
+        .map(|source| (source.resource.clone(), source.path.clone(), source.diff_path.clone()))
         .collect::<Vec<_>>();
       let overwrites = stream_files
         .iter()
-        .filter(|source| !is_base_with_additional(source))
         .filter_map(|source| Some((source.path.clone(), self.overwrite(source)?.clone())))
         .collect();
       MergeYmap {
@@ -104,11 +82,7 @@ impl IncrementalMerge<'_> {
           .iter()
           .map(|source| (source.resource.clone(), source.file_name.clone(), source.path.clone()))
           .collect(),
-        added: plans
-          .iter()
-          .filter(|(_, plan)| plan.additional.is_empty())
-          .map(|(name, _)| (*name).clone())
-          .collect(),
+        added: plans.iter().map(|(name, _)| (*name).clone()).collect(),
         replacing: plans
           .iter()
           .filter(|(_, plan)| plan.replacing)
@@ -118,7 +92,6 @@ impl IncrementalMerge<'_> {
       .run_with_latest_vanilla_files(&vanilla, &ymap_sources)?;
       duplicates = crate::common::json::read_json(directory.join(".duplicates.json"))?;
       // The report names each file relative to its store, as the merge metadata does.
-      // A base source merged as the baseline is named as the source it is.
       let stored = vanilla
         .iter()
         .map(|path| (path.clone(), self.stored_vanilla_path(path)))

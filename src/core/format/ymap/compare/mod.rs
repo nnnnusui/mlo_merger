@@ -7,6 +7,7 @@
 //! physics dictionaries, entity extensions, LOD lights kept in step with their distant LOD
 //! lights, and how the diffs of several sources combine.
 
+pub mod added;
 mod context;
 mod diff;
 pub mod distant_lod_lights;

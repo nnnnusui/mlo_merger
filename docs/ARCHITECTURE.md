@@ -104,14 +104,18 @@ diff record and the generation index alone, and are kept while both are unchange
 4. Write merged native stream files under extension subdirectories (`ymap/`, `ybn/`),
    `_omit.txt` and `duplicates.json` at the selected output root.
 
-An added YMAP is merged as the overwrite cache records it. By default it is taken from one
-resource, the one whose name sorts last, as the one loaded last, with a warning when others
-ship it too; its name, flags, extents and block are kept. It is compared with that source
-rather than the empty YMAP, so it is written only when the merge changes it and is otherwise
-deployed as a clone, unless other resources ship it too: then it is always written,
-replacing theirs. When an overwrite names its base source, the base source's YMAP takes the
-place of vanilla, and the other resources' diffs against it are merged into it as
-resources replacing a vanilla YMAP are.
+An added YMAP is merged from every resource's version that no overwrite ignores, as the
+overwrite cache records them, each compared with the empty YMAP; its name, flags, extents
+and block are kept. Versions are merged from the resource whose name sorts last, the one
+loaded last, and the additions an earlier version makes already are left out before the
+diffs are combined (`core::format::ymap::compare::added`): entities by GUID or by type,
+archetype, LOD level and position, other items by equality within the matching tolerances
+(`struct_diff::Diff::same_as`), and the extents cover every version's. Parent references to
+an entity left out in favour of one with another GUID resolve to the kept one through an
+alias in the merge's parent references, wherever the child is. An added YMAP one resource ships is compared with that source
+rather than the empty YMAP, so it is written only when the merge changes it and is
+otherwise deployed as a clone; one several resources ship is always written, replacing
+theirs.
 
 Merge output is staged and replaces the selected output directory after a
 successful run. The default output is `asset/merged`. A missing or stale diff
@@ -142,10 +146,9 @@ Overwrites are user edits applied to merge inputs without changing source or
 cache bytes; besides the sources, they are the only input written from outside the tool.
 The source cache never reads them: it keeps the sources and preprocesses them for reading.
 What the overwrites call for is derived into the overwrite cache, as the source cache is
-from the sources, by its own stage before the merge: which resource's YMAP wins for each
-YMAP that resources add (`added_ymaps.json`), the other resources' diffs against a base
-source an overwrite names, the base source's own overwrite as removals from it, and the
-warnings of what the overwrites leave to defaults or no longer match (`warnings.json`). The
+from the sources, by its own stage before the merge: the stream files each YMAP that
+resources add is merged from, in merge order (`added_ymaps.json`), and the overwrites that
+no longer match (`warnings.json`). The
 cache records a digest of the source and vanilla caches and every overwrite, and a merge
 reading one that no longer matches fails.
 
@@ -167,9 +170,6 @@ existing YMAPs. The differences join the merge as the last source rather than
 overriding its result, so the merge policy applies to them unchanged; a file with
 one is merged even when no resource replaces it. It applies only while the latest
 vanilla file matches its fingerprint. YBN overwrites are not yet supported.
-
-`overwrite/added/ymap/{fileName}.json` names the base source of a YMAP that several
-resources add, in place of the default choice.
 
 ## Inspection
 

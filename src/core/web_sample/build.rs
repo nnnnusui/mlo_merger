@@ -88,8 +88,13 @@ pub(super) fn ymap(
   }
 }
 
-/// Sets the map's extents around its entities: their positions for the entity extents, widened
-/// by their LOD distances for the streaming extents.
+/// How far the sample takes each entity's archetype to reach from its position, for the entity
+/// extents.
+const ARCHETYPE_RADIUS: f32 = 10.0;
+
+/// Sets the map's extents around its entities: their positions widened by
+/// [`ARCHETYPE_RADIUS`] for the entity extents, and by their LOD distances for the streaming
+/// extents.
 pub(super) fn fit_extents(map: &mut Ymap) {
   let points = map
     .entities
@@ -103,12 +108,12 @@ pub(super) fn fit_extents(map: &mut Ymap) {
   if points.is_empty() {
     return;
   }
-  let bound = |pick: fn(&Position) -> f32, widen: f32, minimum: bool| {
+  let bound = |pick: fn(&Position) -> f32, widen: Option<f32>, minimum: bool| {
     points
       .iter()
       .map(|(point, distance)| {
         let value = pick(point);
-        let offset = widen * distance;
+        let offset = widen.map_or(ARCHETYPE_RADIUS, |widen| widen * distance);
         if minimum { value - offset } else { value + offset }
       })
       .fold(
@@ -116,7 +121,7 @@ pub(super) fn fit_extents(map: &mut Ymap) {
         |a, b| if minimum { a.min(b) } else { a.max(b) },
       )
   };
-  let extents = |widen: f32| {
+  let extents = |widen: Option<f32>| {
     (
       position(
         bound(|p| p.x, widen, true),
@@ -130,8 +135,8 @@ pub(super) fn fit_extents(map: &mut Ymap) {
       ),
     )
   };
-  (map.entities_extents_min, map.entities_extents_max) = extents(0.0);
-  (map.streaming_extents_min, map.streaming_extents_max) = extents(1.0);
+  (map.entities_extents_min, map.entities_extents_max) = extents(None);
+  (map.streaming_extents_min, map.streaming_extents_max) = extents(Some(1.0));
 }
 
 /// A high-detail entity without a LOD parent.

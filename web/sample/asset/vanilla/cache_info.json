@@ -10,7 +10,7 @@
         "distlodlights_small001.ymap": {
           "file": {
             "object": "0000-base/ymap/distlodlights_small001.ymap",
-            "sha256": "063f3322ce8c4946e0f4dfecaa540f00a9d3fe33929c3e589040b31b7140cfbe",
+            "sha256": "811353438914ba4efddab51f65264ea6924d0b7c61e97b4a9062949a50bd1cdc",
             "source": "smpl.rpf/distlodlights_small001.ymap"
           },
           "previous_sha256": null
@@ -18,7 +18,7 @@
         "lodlights_small001.ymap": {
           "file": {
             "object": "0000-base/ymap/lodlights_small001.ymap",
-            "sha256": "f91a6ab00dfdf31f95ce9cf0ab6b75b0595e97d9df59cbf84ebd22a28b69866a",
+            "sha256": "2103d9c1e96c50c2555547844308a22736a0575b84f7adea05a83e7bc8ba0d84",
             "source": "smpl.rpf/lodlights_small001.ymap"
           },
           "previous_sha256": null
@@ -34,7 +34,7 @@
         "smpl_block_01.ymap": {
           "file": {
             "object": "0000-base/ymap/smpl_block_01.ymap",
-            "sha256": "5aa73f81be0399e3219b40791ee24701cc629e2d3e42eb9599631055e4c8adff",
+            "sha256": "edbc473156d8677f3c7aafd60e5d6a76f619f013577092055a3451becb82abb8",
             "source": "smpl.rpf/smpl_block_01.ymap"
           },
           "previous_sha256": null
@@ -42,7 +42,7 @@
         "smpl_block_01_lod.ymap": {
           "file": {
             "object": "0000-base/ymap/smpl_block_01_lod.ymap",
-            "sha256": "96322ed5975a5f7342eadce450b0e6652fa9c28ee8d45bc62d15d59cccfc6b75",
+            "sha256": "6763a32ef7c16a67c38975f9f3ee3470226ec87bf8a9ebe54a087469cb9ae10a",
             "source": "smpl.rpf/smpl_block_01_lod.ymap"
           },
           "previous_sha256": null
@@ -50,7 +50,7 @@
         "smpl_block_02.ymap": {
           "file": {
             "object": "0000-base/ymap/smpl_block_02.ymap",
-            "sha256": "a04d90900bb156d1a176405931077ec26e8d8abb9b513cded0b53d46549e3327",
+            "sha256": "056564e02e48946af83b5fea22d99753c740835ea040da20587c9befd7ff185d",
             "source": "smpl.rpf/smpl_block_02.ymap"
           },
           "previous_sha256": null
@@ -68,10 +68,10 @@
         "smpl_block_02.ymap": {
           "file": {
             "object": "0001-update/ymap/smpl_block_02.ymap",
-            "sha256": "0ab815ea968606e772241f9189cc729fcbe1ba69577053f8f931244d46fb3d9d",
+            "sha256": "ac91a0f8b8a4ac33aa960949b225a2e7db5d2eda2db68fd30f04490c3a4cda42",
             "source": "smpl.rpf/smpl_block_02.ymap"
           },
-          "previous_sha256": "a04d90900bb156d1a176405931077ec26e8d8abb9b513cded0b53d46549e3327"
+          "previous_sha256": "056564e02e48946af83b5fea22d99753c740835ea040da20587c9befd7ff185d"
         }
       },
       "id": "0001-update",
@@ -86,7 +86,7 @@
         "winter_distlodlights_small001.ymap": {
           "file": {
             "object": "0002-smpl_winter/ymap/winter_distlodlights_small001.ymap",
-            "sha256": "ac4c4ddc35557a84c73e02d48e86786ba0c757b989bfaaad9df6f530499aee8a",
+            "sha256": "e8fc46a24e93766cce8b7e9df55d490e80832889b68ea5eae8df8369e19f1eb1",
             "source": "smpl.rpf/winter_distlodlights_small001.ymap"
           },
           "previous_sha256": null
@@ -94,7 +94,7 @@
         "winter_lodlights_small001.ymap": {
           "file": {
             "object": "0002-smpl_winter/ymap/winter_lodlights_small001.ymap",
-            "sha256": "9b05c71b1535d28345dfc642e52d774a8287b319656808cb3e12aaf0fd0b543a",
+            "sha256": "43a24ca782d1f4f183dc6a6b7cccf75615d808236b2c3c8f2cbeb9d24501bd97",
             "source": "smpl.rpf/winter_lodlights_small001.ymap"
           },
           "previous_sha256": null
@@ -102,7 +102,7 @@
         "winter_smpl_block_01.ymap": {
           "file": {
             "object": "0002-smpl_winter/ymap/winter_smpl_block_01.ymap",
-            "sha256": "9dabbd95e43130a6d785dfa69bd1288c14481b7fcbdae6dc77b9fa1d4958bdb0",
+            "sha256": "a6480a262919c74c661e58fb596e28f4119458f096e8f57c4c93e6f64bb375f5",
             "source": "smpl.rpf/winter_smpl_block_01.ymap"
           },
           "previous_sha256": null
@@ -120,10 +120,10 @@
         "smpl_block_02.ymap": {
           "file": {
             "object": "0003-smpl_patch_01/ymap/smpl_block_02.ymap",
-            "sha256": "84f7e7a2eda8605587306ac750fdc432a6484eb6349391785e987f475cb0b818",
+            "sha256": "ab79abf1d1a61c1e62acbb6f243af02e902acdb5dcdb7201ecade06a14a8b974",
             "source": "smpl.rpf/smpl_block_02.ymap"
           },
-          "previous_sha256": "0ab815ea968606e772241f9189cc729fcbe1ba69577053f8f931244d46fb3d9d"
+          "previous_sha256": "ac91a0f8b8a4ac33aa960949b225a2e7db5d2eda2db68fd30f04490c3a4cda42"
         }
       },
       "id": "0003-smpl_patch_01",
@@ -146,15 +146,15 @@
         "smpl_block_02.ymap": {
           "file": {
             "object": "0004-smpl_summer/ymap/smpl_block_02.ymap",
-            "sha256": "8f1f7b11bdf2ccfeb1ca04264fdf541885643f9f284aff65346da028de91fc83",
+            "sha256": "350e9f844e228d388ceb5f30b43270635737ea282a3f5462a9d8fb3331e51a5d",
             "source": "smpl.rpf/smpl_block_02.ymap"
           },
-          "previous_sha256": "84f7e7a2eda8605587306ac750fdc432a6484eb6349391785e987f475cb0b818"
+          "previous_sha256": "ab79abf1d1a61c1e62acbb6f243af02e902acdb5dcdb7201ecade06a14a8b974"
         },
         "summer_smpl_block_01.ymap": {
           "file": {
             "object": "0004-smpl_summer/ymap/summer_smpl_block_01.ymap",
-            "sha256": "0f58e1006fd3abd4aec363948eccd6c7cb255713c026b2adf51f42b10a1c30ee",
+            "sha256": "9e2065a4fd46ab8d2423020133861f8ea379ad286e213009d2e275f7f0bb3c0a",
             "source": "smpl.rpf/summer_smpl_block_01.ymap"
           },
           "previous_sha256": null

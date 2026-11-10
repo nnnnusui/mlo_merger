@@ -20,7 +20,7 @@ pub struct GenerateOverwriteCache {
 /// Parses `--generate-overwrite-cache` arguments.
 pub fn parser() -> impl Parser<GenerateOverwriteCache> {
   let command = long("generate-overwrite-cache")
-    .help("Build or update what the overwrites call for, such as the base sources' diffs")
+    .help("Build or update what the overwrites call for: the sources of added YMAPs and the overwrite warnings")
     .req_flag(());
   let source_dir = short('i')
     .long("input")

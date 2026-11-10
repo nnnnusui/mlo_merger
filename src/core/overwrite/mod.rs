@@ -9,12 +9,8 @@
 //! differences from a latest vanilla YMAP, merged after every resource's. It applies only while
 //! that vanilla file is the one it was written against.
 //!
-//! `<overwrite>/added/ymap/<file name>.json` holds an [`AddedYmapOverwrite`]: the base source of
-//! a YMAP that several resources add, from which the others' differences are taken.
-//!
 //! What these call for is derived into the overwrite cache (see [`crate::core::overwrite_cache`]).
 
-mod added;
 mod skip;
 #[cfg(test)]
 mod test;
@@ -28,7 +24,6 @@ use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 use std::path::Path;
 
-pub use added::AddedYmapOverwrite;
 pub use skip::skip_diffs;
 pub use vanilla::VanillaOverwrite;
 
@@ -175,38 +170,22 @@ impl StreamFileOverwrite {
   }
 }
 
-/// Every resource stream file's overwrite, keyed by resource name and stream path, the latest
-/// vanilla files' and the base sources of added YMAPs.
+/// Every resource stream file's overwrite, keyed by resource name and stream path, and the
+/// latest vanilla files'.
 #[derive(Debug, Clone, Default)]
 pub struct Overwrites {
   resources: BTreeMap<(String, String), StreamFileOverwrite>,
   vanilla: BTreeMap<String, VanillaOverwrite>,
-  added: BTreeMap<String, AddedYmapOverwrite>,
 }
 
 impl Overwrites {
-  /// Reads `<directory>/resources/<resource>/**/*.diff.json`,
-  /// `<directory>/vanilla/latest/ymap/*.diff.json` and `<directory>/added/ymap/*.json`; a
-  /// missing directory has no overwrites.
+  /// Reads `<directory>/resources/<resource>/**/*.diff.json` and
+  /// `<directory>/vanilla/latest/ymap/*.diff.json`; a missing directory has no overwrites.
   pub fn load(directory: &Path) -> Result<Self> {
     Ok(Self {
       resources: load_resources(directory)?,
       vanilla: vanilla::load(directory)?,
-      added: added::load(directory)?,
     })
-  }
-
-  /// The base source of the added YMAP named `file_name`, matched case-insensitively.
-  pub fn added_file(
-    &self,
-    file_name: &str,
-  ) -> Option<&AddedYmapOverwrite> {
-    self.added.get(&file_name.to_ascii_lowercase())
-  }
-
-  /// Every added YMAP overwrite, keyed by lowercase file name.
-  pub fn added_files(&self) -> &BTreeMap<String, AddedYmapOverwrite> {
-    &self.added
   }
 
   /// The overwrite of the stream file at `stream_path` below the `stream` directory of the

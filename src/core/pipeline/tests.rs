@@ -19,14 +19,13 @@ fn report_adds_overwrite_warnings_to_the_changes() {
         file: "maps/map.ymap".into(),
         reason: IgnoredOverwriteReason::SourceChanged,
       }],
-      ..Default::default()
     },
   };
   let empty = r#"{"added":[],"modified":[],"removed":[]}"#;
   assert_eq!(
     serde_json::to_string(&report).unwrap(),
     format!(
-      r#"{{"vanilla_cache":{empty},"source_cache":{empty},"merged":{empty},"added_ymaps_without_base":[],"unmatched_base_sources":[],"ignored_overwrites":[{{"resource":"resource","file":"maps/map.ymap","reason":"source_changed"}}]}}"#
+      r#"{{"vanilla_cache":{empty},"source_cache":{empty},"merged":{empty},"ignored_overwrites":[{{"resource":"resource","file":"maps/map.ymap","reason":"source_changed"}}]}}"#
     )
   );
 }

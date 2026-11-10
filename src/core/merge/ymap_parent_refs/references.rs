@@ -18,6 +18,8 @@ pub(in crate::core::merge) struct ParentReferences {
   ambiguous_guids: std::collections::HashSet<(u32, u32)>,
   entity_keys: HashMap<(u32, Vec<u32>, usize), u32>,
   original_guids: HashMap<u32, u32>,
+  /// Entity identities that another entity stands in for; see [`Self::alias`].
+  aliases: HashMap<u32, u32>,
 }
 
 struct UnresolvedReference {
@@ -159,7 +161,28 @@ impl ParentReferences {
     self.handles.insert(target, handle);
     Ok(handle)
   }
-  /// Returns the target represented by an internal handle.
+  /// Makes the entity of `map` with the unique `guid` stand for the one with `left_out`, which
+  /// the merge leaves out in its favour, so that parent references to that one resolve to it,
+  /// whenever they were captured.
+  pub(in crate::core::merge) fn alias(
+    &mut self,
+    map: u32,
+    left_out: u32,
+    guid: u32,
+  ) -> io::Result<()> {
+    if [left_out, guid]
+      .iter()
+      .any(|guid| *guid == 0 || self.ambiguous_guids.contains(&(map, *guid)))
+    {
+      return Ok(());
+    }
+    let from = self.entity_id_with_occurrence(map, vec![left_out], 0, left_out)?;
+    let to = self.entity_id_with_occurrence(map, vec![guid], 0, guid)?;
+    self.aliases.insert(from, to);
+    Ok(())
+  }
+
+  /// Returns the target represented by an internal handle, after [`Self::alias`].
   pub(in crate::core::merge) fn target(
     &self,
     handle: i32,
@@ -168,7 +191,11 @@ impl ParentReferences {
       return None;
     }
     let index = handle.checked_neg()?.checked_sub(2)?;
-    self.targets.get(usize::try_from(index).ok()?).copied()
+    let target = *self.targets.get(usize::try_from(index).ok()?)?;
+    Some(ParentTarget {
+      guid: self.aliases.get(&target.guid).copied().unwrap_or(target.guid),
+      ..target
+    })
   }
 
   /// Resolves a handle against a final array; removed parents are detached.

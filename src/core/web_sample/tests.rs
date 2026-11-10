@@ -128,8 +128,15 @@ fn parent_indices(map: &Ymap) -> Vec<i32> {
 fn pipeline_runs_on_the_web_sample() {
   let workspace = Workspace::new("pipeline");
   let latest = workspace.pipeline(None);
-  // Nine stream files merged or cloned, and the custom map, which the source cache collects too.
-  assert_eq!(latest.deploy.copied, 11);
+  // Nine stream files merged or cloned, and the custom maps, which the source cache collects too.
+  assert_eq!(latest.deploy.copied, 12);
+
+  // Both versions of the custom map merge, the later first: the shared sign once, and the crate
+  // once, as placed again under another GUID; the label's parent index follows it.
+  let custom = workspace.merged_ymap("smpl_custom_01.ymap");
+  assert_eq!(guids(&custom), [guid::BARREL, guid::SIGN, guid::CRATE_V2]);
+  let label = workspace.merged_ymap("smpl_custom_02.ymap");
+  assert_eq!(label.entities[0].parent_index, 2);
 
   // Relationships: the block and its generations are children of the LOD map, and the LOD lights
   // of their distant partner.
@@ -227,6 +234,35 @@ fn pipeline_runs_on_the_web_sample() {
   assert!(
     workspace.asset("read-cache/vanilla/0003-smpl_patch_01/ymap/smpl_block_02.ymap.json").is_file()
   );
-  // Seven resource YMAPs, the custom map included, and the eight vanilla YMAPs of build 100.
-  assert_eq!(read.files.len(), 15);
+  // Nine resource YMAPs, the custom maps included, and the eight vanilla YMAPs of build 100.
+  assert_eq!(read.files.len(), 17);
+}
+
+#[test]
+fn every_stream_file_covers_the_shared_position() {
+  let [x, y, z] = EVERY_FILE_POSITION.map(f64::from);
+  let names = hash_names().into_iter().collect();
+  let mut checked = 0;
+  for file in sample_files() {
+    let bounds = if file.path.ends_with(".ymap") {
+      let map = ymap_to_model(&file.bytes, &names).unwrap();
+      let (min, max) = (&map.entities_extents_min, &map.entities_extents_max);
+      ([min.x, min.y, min.z].map(f64::from), [max.x, max.y, max.z].map(f64::from))
+    } else if file.path.ends_with(".ybn") {
+      let root = crate::core::format::ybn::read_ybn_bound_tree(&file.bytes).unwrap();
+      crate::core::find::ybn::world_bounds(&root).unwrap().unwrap()
+    } else {
+      continue;
+    };
+    let (min, max) = bounds;
+    assert!(
+      (min[0]..=max[0]).contains(&x)
+        && (min[1]..=max[1]).contains(&y)
+        && (min[2]..=max[2]).contains(&z),
+      "{} spans {min:?} to {max:?}",
+      file.path
+    );
+    checked += 1;
+  }
+  assert_eq!(checked, 26);
 }

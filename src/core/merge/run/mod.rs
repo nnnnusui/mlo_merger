@@ -1,4 +1,5 @@
 use super::duplicates::{Change, Collector, Contribution, DuplicateReport};
+use crate::core::format::ymap::compare::added;
 use crate::core::format::ymap::compare::lod_light_pairs::LightSide;
 use crate::core::format::ymap::compare::{
   EntityParent, EntityParents, IgnoredChange, YmapComparisonDiff, YmapDiffContext, YmapDiffFields,
@@ -40,13 +41,14 @@ pub struct MergeYmap {
   /// resources' diffs are. A vanilla file with one is merged even when no source replaces it.
   pub propagated: Vec<PropagatedYmap>,
   /// The lowercase file names of the latest files that are the empty baselines of YMAPs
-  /// resources add rather than vanilla YMAPs (see
-  /// [`crate::core::source_cache::added_ymap_baselines`]). Each has one source, whose name,
-  /// flags, extents and block are kept, and which is compared with that source rather than its
-  /// baseline, so it is written only when the merge changes it, unless in [`Self::replacing`].
+  /// resources add rather than vanilla YMAPs. Their sources' name, flags, extents and block are
+  /// kept, and additions a source earlier in merge order makes already are left out (see
+  /// [`crate::core::format::ymap::compare::added`]). One with a single source is compared with
+  /// that source rather than its baseline, so it is written only when the merge changes it,
+  /// unless in [`Self::replacing`].
   pub added: HashSet<String>,
-  /// The lowercase names of the YMAPs resources add that more resources ship than the merge
-  /// takes, whose merged YMAP is always written so that it replaces theirs.
+  /// The lowercase names of the YMAPs resources add that several resources ship, whose merged
+  /// YMAP is always written so that it replaces theirs.
   pub replacing: HashSet<String>,
 }
 

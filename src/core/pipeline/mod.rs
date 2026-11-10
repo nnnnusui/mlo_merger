@@ -37,8 +37,8 @@ pub struct Pipeline {
   pub merged_dir: PathBuf,
   /// Overwrites applied to source diffs before merging; `None` applies none.
   pub overwrite_dir: Option<PathBuf>,
-  /// What the overwrites call for, built from them before merging; `None` works only while no
-  /// overwrite names a base source of an added YMAP.
+  /// What the overwrites call for, built from them before merging; `None` derives it in the
+  /// merge.
   pub overwrite_cache_dir: Option<PathBuf>,
   /// Final deployment directory.
   pub output_dir: PathBuf,
