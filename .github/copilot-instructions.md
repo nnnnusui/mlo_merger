@@ -38,7 +38,7 @@ This document contains meta-guidelines that cannot be expressed through automate
 
 Before making a large change, write its implementation plan to `docs/plan/{timestamp}_{plan_name}.md`
 (e.g. `docs/plan/202610230935_mlomerger_cargenerator.md`), with `{timestamp}` as `YYYYMMDDHHmm` and `{plan_name}` in snake_case.
-Once every step of a plan is done, rename it to `docs/plan/{timestamp}_done_{plan_name}.md`, keeping its timestamp.
+Once every step of a plan is done, rename it to `docs/plan/{timestamp}_done_{plan_name}.md`, keeping its timestamp, with `git mv` so that git records the rename.
 
 ## Version Control
 
