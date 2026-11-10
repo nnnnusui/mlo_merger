@@ -87,6 +87,8 @@ mod tests {
       "AddedYmaps",
       "AddedYmap",
       "AddedYmapSource",
+      "LeftOutAddition",
+      "AddedItem",
       "OverwriteWarnings",
       "StreamFileOverwrite",
       "OverwriteFingerprint",

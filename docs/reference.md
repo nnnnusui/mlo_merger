@@ -134,7 +134,8 @@ flags, extents and block are kept.
   one, or another item equal within the matching tolerances; LOD lights and distant LOD
   lights are kept. The extents cover every version's.
   The merged YMAP is always written, so it replaces the others. The overwrite cache's
-  `added_ymaps.json` (`AddedYmaps`) records each added YMAP's sources in merge order.
+  `added_ymaps.json` (`AddedYmaps`) records each added YMAP's sources in merge order and the additions left out, each
+  with the item kept in its place.
 - A resource overwrite with `ignore` leaves its stream file out of the merge.
 - An added YMAP only one resource ships is written only when the merge changes it, for
   example through an overwrite or a repaired parent reference; otherwise the resource's

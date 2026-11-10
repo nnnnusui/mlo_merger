@@ -37,7 +37,7 @@ in `web/`, described under `web` in its `release.json`; see [Browser build](web.
 | Changes carried to newer DLC generations | `YmapPropagatedDiff`, `YmapPropagationOrigin` |
 | Vanilla YMAP generations | `GenerationIndex`, `GenerationUnit` |
 | Overwrite documents | `StreamFileOverwrite`, `OverwriteFingerprint`, `YmapDiffSkip`, `VanillaOverwrite` |
-| Overwrite cache | `AddedYmaps`, `AddedYmap`, `AddedYmapSource`, `OverwriteWarnings` |
+| Overwrite cache | `AddedYmaps`, `AddedYmap`, `AddedYmapSource`, `LeftOutAddition`, `AddedItem`, `OverwriteWarnings` |
 | Pipeline stdout | `PipelineReport`, `PipelineChanges`, `StoreChanges`, `OverwriteWarnings`, `IgnoredOverwrite`, `IgnoredOverwriteReason` |
 | Merge diagnostics | `DuplicateReport` |
 
@@ -342,7 +342,25 @@ version is merged:
 - The extents cover every version's. Name, flags and block come from the first version.
 - Leave out what remains doubled with a resource overwrite written from that resource's
   source-cache diff document, as for any source, or leave a version out with `ignore`.
-- The merge logs, for each such YMAP, how many additions it left out.
+- `added_ymaps.json` lists each addition left out in the YMAP's `left_out`: the stream file
+  and the item, by its array (as diff documents name it) and its index in that file, with the
+  item of an earlier version kept in its place:
+
+  ```json
+  "left_out": [
+    {
+      "resource": "smpl_custom_props", "stream_path": "smpl_custom_01.ymap",
+      "field": "entities", "index": 1,
+      "kept": {
+        "resource": "smpl_custom_props_v2", "stream_path": "smpl_custom_01.ymap",
+        "field": "entities", "index": 2
+      }
+    }
+  ]
+  ```
+
+  It is taken from the source-cache diff documents with the resource overwrites applied, as
+  the merge thins them, so an overwrite leaving out the kept item brings the other back.
 
 ### Applying Overwrites
 

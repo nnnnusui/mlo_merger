@@ -19,8 +19,6 @@
 //!
 //! [`union_extents`] gives the merged YMAP extents covering every version's.
 
-use std::collections::HashSet;
-
 use struct_diff::Diff;
 
 use super::{ItemDiff, PositionDiff, YmapDiffFields, YmapEntityDiff, instanced_data};
@@ -29,11 +27,22 @@ use crate::core::{
   format::ymap::{model::YmapEntity, reference_hash},
 };
 
+/// One addition [`thin_additions`] left out.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LeftOut {
+  /// The field of the diffs, such as `entities` or `instanced_data.grass_instance_list`.
+  pub field: &'static str,
+  /// The source, by its index in merge order, and the addition, by its index in that source's
+  /// list of changes to the field.
+  pub at: (usize, usize),
+  /// The addition of an earlier source it is the same as, likewise.
+  pub kept: (usize, usize),
+}
+
 /// What [`thin_additions`] left out.
 #[derive(Debug, Default, PartialEq, Eq)]
 pub struct Thinned {
-  /// How many additions it left out.
-  pub left_out: usize,
+  pub left_out: Vec<LeftOut>,
   /// For each entity left out in favour of one with another GUID, its GUID and the kept one's.
   pub aliases: Vec<(u32, u32)>,
 }
@@ -45,33 +54,37 @@ pub fn thin_additions(
   tolerances: &MatchTolerances,
 ) -> Thinned {
   let mut thinned = thin_entities(sources, tolerances);
-  let mut left_out = 0;
-  left_out += thin_items(
+  let left_out = &mut thinned.left_out;
+  thin_items(
     "box_occluders",
     sources,
     |diff| Some(&mut diff.box_occluders),
     |a, b| a.same_as(b, tolerances),
+    left_out,
   );
-  left_out += thin_items(
+  thin_items(
     "occlude_models",
     sources,
     |diff| Some(&mut diff.occlude_models),
     |a, b| a.same_as(b, tolerances),
+    left_out,
   );
-  left_out += thin_items(
+  thin_items(
     "time_cycle_modifiers",
     sources,
     |diff| Some(&mut diff.time_cycle_modifiers),
     |a, b| a.same_as(b, tolerances),
+    left_out,
   );
-  left_out += thin_items(
+  thin_items(
     "car_generators",
     sources,
     |diff| Some(&mut diff.car_generators),
     |a, b| a.same_as(b, tolerances),
+    left_out,
   );
-  left_out += thin_items(
-    "grass_instance_list",
+  thin_items(
+    "instanced_data.grass_instance_list",
     sources,
     |diff| diff.instanced_data.as_mut().map(|data| &mut data.grass_instance_list),
     |a, b| {
@@ -82,8 +95,8 @@ pub fn thin_additions(
       )
       .is_none()
     },
+    left_out,
   );
-  thinned.left_out += left_out;
   thinned
 }
 
@@ -105,15 +118,18 @@ fn thin_entities(
   sources: &mut [YmapDiffFields],
   tolerances: &MatchTolerances,
 ) -> Thinned {
-  let mut guids = HashSet::new();
-  let mut earlier = Vec::<YmapEntity>::new();
+  // The entities kept so far, with where they are.
+  let mut earlier = Vec::<(YmapEntity, (usize, usize))>::new();
   let mut thinned = Thinned::default();
-  for source in sources {
+  for (index, source) in sources.iter_mut().enumerate() {
     let Some(entities) = &mut source.entities else {
       continue;
     };
     let mut kept = Vec::new();
+    let mut position = 0;
     entities.retain(|diff| {
+      let at = (index, position);
+      position += 1;
       let YmapEntityDiff::Added {
         entity,
         ..
@@ -121,18 +137,14 @@ fn thin_entities(
       else {
         return true;
       };
-      let same = if entity.guid != 0 && guids.contains(&entity.guid) {
-        Some(entity.guid)
-      } else {
-        earlier
-          .iter()
-          .find(|other| placed_alike(entity, other, tolerances.ymap))
-          .map(|other| other.guid)
-      };
+      let same = earlier
+        .iter()
+        .find(|(other, _)| entity.guid != 0 && other.guid == entity.guid)
+        .or_else(|| earlier.iter().find(|(other, _)| placed_alike(entity, other, tolerances.ymap)));
       let left_out = match same {
-        Some(guid) if guid == entity.guid || entity.guid == 0 => true,
+        Some((other, _)) if other.guid == entity.guid || entity.guid == 0 => true,
         // Children may point at it by its GUID, so it is left out only for one that has one.
-        Some(0) => {
+        Some((other, _)) if other.guid == 0 => {
           tracing::info!(
             "    entities: entity {} ({}) is placed as one an earlier source adds without a GUID; keeping it",
             entity.guid,
@@ -140,44 +152,50 @@ fn thin_entities(
           );
           false
         }
-        Some(guid) => {
-          thinned.aliases.push((entity.guid, guid));
+        Some((other, _)) => {
+          thinned.aliases.push((entity.guid, other.guid));
           true
         }
         None => false,
       };
-      if left_out {
-        tracing::info!(
-          "    entities: an earlier source adds entity {} ({}) already; leaving it out",
-          entity.guid,
-          entity.archetype_name
-        );
-        thinned.left_out += 1;
-      } else {
-        kept.push(entity.clone());
+      match (left_out, same) {
+        (true, Some((_, kept_at))) => {
+          tracing::info!(
+            "    entities: an earlier source adds entity {} ({}) already; leaving it out",
+            entity.guid,
+            entity.archetype_name
+          );
+          thinned.left_out.push(LeftOut {
+            field: "entities",
+            at,
+            kept: *kept_at,
+          });
+        }
+        _ => kept.push((entity.clone(), at)),
       }
       !left_out
     });
     if entities.is_empty() {
       source.entities = None;
     }
-    guids.extend(kept.iter().map(|entity| entity.guid).filter(|guid| *guid != 0));
     earlier.extend(kept);
   }
   thinned
 }
 
-/// Thins the additions to one array of `sources`, which `list` picks out of each diff, leaving
-/// out an item when `same` holds for it and an item an earlier source adds.
+/// Thins the additions to the `field` array of `sources`, which `list` picks out of each diff,
+/// leaving out an item when `same` holds for it and an item an earlier source adds, and listing
+/// it in `left_out`.
 fn thin_items<T: Clone, C>(
-  what: &str,
+  field: &'static str,
   sources: &mut [YmapDiffFields],
   mut list: impl FnMut(&mut YmapDiffFields) -> Option<&mut Option<Vec<ItemDiff<T, C>>>>,
   same: impl Fn(&T, &T) -> bool,
-) -> usize {
-  let mut earlier = Vec::<T>::new();
-  let mut left_out = 0;
-  for source in sources {
+  left_out: &mut Vec<LeftOut>,
+) {
+  let mut earlier = Vec::<(T, (usize, usize))>::new();
+  let before = left_out.len();
+  for (index, source) in sources.iter_mut().enumerate() {
     let Some(diffs) = list(source) else {
       continue;
     };
@@ -185,7 +203,10 @@ fn thin_items<T: Clone, C>(
       continue;
     };
     let mut kept = Vec::new();
+    let mut position = 0;
     items.retain(|diff| {
+      let at = (index, position);
+      position += 1;
       let ItemDiff::Added {
         item,
         ..
@@ -193,11 +214,15 @@ fn thin_items<T: Clone, C>(
       else {
         return true;
       };
-      if earlier.iter().any(|other| same(other, item)) {
-        left_out += 1;
+      if let Some((_, kept_at)) = earlier.iter().find(|(other, _)| same(other, item)) {
+        left_out.push(LeftOut {
+          field,
+          at,
+          kept: *kept_at,
+        });
         return false;
       }
-      kept.push(item.clone());
+      kept.push((item.clone(), at));
       true
     });
     if items.is_empty() {
@@ -205,10 +230,10 @@ fn thin_items<T: Clone, C>(
     }
     earlier.extend(kept);
   }
-  if left_out > 0 {
-    tracing::info!("    {what}: {left_out} additions an earlier source makes too are left out");
+  let count = left_out.len() - before;
+  if count > 0 {
+    tracing::info!("    {field}: {count} additions an earlier source makes too are left out");
   }
-  left_out
 }
 
 /// Sets the extents of the first of `sources` to the smallest covering those of every source,
@@ -295,7 +320,15 @@ mod tests {
       adding(vec![occluder(101), occluder(110)]),
       adding(vec![occluder(100), occluder(120), occluder(120)]),
     ];
-    assert_eq!(thin_additions(&mut sources, &tolerances).left_out, 2);
+    let left_out = |at, kept| LeftOut {
+      field: "box_occluders",
+      at,
+      kept,
+    };
+    assert_eq!(
+      thin_additions(&mut sources, &tolerances).left_out,
+      [left_out((1, 0), (0, 0)), left_out((2, 0), (0, 0))]
+    );
     assert_eq!(sources[1], adding(vec![occluder(110)]));
     assert_eq!(sources[2], adding(vec![occluder(120), occluder(120)]));
 
@@ -345,7 +378,11 @@ mod tests {
     assert_eq!(
       thinned,
       Thinned {
-        left_out: 1,
+        left_out: vec![LeftOut {
+          field: "entities",
+          at: (1, 0),
+          kept: (0, 0),
+        }],
         aliases: vec![(2, 1)],
       }
     );

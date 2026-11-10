@@ -383,10 +383,10 @@ impl MergeYmap {
       if self.added.contains(&ymap_name.to_ascii_lowercase()) && ymap_diffs.len() > 1 {
         let tolerances = crate::core::config::matching::current();
         let thinned = added::thin_additions(&mut ymap_diffs, &tolerances);
-        if thinned.left_out > 0 {
+        if !thinned.left_out.is_empty() {
           tracing::info!(
             "  Left out {} additions an earlier version makes already",
-            thinned.left_out
+            thinned.left_out.len()
           );
         }
         // Children of an entity left out point at the one kept in its place.

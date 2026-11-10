@@ -405,6 +405,31 @@ fn added_ymaps_merge_every_version_without_shared_additions() {
     files["files"]["custom.ymap"]["shipped_by"],
     serde_json::json!(["resource_a", "resource_b", "resource_c"])
   );
+  // The overwrite cache records each entity left out by its resource and index, with the one
+  // kept in its place.
+  let entity_left_out = files["files"]["custom.ymap"]["left_out"]
+    .as_array()
+    .unwrap()
+    .iter()
+    .filter(|left_out| left_out["field"] == "entities")
+    .map(|left_out| {
+      let name = |item: &serde_json::Value| {
+        format!("{}[{}]", item["resource"].as_str().unwrap(), item["index"])
+      };
+      (name(left_out), name(&left_out["kept"]))
+    })
+    .collect::<Vec<_>>();
+  let pair = |left_out: &str, kept: &str| (left_out.to_string(), kept.to_string());
+  assert_eq!(
+    entity_left_out,
+    [
+      pair("resource_b[0]", "resource_c[0]"),
+      pair("resource_b[1]", "resource_c[1]"),
+      pair("resource_a[0]", "resource_c[1]"),
+      pair("resource_a[1]", "resource_c[0]"),
+      pair("resource_a[2]", "resource_c[3]"),
+    ]
+  );
   // The child's parent index follows entity 150 to entity 100, which stands in for it.
   let solo_merged = read(&output.join("ymap/solo.ymap"));
   assert_eq!(guids(&solo_merged), [300]);
