@@ -57,11 +57,11 @@ every test passing.
 
 ### 6. Split modules that hold several concerns
 
-- [ ] `source_cache/read.rs`: the read API (`load_merge_inputs`, `inventoried_files`,
+- [x] `source_cache/read.rs`: the read API (`load_merge_inputs`, `inventoried_files`,
   `cached_files`, ...) out of `source_cache/mod.rs`.
-- [ ] `overwrite_cache/added.rs`: resolving added YMAPs and recording what they leave out, out of
+- [x] `overwrite_cache/added.rs`: resolving added YMAPs and recording what they leave out, out of
   `overwrite_cache/mod.rs`.
-- [ ] `web_sample/earlier.rs`: building the earlier versions, out of `web_sample/mod.rs`.
+- [x] `web_sample/earlier.rs`: building the earlier versions, out of `web_sample/mod.rs`.
 
 ### 7. Split the YMAP merge engine
 
