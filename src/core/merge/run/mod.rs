@@ -1,5 +1,5 @@
 use super::duplicates::{Change, Collector, Contribution, DuplicateReport};
-use crate::core::format::ymap::compare::added;
+use crate::core::format::ymap::compare::added as compare_added;
 use crate::core::format::ymap::compare::lod_light_pairs::LightSide;
 use crate::core::format::ymap::compare::{
   EntityParent, EntityParents, IgnoredChange, YmapComparisonDiff, YmapDiffContext, YmapDiffFields,
@@ -10,7 +10,7 @@ use crate::core::format::ymap::model::ymap::Ymap;
 use crate::core::format::ymap::reference_hash;
 use crate::core::format::ymap::relation::{EntityParentRef, entity_parent_ref};
 use crate::core::merge::ymap_parent_refs::{
-  OriginalMap, ParentReferences, SourceMaps, runtime_entities,
+  OriginalMap, ParentReferences, ParentTarget, SourceMaps, runtime_entities,
 };
 use crate::core::overwrite::{OverwriteFingerprint, StreamFileOverwrite, VanillaOverwrite};
 use crate::platform::fs;

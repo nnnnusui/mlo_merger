@@ -19,7 +19,7 @@ mod references;
 mod sources;
 
 pub(super) use crate::core::format::ymap::relation::runtime_entities;
-pub(super) use references::ParentReferences;
+pub(super) use references::{ParentReferences, ParentTarget};
 pub(super) use sources::{OriginalMap, SourceMaps};
 
 #[cfg(test)]

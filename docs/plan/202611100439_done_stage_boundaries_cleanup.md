@@ -65,10 +65,11 @@ every test passing.
 
 ### 7. Split the YMAP merge engine
 
-- [ ] Split `MergeYmap::run_configured_inner` (about 600 lines) into its phases: registering
-  sources and parents, collecting each YMAP's diffs, combining them, relinking children, and
-  deciding the output.
-- [ ] One helper for recording a diff's entity changes in the duplicate report, replacing the
+- [x] Split `MergeYmap::run_configured_inner` (about 600 lines) into its phases on a shared
+  `MergeRun`: grouping the sources, registering them and their parents, planning each YMAP
+  (merged, or kept from its single source), relinking vanilla children, restoring parent
+  indices, checking local LOD hierarchies, and deciding the output.
+- [x] One helper for recording a diff's entity changes in the duplicate report, replacing the
   three copies.
 
 ## Out of Scope
