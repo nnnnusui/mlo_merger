@@ -192,9 +192,15 @@ fn pipeline_runs_on_the_web_sample() {
     .unwrap(),
   )
   .unwrap();
+  let current: serde_json::Value = serde_json::from_slice(
+    &fs::read(workspace.asset("source-cache/diff/smpl_street_tweaks/smpl_block_01.ymap.diff.json"))
+      .unwrap(),
+  )
+  .unwrap();
+  let planter = super::earlier::added_index(&current, guid::PLANTER);
   assert_eq!(
     rewritten["skip"],
-    serde_json::json!({"entities": [{"Added": {"entity": {"guid": guid::PLANTER}}}]})
+    serde_json::json!({"entities": [{"Added": {"target_index": planter}}]})
   );
   let rework = update("smpl_block_rework", "maps/smpl_block_01.ymap");
   assert_eq!(rework.outcome, crate::core::overwrite_cache::SourceUpdateOutcome::Manual);

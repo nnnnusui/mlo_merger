@@ -40,16 +40,7 @@ pub(super) fn earlier_versions() -> &'static [(String, Vec<u8>)] {
     .unwrap();
     let lamp = find(&block_01("smpl_block_01"), guid::LAMP);
     let mut files = Vec::new();
-    for (resource, skip) in [
-      (
-        "smpl_street_tweaks",
-        serde_json::json!({"entities": [
-          {"Added": {"entity": {"guid": guid::PLANTER}}},
-          {"Added": {"entity": {"guid": guid::CONE}}}
-        ]}),
-      ),
-      ("smpl_block_rework", serde_json::json!({"entities": [{"Modified": {"base_index": lamp}}]})),
-    ] {
+    for resource in ["smpl_street_tweaks", "smpl_block_rework"] {
       let cache = asset.join("source-cache");
       let stream_path =
         if resource == "smpl_block_rework" { "maps/smpl_block_01.ymap" } else { "smpl_block_01.ymap" };
@@ -63,6 +54,12 @@ pub(super) fn earlier_versions() -> &'static [(String, Vec<u8>)] {
         document[file]["modified_seconds"] = 0.into();
         document[file]["modified_nanos"] = 0.into();
       }
+      let skip = if resource == "smpl_street_tweaks" {
+        let added = |guid| serde_json::json!({"Added": {"target_index": added_index(&document, guid)}});
+        serde_json::json!({"entities": [added(guid::PLANTER), added(guid::CONE)]})
+      } else {
+        serde_json::json!({"entities": [{"Modified": {"base_index": lamp}}]})
+      };
       let sha = sha256(&bytes);
       let history = crate::core::source_cache::history::version_path(resource, stream_path, &sha);
       let diff = crate::core::source_cache::history::diff_path(resource, stream_path, &sha);
@@ -88,4 +85,18 @@ pub(super) fn earlier_versions() -> &'static [(String, Vec<u8>)] {
     let _ = fs::remove_dir_all(&root);
     files
   })
+}
+
+/// The `target_index` of the entity with `guid` that the diff document `document` adds.
+pub(super) fn added_index(
+  document: &serde_json::Value,
+  guid: u32,
+) -> serde_json::Value {
+  document["diffs"]["entities"]
+    .as_array()
+    .into_iter()
+    .flatten()
+    .find(|diff| diff["Added"]["entity"]["guid"] == guid)
+    .map(|diff| diff["Added"]["target_index"].clone())
+    .unwrap_or_else(|| panic!("no addition of entity {guid}"))
 }

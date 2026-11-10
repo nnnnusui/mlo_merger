@@ -8,16 +8,12 @@
     "entities": [
       {
         "Added": {
-          "entity": {
-            "guid": 1515847681
-          }
+          "target_index": 7
         }
       },
       {
         "Added": {
-          "entity": {
-            "guid": 1515847683
-          }
+          "target_index": 8
         }
       }
     ]
