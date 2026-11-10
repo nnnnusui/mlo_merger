@@ -479,18 +479,24 @@ exist are skipped. Store paths take the same options and defaults as the other c
 | `broken_link` | A `vanilla-cache/latest/` link whose target does not exist |
 | `wrong_link` | A `vanilla-cache/latest/` entry that does not link to the archive file the metadata names |
 | `unreadable` | The store's metadata cannot be read, so the store was not checked further |
+| `stale` | The overwrite cache was built from other source or vanilla caches or overwrites than the current ones |
 
 - The vanilla archive, vanilla cache, source cache (including diff documents) and merge
   output are checked whole. In the deployment, only the managed `stream/{extension}/merged/`
   and `stream/{extension}/clone/` directories are checked for unrecorded files, since other
   files are left to the user.
+- The overwrite cache is checked against what it was built from (`--overwrite`, default
+  `asset/overwrite`), and for the files it names: the sources of `added_stream_files.json`
+  in the source cache, and the earlier versions `source_updates/` records in the source
+  cache's history; one that is missing is reported as `missing` on the record naming it.
 - Without `--deep`, contents are compared by size; the vanilla archive and cache record no
   sizes, so only `--deep` compares their contents. `--deep` reads every file, a few seconds
   for a full vanilla archive.
 - Nothing is repaired. The next merge and deployment rebuild their missing or changed
   files, and the next vanilla-cache update its links. A damaged vanilla archive is reused as
   it is, so extract it again with `--generate-vanilla`; a source-cache file that is missing
-  is restored from its resource when the resource still has it. Unrecorded files are left
+  is restored from its resource when the resource still has it, and a stale overwrite cache
+  is rebuilt by `--generate-overwrite-cache` or a command running it. Unrecorded files are left
   for you to remove.
 
 ## Convert Files

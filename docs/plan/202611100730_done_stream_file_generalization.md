@@ -51,8 +51,9 @@ leaves every test passing.
 
 ### 4. Check the overwrite cache
 
-- [ ] `--check` checks the overwrite cache: a stale digest, sources `added_stream_files.json`
-  names that are missing, and history files `source_updates/` names that are missing.
+- [x] `--check` checks the overwrite cache: a stale digest, sources `added_stream_files.json`
+  names that are missing, and history files `source_updates/` names that are missing, with
+  a new issue kind, `stale`.
 
 ## Out of Scope
 

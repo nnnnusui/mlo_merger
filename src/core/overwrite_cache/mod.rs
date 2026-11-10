@@ -22,10 +22,12 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 mod added;
+mod check;
 mod source_updates;
 mod warnings;
 
 pub use added::{AddedItem, AddedStreamFile, AddedStreamFileSource, LeftOutAddition};
+pub(crate) use check::check;
 pub use source_updates::{SOURCE_UPDATES, SourceUpdate, SourceUpdateOutcome, SourceVersion};
 pub use warnings::OverwriteWarnings;
 

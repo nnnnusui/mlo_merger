@@ -201,6 +201,52 @@ fn pipeline_runs_on_the_web_sample() {
   assert_eq!(latest.warnings.ignored_overwrites.len(), 1);
   assert_eq!(latest.warnings.ignored_overwrites[0].resource.as_deref(), Some("smpl_block_rework"));
 
+  // Every store is consistent with its metadata. An overwrite changed since, and an earlier
+  // version gone from the history, show in the overwrite cache's check.
+  let check = || {
+    crate::core::check::Check {
+      vanilla_dir: workspace.asset("vanilla"),
+      vanilla_cache_dir: workspace.asset("vanilla-cache"),
+      source_cache_dir: workspace.asset("source-cache"),
+      overwrite_dir: Some(workspace.asset("overwrite")),
+      overwrite_cache_dir: workspace.asset("overwrite-cache"),
+      merged_dir: workspace.asset("merged"),
+      output_dir: workspace.asset("merged_mlo"),
+      deep: true,
+    }
+    .run()
+    .unwrap()
+    .issues
+    .into_iter()
+    .map(|issue| (issue.store, issue.kind, issue.path))
+    .collect::<Vec<_>>()
+  };
+  assert_eq!(check(), []);
+  let rework_overwrite =
+    workspace.asset("overwrite/resources/smpl_block_rework/maps/smpl_block_01.ymap.diff.json");
+  let original = fs::read(&rework_overwrite).unwrap();
+  fs::write(&rework_overwrite, [&original[..], b"\n"].concat()).unwrap();
+  let earlier = workspace.asset("source-cache").join(rework.before.source.as_ref().unwrap());
+  let earlier_bytes = fs::read(&earlier).unwrap();
+  fs::remove_file(&earlier).unwrap();
+  let record = format!(
+    "source_updates/smpl_block_rework/maps/smpl_block_01.ymap/{}.json",
+    rework.before.sha256
+  );
+  let issues = check();
+  assert!(issues.contains(&(
+    "overwrite-cache".into(),
+    crate::core::check::CheckIssueKind::Stale,
+    "added_stream_files.json".into()
+  )));
+  assert!(issues.contains(&(
+    "overwrite-cache".into(),
+    crate::core::check::CheckIssueKind::Missing,
+    record
+  )));
+  fs::write(&rework_overwrite, original).unwrap();
+  fs::write(&earlier, earlier_bytes).unwrap();
+
   // Both resources' edits merge, but for the planter the overwrite reverts, and the houses follow
   // their parents' removed SLOD.
   let block = workspace.merged_ymap("smpl_block_01.ymap");

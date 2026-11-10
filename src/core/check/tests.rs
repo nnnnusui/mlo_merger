@@ -110,6 +110,8 @@ fn stores(root: &Path) -> Check {
     vanilla_dir: root.join("vanilla"),
     vanilla_cache_dir: root.join("vanilla-cache"),
     source_cache_dir: root.join("source-cache"),
+    overwrite_dir: None,
+    overwrite_cache_dir: root.join("overwrite-cache"),
     merged_dir: root.join("merged"),
     output_dir: root.join("merged_mlo"),
     deep: false,
@@ -131,6 +133,7 @@ fn each_store_whose_metadata_cannot_be_read_is_reported_once() {
     check.vanilla_dir.join("cache_info.json"),
     check.vanilla_cache_dir.join("cache_info.json"),
     check.source_cache_dir.join("cache_info.json"),
+    check.overwrite_cache_dir.join("added_stream_files.json"),
     check.merged_dir.join("cache_info.json"),
     check.output_dir.join("deploy_cache_info.json"),
   ] {
@@ -149,6 +152,7 @@ fn each_store_whose_metadata_cannot_be_read_is_reported_once() {
       ("vanilla", CheckIssueKind::Unreadable, "cache_info.json"),
       ("vanilla-cache", CheckIssueKind::Unreadable, "cache_info.json"),
       ("source-cache", CheckIssueKind::Unreadable, "cache_info.json"),
+      ("overwrite-cache", CheckIssueKind::Unreadable, "added_stream_files.json"),
       ("merged", CheckIssueKind::Unreadable, "cache_info.json"),
       ("deployment", CheckIssueKind::Unreadable, "deploy_cache_info.json"),
     ]

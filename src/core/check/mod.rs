@@ -28,7 +28,7 @@ pub struct CheckReport {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "typescript", derive(specta::Type))]
 pub struct CheckIssue {
-  /// `vanilla`, `vanilla-cache`, `source-cache`, `merged` or `deployment`.
+  /// `vanilla`, `vanilla-cache`, `source-cache`, `overwrite-cache`, `merged` or `deployment`.
   pub store: String,
   pub kind: CheckIssueKind,
   /// The file, relative to the store's directory.
@@ -54,6 +54,8 @@ pub enum CheckIssueKind {
   WrongLink,
   /// The metadata cannot be read, so the store was not checked further.
   Unreadable,
+  /// The store was built from inputs that changed since; its stage rebuilds it.
+  Stale,
 }
 
 /// Checks the stores at these directories; a store whose directory is missing is skipped.
@@ -62,6 +64,9 @@ pub struct Check {
   pub vanilla_dir: PathBuf,
   pub vanilla_cache_dir: PathBuf,
   pub source_cache_dir: PathBuf,
+  /// The overwrites the overwrite cache is built from, if any.
+  pub overwrite_dir: Option<PathBuf>,
+  pub overwrite_cache_dir: PathBuf,
   pub merged_dir: PathBuf,
   /// Deployment output.
   pub output_dir: PathBuf,
@@ -75,7 +80,8 @@ impl Check {
   /// ```no_run
   /// let report = mlo_merger::core::check::Check {
   ///   vanilla_dir: "asset/vanilla".into(), vanilla_cache_dir: "asset/vanilla-cache".into(),
-  ///   source_cache_dir: "asset/source-cache".into(), merged_dir: "asset/merged".into(),
+  ///   source_cache_dir: "asset/source-cache".into(), overwrite_dir: Some("asset/overwrite".into()),
+  ///   overwrite_cache_dir: "asset/overwrite-cache".into(), merged_dir: "asset/merged".into(),
   ///   output_dir: "asset/merged_mlo".into(), deep: false,
   /// }.run()?;
   /// # Ok::<(), Box<dyn std::error::Error>>(())
@@ -91,6 +97,15 @@ impl Check {
     })?;
     check_store(&mut issues, "source-cache", &self.source_cache_dir, |findings| {
       crate::core::source_cache::check(&self.source_cache_dir, deep, findings)
+    })?;
+    check_store(&mut issues, "overwrite-cache", &self.overwrite_cache_dir, |findings| {
+      crate::core::overwrite_cache::check(
+        &self.overwrite_cache_dir,
+        &self.source_cache_dir,
+        &self.vanilla_cache_dir,
+        self.overwrite_dir.as_deref(),
+        findings,
+      )
     })?;
     check_store(&mut issues, "merged", &self.merged_dir, |findings| {
       crate::core::merge::check(&self.merged_dir, deep, findings)

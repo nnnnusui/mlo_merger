@@ -24,6 +24,16 @@ pub fn parser() -> impl Parser<Check> {
     "Source cache directory (default: asset/source-cache)",
     "asset/source-cache",
   );
+  let overwrite_dir = directory(
+    "overwrite",
+    "Overwrites the overwrite cache is built from (default: asset/overwrite)",
+    "asset/overwrite",
+  );
+  let overwrite_cache_dir = directory(
+    "overwrite-cache",
+    "Overwrite cache directory (default: asset/overwrite-cache)",
+    "asset/overwrite-cache",
+  );
   let merged_dir = directory("merged", "Merged directory (default: asset/merged)", "asset/merged");
   let output_dir = short('o')
     .long("output")
@@ -36,20 +46,34 @@ pub fn parser() -> impl Parser<Check> {
     vanilla_dir,
     vanilla_cache_dir,
     source_cache_dir,
+    overwrite_dir,
+    overwrite_cache_dir,
     merged_dir,
     output_dir,
     deep
   )
-  .map(|(_, vanilla_dir, vanilla_cache_dir, source_cache_dir, merged_dir, output_dir, deep)| {
-    Check {
+  .map(
+    |(
+      _,
       vanilla_dir,
       vanilla_cache_dir,
       source_cache_dir,
+      overwrite_dir,
+      overwrite_cache_dir,
       merged_dir,
       output_dir,
       deep,
-    }
-  })
+    )| Check {
+      vanilla_dir,
+      vanilla_cache_dir,
+      source_cache_dir,
+      overwrite_dir: Some(overwrite_dir),
+      overwrite_cache_dir,
+      merged_dir,
+      output_dir,
+      deep,
+    },
+  )
 }
 
 /// Prints the issues as one line of JSON and fails when there are any.

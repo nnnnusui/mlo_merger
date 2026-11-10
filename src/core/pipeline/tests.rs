@@ -145,6 +145,8 @@ fn pipeline_routes_resources_through_merge_and_deploy_and_reuses_vanilla() {
     vanilla_dir: pipeline.vanilla_dir.clone(),
     vanilla_cache_dir: pipeline.vanilla_cache_dir.clone(),
     source_cache_dir: pipeline.source_cache_dir.clone(),
+    overwrite_dir: pipeline.overwrite_dir.clone(),
+    overwrite_cache_dir: pipeline.overwrite_cache_dir.clone(),
     merged_dir: pipeline.merged_dir.clone(),
     output_dir: pipeline.output_dir.clone(),
     deep: true,
