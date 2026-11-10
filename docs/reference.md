@@ -262,7 +262,7 @@ into the overwrite cache (`--overwrite-cache`, default `asset/overwrite-cache`) 
 reads it, even with no overwrites, since it also records which resources each added stream file is
 merged from; a missing one, or one older than the source and vanilla caches or the
 overwrites, fails the merge. Overwrites currently only apply to
-YMAPs.
+YMAPs; one of another format is reported as `unsupported_format` and not applied.
 
 - `resources/{resourceName}/{stream_path}.diff.json` (`StreamFileOverwrite`), one per
   stream file, lists the differences of that file's diff document to leave out of the

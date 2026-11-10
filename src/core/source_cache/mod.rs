@@ -58,7 +58,7 @@ fn diff_name(
 
 /// Where the source cache keeps the diff of a resource's YMAP, relative to its `diff` directory,
 /// given the resource's source directory and the file's path below it.
-pub(crate) fn ymap_diff_path(
+pub(crate) fn stream_file_diff_path(
   resource_source: &Path,
   file_path: &str,
 ) -> Result<PathBuf> {

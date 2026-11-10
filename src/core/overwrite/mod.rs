@@ -27,6 +27,15 @@ use std::path::Path;
 pub use skip::skip_diffs;
 pub use vanilla::VanillaOverwrite;
 
+/// The formats, by extension, whose stream files overwrites apply to.
+pub const SUPPORTED_FORMATS: &[&str] = &[".ymap"];
+
+/// Whether overwrites apply to the stream file at `stream_path`, by its extension.
+pub fn supports(stream_path: &str) -> bool {
+  let stream_path = stream_path.to_ascii_lowercase();
+  SUPPORTED_FORMATS.iter().any(|extension| stream_path.ends_with(extension))
+}
+
 /// The extension of a resource overwrite document, after the stream file's own path.
 const DOCUMENT_EXTENSION: &str = ".diff.json";
 
@@ -88,11 +97,14 @@ pub struct IgnoredOverwrite {
 #[serde(rename_all = "snake_case")]
 #[cfg_attr(feature = "typescript", derive(specta::Type))]
 pub enum IgnoredOverwriteReason {
-  /// No merged source YMAP is the resource overwrite's file.
+  /// The overwrite's file is of a format overwrites do not support yet (see
+  /// [`SUPPORTED_FORMATS`]).
+  UnsupportedFormat,
+  /// No merged source stream file is the resource overwrite's file.
   MissingSource,
   /// The source file differs from the one the overwrite was written against.
   SourceChanged,
-  /// No latest vanilla YMAP has the overwrite's file name.
+  /// No latest vanilla file has the overwrite's file name.
   MissingVanilla,
   /// The latest vanilla file differs from the one the overwrite was written against; reported
   /// only when the source, if any, is unchanged.
@@ -304,6 +316,15 @@ fn load_resources(directory: &Path) -> Result<ResourceOverwrites> {
     {
       return Err(
         format!("{} needs source, vanilla and skip unless it sets ignore", path.display()).into(),
+      );
+    }
+    if !supports(stream_path) {
+      tracing::warn!(
+        "Overwrites of {} files are not supported yet; {} is not applied",
+        Path::new(stream_path).extension().map_or("extensionless".into(), |extension| {
+          format!(".{}", extension.to_string_lossy())
+        }),
+        path.display()
       );
     }
     let key = (resource.to_ascii_lowercase(), normalize(stream_path));

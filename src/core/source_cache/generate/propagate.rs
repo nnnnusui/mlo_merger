@@ -37,7 +37,7 @@ use crate::{
       YmapComparisonDiff, YmapComparisonFile, YmapPropagatedDiff, YmapPropagationOrigin,
       lod_light_pairs::LightSide,
     },
-    source_cache::{read_metadata, ymap_diff_path},
+    source_cache::{read_metadata, stream_file_diff_path},
     vanilla_cache::generations::{self, GenerationIndex, GenerationUnit, ItemKind},
   },
 };
@@ -318,7 +318,7 @@ impl Propagation<'_> {
         let diff_path = self
           .output
           .join(crate::core::source_cache::DIFF_DIR)
-          .join(ymap_diff_path(&resource.source, &file.path)?);
+          .join(stream_file_diff_path(&resource.source, &file.path)?);
         let Ok(document) = crate::common::json::read_json::<YmapComparisonDiff>(&diff_path) else {
           continue;
         };

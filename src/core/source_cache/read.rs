@@ -2,7 +2,7 @@
 //! merge takes, without rescanning the resources.
 
 use super::types::{SourceCacheConflictReport, SourceCacheMetadata};
-use super::{DIFF_DIR, Result, added, generate, layout, ymap_diff_path};
+use super::{DIFF_DIR, Result, added, generate, layout, stream_file_diff_path};
 use crate::platform::fs;
 use std::{
   collections::{BTreeMap, BTreeSet},
@@ -399,7 +399,7 @@ pub fn load_merge_inputs(
         let added = added::is_added_stream_file(&extension, &file)
           && file.cached_path.is_some()
           && fs::is_file(
-            cache_dir.join(DIFF_DIR).join(ymap_diff_path(&resource.source, &file.path)?),
+            cache_dir.join(DIFF_DIR).join(stream_file_diff_path(&resource.source, &file.path)?),
           );
         if file.vanilla.is_none() && !added {
           continue;
@@ -431,7 +431,7 @@ pub fn load_merge_inputs(
         };
         if selected_for_merge {
           let diff_path = (extension == ".ymap")
-            .then(|| ymap_diff_path(&resource.source, &file.path))
+            .then(|| stream_file_diff_path(&resource.source, &file.path))
             .transpose()?
             .map(|path| cache_dir.join(DIFF_DIR).join(path));
           selected.push(MergeSourceFile {

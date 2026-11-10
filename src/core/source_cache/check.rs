@@ -3,7 +3,7 @@
 use super::{
   Result,
   generate::propagate::{PROPAGATED_DIR, read_record},
-  read_metadata, ymap_diff_path,
+  read_metadata, stream_file_diff_path,
 };
 use crate::core::check::{CheckIssueKind, Findings};
 use crate::platform::fs;
@@ -52,7 +52,8 @@ pub(crate) fn check(
         }
         let added = super::added::is_added_stream_file(format, file) && file.cached_path.is_some();
         if format == ".ymap" && (file.vanilla.is_some() || added) {
-          let diff = Path::new(super::DIFF_DIR).join(ymap_diff_path(&resource.source, &file.path)?);
+          let diff =
+            Path::new(super::DIFF_DIR).join(stream_file_diff_path(&resource.source, &file.path)?);
           diffs.insert(diff.to_string_lossy().replace('\\', "/"));
         }
       }

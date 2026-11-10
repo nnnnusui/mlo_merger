@@ -34,9 +34,10 @@ impl OverwriteWarnings {
         None => format!("vanilla {}", overwrite.file),
       };
       let reason = match overwrite.reason {
-        IgnoredOverwriteReason::MissingSource => "names no merged source YMAP",
+        IgnoredOverwriteReason::UnsupportedFormat => "is of a format overwrites do not support yet",
+        IgnoredOverwriteReason::MissingSource => "names no merged source stream file",
         IgnoredOverwriteReason::SourceChanged => "was written against another source file",
-        IgnoredOverwriteReason::MissingVanilla => "names no latest vanilla YMAP",
+        IgnoredOverwriteReason::MissingVanilla => "names no latest vanilla file",
         IgnoredOverwriteReason::VanillaChanged => "was written against another vanilla file",
       };
       tracing::warn!("Overwrite of {file} {reason}; not applied");
@@ -59,7 +60,6 @@ pub fn collect(
   let latest = crate::core::vanilla_cache::latest_files(vanilla_cache_dir)?
     .into_iter()
     .map(|file| (file.name.to_ascii_lowercase(), file.path))
-    .filter(|(name, _)| name.ends_with(".ymap"))
     .collect::<BTreeMap<_, _>>();
   let sources = inputs.ymap_by_key();
   for (resource, stream_path) in overwrites.keys() {
@@ -67,6 +67,14 @@ pub fn collect(
       continue;
     };
     let file_key = (resource.to_string(), stream_path.to_string());
+    if !crate::core::overwrite::supports(stream_path) {
+      warnings.ignored_overwrites.push(IgnoredOverwrite {
+        resource: Some(resource.to_string()),
+        file: stream_path.to_string(),
+        reason: IgnoredOverwriteReason::UnsupportedFormat,
+      });
+      continue;
+    }
     // One leaving out a stream file applies while a resource ships it.
     if overwrite.ignore && sources.contains_key(&file_key) {
       continue;

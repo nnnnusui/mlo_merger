@@ -63,7 +63,7 @@ impl IncrementalMerge<'_> {
     &self,
     source: &MergeSourceFile,
   ) -> Option<&StreamFileOverwrite> {
-    if source.propagated || !source.file_name.to_ascii_lowercase().ends_with(".ymap") {
+    if source.propagated || !crate::core::overwrite::supports(&source.file_name) {
       return None;
     }
     self.overwrites.for_source(source)

@@ -474,10 +474,11 @@ or removed (`PipelineChanges`), and the [overwrite warnings](#overwrite-warnings
 
   | `reason` | Meaning |
   |---|---|
-  | `source_changed` | The source YMAP differs from `source` |
-  | `vanilla_changed` | The latest vanilla YMAP differs from `vanilla` (the source, if any, is unchanged) |
-  | `missing_source` | The resource merges no YMAP at `file`, for example after it was removed or excluded |
-  | `missing_vanilla` | No latest vanilla YMAP is named `file` |
+  | `unsupported_format` | `file` is of a format overwrites do not support yet (only YMAPs are supported) |
+  | `source_changed` | The source stream file differs from `source` |
+  | `vanilla_changed` | The latest vanilla file differs from `vanilla` (the source, if any, is unchanged) |
+  | `missing_source` | The resource merges no stream file at `file`, for example after it was removed or excluded |
+  | `missing_vanilla` | No latest vanilla file is named `file` |
 - Deployment is not included; its counts are logged on stderr.
 
 ## Example: From Player Position To Overwrite

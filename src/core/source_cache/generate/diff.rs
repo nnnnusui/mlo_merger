@@ -21,7 +21,7 @@ use crate::{
       StreamFileRef, YmapComparisonContext, YmapComparisonDiff, YmapComparisonFile,
       YmapComparisonPartner,
     },
-    source_cache::{types::ResourceInventory, ymap_diff_path},
+    source_cache::{stream_file_diff_path, types::ResourceInventory},
   },
 };
 use rayon::prelude::*;
@@ -122,7 +122,7 @@ pub(in crate::core::source_cache) fn write_ymap_diffs(
       if file.vanilla.is_none() && file.cached_path.is_none() {
         continue;
       }
-      let file_path = ymap_diff_path(&resource.source, &file.path)?;
+      let file_path = stream_file_diff_path(&resource.source, &file.path)?;
       let stream_file = StreamFileRef {
         resource_name: Some(resource_name.clone()),
         vanilla_version: metadata.latest_vanilla_version.clone(),

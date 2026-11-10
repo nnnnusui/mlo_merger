@@ -41,12 +41,12 @@ leaves every test passing.
 
 ### 3. Stream-file wording in generic code
 
-- [ ] `ymap_diff_path` → `stream_file_diff_path`, as diff documents are kept by stream path.
-- [ ] The overwrite warnings: match resource overwrites against every source stream file and
+- [x] `ymap_diff_path` → `stream_file_diff_path`, as diff documents are kept by stream path.
+- [x] The overwrite warnings: match resource overwrites against every source stream file and
   the latest vanilla files of every format, and report one of a format overwrites do not
   support yet as `unsupported_format` instead of `missing_source`; their messages name stream
   files.
-- [ ] Resource overwrites of unsupported formats are reported when loaded, not silently skipped by
+- [x] Resource overwrites of unsupported formats are reported when loaded, not silently skipped by
   the merge.
 
 ### 4. Check the overwrite cache
