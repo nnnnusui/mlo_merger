@@ -5,7 +5,7 @@ use crate::core::check::{CheckIssueKind, Findings, files_below};
 use std::{collections::BTreeSet, path::Path};
 
 /// Files of the archive besides the stages' objects.
-const ARCHIVE_FILES: [&str; 3] = ["cache_info.json", "hash_names.json", "rpf_names.json"];
+const ARCHIVE_FILES: [&str; 2] = ["cache_info.json", "hash_names.json"];
 
 /// Checks that every object the manifest records exists, with its SHA-256 when `deep`, and
 /// that the archive holds nothing else.

@@ -76,6 +76,12 @@ fn validate_output_location(
   Ok(())
 }
 
+/// The archive's files besides its stages.
+const METADATA_FILES: [&str; 2] = ["hash_names.json", "cache_info.json"];
+
+/// Files earlier versions wrote to the archive, removed once a new one is published.
+const OBSOLETE_FILES: [&str; 1] = ["rpf_names.json"];
+
 /// Reject unknown output directories and retain backups until root metadata
 /// is installed, restoring the previous cache if publication fails.
 pub(super) fn publish_cache(
@@ -83,7 +89,7 @@ pub(super) fn publish_cache(
   output: &Path,
   manifest: &VanillaCacheManifest,
 ) -> Result<()> {
-  for name in ["rpf_names.json", "hash_names.json", "cache_info.json"] {
+  for name in METADATA_FILES {
     let metadata_path = output.join(name);
     if fs::exists(&metadata_path).unwrap_or(false) && !fs::is_file(&metadata_path) {
       return Err(
@@ -118,7 +124,7 @@ pub(super) fn publish_cache(
       published.push((version.id.clone(), existed));
       fs::rename(build.join(&version.id), destination)?;
     }
-    for name in ["rpf_names.json", "hash_names.json", "cache_info.json"] {
+    for name in METADATA_FILES {
       let source = build.join(name);
       if !fs::is_file(&source) {
         continue;
@@ -155,6 +161,14 @@ pub(super) fn publish_cache(
   }
   if let Err(error) = fs::remove_dir_all(&backup) {
     tracing::warn!("Could not clean cache backup {}: {error}", backup.display());
+  }
+  if result.is_ok() {
+    for name in OBSOLETE_FILES {
+      let path = output.join(name);
+      if fs::is_file(&path) {
+        fs::remove_file(&path)?;
+      }
+    }
   }
   result
 }

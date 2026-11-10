@@ -187,7 +187,6 @@ impl BuildVanillaArchive {
     manifest: &VanillaCacheManifest,
     rpf_names: &BTreeSet<String>,
   ) -> Result<()> {
-    write_json(&build.join("rpf_names.json"), rpf_names)?;
     write_json(&build.join("cache_info.json"), &manifest)?;
     write_hash_index(build, manifest, rpf_names)?;
     publish_cache(build, output_dir, manifest)?;
