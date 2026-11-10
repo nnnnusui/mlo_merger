@@ -523,7 +523,7 @@ fn earlier_versions() -> &'static [(String, Vec<u8>)] {
       exclusions: None,
       merged_dir: asset.join("merged"),
       overwrite_dir: None,
-      overwrite_cache_dir: None,
+      overwrite_cache_dir: asset.join("overwrite-cache"),
       output_dir: asset.join("merged_mlo"),
       gamebuild: None,
       force: false,

@@ -47,7 +47,7 @@ fn pipeline_routes_resources_through_merge_and_deploy_and_reuses_vanilla() {
     gamebuild: None,
     force: false,
     overwrite_dir: None,
-    overwrite_cache_dir: None,
+    overwrite_cache_dir: root.join("overwrite-cache"),
   };
   let bytes = crate::core::format::ybn::xml::xml_to_ybn(include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
@@ -183,6 +183,7 @@ fn pipeline_routes_resources_through_merge_and_deploy_and_reuses_vanilla() {
     source_cache_dir: moved.join("source-cache"),
     merged_dir: moved.join("merged"),
     output_dir: moved.join("merged_mlo"),
+    overwrite_cache_dir: moved.join("overwrite-cache"),
     ..pipeline.clone()
   };
   fs::create_dir_all(moved_root.join("unused")).unwrap();
@@ -244,7 +245,7 @@ fn pipeline_reuses_vanilla_and_applies_exclusions_only_for_this_run() {
     gamebuild: None,
     force: false,
     overwrite_dir: None,
-    overwrite_cache_dir: None,
+    overwrite_cache_dir: root.join("overwrite-cache"),
   };
   fs::create_dir_all(pipeline.source_dir.join("resource")).unwrap();
   fs::write(pipeline.source_dir.join("resource/fxmanifest.lua"), []).unwrap();
@@ -310,7 +311,7 @@ fn missing_vanilla_requires_a_game_directory_without_destroying_existing_data() 
     gamebuild: None,
     force: false,
     overwrite_dir: None,
-    overwrite_cache_dir: None,
+    overwrite_cache_dir: root.join("overwrite-cache"),
   };
   fs::create_dir_all(&pipeline.source_dir).unwrap();
   assert!(pipeline.run().unwrap_err().to_string().contains("specify --game-dir"));

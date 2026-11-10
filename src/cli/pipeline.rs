@@ -104,7 +104,7 @@ pub fn run(command: Pipeline) -> Result<String, Box<dyn std::error::Error>> {
     exclusions: command.exclusions,
     merged_dir: command.merged_dir,
     overwrite_dir: Some(command.overwrite_dir),
-    overwrite_cache_dir: Some(command.overwrite_cache_dir),
+    overwrite_cache_dir: command.overwrite_cache_dir,
     output_dir: command.common.output,
     gamebuild: super::common::gamebuild(command.common.gamebuild.as_deref())?,
     force: command.common.force,

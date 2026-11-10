@@ -38,9 +38,9 @@ pub struct Merge {
   pub output_dir: PathBuf,
   /// User edits of the merge (see [`crate::core::overwrite`]); `None` applies none.
   pub overwrite_dir: Option<PathBuf>,
-  /// What the overwrites call for, built from them beforehand (see
-  /// [`crate::core::overwrite_cache`]); `None` derives it here.
-  pub overwrite_cache_dir: Option<PathBuf>,
+  /// What the overwrites call for (see [`crate::core::overwrite_cache`]), which must have been
+  /// built from the current caches and overwrites beforehand.
+  pub overwrite_cache_dir: PathBuf,
   /// Rebuilds merge groups regardless of freshness.
   pub force: bool,
 }
@@ -58,7 +58,7 @@ impl Merge {
   ///   source_dir: "asset/source".into(), vanilla_cache_dir: "asset/vanilla-cache".into(),
   ///   source_cache_dir: "asset/source-cache".into(), output_dir: "asset/merged".into(),
   ///   overwrite_dir: Some("asset/overwrite".into()),
-  ///   overwrite_cache_dir: Some("asset/overwrite-cache".into()), force: false,
+  ///   overwrite_cache_dir: "asset/overwrite-cache".into(), force: false,
   /// }.run()?;
   /// # Ok::<(), Box<dyn std::error::Error>>(())
   /// ```
@@ -75,26 +75,15 @@ impl Merge {
       Some(directory) => Overwrites::load(directory)?,
       None => Overwrites::default(),
     };
-    let (added_files, warnings) = match &self.overwrite_cache_dir {
-      Some(directory) => {
-        let (added, warnings) = crate::core::overwrite_cache::load(
-          directory,
-          &source_cache_dir,
-          &vanilla_cache_dir,
-          self.overwrite_dir.as_deref(),
-        )?;
-        (added.files, warnings)
-      }
-      None => {
-        let files = crate::core::overwrite_cache::resolve_without_cache(&merge_inputs, &overwrites);
-        let warnings =
-          crate::core::overwrite_cache::warnings(&merge_inputs, &overwrites, &vanilla_cache_dir)?;
-        (files, warnings)
-      }
-    };
+    let (added, warnings) = crate::core::overwrite_cache::load(
+      &self.overwrite_cache_dir,
+      &source_cache_dir,
+      &vanilla_cache_dir,
+      self.overwrite_dir.as_deref(),
+    )?;
+    let added = added.files;
     // Logged on every run, as a merge reusing its previous output does not look at overwrites.
     warnings.log();
-    let added = super::added::plans(&added_files);
     // A stream file an overwrite ignores is left out of the merge whole.
     merge_inputs
       .ymap

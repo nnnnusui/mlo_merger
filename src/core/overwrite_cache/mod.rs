@@ -35,7 +35,7 @@ mod source_updates;
 mod warnings;
 
 pub use source_updates::{SOURCE_UPDATES, SourceUpdate, SourceUpdateOutcome, SourceVersion};
-pub use warnings::{OverwriteWarnings, collect as warnings};
+pub use warnings::OverwriteWarnings;
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
@@ -74,6 +74,21 @@ pub struct AddedYmap {
   #[serde(default, skip_serializing_if = "Vec::is_empty")]
   #[cfg_attr(feature = "typescript", specta(optional))]
   pub left_out: Vec<LeftOutAddition>,
+}
+
+impl AddedYmap {
+  /// Whether several resources ship it, so the merged YMAP is always written to replace theirs.
+  pub fn replaces_others(&self) -> bool {
+    self.shipped_by.len() > 1
+  }
+
+  /// The place in merge order of the stream file of the resource with ID `resource`.
+  pub fn merge_position(
+    &self,
+    resource: &str,
+  ) -> Option<usize> {
+    self.sources.iter().position(|source| source.resource == resource)
+  }
 }
 
 /// An addition the merge leaves out of a YMAP that resources add, as an earlier source in merge
@@ -217,15 +232,6 @@ pub fn load(
     format!("Cannot read {}: {error}; build the overwrite cache", path.display())
   })?;
   Ok((added, warnings))
-}
-
-/// The stream files each added YMAP of `inputs` is merged from, leaving out those `overwrites`
-/// ignore, as the overwrite cache records them; for a merge without one.
-pub fn resolve_without_cache(
-  inputs: &MergeInputs,
-  overwrites: &Overwrites,
-) -> BTreeMap<String, AddedYmap> {
-  resolve(inputs, overwrites)
 }
 
 /// The stream files of `inputs` each added YMAP is merged from; see the module docs.

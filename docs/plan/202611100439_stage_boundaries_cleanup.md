@@ -36,11 +36,11 @@ every test passing.
 
 ### 3. The merge requires the overwrite cache
 
-- [ ] `Merge::overwrite_cache_dir` and `Pipeline::overwrite_cache_dir` become required paths;
+- [x] `Merge::overwrite_cache_dir` and `Pipeline::overwrite_cache_dir` become required paths;
   remove `overwrite_cache::resolve_without_cache` and the merge's own warnings.
-- [ ] The merge takes `AddedYmap` as the overwrite cache records it; remove `merge::added`'s
+- [x] The merge takes `AddedYmap` as the overwrite cache records it; remove `merge::added`'s
   copy of it.
-- [ ] Update the tests that merge without an overwrite cache.
+- [x] Update the tests that merge without an overwrite cache.
 
 ### 4. One record of what added YMAPs leave out
 

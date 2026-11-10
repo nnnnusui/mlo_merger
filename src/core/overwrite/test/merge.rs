@@ -85,7 +85,7 @@ fn overwrites_skip_source_diffs_written_against_the_current_files() {
     source_cache_dir: source_cache.clone(),
     output_dir: output.clone(),
     overwrite_dir: Some(overwrite_dir.clone()),
-    overwrite_cache_dir: Some(root.join("overwrite-cache")),
+    overwrite_cache_dir: root.join("overwrite-cache"),
     force: false,
   };
   let merged = || {
@@ -204,7 +204,7 @@ fn overwrites_follow_their_source_to_its_next_version() {
     source_cache_dir: source_cache.clone(),
     output_dir: output.clone(),
     overwrite_dir: Some(overwrite_dir.clone()),
-    overwrite_cache_dir: Some(overwrite_cache.clone()),
+    overwrite_cache_dir: overwrite_cache.clone(),
     force: false,
   };
   let merged = || {
@@ -394,7 +394,7 @@ fn vanilla_overwrites_merge_after_the_sources() {
     source_cache_dir: root.join("source-cache"),
     output_dir: output.clone(),
     overwrite_dir: Some(overwrite_dir.clone()),
-    overwrite_cache_dir: Some(root.join("overwrite-cache")),
+    overwrite_cache_dir: root.join("overwrite-cache"),
     force: false,
   };
   let merged = || {
@@ -521,7 +521,7 @@ fn added_ymaps_merge_every_version_without_shared_additions() {
     source_cache_dir: source_cache.clone(),
     output_dir: output.clone(),
     overwrite_dir: Some(overwrite_dir.clone()),
-    overwrite_cache_dir: Some(overwrite_cache.clone()),
+    overwrite_cache_dir: overwrite_cache.clone(),
     force: false,
   };
   let read = |path: &Path| ymap_to_model(&fs::read(path).unwrap(), &catalog.hash_names).unwrap();
@@ -691,7 +691,7 @@ fn added_ymaps_keep_parent_indices_into_added_parents() {
     source_cache_dir: root.join("source-cache"),
     output_dir: output.clone(),
     overwrite_dir: None,
-    overwrite_cache_dir: None,
+    overwrite_cache_dir: output.with_file_name("overwrite-cache"),
     force: false,
   }
   .run_after_caches(&vanilla)

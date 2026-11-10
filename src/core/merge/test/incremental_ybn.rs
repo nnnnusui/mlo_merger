@@ -83,7 +83,7 @@ fn merge_dispatches_latest_vanilla_ybn_and_writes_omit_list() {
     output_dir: output_dir.clone(),
     force: false,
     overwrite_dir: None,
-    overwrite_cache_dir: None,
+    overwrite_cache_dir: output_dir.with_file_name("overwrite-cache"),
   }
   .run_after_caches(&vanilla_dir)
   .unwrap();
@@ -140,7 +140,7 @@ fn merge_dispatches_latest_vanilla_ybn_and_writes_omit_list() {
     output_dir: output_dir.clone(),
     force: false,
     overwrite_dir: None,
-    overwrite_cache_dir: None,
+    overwrite_cache_dir: output_dir.with_file_name("overwrite-cache"),
   }
   .run_after_caches(&vanilla_dir)
   .unwrap();
@@ -163,7 +163,7 @@ fn merge_dispatches_latest_vanilla_ybn_and_writes_omit_list() {
     output_dir: output_dir.clone(),
     force: false,
     overwrite_dir: None,
-    overwrite_cache_dir: None,
+    overwrite_cache_dir: output_dir.with_file_name("overwrite-cache"),
   }
   .run_after_caches(&vanilla_dir)
   .unwrap();
@@ -184,7 +184,7 @@ fn merge_dispatches_latest_vanilla_ybn_and_writes_omit_list() {
     output_dir: output_dir.clone(),
     force: false,
     overwrite_dir: None,
-    overwrite_cache_dir: None,
+    overwrite_cache_dir: output_dir.with_file_name("overwrite-cache"),
   }
   .run_after_caches(&vanilla_dir)
   .unwrap();
@@ -203,7 +203,7 @@ fn merge_dispatches_latest_vanilla_ybn_and_writes_omit_list() {
     output_dir: output_dir.clone(),
     force: false,
     overwrite_dir: None,
-    overwrite_cache_dir: None,
+    overwrite_cache_dir: output_dir.with_file_name("overwrite-cache"),
   }
   .run_after_caches(&vanilla_dir)
   .unwrap();
@@ -227,7 +227,7 @@ fn merge_dispatches_latest_vanilla_ybn_and_writes_omit_list() {
     output_dir: output_dir.clone(),
     force: false,
     overwrite_dir: None,
-    overwrite_cache_dir: None,
+    overwrite_cache_dir: output_dir.with_file_name("overwrite-cache"),
   }
   .run_after_caches(&vanilla_dir)
   .unwrap();
@@ -248,7 +248,7 @@ fn merge_dispatches_latest_vanilla_ybn_and_writes_omit_list() {
     output_dir: output_dir.clone(),
     force: false,
     overwrite_dir: None,
-    overwrite_cache_dir: None,
+    overwrite_cache_dir: output_dir.with_file_name("overwrite-cache"),
   }
   .run_after_caches(&vanilla_dir)
   .unwrap();
@@ -261,7 +261,7 @@ fn merge_dispatches_latest_vanilla_ybn_and_writes_omit_list() {
     output_dir: output_dir.clone(),
     force: true,
     overwrite_dir: None,
-    overwrite_cache_dir: None,
+    overwrite_cache_dir: output_dir.with_file_name("overwrite-cache"),
   }
   .run_after_caches(&vanilla_dir)
   .unwrap();
@@ -282,7 +282,7 @@ fn merge_dispatches_latest_vanilla_ybn_and_writes_omit_list() {
       source_cache_dir: source_cache_dir.clone(),
       output_dir: output_dir.clone(),
       overwrite_dir: None,
-      overwrite_cache_dir: None,
+      overwrite_cache_dir: output_dir.with_file_name("overwrite-cache"),
       force: false,
     }
     .run_after_caches(&vanilla_dir)
@@ -299,7 +299,7 @@ fn merge_dispatches_latest_vanilla_ybn_and_writes_omit_list() {
     output_dir: output_dir.clone(),
     force: false,
     overwrite_dir: None,
-    overwrite_cache_dir: None,
+    overwrite_cache_dir: output_dir.with_file_name("overwrite-cache"),
   }
   .run_after_caches(&vanilla_dir)
   .unwrap();

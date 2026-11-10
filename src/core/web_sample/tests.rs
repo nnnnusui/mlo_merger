@@ -70,7 +70,7 @@ impl Workspace {
       exclusions: None,
       merged_dir: self.asset("merged"),
       overwrite_dir: Some(self.asset("overwrite")),
-      overwrite_cache_dir: Some(self.asset("overwrite-cache")),
+      overwrite_cache_dir: self.asset("overwrite-cache"),
       output_dir: self.asset("merged_mlo"),
       gamebuild: gamebuild.map(|build| builds.resolve(build).unwrap()),
       force: false,

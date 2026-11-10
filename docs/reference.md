@@ -247,8 +247,10 @@ visible through another copy.
 Overwrites are the only inputs written from outside the tool besides the sources. They are
 read from `--overwrite` (default: `asset/overwrite`), and what they call for is derived
 into the overwrite cache (`--overwrite-cache`, default `asset/overwrite-cache`) by
-`--generate-overwrite-cache`, which `--merge` and `--pipeline` run first. A merge reading
-an overwrite cache older than the overwrites fails. Overwrites currently only apply to
+`--generate-overwrite-cache`, which `--merge` and `--pipeline` run first. The merge always
+reads it, even with no overwrites, since it also records which resources each added YMAP is
+merged from; a missing one, or one older than the source and vanilla caches or the
+overwrites, fails the merge. Overwrites currently only apply to
 YMAPs.
 
 - `resources/{resourceName}/{stream_path}.diff.json` (`StreamFileOverwrite`), one per

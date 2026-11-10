@@ -60,9 +60,11 @@ impl IncrementalMerge<'_> {
       // records, the one loaded last first.
       let mut stream_files = stream_files;
       stream_files.sort_by_key(|source| {
-        self.added.get(&source.file_name.to_ascii_lowercase()).map_or(0, |plan| {
-          plan.resources.iter().position(|resource| *resource == source.resource).unwrap_or(0)
-        })
+        self
+          .added
+          .get(&source.file_name.to_ascii_lowercase())
+          .and_then(|file| file.merge_position(&source.resource))
+          .unwrap_or(0)
       });
       let ymap_sources = stream_files
         .iter()
@@ -85,7 +87,7 @@ impl IncrementalMerge<'_> {
         added: plans.iter().map(|(name, _)| (*name).clone()).collect(),
         replacing: plans
           .iter()
-          .filter(|(_, plan)| plan.replacing)
+          .filter(|(_, file)| file.replaces_others())
           .map(|(name, _)| (*name).clone())
           .collect(),
       }

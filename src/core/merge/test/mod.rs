@@ -21,16 +21,14 @@ impl Merge {
       force: false,
     }
     .run_after_vanilla_cache()?;
-    if let Some(output_dir) = &self.overwrite_cache_dir {
-      crate::core::overwrite_cache::BuildOverwriteCache {
-        source_dir: self.source_dir.clone(),
-        source_cache_dir: self.source_cache_dir.clone(),
-        vanilla_cache_dir: self.vanilla_cache_dir.clone(),
-        overwrite_dir: self.overwrite_dir.clone(),
-        output_dir: output_dir.clone(),
-      }
-      .run()?;
+    crate::core::overwrite_cache::BuildOverwriteCache {
+      source_dir: self.source_dir.clone(),
+      source_cache_dir: self.source_cache_dir.clone(),
+      vanilla_cache_dir: self.vanilla_cache_dir.clone(),
+      overwrite_dir: self.overwrite_dir.clone(),
+      output_dir: self.overwrite_cache_dir.clone(),
     }
+    .run()?;
     self.run()
   }
 }

@@ -66,7 +66,7 @@ pub fn run(command: Merge) -> Result<String, Box<dyn std::error::Error>> {
     source_cache_dir: command.common.source_cache,
     output_dir: command.common.output,
     overwrite_dir: Some(command.overwrite_dir),
-    overwrite_cache_dir: Some(command.overwrite_cache_dir),
+    overwrite_cache_dir: command.overwrite_cache_dir,
     force: command.common.force,
   }
   .run()?;

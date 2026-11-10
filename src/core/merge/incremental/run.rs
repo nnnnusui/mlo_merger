@@ -206,7 +206,7 @@ impl IncrementalMerge<'_> {
           merge_sources,
           vanilla,
           dependencies: context.graph.get(name).cloned().unwrap_or_default(),
-          replaces_other_resources: self.added.get(name).is_some_and(|plan| plan.replacing),
+          replaces_other_resources: self.added.get(name).is_some_and(|file| file.replaces_others()),
           dependency_fingerprint: String::new(),
           output: None,
           merged_at: context.now.to_string(),
