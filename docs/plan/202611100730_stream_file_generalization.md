@@ -34,10 +34,10 @@ leaves every test passing.
 
 ### 2. Names that identify no stream file
 
-- [ ] One source-cache rule for the file names resources ship as their own (`_manifest.ymf`),
-  applied wherever stream files are matched across resources or with vanilla: added stream
-  files, vanilla-named files and stream conflicts.
-- [ ] Test it with a `_manifest.ymf` in two resources; document it in reference.md.
+- [x] One rule, `core::stream_file::identifies_stream_file`, for the file names resources ship
+  as their own (`_manifest.ymf`), applied wherever stream files are matched across resources or
+  with vanilla: added stream files, vanilla-named files and stream conflicts.
+- [x] Test it with a `_manifest.ymf` in two resources; document it in reference.md.
 
 ### 3. Stream-file wording in generic code
 

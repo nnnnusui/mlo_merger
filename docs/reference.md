@@ -70,6 +70,11 @@ content as `history/{resourceName}/{stream-relative-path}/{sha256}.{extension}`,
 document then, if any, as `{sha256}.diff.json`, so overwrites written against it can be
 followed to the new version (see [Overwrites](#overwrites)); nothing removes history.
 
+A stream file's name identifies it across resources and vanilla: files of one name are one
+stream file shipped several times. The exception is a name every resource ships for itself,
+`_manifest.ymf`: it is no conflict, replaces no vanilla file and is no
+[added stream file](#added-stream-files), so each resource's stays in its resource.
+
 Source-cache selection accepts a resource name or input-relative resource path; `-f`
 forces that selection, not its prerequisites.
 

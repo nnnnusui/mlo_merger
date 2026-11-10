@@ -82,7 +82,7 @@ fn scan_directories(
 
   let mut conflicts: BTreeMap<String, Vec<StreamFileConflict>> = BTreeMap::new();
   for (file_name, paths) in files_by_name {
-    if paths.len() <= 1 {
+    if paths.len() <= 1 || !crate::core::stream_file::identifies_stream_file(&file_name) {
       continue;
     }
     let extension = Path::new(&file_name)
@@ -154,14 +154,18 @@ mod tests {
     crate::platform::fs::write(first_stream.join("shared.ytyp"), []).unwrap();
     crate::platform::fs::write(third_stream.join("SHARED.YTYP"), []).unwrap();
     crate::platform::fs::write(unmanifested_stream.join("mission.ymap"), []).unwrap();
+    // Each resource's own manifest is no conflict.
+    crate::platform::fs::write(first_stream.join("_manifest.ymf"), []).unwrap();
+    crate::platform::fs::write(second_stream.join("_MANIFEST.ymf"), []).unwrap();
 
     let report = scan_stream_conflicts(&temp_dir).unwrap();
-    assert_eq!(report.scanned_file_count, 6);
+    assert_eq!(report.scanned_file_count, 8);
     assert_eq!(report.conflict_count, 2);
     assert_eq!(report.conflicts[".ymap"][0].file_name, "mission.ymap");
     assert_eq!(report.conflicts[".ymap"][0].paths.len(), 3);
     assert_eq!(report.conflicts[".ytyp"][0].file_name, "shared.ytyp");
     assert_eq!(report.conflicts[".ytyp"][0].paths.len(), 2);
+    assert!(!report.conflicts.contains_key(".ymf"));
 
     crate::platform::fs::remove_dir_all(temp_dir).unwrap();
   }

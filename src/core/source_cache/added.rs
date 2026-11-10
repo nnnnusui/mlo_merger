@@ -58,7 +58,9 @@ pub(super) fn is_added_stream_file(
   format: &str,
   file: &super::types::SourceFile,
 ) -> bool {
-  ADDED_FORMATS.contains(&format) && file.vanilla.is_none()
+  ADDED_FORMATS.contains(&format)
+    && file.vanilla.is_none()
+    && crate::core::stream_file::identifies_stream_file(&file.file_name)
 }
 
 /// The encoded [`Ymap::empty`] the added YMAPs are compared with.

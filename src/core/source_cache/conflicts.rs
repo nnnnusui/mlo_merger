@@ -62,7 +62,7 @@ fn group_conflicts(
 ) -> BTreeMap<String, Vec<StreamFileConflict>> {
   let mut conflicts: BTreeMap<String, Vec<StreamFileConflict>> = BTreeMap::new();
   for (file_name, paths) in names {
-    if paths.len() < 2 {
+    if paths.len() < 2 || !crate::core::stream_file::identifies_stream_file(&file_name) {
       continue;
     }
     let extension = Path::new(&file_name)

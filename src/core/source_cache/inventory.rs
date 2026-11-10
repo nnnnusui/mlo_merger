@@ -124,7 +124,9 @@ pub(super) fn source_inventory(
           .and_then(|extension| extension.to_str())
           .map(|extension| format!(".{}", extension.to_ascii_lowercase()))
           .unwrap_or_else(|| "[no extension]".into());
-        let vanilla = if matches!(format.as_str(), ".ymap" | ".ybn") {
+        let vanilla = if matches!(format.as_str(), ".ymap" | ".ybn")
+          && crate::core::stream_file::identifies_stream_file(&file_name)
+        {
           vanilla_files.get(&file_name).map(|file| VanillaMatch {
             version: file.version.clone(),
             sha256: file.sha256.clone(),
