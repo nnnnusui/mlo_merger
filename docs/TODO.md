@@ -9,6 +9,7 @@
 Resource overwrites (`overwrite/resources/{resourceName}/{stream_path}.diff.json`) leave selected differences of a source YMAP's diff out of the merge, or the file whole. The overwrite cache derives which resources' files each stream file that resources add is merged from, and the warnings. Vanilla overwrites (`overwrite/vanilla/latest/ymap/*.diff.json`) add differences from the latest vanilla YMAP as the last merge source.
 
 - [ ] Let a vanilla overwrite take precedence over resources' changes to the same items, if the merge policy gains configured priorities.
+- [ ] Let a resource overwrite add differences of its own besides `skip`: `diffs` in a diff document's shape, adding or modifying items on top of the resource's diff, which is why resource overwrites are named `.diff.json`.
 - [ ] Support YBN overwrites.
 - [ ] Follow overwrites to a new vanilla version, as they are followed to a new source version: remap the vanilla indices their selectors name. Overwrites whose baseline changed are only listed in `ignored_overwrites` now.
 - [ ] Report selectors that match no difference, unsupported or ambiguous overwrite changes, and overwrite files that are not read (such as the earlier `resources/{resourceName}.json` layout), in the overwrite cache's `warnings.json`, as `ignored_overwrites` does for missing and stale overwrites; they are only logged now.

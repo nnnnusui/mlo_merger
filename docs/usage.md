@@ -227,6 +227,31 @@ vanilla. The last stdout line is a `ReadResult`:
 - `--read --all` reads every YMAP of every resource and of vanilla, for
   tools that want all documents up front.
 
+### How Diff Documents Compose
+
+Every `.diff.json` holds differences from a base, and the merge composes them. Each kind has
+its own base:
+
+| Document | Base | Holds |
+|---|---|---|
+| `asset/source-cache/diff/{resource}/{stream_path}.diff.json` | The resource's baseline YMAP: the vanilla YMAP of that name, an empty YMAP, or the base source's YMAP | `diffs`, the resource's differences |
+| `asset/overwrite/resources/{resource}/{stream_path}.diff.json` | The source-cache diff document at the same path | `skip`, the differences of that document to cancel |
+| `asset/overwrite/vanilla/latest/ymap/{file_name}.diff.json` | The latest vanilla YMAP | `diffs`, differences of its own |
+
+- A diff document leads from its `base` file to its `target` file. Array differences name
+  base items by `base_index`, so the diffs of several resources from one base combine
+  without their indices conflicting, and name where the target file has an item by
+  `target_index`, which picks out one item of one diff.
+- A resource overwrite is a diff of a diff. It sits at the same relative path as the diff
+  document it applies to, is tied to that document's files by its `target` and `base`
+  fingerprints, and its `skip` cancels any of the document's differences, from whole
+  fields and array items down to single changes within an item; `ignore` cancels the file
+  whole. It adds no differences of its own.
+- The merge applies to each base YMAP every resource's diff, with that resource's
+  overwrite applied, in merge order, then the vanilla overwrite as the last source. Where
+  sources change the same item, the merge policy decides (see
+  [Combining Sources](reference.md#combining-sources)); an overwrite does not override it.
+
 ### Diff Documents
 
 Source-cache generation writes one diff document for every source YMAP: against the vanilla
@@ -264,6 +289,9 @@ asset/source-cache/diff/{resource}/{stream_path}.diff.json
 ```text
 asset/overwrite/resources/{resource}/{stream_path}.diff.json
 ```
+
+A resource overwrite cancels differences of the diff document at the same path (see
+[How Diff Documents Compose](#how-diff-documents-compose)).
 
 ```json
 {
@@ -303,6 +331,9 @@ See [docs/sample/overwrite](sample/overwrite/README.md) for complete examples.
 ```text
 asset/overwrite/vanilla/latest/ymap/{file_name}.diff.json
 ```
+
+A vanilla overwrite is a diff document of its own against the latest vanilla YMAP, merged
+after every resource's (see [How Diff Documents Compose](#how-diff-documents-compose)).
 
 ```json
 {
