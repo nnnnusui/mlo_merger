@@ -10,7 +10,7 @@ use crate::platform::fs;
 use std::{collections::BTreeSet, path::Path};
 
 /// Entries of the cache directory.
-const CACHE_ENTRIES: [&str; 10] = [
+const CACHE_ENTRIES: [&str; 11] = [
   "cache_info.json",
   "stream_conflicts.json",
   "vanilla_ymaps_to_read.json",
@@ -20,8 +20,10 @@ const CACHE_ENTRIES: [&str; 10] = [
   "diff",
   "propagated",
   "added_ymap_relationships.json",
-  // Archived history, which nothing reads.
+  // Archived resources, which nothing reads.
   "_old",
+  // Earlier versions of cached files, which overwrites written against them read.
+  "history",
 ];
 
 /// Checks that each file the inventory records as moved into the cache is there with its

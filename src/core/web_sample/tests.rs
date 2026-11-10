@@ -69,8 +69,8 @@ impl Workspace {
       source_cache_dir: self.asset("source-cache"),
       exclusions: None,
       merged_dir: self.asset("merged"),
-      overwrite_dir: None,
-      overwrite_cache_dir: None,
+      overwrite_dir: Some(self.asset("overwrite")),
+      overwrite_cache_dir: Some(self.asset("overwrite-cache")),
       output_dir: self.asset("merged_mlo"),
       gamebuild: gamebuild.map(|build| builds.resolve(build).unwrap()),
       force: false,
@@ -173,9 +173,38 @@ fn pipeline_runs_on_the_web_sample() {
     );
   }
 
-  // Both resources' edits merge, and the houses follow their parents' removed SLOD.
+  // The overwrite of `smpl_street_tweaks`, written against its earlier version, is rewritten
+  // against the current one: it still reverts the planter, and no longer names the cone. That of
+  // `smpl_block_rework` reverted the lamp's colour, which the current version changes otherwise,
+  // so it is left to be written again, and not applied.
+  let update = |resource: &str, stream_path: &str| -> crate::core::overwrite_cache::SourceUpdate {
+    let directory =
+      workspace.asset(&format!("overwrite-cache/source_updates/{resource}/{stream_path}"));
+    let record = fs::read_dir(directory).unwrap().next().unwrap().unwrap().path();
+    serde_json::from_slice(&fs::read(record).unwrap()).unwrap()
+  };
+  let tweaks = update("smpl_street_tweaks", "smpl_block_01.ymap");
+  assert_eq!(tweaks.outcome, crate::core::overwrite_cache::SourceUpdateOutcome::Rewritten);
+  let rewritten: serde_json::Value = serde_json::from_slice(
+    &fs::read(
+      workspace.asset("overwrite/resources/smpl_street_tweaks/smpl_block_01.ymap.diff.json"),
+    )
+    .unwrap(),
+  )
+  .unwrap();
+  assert_eq!(
+    rewritten["skip"],
+    serde_json::json!({"entities": [{"Added": {"entity": {"guid": guid::PLANTER}}}]})
+  );
+  let rework = update("smpl_block_rework", "maps/smpl_block_01.ymap");
+  assert_eq!(rework.outcome, crate::core::overwrite_cache::SourceUpdateOutcome::Manual);
+  assert_eq!(latest.warnings.ignored_overwrites.len(), 1);
+  assert_eq!(latest.warnings.ignored_overwrites[0].resource.as_deref(), Some("smpl_block_rework"));
+
+  // Both resources' edits merge, but for the planter the overwrite reverts, and the houses follow
+  // their parents' removed SLOD.
   let block = workspace.merged_ymap("smpl_block_01.ymap");
-  assert!(guids(&block).contains(&guid::PLANTER));
+  assert!(!guids(&block).contains(&guid::PLANTER));
   assert!(!guids(&block).contains(&guid::BIN));
   assert!(block.car_generators.is_empty());
   assert_eq!(block.time_cycle_modifiers[0].percentage, 80.0);
@@ -228,6 +257,7 @@ fn pipeline_runs_on_the_web_sample() {
     gamebuild: None,
     output_dir: workspace.asset("read-cache"),
     force: false,
+    version: None,
   }
   .run()
   .unwrap();
@@ -264,5 +294,6 @@ fn every_stream_file_covers_the_shared_position() {
     );
     checked += 1;
   }
-  assert_eq!(checked, 26);
+  // The earlier versions kept in the source cache's history included.
+  assert_eq!(checked, 28);
 }

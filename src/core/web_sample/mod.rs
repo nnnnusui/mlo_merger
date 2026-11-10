@@ -67,6 +67,7 @@ mod guid {
   pub const KIOSK: u32 = 0x534D_0206;
   pub const PLANTER: u32 = 0x5A5A_0001;
   pub const BIRCH: u32 = 0x5A5A_0002;
+  pub const CONE: u32 = 0x5A5A_0003;
   pub const SIGN: u32 = 0x5A5A_0101;
   pub const CRATE: u32 = 0x5A5A_0102;
   pub const CRATE_LABEL: u32 = 0x5A5A_0103;
@@ -244,8 +245,9 @@ fn find(
 }
 
 /// Resource `[smpl]/smpl_street_tweaks`: moves the bench, locks the door, removes the car
-/// generator and adds a planter; removes a LOD light pair; adds the planter's collision.
-fn street_tweaks() -> Vec<(&'static str, Vec<u8>)> {
+/// generator and adds a planter; removes a LOD light pair; adds the planter's collision. Its
+/// `earlier` version, which an overwrite was written against, also added a cone.
+fn street_tweaks(earlier: bool) -> Vec<(&'static str, Vec<u8>)> {
   let mut map = block_01("smpl_block_01");
   let bench = find(&map, guid::BENCH);
   map.entities[bench].position.x += 1.5;
@@ -253,6 +255,9 @@ fn street_tweaks() -> Vec<(&'static str, Vec<u8>)> {
   map.entities[door_entity].extensions = vec![door("smpl_door_main", true)];
   map.car_generators.clear();
   map.entities.push(entity("smpl_planter", guid::PLANTER, position(-7095.0, 7088.0, 20.0), 0.0));
+  if earlier {
+    map.entities.push(entity("smpl_cone", guid::CONE, position(-7092.0, 7090.0, 20.0), 0.0));
+  }
   fit_extents(&mut map);
   let (mut lights, mut distant) = lod_lights("", 3);
   lights.lod_lights.remove(2);
@@ -272,14 +277,16 @@ fn street_tweaks() -> Vec<(&'static str, Vec<u8>)> {
 
 /// Resource `smpl_block_rework`: brightens the dusk, removes the occlude model's roof and the
 /// bin, recolours the lamp; removes the empty SLOD from the parent, so the houses' parent
-/// indices move; removes the bollard's collision.
-fn block_rework() -> Vec<(&'static str, Vec<u8>)> {
+/// indices move; removes the bollard's collision. Its `earlier` version, which an overwrite was
+/// written against, recoloured the lamp otherwise.
+fn block_rework(earlier: bool) -> Vec<(&'static str, Vec<u8>)> {
   let mut map = block_01("smpl_block_01");
   map.time_cycle_modifiers[0].percentage = 80.0;
   map.occlude_models[0].triangles.truncate(2);
   map.entities.remove(find(&map, guid::BIN));
   let lamp = find(&map, guid::LAMP);
-  map.entities[lamp].extensions = vec![light_effect("smpl_lamp_light", [170, 200, 255])];
+  let colour = if earlier { [200, 200, 255] } else { [170, 200, 255] };
+  map.entities[lamp].extensions = vec![light_effect("smpl_lamp_light", colour)];
   // The resource's own parent has lost its first entity, so its houses point one lower.
   let (house_a, house_b) = (find(&map, guid::HOUSE_A), find(&map, guid::HOUSE_B));
   map.entities[house_a].parent_index = 0;
@@ -381,6 +388,7 @@ const NAMES: &[&str] = &[
   "smpl_fountain",
   "smpl_kiosk",
   "smpl_planter",
+  "smpl_cone",
   "smpl_tree_birch",
   "smpl_sign_board",
   "smpl_crate",
@@ -473,6 +481,110 @@ const CONFIG: &str = "\
 
 /// Every file of the sample workspace, with `files.json` listing them for the page.
 fn sample_files() -> Vec<SampleFile> {
+  let mut files = workspace_files(false);
+  files.extend(earlier_versions().iter().map(|(path, bytes)| SampleFile {
+    path: path.clone(),
+    bytes: bytes.clone(),
+  }));
+  // The files the page seeds.
+  let mut listed = files.iter().map(|file| file.path.clone()).collect::<Vec<_>>();
+  listed.sort();
+  files.push(SampleFile {
+    path: "files.json".into(),
+    bytes: serde_json::to_vec_pretty(&listed).unwrap(),
+  });
+  files
+}
+
+/// The overwrites written against the earlier versions of two resources' `smpl_block_01.ymap`,
+/// and those versions with their diff documents, kept in the source cache's history as a
+/// pipeline run on them would have left them. The overwrite of `smpl_street_tweaks` reverts its
+/// planter and its cone, which the current version no longer adds, so it is rewritten; that of
+/// `smpl_block_rework` reverts its lamp's colour, which the current version changes otherwise,
+/// so it is left to be written again.
+fn earlier_versions() -> &'static [(String, Vec<u8>)] {
+  static FILES: std::sync::OnceLock<Vec<(String, Vec<u8>)>> = std::sync::OnceLock::new();
+  FILES.get_or_init(|| {
+    let root = std::env::temp_dir().join(format!("mlo_web_sample_earlier_{}", std::process::id()));
+    let _ = fs::remove_dir_all(&root);
+    for file in workspace_files(true) {
+      let path = root.join(&file.path);
+      fs::create_dir_all(path.parent().unwrap()).unwrap();
+      fs::write(path, file.bytes).unwrap();
+    }
+    let asset = root.join("asset");
+    crate::core::pipeline::Pipeline {
+      source_dir: asset.join("source"),
+      game_dir: asset.join("missing-game"),
+      magic: asset.join("magic.dat"),
+      vanilla_dir: asset.join("vanilla"),
+      vanilla_cache_dir: asset.join("vanilla-cache"),
+      source_cache_dir: asset.join("source-cache"),
+      exclusions: None,
+      merged_dir: asset.join("merged"),
+      overwrite_dir: None,
+      overwrite_cache_dir: None,
+      output_dir: asset.join("merged_mlo"),
+      gamebuild: None,
+      force: false,
+    }
+    .run()
+    .unwrap();
+    let lamp = find(&block_01("smpl_block_01"), guid::LAMP);
+    let mut files = Vec::new();
+    for (resource, skip) in [
+      (
+        "smpl_street_tweaks",
+        serde_json::json!({"entities": [
+          {"Added": {"entity": {"guid": guid::PLANTER}}},
+          {"Added": {"entity": {"guid": guid::CONE}}}
+        ]}),
+      ),
+      ("smpl_block_rework", serde_json::json!({"entities": [{"Modified": {"before_index": lamp}}]})),
+    ] {
+      let cache = asset.join("source-cache");
+      let stream_path =
+        if resource == "smpl_block_rework" { "maps/smpl_block_01.ymap" } else { "smpl_block_01.ymap" };
+      let bytes = fs::read(cache.join(format!("resources/{resource}/{stream_path}"))).unwrap();
+      let mut document: serde_json::Value = serde_json::from_slice(
+        &fs::read(cache.join(format!("diff/{resource}/{stream_path}.diff.json"))).unwrap(),
+      )
+      .unwrap();
+      // Modification times are the run's; the documents are compared by content.
+      for file in ["source", "vanilla"] {
+        document[file]["modified_seconds"] = 0.into();
+        document[file]["modified_nanos"] = 0.into();
+      }
+      let sha = sha256(&bytes);
+      let history = crate::core::source_cache::history::version_path(resource, stream_path, &sha);
+      let diff = crate::core::source_cache::history::diff_path(resource, stream_path, &sha);
+      let fingerprint = |file: &str| {
+        serde_json::json!({"sha256": document[file]["sha256"], "size": document[file]["size"]})
+      };
+      let overwrite = serde_json::json!({
+        "schema_version": 1,
+        "source": fingerprint("source"),
+        "vanilla": fingerprint("vanilla"),
+        "skip": skip,
+      });
+      files.push((format!("asset/source-cache/{history}"), bytes));
+      files.push((
+        format!("asset/source-cache/{diff}"),
+        serde_json::to_vec_pretty(&document).unwrap(),
+      ));
+      files.push((
+        format!("asset/overwrite/resources/{resource}/{stream_path}.diff.json"),
+        serde_json::to_vec_pretty(&overwrite).unwrap(),
+      ));
+    }
+    let _ = fs::remove_dir_all(&root);
+    files
+  })
+}
+
+/// The vanilla archive, the configuration and the resources, at their `earlier` versions or
+/// their current ones.
+fn workspace_files(earlier: bool) -> Vec<SampleFile> {
   let mut files = Vec::new();
   let mut versions = Vec::new();
   let mut previous: BTreeMap<&str, String> = BTreeMap::new();
@@ -516,8 +628,8 @@ fn sample_files() -> Vec<SampleFile> {
     bytes: serde_json::to_vec_pretty(&serde_json::json!({"names": names})).unwrap(),
   });
   for (resource, resource_files) in [
-    ("[smpl]/smpl_street_tweaks", street_tweaks()),
-    ("smpl_block_rework", block_rework()),
+    ("[smpl]/smpl_street_tweaks", street_tweaks(earlier)),
+    ("smpl_block_rework", block_rework(earlier)),
     ("smpl_custom_props", custom_props()),
     ("smpl_custom_props_v2", custom_props_v2()),
   ] {
@@ -535,13 +647,6 @@ fn sample_files() -> Vec<SampleFile> {
   files.push(SampleFile {
     path: "asset/config.toml".into(),
     bytes: CONFIG.into(),
-  });
-  // The files the page seeds.
-  let mut listed = files.iter().map(|file| file.path.clone()).collect::<Vec<_>>();
-  listed.sort();
-  files.push(SampleFile {
-    path: "files.json".into(),
-    bytes: serde_json::to_vec_pretty(&listed).unwrap(),
   });
   files
 }

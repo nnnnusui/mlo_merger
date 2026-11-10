@@ -8,6 +8,9 @@
 //!   one makes them already.
 //! - `warnings.json` ([`OverwriteWarnings`]): overwrites that no longer match their files. The
 //!   merge logs them on every run.
+//! - `source_updates/` ([`SourceUpdate`]): the resource overwrites whose source changed, each as
+//!   it was and what was done about it: rewritten against the current version, in the
+//!   overwrites, or left to be written again. Unlike the rest, these records are kept.
 //!
 //! Every resource's version of a YMAP that resources add is merged, each compared with the
 //! empty YMAP, and the additions an earlier one makes already are left out (see
@@ -27,8 +30,10 @@ use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
+mod source_updates;
 mod warnings;
 
+pub use source_updates::{SOURCE_UPDATES, SourceUpdate, SourceUpdateOutcome, SourceVersion};
 pub use warnings::{OverwriteWarnings, collect as warnings};
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
@@ -130,7 +135,7 @@ impl BuildOverwriteCache {
     let source_cache_dir = fs::canonicalize(&self.source_cache_dir)?;
     let vanilla_cache_dir = fs::canonicalize(&self.vanilla_cache_dir)?;
     let output = &self.output_dir;
-    let inputs_digest =
+    let mut inputs_digest =
       inputs_digest(&source_cache_dir, &vanilla_cache_dir, self.overwrite_dir.as_deref())?;
     if read_json::<AddedYmaps>(output.join(ADDED_YMAPS)).is_ok_and(|previous| {
       previous.format_version == FORMAT_VERSION && previous.inputs == inputs_digest
@@ -140,10 +145,18 @@ impl BuildOverwriteCache {
       return Ok(false);
     }
     let inputs = crate::core::source_cache::load_merge_inputs(&source_cache_dir, &source_dir)?;
-    let overwrites = match &self.overwrite_dir {
+    let mut overwrites = match &self.overwrite_dir {
       Some(directory) => Overwrites::load(directory)?,
       None => Overwrites::default(),
     };
+    // Overwrites written against an earlier version of their source are rewritten where they
+    // can be, so what follows reads them as rewritten.
+    if source_updates::review(output, &source_cache_dir, &inputs, &overwrites)?
+      && let Some(directory) = &self.overwrite_dir
+    {
+      overwrites = Overwrites::load(directory)?;
+      inputs_digest = self::inputs_digest(&source_cache_dir, &vanilla_cache_dir, Some(directory))?;
+    }
     let mut files = resolve(&inputs, &overwrites);
     record_left_out(&mut files, &inputs, &overwrites)?;
     let warnings = warnings::collect(&inputs, &overwrites, &vanilla_cache_dir)?;

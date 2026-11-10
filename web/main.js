@@ -28,7 +28,7 @@ const TEXT = {
     footer:
       "The sample's vanilla files and resources are invented for this page (see web/sample in the repository). Nothing is uploaded; the files live in memory and vanish on reload.",
     ready:
-      "Ready. The workspace holds three sample resources and a five-stage vanilla archive; the sample's build 100 stops before its last stage.",
+      "Ready. The workspace holds four sample resources, two overwrites written against their earlier versions, and a five-stage vanilla archive; the sample's build 100 stops before its last stage.",
     running: (writes) => `Running… ${writes} writes`,
     done: (ms, writes, counts) =>
       `Finished in ${ms} ms: ${writes} writes, ${counts.added} added, ${counts.modified} modified, ${counts.removed} removed.`,
@@ -60,7 +60,7 @@ const TEXT = {
     footer:
       "サンプルの vanilla ファイルとリソースは、このページのために作った架空のものです（リポジトリの web/sample）。アップロードは行わず、ファイルはメモリ上にだけあり、再読み込みで消えます。",
     ready:
-      "準備完了。ワークスペースにはサンプルのリソース 3 つと、5 ステージの vanilla があります。サンプルのビルド 100 は最後のステージの手前までです。",
+      "準備完了。ワークスペースにはサンプルのリソース 4 つ、その旧版に対して書かれた overwrite 2 つ、5 ステージの vanilla があります。サンプルのビルド 100 は最後のステージの手前までです。",
     running: (writes) => `実行中… ${writes} 回の書き込み`,
     done: (ms, writes, counts) =>
       `${ms} ms で完了: 書き込み ${writes} 回、追加 ${counts.added}、変更 ${counts.modified}、削除 ${counts.removed}。`,

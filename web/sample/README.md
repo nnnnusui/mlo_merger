@@ -56,9 +56,31 @@ Edits to `smpl_block_01.ymap` and the LOD lights carry over to their DLC generat
 resources' collisions predate `smpl_summer`, so merging against the last stage removes the
 kiosk's collision, while `--gamebuild 100` merges against the stage they were made for.
 
+## Overwrites Written Against Earlier Versions (`asset/overwrite`, `asset/source-cache/history`)
+
+Two overwrites were written against earlier versions of the resources' `smpl_block_01.ymap`,
+which the source cache keeps under `asset/source-cache/history/`, as a pipeline run on them
+would have left them, with their diff documents:
+
+- `smpl_street_tweaks`'s reverts the planter and a cone its earlier version added. The current
+  version no longer adds the cone, so the first pipeline run rewrites the overwrite in
+  `asset/overwrite` against it: it keeps reverting the planter and no longer names the cone.
+- `smpl_block_rework`'s reverts the lamp's colour, which the current version changes to
+  another colour. It is left as it is, not applied, and listed in `ignored_overwrites`, to be
+  written again.
+
+Both are recorded under `asset/overwrite-cache/source_updates/`. Read an earlier version with,
+for example,
+
+```bash
+mlo_merger --read --resource smpl_street_tweaks --version {sha256} smpl_block_01.ymap
+```
+
+where `{sha256}` names the file in the history.
+
 ## A Position Every File Covers
 
-Every stream file here, YMAP or YBN, of every stage and resource, covers
+Every stream file here, YMAP or YBN, of every stage and resource and in the history, covers
 **(-7090, 7092, 20.5)**: it lies inside each YMAP's entity extents (the sample takes each
 archetype to reach 10 m from its entity) and each YBN's bounds. A file-from-position search
 there lists every file the stores hold:

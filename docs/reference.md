@@ -65,7 +65,10 @@ operation itself.
 resource stream directories.** They remain available in the source cache; other files stay
 in the original resources. Resource names must be unique across groups. Files are cached at
 `resources/{resourceName}/{stream-relative-path}`, without the leading `stream/` or
-`streams/` component. Replaced cached files are retained under `_old/`.
+`streams/` component. A cached file a resource replaces with a new version is kept by its
+content as `history/{resourceName}/{stream-relative-path}/{sha256}.{extension}`, with its diff
+document then, if any, as `{sha256}.diff.json`, so overwrites written against it can be
+followed to the new version (see [Overwrites](#overwrites)); nothing removes history.
 
 Source-cache selection accepts a resource name or input-relative resource path; `-f`
 forces that selection, not its prerequisites.
@@ -96,7 +99,7 @@ resource paths under `-i`, preserving modification times.
 - Different existing destination contents, missing cached files and symlink paths are
   rejected before any file moves; identical destination files are kept and their cached
   duplicates removed.
-- `_old/` history and unrecorded files are left untouched. Merged and deployed output is
+- `_old/`, `history/` and unrecorded files are left untouched. Merged and deployed output is
   not changed.
 - Run it while no other cache or pipeline operation is active. The next source-cache or
   pipeline run indexes the resources again and moves the same files back into the cache.
@@ -262,7 +265,14 @@ YMAPs.
 An overwrite leaving out differences applies only while the files it was written against are current: its
 `source` and `vanilla` fingerprints (`sha256` and `size`) must match. Otherwise it is
 left out whole with a warning, and the pipeline lists it in `ignored_overwrites` on every
-run until it is rewritten. The overwrite cache's `warnings.json` (`OverwriteWarnings`)
+run until it is rewritten. A resource overwrite whose source alone changed is first
+followed to the new version: the overwrite cache compares the diff document of the version it
+was written against, from the source cache's history, with the current one, and rewrites the
+overwrite in place when every difference it left out is still left out by the same selector
+or no longer made, dropping the selectors that match nothing; otherwise it is left as it is.
+Either way `{overwrite cache}/source_updates/` records it (see
+[usage.md](usage.md#when-source-or-vanilla-files-change)). The overwrite cache's
+`warnings.json` (`OverwriteWarnings`)
 lists these; see
 [usage.md](usage.md#overwrite-warnings). The document formats, selectors and what happens when files
 change are described in [usage.md](usage.md#overwrite-documents); complete examples are in

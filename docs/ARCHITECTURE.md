@@ -161,7 +161,11 @@ selectors that match no difference.
 The overwrite cache checks every overwrite against the current files whenever its inputs
 change and records those that do not apply in `warnings.json`; merge logs and returns them
 on each run, including runs that reuse their output, and the pipeline prints them as
-`ignored_overwrites`.
+`ignored_overwrites`. Before that, a resource overwrite whose source alone changed is followed
+to the new version, the source cache keeping the version it was written against by its
+SHA-256 under `history/`: the overwrite cache compares that version's diff document with the
+current one, rewrites the overwrite in the overwrites when its selectors carry over, and
+records what it did under `source_updates/`, which, unlike the rest of the cache, is kept.
 
 `overwrite/vanilla/latest/ymap/{fileName}.diff.json` holds differences written
 directly against a latest vanilla YMAP. Only `latest` is read: merges compare

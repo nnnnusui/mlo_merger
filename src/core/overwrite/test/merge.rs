@@ -166,6 +166,176 @@ fn overwrites_skip_source_diffs_written_against_the_current_files() {
 }
 
 #[test]
+fn overwrites_follow_their_source_to_its_next_version() {
+  use crate::core::overwrite_cache::{SourceUpdate, SourceUpdateOutcome};
+
+  let (bytes, catalog) = sample_bytes();
+  let vanilla_model = sample_ymap("parent_refs/vanilla_parent.ymap");
+  let root = std::env::temp_dir().join(format!("merge_overwrite_update_{}", std::process::id()));
+  let _ = fs::remove_dir_all(&root);
+  let resource = root.join("source/resource");
+  let vanilla = root.join("vanilla");
+  let source_cache = root.join("source-cache");
+  let overwrite_dir = root.join("overwrite");
+  let overwrite_cache = root.join("overwrite-cache");
+  let output = root.join("merged");
+  fs::create_dir_all(resource.join("stream")).unwrap();
+  fs::write(resource.join("fxmanifest.lua"), []).unwrap();
+  write_vanilla(&vanilla, &bytes);
+  let ship = |model: &Ymap| {
+    fs::write(resource.join("stream/map.ymap"), write_ymap(model, &model.entities).unwrap())
+      .unwrap();
+  };
+  let added = |guid: u32, y: f32| {
+    let mut entity = vanilla_model.entities[0].clone();
+    entity.guid = guid;
+    entity.position.y += y;
+    entity
+  };
+  // The resource moves vanilla entity 0 and adds entities 1000 and 2000.
+  let mut first = vanilla_model.clone();
+  first.entities[0].position.x += 1.0;
+  first.entities.extend([added(1000, 10.0), added(2000, 20.0)]);
+  ship(&first);
+
+  let merge = Merge {
+    source_dir: root.join("source"),
+    vanilla_cache_dir: root.join("vanilla-cache"),
+    source_cache_dir: source_cache.clone(),
+    output_dir: output.clone(),
+    overwrite_dir: Some(overwrite_dir.clone()),
+    overwrite_cache_dir: Some(overwrite_cache.clone()),
+    force: false,
+  };
+  let merged = || {
+    ymap_to_model(&fs::read(output.join("ymap/map.ymap")).unwrap(), &catalog.hash_names).unwrap()
+  };
+  let guids = |model: &Ymap| model.entities.iter().map(|entity| entity.guid).collect::<Vec<_>>();
+  merge.run_after_caches(&vanilla).unwrap();
+  let document: YmapComparisonDiff = serde_json::from_reader(
+    fs::File::open(source_cache.join("diff/resource/map.ymap.diff.json")).unwrap(),
+  )
+  .unwrap();
+  // The overwrite reverts the move and entity 1000.
+  let overwrite_path = overwrite_dir.join("resources/resource/map.ymap.diff.json");
+  let written = StreamFileOverwrite {
+    schema_version: StreamFileOverwrite::SCHEMA_VERSION,
+    ignore: false,
+    source: Some(OverwriteFingerprint {
+      sha256: document.source.sha256.clone(),
+      size: document.source.size,
+    }),
+    vanilla: Some(OverwriteFingerprint {
+      sha256: document.vanilla.sha256.clone(),
+      size: document.vanilla.size,
+    }),
+    skip: Some(serde_json::json!({"entities": [
+      {"Modified": {"before_index": 0, "changes": {"position": true}}},
+      {"Added": {"entity": {"guid": 1000}}}
+    ]})),
+  };
+  fs::create_dir_all(overwrite_path.parent().unwrap()).unwrap();
+  write_json(&overwrite_path, &written).unwrap();
+  merge.run_after_caches(&vanilla).unwrap();
+  assert_eq!(guids(&merged()), [100, 200, 2000]);
+  assert_eq!(merged().entities[0].position.x, vanilla_model.entities[0].position.x);
+  let record = |sha256: &str| -> SourceUpdate {
+    serde_json::from_reader(
+      fs::File::open(
+        overwrite_cache.join(format!("source_updates/resource/map.ymap/{sha256}.json")),
+      )
+      .unwrap(),
+    )
+    .unwrap()
+  };
+
+  // The next version no longer adds entity 1000, and adds entity 3000: the overwrite is rewritten
+  // against it, without the selector of entity 1000, and keeps reverting the move.
+  let mut second = first.clone();
+  second.entities.retain(|entity| entity.guid != 1000);
+  second.entities.push(added(3000, 30.0));
+  ship(&second);
+  let rewritten = merge.run_after_caches(&vanilla).unwrap();
+  assert!(rewritten.warnings.is_empty(), "{:?}", rewritten.warnings);
+  assert_eq!(guids(&merged()), [100, 200, 2000, 3000]);
+  assert_eq!(merged().entities[0].position.x, vanilla_model.entities[0].position.x);
+  let before = &document.source.sha256;
+  // The source cache keeps the earlier version, with its diff document.
+  assert!(source_cache.join(format!("history/resource/map.ymap/{before}.ymap")).is_file());
+  assert!(source_cache.join(format!("history/resource/map.ymap/{before}.diff.json")).is_file());
+  let update = record(before);
+  assert_eq!(update.outcome, SourceUpdateOutcome::Rewritten);
+  assert_eq!(update.overwrite, written);
+  assert_eq!(update.before.diff, Some(format!("history/resource/map.ymap/{before}.diff.json")));
+  assert_eq!(update.after.diff, Some("diff/resource/map.ymap.diff.json".into()));
+  let reverted = serde_json::to_value(&update.reverted).unwrap()["entities"].clone();
+  assert_eq!(reverted.as_array().unwrap().len(), 2, "{reverted}");
+  let on_disk: StreamFileOverwrite =
+    serde_json::from_reader(fs::File::open(&overwrite_path).unwrap()).unwrap();
+  assert_eq!(Some(&on_disk), update.rewritten.as_ref());
+  assert_eq!(
+    on_disk.skip,
+    Some(serde_json::json!({"entities": [
+      {"Modified": {"before_index": 0, "changes": {"position": true}}}
+    ]}))
+  );
+  assert_ne!(on_disk.source, written.source);
+  // `--read --version` reads the earlier version from the history.
+  let read = crate::core::read::Read {
+    target: crate::core::read::ReadTarget::Resource("resource".into()),
+    files: vec!["map.ymap".into()],
+    source_dir: root.join("source"),
+    source_cache_dir: source_cache.clone(),
+    vanilla_dir: vanilla.clone(),
+    vanilla_cache_dir: root.join("vanilla-cache"),
+    gamebuild: None,
+    output_dir: root.join("read-cache"),
+    force: false,
+    version: Some(before.clone()),
+  };
+  let result = read.run().unwrap();
+  assert_eq!(
+    result.files[0].origin,
+    crate::core::read::ReadOrigin::History {
+      resource: "resource".into(),
+      stream_path: "map.ymap".into(),
+      sha256: before.clone(),
+    }
+  );
+  let document: crate::core::read::YmapReadDocument =
+    serde_json::from_reader(fs::File::open(&result.files[0].output).unwrap()).unwrap();
+  assert_eq!(guids(&document.model), [100, 200, 1000, 2000]);
+  assert!(
+    crate::core::read::Read {
+      version: Some("missing".into()),
+      ..read.clone()
+    }
+    .run()
+    .is_err()
+  );
+
+  // The version after moves entity 0 elsewhere: the move it reverted changed, so it is left to
+  // be written again, and not applied.
+  let mut third = second.clone();
+  third.entities[0].position.x += 5.0;
+  ship(&third);
+  let manual = merge.run_after_caches(&vanilla).unwrap();
+  assert_eq!(manual.warnings.ignored_overwrites.len(), 1);
+  assert_eq!(merged().entities[0].position.x, third.entities[0].position.x);
+  let update = record(&on_disk.source.as_ref().unwrap().sha256);
+  assert_eq!(update.outcome, SourceUpdateOutcome::Manual);
+  assert!(
+    update.reasons.iter().any(|reason| reason.contains("differs now")),
+    "{:?}",
+    update.reasons
+  );
+  let unchanged: StreamFileOverwrite =
+    serde_json::from_reader(fs::File::open(&overwrite_path).unwrap()).unwrap();
+  assert_eq!(unchanged, on_disk);
+  fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn vanilla_overwrites_merge_after_the_sources() {
   use crate::core::config::matching;
   use crate::core::format::ymap::compare::YmapDiffContext;

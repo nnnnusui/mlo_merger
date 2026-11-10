@@ -37,7 +37,7 @@ in `web/`, described under `web` in its `release.json`; see [Browser build](web.
 | Changes carried to newer DLC generations | `YmapPropagatedDiff`, `YmapPropagationOrigin` |
 | Vanilla YMAP generations | `GenerationIndex`, `GenerationUnit` |
 | Overwrite documents | `StreamFileOverwrite`, `OverwriteFingerprint`, `YmapDiffSkip`, `VanillaOverwrite` |
-| Overwrite cache | `AddedYmaps`, `AddedYmap`, `AddedYmapSource`, `LeftOutAddition`, `AddedItem`, `OverwriteWarnings` |
+| Overwrite cache | `AddedYmaps`, `AddedYmap`, `AddedYmapSource`, `LeftOutAddition`, `AddedItem`, `OverwriteWarnings`, `SourceUpdate`, `SourceVersion`, `SourceUpdateOutcome` |
 | Pipeline stdout | `PipelineReport`, `PipelineChanges`, `StoreChanges`, `OverwriteWarnings`, `IgnoredOverwrite`, `IgnoredOverwriteReason` |
 | Merge diagnostics | `DuplicateReport` |
 
@@ -221,6 +221,9 @@ vanilla. The last stdout line is a `ReadResult`:
 - Several names are read in one run, in the order given. If any name matches no file or is
   ambiguous, the whole command fails and writes nothing, so read names one at a time when
   some may be missing.
+- `--read --resource NAME --version SHA256 FILE` reads the earlier version with that SHA-256
+  of a resource's file, which the source cache keeps in its history, as
+  `origin.History`, to `asset/read-cache/history/{resource}/{stream_path}/{sha256}.ymap.json`.
 - `--read --all` reads every YMAP of every resource and of vanilla, for
   tools that want all documents up front.
 
@@ -377,10 +380,31 @@ warning starting with `Overwrite of`.
 
 #### When Source Or Vanilla Files Change
 
-An overwrite is written against the files its fingerprints name. When a resource is updated
-or the game build moves the latest vanilla file, the next run (the pipeline updates the source
-cache first) merges the file again without the overwrite: the overwrite is left out whole,
-not partially applied, and the overwrite document is not changed. The merge does not fail.
+An overwrite is written against the files its fingerprints name. When the game build moves
+the latest vanilla file, or a resource is updated and its overwrite cannot be followed (see
+below), the next run (the pipeline updates the source cache first) merges the file again
+without the overwrite: the overwrite is left out whole, not partially applied, and the
+overwrite document is not changed. The merge does not fail.
+
+When only the resource's file changed, the source cache keeps the version the overwrite was
+written against (`asset/source-cache/history/{resource}/{stream_path}/{sha256}.*`), and
+building the overwrite cache compares that version's diff document with the current one:
+
+- If every difference the overwrite left out is still left out by the same selector, or the
+  resource no longer makes it, and the selectors leave out nothing new, the overwrite is
+  **rewritten in `asset/overwrite`** against the current version, without the selectors that
+  match nothing any more, and applies again.
+- Otherwise, as when an entity with the same GUID or the change to the same vanilla item
+  differs, it is left as it is and listed in `ignored_overwrites`, to be written again.
+- Either way `asset/overwrite-cache/source_updates/{resource}/{stream_path}/{sha256}.json`
+  (`SourceUpdate`), named after the version it was written against, records it: the
+  overwrite as it was (`overwrite`), the differences it left out of that version's diff
+  (`reverted`, a diff document's `diffs`), both versions' files relative to the source cache
+  (`before`, `after`), the `outcome` (`rewritten` or `manual`), the `reasons` for `manual`,
+  and the `rewritten` overwrite. These records are kept; read them to review what was done.
+- To see the reverted items in place, read the earlier version with
+  `--read --resource {resource} --version {sha256} {stream_path}` (see [`--read`](#--read)).
+- A vanilla update is not followed yet.
 
 - A merge that reuses its previous output still checks every overwrite, so
   `ignored_overwrites` lists an outdated overwrite on every run, not only on the run where the

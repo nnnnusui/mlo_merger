@@ -308,16 +308,16 @@ fn moves_vanilla_files_retains_history_and_updates_only_selected_resources() {
   );
   assert_eq!(before.resources["resource_b"], after.resources["resource_b"]);
   assert_eq!(before.resource_checks["resource_b"], after.resource_checks["resource_b"]);
-  let history = fs::read_dir(output.join("_old")).unwrap().next().unwrap().unwrap().path();
-  assert_eq!(fs::read(history.join("resource_a/nested/collision.ybn")).unwrap(), b"original");
-  let old: SourceCacheMetadata =
-    serde_json::from_reader(fs::File::open(history.join("cache_info.json")).unwrap()).unwrap();
-  assert_eq!(old, before);
-  let old_file: FileFingerprint = serde_json::from_reader(
-    fs::File::open(history.join("resource_a/nested/collision.ybn.fingerprint.json")).unwrap(),
-  )
-  .unwrap();
-  assert_eq!(old_file.sha256, hex::encode(Sha256::digest(b"original")));
+  // The replaced version is kept by its content.
+  let original = hex::encode(Sha256::digest(b"original"));
+  let kept = crate::core::source_cache::history::version_path(
+    "resource_a",
+    "nested/collision.ybn",
+    &original,
+  );
+  assert_eq!(kept, format!("history/resource_a/nested/collision.ybn/{original}.ybn"));
+  assert_eq!(fs::read(output.join(kept)).unwrap(), b"original");
+  assert!(!output.join("_old").exists());
   assert!(
     !BuildSourceCache {
       resource: Some(str::to_owned("resource_a")),
@@ -336,7 +336,7 @@ fn moves_vanilla_files_retains_history_and_updates_only_selected_resources() {
     .run_after_vanilla_cache()
     .unwrap()
   );
-  assert_eq!(fs::read_dir(output.join("_old")).unwrap().count(), 1);
+  assert!(!output.join("_old").exists());
   assert!(second.join("streams/nested/collision.ybn").exists());
 
   let mut raw: VanillaCacheManifest =

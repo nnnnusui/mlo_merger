@@ -5,6 +5,7 @@ mod check;
 mod conflicts;
 pub(crate) mod exclusions;
 mod generate;
+pub mod history;
 mod inventory;
 mod layout;
 mod publication;

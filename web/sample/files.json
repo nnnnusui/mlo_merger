@@ -1,5 +1,11 @@
 [
   "asset/config.toml",
+  "asset/overwrite/resources/smpl_block_rework/maps/smpl_block_01.ymap.diff.json",
+  "asset/overwrite/resources/smpl_street_tweaks/smpl_block_01.ymap.diff.json",
+  "asset/source-cache/history/smpl_block_rework/maps/smpl_block_01.ymap/f1959c33c2bb017008ccdc011952a8c85f7b7e90cb6b48f2580b8aaf494759f5.diff.json",
+  "asset/source-cache/history/smpl_block_rework/maps/smpl_block_01.ymap/f1959c33c2bb017008ccdc011952a8c85f7b7e90cb6b48f2580b8aaf494759f5.ymap",
+  "asset/source-cache/history/smpl_street_tweaks/smpl_block_01.ymap/ecf55b3dc9b98e4c08a2f5c3f70c90935c77c6eceb6b1b3dbb87f9e6c9eed09d.diff.json",
+  "asset/source-cache/history/smpl_street_tweaks/smpl_block_01.ymap/ecf55b3dc9b98e4c08a2f5c3f70c90935c77c6eceb6b1b3dbb87f9e6c9eed09d.ymap",
   "asset/source/[smpl]/smpl_street_tweaks/fxmanifest.lua",
   "asset/source/[smpl]/smpl_street_tweaks/stream/distlodlights_small001.ymap",
   "asset/source/[smpl]/smpl_street_tweaks/stream/lodlights_small001.ymap",

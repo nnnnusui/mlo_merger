@@ -1,0 +1,143 @@
+{
+  "diffs": {
+    "car_generators": [
+      {
+        "Removed": {
+          "index": 0
+        }
+      }
+    ],
+    "entities": [
+      {
+        "Modified": {
+          "after_index": 2,
+          "before_index": 2,
+          "changes": {
+            "extensions": [
+              {
+                "Door": {
+                  "audio_hash": "smpl_door_audio",
+                  "can_break": false,
+                  "door_target_ratio": 0.0,
+                  "enable_limit_angle": true,
+                  "limit_angle": 90.0,
+                  "name": "smpl_door_main",
+                  "offset_position": {
+                    "x": 0.0,
+                    "y": 0.0,
+                    "z": 0.0
+                  },
+                  "starts_locked": true
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "Modified": {
+          "after_index": 4,
+          "before_index": 4,
+          "changes": {
+            "position": {
+              "x": -7078.5
+            }
+          }
+        }
+      },
+      {
+        "Added": {
+          "after": 6,
+          "entity": {
+            "ambient_occlusion_multiplier": 255,
+            "archetype_name": "smpl_planter",
+            "artificial_ambient_occlusion": 255,
+            "child_lod_dist": 0.0,
+            "entity_type": "CEntityDef",
+            "flags": 1572864,
+            "guid": 1515847681,
+            "lod_dist": 120.0,
+            "lod_level": "LODTYPES_DEPTH_HD",
+            "num_children": 0,
+            "parent_index": -1,
+            "position": {
+              "x": -7095.0,
+              "y": 7088.0,
+              "z": 20.0
+            },
+            "priority_level": "PRI_REQUIRED",
+            "rotation": {
+              "w": 1.0,
+              "x": 0.0,
+              "y": 0.0,
+              "z": 0.0
+            },
+            "scale_x_y": 1.0,
+            "scale_z": 1.0,
+            "tint_value": 0
+          },
+          "parent": "None"
+        }
+      },
+      {
+        "Added": {
+          "after": 6,
+          "entity": {
+            "ambient_occlusion_multiplier": 255,
+            "archetype_name": "smpl_cone",
+            "artificial_ambient_occlusion": 255,
+            "child_lod_dist": 0.0,
+            "entity_type": "CEntityDef",
+            "flags": 1572864,
+            "guid": 1515847683,
+            "lod_dist": 120.0,
+            "lod_level": "LODTYPES_DEPTH_HD",
+            "num_children": 0,
+            "parent_index": -1,
+            "position": {
+              "x": -7092.0,
+              "y": 7090.0,
+              "z": 20.0
+            },
+            "priority_level": "PRI_REQUIRED",
+            "rotation": {
+              "w": 1.0,
+              "x": 0.0,
+              "y": 0.0,
+              "z": 0.0
+            },
+            "scale_x_y": 1.0,
+            "scale_z": 1.0,
+            "tint_value": 0
+          },
+          "parent": "None"
+        }
+      }
+    ]
+  },
+  "schema_version": 11,
+  "source": {
+    "modified_nanos": 0,
+    "modified_seconds": 0,
+    "path": "resources/smpl_street_tweaks/smpl_block_01.ymap",
+    "sha256": "ecf55b3dc9b98e4c08a2f5c3f70c90935c77c6eceb6b1b3dbb87f9e6c9eed09d",
+    "size": 2950
+  },
+  "tolerances": {
+    "ybn_position": 0.05,
+    "ymap": 0.001,
+    "ymap_box_occluder_position": 1,
+    "ymap_box_occluder_rotation": 1,
+    "ymap_car_generator_position_decimals": 3,
+    "ymap_grass_position": 0.01,
+    "ymap_lod_light_position_decimals": 3,
+    "ymap_occlude_model_position": 0.01
+  },
+  "vanilla": {
+    "modified_nanos": 0,
+    "modified_seconds": 0,
+    "path": "latest/ymap/smpl_block_01.ymap",
+    "sha256": "edbc473156d8677f3c7aafd60e5d6a76f619f013577092055a3451becb82abb8",
+    "size": 3038
+  }
+}

@@ -60,6 +60,10 @@ pub struct Read {
   pub output_dir: PathBuf,
   /// Writes every JSON again, even one still describing its file.
   pub force: bool,
+  /// With [`ReadTarget::Resource`] and its files named, reads instead the earlier version with
+  /// this SHA-256 of each, which the source cache keeps in its history (see
+  /// [`crate::core::source_cache::history`]).
+  pub version: Option<String>,
 }
 
 /// What [`Read::run`] wrote.
@@ -97,6 +101,14 @@ pub enum ReadOrigin {
     /// changed it.
     version: String,
     file_name: String,
+  },
+  /// An earlier version of a resource's file, kept in the source cache's history.
+  History {
+    /// Resource directory name.
+    resource: String,
+    /// Path below the resource's `stream` directory.
+    stream_path: String,
+    sha256: String,
   },
 }
 
@@ -231,6 +243,9 @@ impl Read {
         files
       }
     };
+    if let Some(version) = &self.version {
+      selected = self.history_versions(selected, version)?;
+    }
     let unmatched = self
       .files
       .iter()
@@ -400,6 +415,49 @@ impl Read {
       }
     }
     Ok(selected)
+  }
+
+  /// The versions with `sha256` of the resource files `selected`, from the source cache's
+  /// history.
+  fn history_versions(
+    &self,
+    selected: Vec<Selected>,
+    sha256: &str,
+  ) -> Result<Vec<Selected>> {
+    if !matches!(self.target, ReadTarget::Resource(_)) || self.files.is_empty() {
+      return Err("--read --version reads named files of one --resource".into());
+    }
+    selected
+      .into_iter()
+      .map(|selected| {
+        let ReadOrigin::Resource {
+          resource,
+          stream_path,
+        } = selected.origin
+        else {
+          return Err("--read --version reads resource files".into());
+        };
+        let stored =
+          crate::core::source_cache::history::version_path(&resource, &stream_path, sha256);
+        let input = self.source_cache_dir.join(&stored);
+        if !fs::is_file(&input) {
+          return Err(
+            format!("The source cache keeps no version {sha256} of {stream_path} ({resource})")
+              .into(),
+          );
+        }
+        Ok(Selected {
+          output: self.output_dir.join(format!("{stored}.json")),
+          origin: ReadOrigin::History {
+            resource,
+            stream_path,
+            sha256: sha256.to_string(),
+          },
+          input,
+          stored,
+        })
+      })
+      .collect()
   }
 
   /// The files of the vanilla stage [`Self::vanilla_version`] selects, matching

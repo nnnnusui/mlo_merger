@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "skip": {
+    "entities": [
+      {
+        "Added": {
+          "entity": {
+            "guid": 1515847681
+          }
+        }
+      },
+      {
+        "Added": {
+          "entity": {
+            "guid": 1515847683
+          }
+        }
+      }
+    ]
+  },
+  "source": {
+    "sha256": "ecf55b3dc9b98e4c08a2f5c3f70c90935c77c6eceb6b1b3dbb87f9e6c9eed09d",
+    "size": 2950
+  },
+  "vanilla": {
+    "sha256": "edbc473156d8677f3c7aafd60e5d6a76f619f013577092055a3451becb82abb8",
+    "size": 3038
+  }
+}

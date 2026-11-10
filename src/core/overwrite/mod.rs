@@ -175,6 +175,8 @@ impl StreamFileOverwrite {
 #[derive(Debug, Clone, Default)]
 pub struct Overwrites {
   resources: BTreeMap<(String, String), StreamFileOverwrite>,
+  /// Where each of [`Self::resources`] was read from.
+  paths: BTreeMap<(String, String), std::path::PathBuf>,
   vanilla: BTreeMap<String, VanillaOverwrite>,
 }
 
@@ -182,8 +184,10 @@ impl Overwrites {
   /// Reads `<directory>/resources/<resource>/**/*.diff.json` and
   /// `<directory>/vanilla/latest/ymap/*.diff.json`; a missing directory has no overwrites.
   pub fn load(directory: &Path) -> Result<Self> {
+    let (resources, paths) = load_resources(directory)?;
     Ok(Self {
-      resources: load_resources(directory)?,
+      resources,
+      paths,
       vanilla: vanilla::load(directory)?,
     })
   }
@@ -196,6 +200,18 @@ impl Overwrites {
     stream_path: &str,
   ) -> Option<&StreamFileOverwrite> {
     self.resources.get(&(resource.to_ascii_lowercase(), normalize(stream_path)))
+  }
+
+  /// The file the overwrite of that stream file was read from.
+  pub fn stream_file_path(
+    &self,
+    resource: &str,
+    stream_path: &str,
+  ) -> Option<&Path> {
+    self
+      .paths
+      .get(&(resource.to_ascii_lowercase(), normalize(stream_path)))
+      .map(|path| path.as_path())
   }
 
   /// Every overwritten stream file as `(resource name, stream path)`, in lowercase.
@@ -220,11 +236,15 @@ impl Overwrites {
 /// Reads `<directory>/resources/<resource>/**/*.diff.json`, keyed by lowercase resource name and
 /// stream path. Files directly in `resources`, the earlier one-document-per-resource layout, are
 /// reported and not read.
-fn load_resources(directory: &Path) -> Result<BTreeMap<(String, String), StreamFileOverwrite>> {
+type ResourceOverwrites =
+  (BTreeMap<(String, String), StreamFileOverwrite>, BTreeMap<(String, String), std::path::PathBuf>);
+
+fn load_resources(directory: &Path) -> Result<ResourceOverwrites> {
   let resources_dir = directory.join("resources");
   let mut overwrites = BTreeMap::new();
+  let mut paths = BTreeMap::new();
   if !fs::is_dir(&resources_dir) {
-    return Ok(overwrites);
+    return Ok((overwrites, paths));
   }
   for entry in crate::platform::fs::WalkDir::new(&resources_dir).follow_links(false) {
     let entry = entry?;
@@ -264,14 +284,16 @@ fn load_resources(directory: &Path) -> Result<BTreeMap<(String, String), StreamF
         format!("{} needs source, vanilla and skip unless it sets ignore", path.display()).into(),
       );
     }
-    overwrites.insert((resource.to_ascii_lowercase(), normalize(stream_path)), overwrite);
+    let key = (resource.to_ascii_lowercase(), normalize(stream_path));
+    paths.insert(key.clone(), path.to_path_buf());
+    overwrites.insert(key, overwrite);
   }
   tracing::info!(
     "Loaded overwrites of {} stream files from {}",
     overwrites.len(),
     resources_dir.display()
   );
-  Ok(overwrites)
+  Ok((overwrites, paths))
 }
 
 fn normalize(stream_path: &str) -> String {

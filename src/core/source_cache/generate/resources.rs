@@ -32,8 +32,6 @@ pub(super) fn update_selected_resources(
   } = vanilla;
   let Publication {
     output,
-    history,
-    previous,
     generated_at,
     ..
   } = publication;
@@ -200,24 +198,16 @@ pub(super) fn update_selected_resources(
         let destination = cache_root.join(relative);
         ensure_safe_path(output, &destination)?;
         let mut replaced = None;
+        // The version it replaces is kept by content, for overwrites written against it.
         if fs::exists(&destination).unwrap_or(false) {
-          fs::create_dir_all(history.as_path())?;
-          if !fs::exists(history.join(crate::core::source_cache::CACHE_INFO)).unwrap_or(false)
-            && let Some(previous) = previous
-          {
-            write_json(&history.join(crate::core::source_cache::CACHE_INFO), previous)?;
-          }
-          let archived = history.join(cache_name.as_ref()).join(relative);
-          fs::create_dir_all(archived.parent().ok_or("Archive path has no parent")?)?;
           let old_fingerprint = fingerprint(&destination, None)?;
-          write_json(
-            &archived.with_file_name(format!(
-              "{}.fingerprint.json",
-              archived.file_name().unwrap().to_string_lossy()
-            )),
-            &old_fingerprint,
+          crate::core::source_cache::history::archive(
+            output,
+            &cache_name,
+            relative,
+            &destination,
+            &old_fingerprint.sha256,
           )?;
-          move_file(&destination, &archived)?;
           replaced = Some(old_fingerprint.sha256);
         }
         fs::create_dir_all(destination.parent().ok_or("Cache file has no parent")?)?;

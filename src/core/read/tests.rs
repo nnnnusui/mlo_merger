@@ -103,6 +103,7 @@ impl Fixture {
       gamebuild: None,
       output_dir: self.root.join("read-cache"),
       force: false,
+      version: None,
     }
   }
 

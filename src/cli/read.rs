@@ -4,7 +4,8 @@ use bpaf::*;
 
 use crate::core::read::{Read, ReadTarget};
 
-/// Parses `--read [--resource NAME | --vanilla | --all] [--gamebuild BUILD] [FILE...]`.
+/// Parses `--read [--resource NAME [--version SHA256] | --vanilla | --all] [--gamebuild BUILD]
+/// [FILE...]`.
 ///
 /// `--gamebuild` is resolved against `[gamebuild]` in `asset/config.toml` as it is parsed.
 pub fn parser() -> impl Parser<Read> {
@@ -46,6 +47,10 @@ pub fn parser() -> impl Parser<Read> {
     .argument::<PathBuf>("DIR")
     .fallback(PathBuf::from("asset/read-cache"));
   let force = short('f').long("force").help("Write every JSON again").switch();
+  let version = long("version")
+    .help("With --resource, read the earlier version with this SHA-256 of each named file, from the source cache's history")
+    .argument::<String>("SHA256")
+    .optional();
   construct!(
     command,
     target,
@@ -56,6 +61,7 @@ pub fn parser() -> impl Parser<Read> {
     vanilla_cache_dir,
     output_dir,
     force,
+    version,
     files
   )
   .map(
@@ -69,6 +75,7 @@ pub fn parser() -> impl Parser<Read> {
       vanilla_cache_dir,
       output_dir,
       force,
+      version,
       files,
     )| Read {
       target,
@@ -80,6 +87,7 @@ pub fn parser() -> impl Parser<Read> {
       gamebuild,
       output_dir,
       force,
+      version,
     },
   )
 }
@@ -129,6 +137,10 @@ mod tests {
     assert_eq!(read.files, ["a.ymap", "b.ymap"]);
 
     assert!(parser().to_options().run_inner(&["--read", "--resource", "a", "--vanilla"]).is_err());
+
+    let read = parse(&["--read", "--resource", "alpha", "--version", "abc", "a.ymap"]);
+    assert_eq!(read.version.as_deref(), Some("abc"));
+    assert!(parse(&["--read", "a.ymap"]).version.is_none());
 
     let read = parse(&["--read", "--all", "-f"]);
     assert_eq!(read.target, ReadTarget::All);
