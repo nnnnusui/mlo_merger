@@ -45,12 +45,10 @@ impl MergeYmap {
             mod_info.mod_ymap_path.display()
           )
         })?;
-        let fingerprint =
-          |file: &crate::core::format::ymap::compare::YmapComparisonFile| OverwriteFingerprint {
-            sha256: file.sha256.clone(),
-            size: file.size,
-          };
-        let fingerprints = (fingerprint(&document.source), fingerprint(&document.vanilla));
+        let fingerprints = (
+          OverwriteFingerprint::from(&document.source),
+          OverwriteFingerprint::from(&document.vanilla),
+        );
         (document.diffs, Some(fingerprints))
       }
       // Sources outside a source cache are compared here, against the latest vanilla.

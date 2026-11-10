@@ -21,9 +21,9 @@
 //! again. Only source changes are handled; an overwrite whose baseline changed is listed in
 //! `warnings.json` as before.
 
-use super::{Result, normalize, resource_name};
+use super::Result;
 use crate::common::json::{read_json, write_json};
-use crate::core::format::ymap::compare::{YmapComparisonDiff, YmapComparisonFile, YmapDiffFields};
+use crate::core::format::ymap::compare::{YmapComparisonDiff, YmapDiffFields};
 use crate::core::overwrite::{OverwriteFingerprint, Overwrites, StreamFileOverwrite, skip_diffs};
 use crate::core::source_cache::{MergeInputs, history};
 use crate::platform::fs;
@@ -102,16 +102,7 @@ pub(super) fn review(
   inputs: &MergeInputs,
   overwrites: &Overwrites,
 ) -> Result<bool> {
-  let sources = inputs
-    .ymap
-    .iter()
-    .map(|source| {
-      (
-        (resource_name(&source.resource).to_ascii_lowercase(), normalize(&source.stream_path)),
-        source,
-      )
-    })
-    .collect::<std::collections::BTreeMap<_, _>>();
+  let sources = inputs.ymap_by_key();
   let mut rewrote = false;
   for (resource, stream_path) in overwrites.keys() {
     let Some(overwrite) = overwrites.stream_file(resource, stream_path) else {
@@ -134,7 +125,7 @@ pub(super) fn review(
     if fs::is_file(&record) {
       continue;
     }
-    let name = resource_name(&source.resource);
+    let name = source.resource_name();
     let stored =
       |relative: String| fs::is_file(source_cache_dir.join(&relative)).then_some(relative);
     let before = SourceVersion {
@@ -230,10 +221,7 @@ fn rebase(
   overwrite: &StreamFileOverwrite,
   skip: &Value,
 ) -> Result<Rebased> {
-  let fingerprint = |file: &YmapComparisonFile| OverwriteFingerprint {
-    sha256: file.sha256.clone(),
-    size: file.size,
-  };
+  let fingerprint = OverwriteFingerprint::from;
   let left_out = |document: &YmapComparisonDiff| -> Result<(Value, Value, Vec<String>)> {
     let mut kept = document.diffs.clone();
     let unmatched = skip_diffs(&mut kept, skip)?;

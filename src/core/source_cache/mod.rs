@@ -32,15 +32,34 @@ pub(crate) use check::check;
 pub use restore::restore_source_cache;
 pub(crate) use streams::read_stream_bytes;
 
-/// Where the source cache keeps the diff of a resource's YMAP, relative to its `diff` directory:
-/// `{resource directory name}/{stream-relative path}.diff.json`.
+/// The directory of the diff documents below the source cache.
+pub const DIFF_DIR: &str = "diff";
+
+/// Where the source cache keeps the diff document of the stream file at `stream_path` of the
+/// resource named `resource`, relative to the cache: `diff/{resource}/{stream_path}.diff.json`.
+pub fn diff_document_path(
+  resource: &str,
+  stream_path: &str,
+) -> PathBuf {
+  Path::new(DIFF_DIR).join(diff_name(resource, stream_path))
+}
+
+/// [`diff_document_path`] relative to the `diff` directory.
+fn diff_name(
+  resource: &str,
+  stream_path: &str,
+) -> PathBuf {
+  Path::new(resource).join(format!("{}.diff.json", stream_path.replace('\\', "/")))
+}
+
+/// Where the source cache keeps the diff of a resource's YMAP, relative to its `diff` directory,
+/// given the resource's source directory and the file's path below it.
 pub(crate) fn ymap_diff_path(
   resource_source: &Path,
   file_path: &str,
 ) -> Result<PathBuf> {
   let resource = resource_source.file_name().ok_or("Resource has no name")?;
-  let relative = layout::stream_relative_path(file_path)?;
-  Ok(Path::new(resource).join(format!("{relative}.diff.json")))
+  Ok(diff_name(&resource.to_string_lossy(), layout::stream_relative_path(file_path)?))
 }
 
 /// One source stream file selected for merge from the current source cache.
@@ -78,6 +97,27 @@ pub struct MergeSourceFile {
   pub propagated: bool,
 }
 
+/// The name of the resource with the ID `resource`, its path relative to the source root: its
+/// directory name, which overwrites and the cache's layout name it by.
+pub fn resource_name(resource: &str) -> String {
+  Path::new(resource)
+    .file_name()
+    .map_or_else(|| resource.to_string(), |name| name.to_string_lossy().into_owned())
+}
+
+impl MergeSourceFile {
+  /// The name of the resource holding it; see [`resource_name`].
+  pub fn resource_name(&self) -> String {
+    resource_name(&self.resource)
+  }
+
+  /// Its resource name and stream path, as overwrites match them (see
+  /// [`crate::common::path::stream_key`]).
+  pub fn stream_key(&self) -> (String, String) {
+    (self.resource_name().to_ascii_lowercase(), crate::common::path::stream_key(&self.stream_path))
+  }
+}
+
 /// Source inputs and vanilla YMAP closure selected by the source-cache analysis.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct MergeInputs {
@@ -94,6 +134,13 @@ pub struct MergeInputs {
   /// The lowercase file names of the YMAPs resources add, which replace no vanilla YMAP and
   /// whose diff documents are taken against an empty YMAP ([`empty_baseline_file`]).
   pub added_ymaps: BTreeSet<String>,
+}
+
+impl MergeInputs {
+  /// The source YMAPs keyed by [`MergeSourceFile::stream_key`].
+  pub fn ymap_by_key(&self) -> BTreeMap<(String, String), &MergeSourceFile> {
+    self.ymap.iter().map(|source| (source.stream_key(), source)).collect()
+  }
 }
 
 /// `path` with `/` separators, as relative paths are recorded.
@@ -404,7 +451,7 @@ pub fn load_merge_inputs(
         let added = added::is_added_ymap(&extension, &file)
           && file.cached_path.is_some()
           && fs::is_file(
-            cache_dir.join("diff").join(ymap_diff_path(&resource.source, &file.path)?),
+            cache_dir.join(DIFF_DIR).join(ymap_diff_path(&resource.source, &file.path)?),
           );
         if file.vanilla.is_none() && !added {
           continue;
@@ -438,7 +485,7 @@ pub fn load_merge_inputs(
           let diff_path = (extension == ".ymap")
             .then(|| ymap_diff_path(&resource.source, &file.path))
             .transpose()?
-            .map(|path| cache_dir.join("diff").join(path));
+            .map(|path| cache_dir.join(DIFF_DIR).join(path));
           selected.push(MergeSourceFile {
             resource: resource_id.clone(),
             path: source_path,

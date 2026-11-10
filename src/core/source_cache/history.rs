@@ -55,7 +55,7 @@ pub(super) fn archive(
   } else {
     crate::common::filesystem::move_file(cached, &version)?;
   }
-  let diff = output.join("diff").join(resource).join(format!("{stream_path}.diff.json"));
+  let diff = output.join(super::diff_document_path(resource, stream_path));
   let describes = crate::common::json::read_json::<YmapComparisonDiff>(&diff)
     .is_ok_and(|document| document.source.sha256 == sha256);
   if describes {

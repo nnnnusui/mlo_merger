@@ -66,8 +66,7 @@ impl IncrementalMerge<'_> {
     if source.propagated || !source.file_name.to_ascii_lowercase().ends_with(".ymap") {
       return None;
     }
-    let resource = Path::new(&source.resource).file_name()?.to_str()?;
-    self.overwrites.stream_file(resource, &source.stream_path)
+    self.overwrites.for_source(source)
   }
 
   /// The overwrite of the latest vanilla file `name` (lowercase), if it is a merged YMAP.

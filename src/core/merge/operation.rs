@@ -96,11 +96,9 @@ impl Merge {
     warnings.log();
     let added = super::added::plans(&added_files);
     // A stream file an overwrite ignores is left out of the merge whole.
-    merge_inputs.ymap.retain(|source| {
-      stream_file_key(source).is_none_or(|(resource, stream_path)| {
-        !overwrites.stream_file(&resource, &stream_path).is_some_and(|overwrite| overwrite.ignore)
-      })
-    });
+    merge_inputs
+      .ymap
+      .retain(|source| !overwrites.for_source(source).is_some_and(|overwrite| overwrite.ignore));
     let latest_files = dispatch_vanilla_stream_files(&vanilla_cache_dir.join("latest"))?;
     let output_dir = prepare_output_path(&self.output_dir)?;
     let staging = Staging(create_staging_directory(&output_dir)?);
@@ -140,14 +138,6 @@ pub struct MergeSummary {
   /// What the overwrites leave undecided or no longer match, whether or not this run merged
   /// those files again.
   pub warnings: OverwriteWarnings,
-}
-
-/// A source YMAP's resource name and stream path, in lowercase, as overwrites name them.
-fn stream_file_key(
-  source: &crate::core::source_cache::MergeSourceFile
-) -> Option<(String, String)> {
-  let resource = Path::new(&source.resource).file_name()?.to_str()?.to_ascii_lowercase();
-  Some((resource, source.stream_path.replace('\\', "/").to_ascii_lowercase()))
 }
 
 fn dispatch_vanilla_stream_files(latest_dir: &Path) -> Result<VanillaStreamFiles> {

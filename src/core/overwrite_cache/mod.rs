@@ -19,8 +19,9 @@
 //! whose resource overwrite sets `ignore` is left out.
 
 use crate::common::json::{read_json, write_json};
+use crate::common::path::stream_key;
 use crate::core::config::matching;
-use crate::core::format::ymap::compare::{YmapComparisonDiff, YmapComparisonFile, YmapDiffFields};
+use crate::core::format::ymap::compare::{YmapComparisonDiff, YmapDiffFields};
 use crate::core::overwrite::{OverwriteFingerprint, Overwrites};
 use crate::core::source_cache::{MergeInputs, MergeSourceFile};
 use crate::platform::fs;
@@ -242,19 +243,17 @@ fn resolve(
   let mut files = BTreeMap::new();
   for (name, mut sources) in shippers {
     // Resource names are unique, so the last by lowercase name is the last loaded.
-    sources.sort_by_key(|source| resource_name(&source.resource).to_ascii_lowercase());
-    let shipped_by = sources.iter().map(|source| resource_name(&source.resource)).collect();
+    sources.sort_by_key(|source| source.resource_name().to_ascii_lowercase());
+    let shipped_by = sources.iter().map(|source| source.resource_name()).collect();
     let merged = sources
       .iter()
       .rev()
       .filter(|source| {
-        let ignored = overwrites
-          .stream_file(&resource_name(&source.resource), &source.stream_path)
-          .is_some_and(|overwrite| overwrite.ignore);
+        let ignored = overwrites.for_source(source).is_some_and(|overwrite| overwrite.ignore);
         if ignored {
           tracing::info!(
             "Added YMAP {name} of {} is ignored by its overwrite",
-            resource_name(&source.resource)
+            source.resource_name()
           );
         }
         !ignored
@@ -287,35 +286,28 @@ fn record_left_out(
   inputs: &MergeInputs,
   overwrites: &Overwrites,
 ) -> Result<()> {
-  let by_key = inputs
-    .ymap
-    .iter()
-    .map(|source| ((source.resource.as_str(), normalize(&source.stream_path)), source))
-    .collect::<BTreeMap<_, _>>();
+  let by_key = inputs.ymap_by_key();
   let tolerances = matching::current();
   for (name, file) in files.iter_mut().filter(|(_, file)| file.sources.len() > 1) {
     let mut full = Vec::new();
     let mut kept = Vec::new();
     for entry in &file.sources {
       let source = by_key
-        .get(&(entry.resource.as_str(), normalize(&entry.stream_path)))
+        .get(&(
+          crate::core::source_cache::resource_name(&entry.resource).to_ascii_lowercase(),
+          stream_key(&entry.stream_path),
+        ))
         .ok_or_else(|| format!("Source {} of added YMAP {name} is not cached", entry.resource))?;
       let path = source.diff_path.as_ref().ok_or_else(|| {
         format!("Source {} of added YMAP {name} has no diff document", entry.resource)
       })?;
       let document: YmapComparisonDiff = read_json(path)?;
       let mut diffs = document.diffs.clone();
-      if let Some(overwrite) =
-        overwrites.stream_file(&resource_name(&source.resource), &source.stream_path)
-      {
-        let fingerprint = |file: &YmapComparisonFile| OverwriteFingerprint {
-          sha256: file.sha256.clone(),
-          size: file.size,
-        };
+      if let Some(overwrite) = overwrites.for_source(source) {
         overwrite.apply(
           &mut diffs,
-          &fingerprint(&document.source),
-          &fingerprint(&document.vanilla),
+          &OverwriteFingerprint::from(&document.source),
+          &OverwriteFingerprint::from(&document.vanilla),
           name,
         )?;
       }
@@ -409,17 +401,6 @@ fn inputs_digest(
     }
   }
   Ok(hex::encode(digest.finalize()))
-}
-
-fn normalize(stream_path: &str) -> String {
-  stream_path.replace('\\', "/").to_ascii_lowercase()
-}
-
-/// The name of the resource with ID `resource`: its directory name.
-fn resource_name(resource: &str) -> String {
-  Path::new(resource)
-    .file_name()
-    .map_or_else(|| resource.to_string(), |name| name.to_string_lossy().into_owned())
 }
 
 #[cfg(test)]

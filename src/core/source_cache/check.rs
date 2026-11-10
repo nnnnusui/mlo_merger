@@ -52,7 +52,7 @@ pub(crate) fn check(
         }
         let added = super::added::is_added_ymap(format, file) && file.cached_path.is_some();
         if format == ".ymap" && (file.vanilla.is_some() || added) {
-          let diff = Path::new("diff").join(ymap_diff_path(&resource.source, &file.path)?);
+          let diff = Path::new(super::DIFF_DIR).join(ymap_diff_path(&resource.source, &file.path)?);
           diffs.insert(diff.to_string_lossy().replace('\\', "/"));
         }
       }

@@ -315,8 +315,10 @@ impl Propagation<'_> {
         if file.vanilla.as_ref().is_none_or(|vanilla| vanilla.content_matches) {
           continue;
         }
-        let diff_path =
-          self.output.join("diff").join(ymap_diff_path(&resource.source, &file.path)?);
+        let diff_path = self
+          .output
+          .join(crate::core::source_cache::DIFF_DIR)
+          .join(ymap_diff_path(&resource.source, &file.path)?);
         let Ok(document) = crate::common::json::read_json::<YmapComparisonDiff>(&diff_path) else {
           continue;
         };

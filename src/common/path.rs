@@ -29,6 +29,12 @@ pub(crate) fn ensure_safe_path(
   }
   Ok(())
 }
+/// The key of a path below a resource's `stream` directory, as overwrites and caches match
+/// stream files: forward slashes, no leading slash, lowercase.
+pub(crate) fn stream_key(stream_path: &str) -> String {
+  stream_path.replace('\\', "/").trim_start_matches('/').to_ascii_lowercase()
+}
+
 pub(crate) fn absolute_path(path: &Path) -> std::io::Result<PathBuf> {
   let absolute =
     if path.is_absolute() { path.to_path_buf() } else { process::current_dir()?.join(path) };

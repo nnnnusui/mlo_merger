@@ -1,13 +1,13 @@
 //! The overwrites that do not take effect (`warnings.json`).
 
-use super::{Result, normalize, resource_name};
+use super::Result;
 use crate::core::overwrite::{
   IgnoredOverwrite, IgnoredOverwriteReason, OverwriteFingerprint, Overwrites,
 };
 use crate::core::source_cache::MergeInputs;
 use crate::platform::fs;
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 /// What does not take effect of the overwrites, against the current source and vanilla caches.
@@ -58,36 +58,20 @@ pub fn collect(
 ) -> Result<OverwriteWarnings> {
   let mut warnings = OverwriteWarnings::default();
   let latest = latest_ymaps(&vanilla_cache_dir.join("latest"))?;
-  let key = |resource: &str, stream_path: &str| {
-    (resource_name(resource).to_ascii_lowercase(), normalize(stream_path))
-  };
-  let shipped = inputs
-    .ymap
-    .iter()
-    .map(|source| key(&source.resource, &source.stream_path))
-    .collect::<BTreeSet<_>>();
-  let sources = inputs
-    .ymap
-    .iter()
-    .map(|source| (key(&source.resource, &source.stream_path), source))
-    .collect::<BTreeMap<_, _>>();
+  let sources = inputs.ymap_by_key();
   for (resource, stream_path) in overwrites.keys() {
     let Some(overwrite) = overwrites.stream_file(resource, stream_path) else {
       continue;
     };
     let file_key = (resource.to_string(), stream_path.to_string());
     // One leaving out a stream file applies while a resource ships it.
-    if overwrite.ignore && shipped.contains(&file_key) {
+    if overwrite.ignore && sources.contains_key(&file_key) {
       continue;
     }
     let source = sources.get(&file_key);
     let vanilla = match source {
       Some(source) if inputs.added_ymaps.contains(&source.file_name.to_ascii_lowercase()) => {
-        let empty = crate::core::source_cache::empty_baseline_file()?;
-        Some(OverwriteFingerprint {
-          sha256: empty.sha256,
-          size: empty.size,
-        })
+        Some(OverwriteFingerprint::empty_baseline()?)
       }
       Some(source) => latest
         .get(&source.file_name.to_ascii_lowercase())

@@ -23,14 +23,15 @@ every test passing.
 
 ### 2. Shared helpers
 
-- [ ] `MergeSourceFile::resource_name()` for the resource directory name, and
+- [x] `MergeSourceFile::resource_name()` for the resource directory name, and
   `Overwrites::for_source(&MergeSourceFile)` for its overwrite, replacing the lookups in the
-  merge, the incremental merge, the overwrite cache, its warnings and its source updates.
-- [ ] One stream-path key (`common::path`), replacing the three normalizations that differ on a
+  merge, the incremental merge, the overwrite cache, its warnings and its source updates;
+  `MergeInputs::ymap_by_key()` for finding an overwrite's source.
+- [x] One stream-path key (`common::path`), replacing the three normalizations that differ on a
   leading `/`.
-- [ ] `From<&YmapComparisonFile> for OverwriteFingerprint`, and the empty baseline's fingerprint
+- [x] `From<&YmapComparisonFile> for OverwriteFingerprint`, and the empty baseline's fingerprint
   from the source cache, replacing the conversions written out in place.
-- [ ] `source_cache::diff_document_path`, replacing the `diff/...` paths built by hand,
+- [x] `source_cache::diff_document_path`, replacing the `diff/...` paths built by hand,
   history's included.
 
 ### 3. The merge requires the overwrite cache

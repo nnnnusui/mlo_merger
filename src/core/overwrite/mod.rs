@@ -107,7 +107,21 @@ pub struct OverwriteFingerprint {
   pub size: u64,
 }
 
+impl From<&crate::core::format::ymap::compare::YmapComparisonFile> for OverwriteFingerprint {
+  fn from(file: &crate::core::format::ymap::compare::YmapComparisonFile) -> Self {
+    Self {
+      sha256: file.sha256.clone(),
+      size: file.size,
+    }
+  }
+}
+
 impl OverwriteFingerprint {
+  /// The empty YMAP the diffs of the YMAPs resources add are taken against.
+  pub fn empty_baseline() -> Result<Self> {
+    Ok(Self::from(&crate::core::source_cache::empty_baseline_file()?))
+  }
+
   /// The content of the file at `path`, after resolving links as latest vanilla files are.
   pub fn read(path: &Path) -> Result<Self> {
     let fingerprint =
@@ -200,6 +214,14 @@ impl Overwrites {
     stream_path: &str,
   ) -> Option<&StreamFileOverwrite> {
     self.resources.get(&(resource.to_ascii_lowercase(), normalize(stream_path)))
+  }
+
+  /// The overwrite of `source`, a source stream file the source cache lists.
+  pub fn for_source(
+    &self,
+    source: &crate::core::source_cache::MergeSourceFile,
+  ) -> Option<&StreamFileOverwrite> {
+    self.resources.get(&source.stream_key())
   }
 
   /// The file the overwrite of that stream file was read from.
@@ -297,7 +319,7 @@ fn load_resources(directory: &Path) -> Result<ResourceOverwrites> {
 }
 
 fn normalize(stream_path: &str) -> String {
-  stream_path.replace('\\', "/").trim_start_matches('/').to_ascii_lowercase()
+  crate::common::path::stream_key(stream_path)
 }
 
 /// The TypeScript type of [`StreamFileOverwrite::skip`], written out by
