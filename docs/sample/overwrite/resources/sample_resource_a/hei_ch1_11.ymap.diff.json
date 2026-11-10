@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "source": {
     "sha256": "51733c11529b45028cb9854e41d81fc52ede13de6d81f5733c6c171879ec0719",
     "size": 4236
@@ -12,7 +12,7 @@
     "box_occluders": [
       {
         "Removed": {
-          "index": 0
+          "base_index": 0
         }
       }
     ],
@@ -20,7 +20,7 @@
     "entities": [
       {
         "Modified": {
-          "before_index": 0,
+          "base_index": 0,
           "changes": {
             "position": true
           }
@@ -30,12 +30,12 @@
     "occlude_models": [
       {
         "Modified": {
-          "before_index": 0,
+          "base_index": 0,
           "changes": {
             "triangles": [
               {
                 "Removed": {
-                  "index": 10
+                  "base_index": 10
                 }
               }
             ]

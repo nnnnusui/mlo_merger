@@ -244,11 +244,15 @@ asset/source-cache/diff/{resource}/{stream_path}.diff.json
   `resources/{resource}/{stream_path}` and `latest/ymap/{file_name}`. For an added YMAP,
   `vanilla.path` is empty: it is compared with an empty YMAP.
 - Array differences are `Added`, `Removed`, `Modified` (and `Replaced` for non-entity arrays).
-  `Removed.index` and `Modified.before_index` index the vanilla model, and
-  `Modified.after_index` indexes the source model. Added entities carry their whole
-  entity, including its `guid`.
-- An added YMAP's diff lists each of its items as `Added`, so an overwrite leaves out an
-  entity with `{ "Added": { "entity": { "guid": ... } } }`. When several resources add a
+  `base_index` indexes the baseline (vanilla) model and `target_index` the source model:
+  `Removed` and `Replaced` name their item by `base_index`, `Modified` by both, and `Added`
+  by `target_index`, with `anchor_base_index`, the baseline item it is placed after (`null`
+  when first). Added entities carry their whole entity, including its `guid`.
+- Select an addition by its `target_index`, which names exactly one item of the source
+  file: `{ "Added": { "target_index": 12 } }`. A GUID, as in
+  `{ "Added": { "entity": { "guid": ... } } }`, selects every addition with that GUID, so
+  it is not unique when entities share one or have none (`0`).
+- An added YMAP's diff lists each of its items as `Added`. When several resources add a
   YMAP of that name, only the merged resources' overwrites apply; the others' are listed
   as `missing_source`.
 - YMAPs without a diff document, such as those whose diff could not be taken, cannot be
@@ -262,15 +266,15 @@ asset/overwrite/resources/{resource}/{stream_path}.diff.json
 
 ```json
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "source":  { "sha256": "<diff document source.sha256>",  "size": 5638 },
   "vanilla": { "sha256": "<diff document vanilla.sha256>", "size": 5675 },
   "skip": {
     "entities": [
-      { "Modified": { "before_index": 0, "changes": { "position": true } } },
-      { "Added": { "entity": { "guid": 1513947137 } } }
+      { "Modified": { "base_index": 0, "changes": { "position": true } } },
+      { "Added": { "target_index": 12 } }
     ],
-    "box_occluders": [{ "Removed": { "index": 0 } }]
+    "box_occluders": [{ "Removed": { "base_index": 0 } }]
   }
 }
 ```
@@ -278,7 +282,7 @@ asset/overwrite/resources/{resource}/{stream_path}.diff.json
 - There is one document per stream file, at the same relative path as its diff document
   (`asset/source-cache/diff/{resource}/{stream_path}.diff.json`, or the overwrite cache's).
   Resource names and stream paths are matched case-insensitively.
-- `{ "schema_version": 1, "ignore": true }` leaves the stream file out of the merge whole,
+- `{ "schema_version": 2, "ignore": true }` leaves the stream file out of the merge whole,
   whatever it holds; it needs no fingerprints. For a YMAP several resources add, the file is
   also left out of the choice of which one wins. It does not keep the file from being
   deployed when nothing merged takes its name.
@@ -301,17 +305,17 @@ asset/overwrite/vanilla/latest/ymap/{file_name}.diff.json
 
 ```json
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "vanilla": { "sha256": "<latest vanilla file sha256>", "size": 5675 },
   "diffs": {
-    "entities": [{ "Removed": { "index": 3 } }]
+    "entities": [{ "Removed": { "base_index": 3 } }]
   }
 }
 ```
 
 - `diffs` is written in the same shape as a diff document's `diffs`, against the latest vanilla
-  model (`--read` returns it with its fingerprint): `Removed.index` and `Modified.before_index`
-  index the vanilla model.
+  model (`--read` returns it with its fingerprint): `base_index` indexes the vanilla model.
+  `target_index` names no file here and is left out.
 - It is merged as the last source, after every resource's diff with its resource overwrite
   applied. The merge policy still decides: a removal wins, and otherwise a resource's earlier
   change to the same item wins over the overwrite.
@@ -391,12 +395,17 @@ When only the resource's file changed, the source cache keeps the version the ov
 written against (`asset/source-cache/history/{resource}/{stream_path}/{sha256}.*`), and
 building the overwrite cache compares that version's diff document with the current one:
 
+- Selectors naming a `target_index` are first pointed at the same item of the current
+  version: the modification of the same vanilla item, or the addition equal to the earlier
+  one, else of the entity with the same non-zero GUID, else of the one with the same type,
+  archetype and LOD level at the same position (within the `ymap` matching tolerance). A
+  selector with no single such item is kept as it is.
 - If every difference the overwrite left out is still left out by the same selector, or the
   resource no longer makes it, and the selectors leave out nothing new, the overwrite is
   **rewritten in `asset/overwrite`** against the current version, without the selectors that
   match nothing any more, and applies again.
-- Otherwise, as when an entity with the same GUID or the change to the same vanilla item
-  differs, it is left as it is and listed in `ignored_overwrites`, to be written again.
+- Otherwise, as when an added entity with the same GUID or placed alike, or the change to
+  the same vanilla item, differs, it is left as it is and listed in `ignored_overwrites`, to be written again.
 - Either way `asset/overwrite-cache/source_updates/{resource}/{stream_path}/{sha256}.json`
   (`SourceUpdate`), named after the version it was written against, records it: the
   overwrite as it was (`overwrite`), the differences it left out of that version's diff
@@ -516,9 +525,9 @@ export interface InspectedFile {
   name: string;
   resource: string;
   streamPath: string;
-  /** The source model; `after_index` points into its arrays. */
+  /** The source model; `target_index` points into its arrays. */
   model: Ymap;
-  /** The latest vanilla model; `index` and `before_index` point into its arrays. */
+  /** The latest vanilla model; `base_index` points into its arrays. */
   vanilla: Ymap | null;
   diff: YmapComparisonDiff | null;
 }
@@ -640,15 +649,15 @@ import type { InspectedFile, SkipRequest } from "../shared/types";
 /** The entity a difference describes: added, removed from vanilla, or modified in the source. */
 function entityOf(file: InspectedFile, change: YmapEntityDiff): YmapEntity | undefined {
   if ("Added" in change) return change.Added.entity;
-  if ("Removed" in change) return file.vanilla?.entities[change.Removed.index];
-  return file.model.entities[change.Modified.after_index];
+  if ("Removed" in change) return file.vanilla?.entities[change.Removed.base_index];
+  return file.model.entities[change.Modified.target_index];
 }
 
 /** A selector leaving out one entity difference as a whole. */
 function entitySelector(change: YmapEntityDiff): YmapDiffSkip {
-  if ("Added" in change) return { entities: [{ Added: { entity: { guid: change.Added.entity.guid } } }] };
-  if ("Removed" in change) return { entities: [{ Removed: { index: change.Removed.index } }] };
-  return { entities: [{ Modified: { before_index: change.Modified.before_index } }] };
+  if ("Added" in change) return { entities: [{ Added: { target_index: change.Added.target_index } }] };
+  if ("Removed" in change) return { entities: [{ Removed: { base_index: change.Removed.base_index } }] };
+  return { entities: [{ Modified: { base_index: change.Modified.base_index } }] };
 }
 
 window.addEventListener("message", ({ data }: MessageEvent<{ type: string; files: InspectedFile[] }>) => {

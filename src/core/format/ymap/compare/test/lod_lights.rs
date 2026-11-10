@@ -27,8 +27,8 @@ fn lod_lights_compare_as_a_multiset_without_parent_positions() {
     json(&vanilla, &modded),
     json!({
       "lod_lights": [
-        { "Removed": { "index": 0 } },
-        { "Added": { "after": 2, "item": serde_json::to_value(light(9.0)).unwrap() } },
+        { "Removed": { "base_index": 0 } },
+        { "Added": { "anchor_base_index": 2, "target_index": 2, "item": serde_json::to_value(light(9.0)).unwrap() } },
       ],
     })
   );
@@ -51,18 +51,19 @@ fn compares_lights_as_a_multiset() {
     vanilla.lod_lights.diff(&modded.lod_lights, &()).unwrap(),
     vec![
       YmapLodLightDiff::Removed {
-        index: 0,
+        base_index: 0,
         implied: false,
         reason: None,
       },
       YmapLodLightDiff::Removed {
-        index: 3,
+        base_index: 3,
         implied: false,
         reason: None,
       },
       // The edited light takes the place of the first light the source lacks after it.
       YmapLodLightDiff::Replaced {
-        index: 2,
+        base_index: 2,
+        target_index: Some(1),
         item: light(9.0),
       },
     ]

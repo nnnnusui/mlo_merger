@@ -87,11 +87,7 @@ fn skip_item(
     && let Some((variant, Value::Object(fields))) = selector.iter().next()
     && let Some(Value::Object(payload)) = variants.get_mut(variant)
   {
-    let matches = fields
-      .iter()
-      .filter(|(name, _)| *name != "changes")
-      .all(|(name, expected)| payload.get(name).is_some_and(|actual| matches(actual, expected)));
-    if !matches {
+    if !payload_matches(payload, fields) {
       return Ok(None);
     }
     let Some(changes) = fields.get("changes") else {
@@ -105,6 +101,33 @@ fn skip_item(
     return Ok(Some(skip_value(target, changes, &path, unmatched)?));
   }
   Ok(matches(item, selector).then_some(true))
+}
+
+/// Whether array selector `selector` selects `item`, an item of a diff array, leaving aside the
+/// `changes` it names within the item.
+pub fn selects(
+  item: &Value,
+  selector: &Value,
+) -> bool {
+  if let (Value::Object(selector), Value::Object(variants)) = (selector, item)
+    && selector.len() == 1
+    && let Some((variant, Value::Object(fields))) = selector.iter().next()
+    && let Some(Value::Object(payload)) = variants.get(variant)
+  {
+    return payload_matches(payload, fields);
+  }
+  matches(item, selector)
+}
+
+/// Whether an item diff's `payload` has every field a variant selector writes, but `changes`.
+fn payload_matches(
+  payload: &Map<String, Value>,
+  fields: &Map<String, Value>,
+) -> bool {
+  fields
+    .iter()
+    .filter(|(name, _)| *name != "changes")
+    .all(|(name, expected)| payload.get(name).is_some_and(|actual| matches(actual, expected)))
 }
 
 /// Whether `actual` has every field `expected` writes, with equal values.

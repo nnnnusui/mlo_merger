@@ -30,7 +30,7 @@ pub struct VanillaOverwrite {
 
 impl VanillaOverwrite {
   /// The current [`Self::schema_version`].
-  pub const SCHEMA_VERSION: u32 = 1;
+  pub const SCHEMA_VERSION: u32 = 2;
 
   /// A digest of this overwrite, for telling whether a merge used the current one.
   pub fn digest(&self) -> String {

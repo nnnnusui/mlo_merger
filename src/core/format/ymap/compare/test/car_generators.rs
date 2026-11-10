@@ -41,12 +41,12 @@ fn car_generators_pair_by_rounded_position() {
       "car_generators": [
         {
           "Modified": {
-            "before_index": 0,
-            "after_index": 0,
+            "base_index": 0,
+            "target_index": 0,
             "changes": { "orient_y": 0.5, "car_model": "taxi" },
           },
         },
-        { "Removed": { "index": 1 } },
+        { "Removed": { "base_index": 1 } },
       ],
     })
   );
@@ -60,7 +60,7 @@ fn car_generator_pairing_follows_the_configured_decimals() {
   assert!(matches!(
     diff(&vanilla, &modded).car_generators.unwrap().as_slice(),
     [YmapCarGeneratorDiff::Replaced {
-      index: 0,
+      base_index: 0,
       ..
     }]
   ));
@@ -72,7 +72,7 @@ fn car_generator_pairing_follows_the_configured_decimals() {
     serde_json::to_value(diff_with(&vanilla, &modded, &coarse)).unwrap(),
     json!({
       "car_generators": [{
-        "Modified": { "before_index": 0, "after_index": 0, "changes": { "position": { "x": 10.25 } } },
+        "Modified": { "base_index": 0, "target_index": 0, "changes": { "position": { "x": 10.25 } } },
       }],
     })
   );
@@ -97,7 +97,8 @@ fn pairs_by_rounded_position_and_thresholds_floats() {
   assert_eq!(
     diffs,
     vec![YmapCarGeneratorDiff::Replaced {
-      index: 1,
+      base_index: 1,
+      target_index: Some(1),
       item: modded.car_generators[1].clone(),
     },]
   );
@@ -109,8 +110,8 @@ fn pairs_by_rounded_position_and_thresholds_floats() {
   assert_eq!(
     vanilla.car_generators.diff(&modded.car_generators, &coarse).unwrap(),
     vec![YmapCarGeneratorDiff::Modified {
-      before_index: 1,
-      after_index: 1,
+      base_index: 1,
+      target_index: 1,
       changes: YmapCarGeneratorFieldDiff {
         position: Some(PositionDiff {
           x: Some(20.01),

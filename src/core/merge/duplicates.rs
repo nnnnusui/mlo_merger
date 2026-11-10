@@ -137,12 +137,13 @@ mod tests {
     let guid = entity.guid;
     entity.guid = 1;
     let added = YmapEntityDiff::Added {
-      after: None,
+      anchor_base_index: None,
+      target_index: None,
       entity,
       parent: crate::core::format::ymap::compare::EntityParent::None,
     };
     let removed = YmapEntityDiff::Removed {
-      index: 0,
+      base_index: 0,
       reason: None,
     };
     let source = |resource: &str, change| Contribution {

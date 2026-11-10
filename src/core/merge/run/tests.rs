@@ -466,7 +466,7 @@ fn propagated_changes_merge_into_vanilla_ymaps_and_reject_stale_documents() {
       },
       origins: Vec::new(),
       diffs: serde_json::from_value(serde_json::json!({ "entities": [{ "Removed": {
-        "index": index, "reason": "propagated from resource: old_parent.ymap entities[1]",
+        "base_index": index, "reason": "propagated from resource: old_parent.ymap entities[1]",
       }}]}))
       .unwrap(),
     };

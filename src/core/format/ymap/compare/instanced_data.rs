@@ -64,7 +64,11 @@ pub struct YmapGrassBatchFieldDiff {
 #[cfg_attr(feature = "typescript", derive(specta::Type))]
 pub struct YmapAddedGrassInstance {
   /// The vanilla instance it follows, or `None` when it comes first.
-  pub after: Option<usize>,
+  pub anchor_base_index: Option<usize>,
+  /// Index of the instance within the modded batch; absent as for [`ItemDiff::Added`].
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  #[cfg_attr(feature = "typescript", specta(optional))]
+  pub target_index: Option<usize>,
   pub world_position: Position,
   pub instance: GrassInstance,
 }
@@ -74,9 +78,9 @@ pub struct YmapAddedGrassInstance {
 #[cfg_attr(feature = "typescript", derive(specta::Type))]
 pub struct YmapModifiedGrassInstance {
   /// Index of the instance within the vanilla batch.
-  pub before_index: usize,
+  pub base_index: usize,
   /// Index of the instance within the modded batch.
-  pub after_index: usize,
+  pub target_index: usize,
   pub world_position: Position,
   pub changes: YmapGrassInstanceFieldDiff,
 }
@@ -157,17 +161,18 @@ pub fn replace_inexact_grass_batches(
 ) {
   for diff in diffs {
     if let ItemDiff::Modified {
-      before_index,
-      after_index,
+      base_index,
+      target_index,
       changes,
       ..
     } = diff
     {
-      let mut batch = before[*before_index].clone();
-      if changes.apply_to(&mut batch).is_err() || batch != after[*after_index] {
+      let mut batch = before[*base_index].clone();
+      if changes.apply_to(&mut batch).is_err() || batch != after[*target_index] {
         *diff = ItemDiff::Replaced {
-          index: *before_index,
-          item: after[*after_index].clone(),
+          base_index: *base_index,
+          target_index: Some(*target_index),
+          item: after[*target_index].clone(),
         };
       }
     }
@@ -520,16 +525,15 @@ impl YmapGrassBatchFieldDiff {
       }
       batch.batch_aabb = bounds.clone();
     }
-    let removed = removed_instances.iter().map(|&index| ItemChange::Removed {
-      index,
+    let removed = removed_instances.iter().map(|&base_index| ItemChange::Removed {
+      base_index,
     });
     let added = added_instances.iter().map(|added| ItemChange::Added {
-      after: added.after,
+      anchor_base_index: added.anchor_base_index,
       item: &added.instance,
     });
     let modified = modified_instances.iter().map(|modified| ItemChange::Modified {
-      before_index: modified.before_index,
-      after_index: modified.after_index,
+      base_index: modified.base_index,
       changes: &modified.changes,
     });
     batch.instances =
@@ -556,8 +560,8 @@ impl YmapGrassBatchFieldDiff {
     let mut modified_instances = modified
       .into_iter()
       .map(|(from, to)| YmapModifiedGrassInstance {
-        before_index: from,
-        after_index: to,
+        base_index: from,
+        target_index: to,
         world_position: after_placed[to].position.clone(),
         // Pairs found by position alone may still share attributes.
         changes: before_placed[from]
@@ -566,14 +570,15 @@ impl YmapGrassBatchFieldDiff {
           .unwrap_or_default(),
       })
       .collect::<Vec<_>>();
-    modified_instances.sort_by_key(|it| it.before_index);
+    modified_instances.sort_by_key(|it| it.base_index);
     Self {
       batch_aabb: (before.batch_aabb != after.batch_aabb).then(|| after.batch_aabb.clone()),
       removed_instances: (0..before_placed.len()).filter(|index| !before_kept[*index]).collect(),
       added_instances: (0..after_placed.len())
         .filter(|index| !after_kept[*index])
         .map(|index| YmapAddedGrassInstance {
-          after: anchors[index],
+          anchor_base_index: anchors[index],
+          target_index: Some(index),
           world_position: after_placed[index].position.clone(),
           instance: after.instances[index].clone(),
         })

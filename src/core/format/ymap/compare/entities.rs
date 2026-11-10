@@ -25,16 +25,21 @@ use crate::core::format::ymap::model::{YmapEntity, ymap_entity::YmapEntityFieldD
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "typescript", derive(specta::Type))]
 pub enum YmapEntityDiff {
-  /// Present only in the modded YMAP, right after vanilla entity `after`, or first when `None`,
-  /// with the parent it points at.
+  /// Present only in the modded YMAP, at `target_index` of its entities, with the parent it
+  /// points at; placed right after vanilla entity `anchor_base_index`, or first when `None`.
+  ///
+  /// `target_index` is absent as for [`ItemDiff::Added`].
   Added {
-    after: Option<usize>,
+    anchor_base_index: Option<usize>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "typescript", specta(optional))]
+    target_index: Option<usize>,
     entity: YmapEntity,
     parent: EntityParent,
   },
-  /// Present only in vanilla, at `index` of its entities.
+  /// Present only in vanilla, at `base_index` of its entities.
   Removed {
-    index: usize,
+    base_index: usize,
     /// Why the entity is removed, when the removal was not taken from the modded YMAP itself;
     /// see [`ItemDiff::Removed`].
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -42,10 +47,10 @@ pub enum YmapEntityDiff {
     reason: Option<String>,
   },
   /// Paired by GUID and differing beyond the tolerance, or pointing at another parent; the
-  /// entity is vanilla's at `before_index` and the modded YMAP's at `after_index`.
+  /// entity is vanilla's at `base_index` and the modded YMAP's at `target_index`.
   Modified {
-    before_index: usize,
-    after_index: usize,
+    base_index: usize,
+    target_index: usize,
     changes: YmapEntityFieldDiff,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[cfg_attr(feature = "typescript", specta(optional))]
@@ -114,7 +119,8 @@ pub fn diff(
   // By modded index, since additions after one vanilla entity are applied in diff order.
   let mut additions = Vec::new();
   let added = |index: usize| YmapEntityDiff::Added {
-    after: anchors[index],
+    anchor_base_index: anchors[index],
+    target_index: Some(index),
     entity: modded[index].clone(),
     parent: parent_of(&ctx.modded_parents, modded, index),
   };
@@ -122,7 +128,7 @@ pub fn diff(
     for (&before_index, &after_index) in vanilla_indices.iter().zip(&modded_indices) {
       if moved.contains(&before_index) {
         diffs.push(YmapEntityDiff::Removed {
-          index: before_index,
+          base_index: before_index,
           reason: None,
         });
         additions.push((after_index, added(after_index)));
@@ -134,8 +140,8 @@ pub fn diff(
         (parent != parent_of(&ctx.vanilla_parents, vanilla, before_index)).then_some(parent);
       if changes.is_some() || parent.is_some() {
         diffs.push(YmapEntityDiff::Modified {
-          before_index,
-          after_index,
+          base_index: before_index,
+          target_index: after_index,
           changes: changes.unwrap_or_default(),
           parent,
           reason: None,
@@ -143,8 +149,8 @@ pub fn diff(
       }
     }
     let paired = vanilla_indices.len().min(modded_indices.len());
-    diffs.extend(vanilla_indices[paired..].iter().map(|&index| YmapEntityDiff::Removed {
-      index,
+    diffs.extend(vanilla_indices[paired..].iter().map(|&base_index| YmapEntityDiff::Removed {
+      base_index,
       reason: None,
     }));
     additions.extend(modded_indices[paired..].iter().map(|&index| (index, added(index))));
@@ -276,43 +282,47 @@ pub(super) fn merge(
     .into_iter()
     .flat_map(|change| match change {
       ItemDiff::Added {
-        after,
+        anchor_base_index,
+        target_index,
         item: (entity, parent),
       } => vec![YmapEntityDiff::Added {
-        after,
+        anchor_base_index,
+        target_index,
         entity,
         parent,
       }],
       ItemDiff::Removed {
-        index,
+        base_index,
         ..
       } => vec![YmapEntityDiff::Removed {
-        index,
+        base_index,
         reason: None,
       }],
       // Entity diffs never replace, since entities pair by GUID; spelled out for completeness.
       ItemDiff::Replaced {
-        index,
+        base_index,
+        target_index,
         item: (entity, parent),
       } => vec![
         YmapEntityDiff::Removed {
-          index,
+          base_index,
           reason: None,
         },
         YmapEntityDiff::Added {
-          after: Some(index),
+          anchor_base_index: Some(base_index),
+          target_index,
           entity,
           parent,
         },
       ],
       ItemDiff::Modified {
-        before_index,
-        after_index,
+        base_index,
+        target_index,
         changes: (changes, parent),
         ..
       } => vec![YmapEntityDiff::Modified {
-        before_index,
-        after_index,
+        base_index,
+        target_index,
         changes,
         parent,
         reason: None,
@@ -334,13 +344,13 @@ impl YmapEntityDiff {
         ..
       } => return entity.guid,
       Self::Removed {
-        index,
+        base_index,
         ..
-      } => *index,
+      } => *base_index,
       Self::Modified {
-        before_index,
+        base_index,
         ..
-      } => *before_index,
+      } => *base_index,
     };
     vanilla.get(index).map_or(0, |entity| entity.guid)
   }
@@ -349,28 +359,27 @@ impl YmapEntityDiff {
   fn change(&self) -> Change {
     match self {
       Self::Added {
-        after,
+        anchor_base_index,
         entity,
         parent,
+        ..
       } => Change::Added {
-        after: *after,
+        anchor_base_index: *anchor_base_index,
         item: (entity.clone(), parent.clone()),
       },
       Self::Removed {
-        index,
+        base_index,
         ..
       } => Change::Removed {
-        index: *index,
+        base_index: *base_index,
       },
       Self::Modified {
-        before_index,
-        after_index,
+        base_index,
         changes,
         parent,
         ..
       } => Change::Modified {
-        before_index: *before_index,
-        after_index: *after_index,
+        base_index: *base_index,
         changes: (changes.clone(), parent.clone()),
       },
     }
@@ -380,15 +389,14 @@ impl YmapEntityDiff {
 /// An entity change owning its linked entity and changes, lent out as an [`ItemChange`].
 enum Change {
   Added {
-    after: Option<usize>,
+    anchor_base_index: Option<usize>,
     item: Linked,
   },
   Removed {
-    index: usize,
+    base_index: usize,
   },
   Modified {
-    before_index: usize,
-    after_index: usize,
+    base_index: usize,
     changes: EntityChanges,
   },
 }
@@ -397,24 +405,22 @@ impl Change {
   fn as_item(&self) -> ItemChange<'_, Linked, EntityChanges> {
     match self {
       Self::Added {
-        after,
+        anchor_base_index,
         item,
       } => ItemChange::Added {
-        after: *after,
+        anchor_base_index: *anchor_base_index,
         item,
       },
       Self::Removed {
-        index,
+        base_index,
       } => ItemChange::Removed {
-        index: *index,
+        base_index: *base_index,
       },
       Self::Modified {
-        before_index,
-        after_index,
+        base_index,
         changes,
       } => ItemChange::Modified {
-        before_index: *before_index,
-        after_index: *after_index,
+        base_index: *base_index,
         changes,
       },
     }

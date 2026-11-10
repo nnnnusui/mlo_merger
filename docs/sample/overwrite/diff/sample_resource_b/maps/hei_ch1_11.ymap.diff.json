@@ -1,5 +1,5 @@
 {
-  "schema_version": 11,
+  "schema_version": 12,
   "source": {
     "path": "docs/sample/source/sample_resource_b/stream/maps/hei_ch1_11.ymap",
     "sha256": "e210d419dd9e211fc0e4fce05164cb2b9335a96c26a98d6be06daedd59e2fd6f",
@@ -28,7 +28,8 @@
     "entities": [
       {
         "Added": {
-          "after": 0,
+          "anchor_base_index": 0,
+          "target_index": 1,
           "entity": {
             "entity_type": "CEntityDef",
             "archetype_name": "ch1_11_props_combo11_SLOD",
@@ -69,13 +70,13 @@
     "occlude_models": [
       {
         "Modified": {
-          "before_index": 0,
-          "after_index": 0,
+          "base_index": 0,
+          "target_index": 0,
           "changes": {
             "triangles": [
               {
                 "Removed": {
-                  "index": 20
+                  "base_index": 20
                 }
               }
             ]

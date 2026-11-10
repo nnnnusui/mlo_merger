@@ -42,18 +42,18 @@ fn occlude_models_list_triangle_changes_by_before_index() {
       "occlude_models": [
         {
           "Modified": {
-            "before_index": 0,
-            "after_index": 0,
+            "base_index": 0,
+            "target_index": 0,
             "changes": {
               "bmax": { "z": 12.5 },
               "flags": 1,
               "triangles": [
-                { "Replaced": { "index": 1, "item": serde_json::to_value(triangle(4.0)).unwrap() } },
+                { "Replaced": { "base_index": 1, "target_index": 1, "item": serde_json::to_value(triangle(4.0)).unwrap() } },
               ],
             },
           },
         },
-        { "Removed": { "index": 1 } },
+        { "Removed": { "base_index": 1 } },
       ],
     })
   );
@@ -90,8 +90,8 @@ fn lists_removed_and_replaced_triangles_by_before_index() {
   assert_eq!(
     diffs,
     vec![YmapOccludeModelDiff::Modified {
-      before_index: 0,
-      after_index: 0,
+      base_index: 0,
+      target_index: 0,
       changes: YmapOccludeModelFieldDiff {
         bmin: Some(PositionDiff {
           z: Some(0.5),
@@ -100,12 +100,13 @@ fn lists_removed_and_replaced_triangles_by_before_index() {
         flags: Some(1),
         triangles: Some(vec![
           YmapTriangleDiff::Removed {
-            index: 2,
+            base_index: 2,
             implied: false,
             reason: None,
           },
           YmapTriangleDiff::Replaced {
-            index: 1,
+            base_index: 1,
+            target_index: Some(1),
             item: triangle(4.0),
           },
         ]),

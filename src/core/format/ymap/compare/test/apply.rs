@@ -494,12 +494,12 @@ fn out_of_range_indices_are_rejected() {
   let removed_twice = YmapDiffFields {
     box_occluders: Some(vec![
       YmapBoxOccluderDiff::Removed {
-        index: 0,
+        base_index: 0,
         implied: false,
         reason: None,
       },
       YmapBoxOccluderDiff::Removed {
-        index: 0,
+        base_index: 0,
         implied: false,
         reason: None,
       },
@@ -511,7 +511,7 @@ fn out_of_range_indices_are_rejected() {
 
   let missing_vanilla = YmapDiffFields {
     box_occluders: Some(vec![YmapBoxOccluderDiff::Removed {
-      index: 1,
+      base_index: 1,
       implied: false,
       reason: None,
     }]),
@@ -522,7 +522,8 @@ fn out_of_range_indices_are_rejected() {
 
   let past_the_end = YmapDiffFields {
     box_occluders: Some(vec![YmapBoxOccluderDiff::Added {
-      after: Some(1),
+      anchor_base_index: Some(1),
+      target_index: None,
       item: occluder(100),
     }]),
     ..Default::default()
@@ -537,14 +538,15 @@ fn additions_follow_their_vanilla_item_even_when_it_is_removed() {
     box_occluders: vec![occluder(0), occluder(100), occluder(200)],
     ..base()
   };
-  let added = |after, x| YmapBoxOccluderDiff::Added {
-    after,
+  let added = |anchor_base_index, x| YmapBoxOccluderDiff::Added {
+    anchor_base_index,
+    target_index: None,
     item: occluder(x),
   };
   let diff = YmapDiffFields {
     box_occluders: Some(vec![
       YmapBoxOccluderDiff::Removed {
-        index: 1,
+        base_index: 1,
         implied: false,
         reason: None,
       },

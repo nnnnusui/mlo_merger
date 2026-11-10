@@ -42,10 +42,10 @@ fn sample_sources() -> Vec<SampleSource> {
   a.occlude_models[0].triangles.remove(10);
   let a_skip = json!({
     "content_flags": true,
-    "entities": [{"Modified": {"before_index": 0, "changes": {"position": true}}}],
-    "box_occluders": [{"Removed": {"index": 0}}],
+    "entities": [{"Modified": {"base_index": 0, "changes": {"position": true}}}],
+    "box_occluders": [{"Removed": {"base_index": 0}}],
     "occlude_models": [
-      {"Modified": {"before_index": 0, "changes": {"triangles": [{"Removed": {"index": 10}}]}}}
+      {"Modified": {"base_index": 0, "changes": {"triangles": [{"Removed": {"base_index": 10}}]}}}
     ],
   });
 
@@ -57,7 +57,7 @@ fn sample_sources() -> Vec<SampleSource> {
   added.position.x += 10.0;
   b.entities.push(added);
   b.occlude_models[0].triangles.remove(20);
-  let b_skip = json!({"entities": [{"Added": {"entity": {"guid": 0x5A3D_0001}}}]});
+  let b_skip = json!({"entities": [{"Added": {"target_index": 1}}]});
 
   vec![
     SampleSource {

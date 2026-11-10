@@ -25,8 +25,8 @@ fn modified_entities_list_changed_fields_beyond_the_tolerance() {
     json!({
       "entities": [{
         "Modified": {
-          "before_index": 0,
-          "after_index": 0,
+          "base_index": 0,
+          "target_index": 0,
           "changes": {
             "archetype_name": "replaced",
             "position": { "y": 12.5 },
@@ -42,7 +42,7 @@ fn modified_entities_list_changed_fields_beyond_the_tolerance() {
 fn removed_entities_keep_only_their_index() {
   let vanilla = with_entities(vec![entity(1), entity(2)]);
   let modded = with_entities(vec![entity(1)]);
-  assert_eq!(json(&vanilla, &modded), json!({ "entities": [{ "Removed": { "index": 1 } }] }));
+  assert_eq!(json(&vanilla, &modded), json!({ "entities": [{ "Removed": { "base_index": 1 } }] }));
 }
 
 #[test]
@@ -50,7 +50,7 @@ fn added_entities_hold_the_whole_entity() {
   let vanilla = with_entities(vec![entity(1)]);
   let modded = with_entities(vec![entity(1), entity(3)]);
   let diffs = json(&vanilla, &modded);
-  assert_eq!(diffs["entities"][0]["Added"]["after"], json!(0));
+  assert_eq!(diffs["entities"][0]["Added"]["anchor_base_index"], json!(0));
   assert_eq!(diffs["entities"][0]["Added"]["entity"], serde_json::to_value(entity(3)).unwrap());
 }
 
@@ -60,9 +60,9 @@ fn shared_guids_pair_in_order_and_report_the_rest() {
   let mut modded = with_entities(vec![entity(1), entity(1), entity(1)]);
   modded.entities[1].scale_z = 3.0;
   let diffs = json(&vanilla, &modded);
-  assert_eq!(diffs["entities"][0]["Modified"]["before_index"], json!(1));
+  assert_eq!(diffs["entities"][0]["Modified"]["base_index"], json!(1));
   assert_eq!(diffs["entities"][0]["Modified"]["changes"], json!({ "scale_z": 3.0 }));
-  assert_eq!(diffs["entities"][1]["Added"]["after"], json!(1));
+  assert_eq!(diffs["entities"][1]["Added"]["anchor_base_index"], json!(1));
   assert_eq!(diffs["entities"].as_array().unwrap().len(), 2);
 }
 
@@ -128,8 +128,8 @@ fn reports_modified_removed_and_added_entities() {
   let diffs = entity_diff(&vanilla, &modded);
   assert_eq!(diffs.len(), 4);
   let YmapEntityDiff::Modified {
-    before_index: 0,
-    after_index: 0,
+    base_index: 0,
+    target_index: 0,
     changes,
     parent: None,
     ..
@@ -150,19 +150,19 @@ fn reports_modified_removed_and_added_entities() {
   );
   assert!(matches!(
     &diffs[1],
-    YmapEntityDiff::Modified { before_index: 1, changes, .. }
+    YmapEntityDiff::Modified { base_index: 1, changes, .. }
       if changes.archetype_name.as_deref() == Some("replaced")
         && changes == &YmapEntityFieldDiff { archetype_name: changes.archetype_name.clone(), ..Default::default() }
   ));
   assert!(matches!(
     &diffs[2],
     YmapEntityDiff::Removed {
-      index: 2,
+      base_index: 2,
       ..
     }
   ));
   assert!(
-    matches!(&diffs[3], YmapEntityDiff::Added { after: Some(1), entity, .. } if entity.guid == 99)
+    matches!(&diffs[3], YmapEntityDiff::Added { anchor_base_index: Some(1), entity, .. } if entity.guid == 99)
   );
 }
 
@@ -179,13 +179,13 @@ fn pairs_shared_guids_in_order_and_reports_the_rest() {
   assert!(matches!(
     &diffs[0],
     YmapEntityDiff::Modified {
-      before_index: 1,
-      after_index: 1,
+      base_index: 1,
+      target_index: 1,
       ..
     }
   ));
   assert!(
-    matches!(&diffs[1], YmapEntityDiff::Added { after: Some(1), entity, .. } if entity.guid == 1)
+    matches!(&diffs[1], YmapEntityDiff::Added { anchor_base_index: Some(1), entity, .. } if entity.guid == 1)
   );
 }
 
@@ -222,7 +222,7 @@ fn parents_compare_by_the_entity_they_point_at() {
     matches!(
       diffs.as_slice(),
       [YmapEntityDiff::Added {
-        after: None,
+        anchor_base_index: None,
         ..
       }]
     ),
@@ -239,7 +239,7 @@ fn parents_compare_by_the_entity_they_point_at() {
     diffs.iter().any(|diff| matches!(
       diff,
       YmapEntityDiff::Modified {
-        before_index: 1,
+        base_index: 1,
         parent: Some(EntityParent::Own {
           guid: 3
         }),

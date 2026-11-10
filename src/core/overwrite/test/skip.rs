@@ -6,15 +6,15 @@ fn diff() -> YmapDiffFields {
     "content_flags": 65,
     "streaming_extents_min": {"x": -452.29492, "z": 106.28345},
     "entities": [
-      {"Modified": {"before_index": 0, "after_index": 0,
+      {"Modified": {"base_index": 0, "target_index": 0,
         "changes": {"position": {"z": -961.18286}, "flags": 8}}},
-      {"Removed": {"index": 1}}
+      {"Removed": {"base_index": 1}}
     ],
-    "box_occluders": [{"Removed": {"index": 236}}, {"Removed": {"index": 237}}],
+    "box_occluders": [{"Removed": {"base_index": 236}}, {"Removed": {"base_index": 237}}],
     "occlude_models": [
-      {"Modified": {"before_index": 2, "after_index": 2, "changes": {
+      {"Modified": {"base_index": 2, "target_index": 2, "changes": {
         "bmin": {"z": 1.2192383},
-        "triangles": [{"Removed": {"index": 10}}, {"Removed": {"index": 11}}]
+        "triangles": [{"Removed": {"base_index": 10}}, {"Removed": {"base_index": 11}}]
       }}}
     ]
   }))
@@ -30,12 +30,12 @@ fn skips_fields_items_and_nested_items_selected_by_content() {
       "content_flags": true,
       "streaming_extents_min": {"x": true},
       "entities": [
-        {"Modified": {"before_index": 0, "changes": {"position": true}}},
-        {"Removed": {"index": 1}}
+        {"Modified": {"base_index": 0, "changes": {"position": true}}},
+        {"Removed": {"base_index": 1}}
       ],
-      "box_occluders": [{"Removed": {"index": 236}}],
+      "box_occluders": [{"Removed": {"base_index": 236}}],
       "occlude_models": [
-        {"Modified": {"before_index": 2, "changes": {"triangles": [{"Removed": {"index": 10}}]}}}
+        {"Modified": {"base_index": 2, "changes": {"triangles": [{"Removed": {"base_index": 10}}]}}}
       ]
     }),
   )
@@ -47,13 +47,13 @@ fn skips_fields_items_and_nested_items_selected_by_content() {
     json!({
       "streaming_extents_min": {"z": 106.28345},
       "entities": [
-        {"Modified": {"before_index": 0, "after_index": 0, "changes": {"flags": 8}}}
+        {"Modified": {"base_index": 0, "target_index": 0, "changes": {"flags": 8}}}
       ],
-      "box_occluders": [{"Removed": {"index": 237}}],
+      "box_occluders": [{"Removed": {"base_index": 237}}],
       "occlude_models": [
-        {"Modified": {"before_index": 2, "after_index": 2, "changes": {
+        {"Modified": {"base_index": 2, "target_index": 2, "changes": {
           "bmin": {"z": 1.2192383},
-          "triangles": [{"Removed": {"index": 11}}]
+          "triangles": [{"Removed": {"base_index": 11}}]
         }}}
       ]
     })
@@ -67,13 +67,13 @@ fn drops_items_and_fields_left_empty_and_reports_unmatched_selectors() {
     &mut diff,
     &json!({
       "entities": [
-        {"Modified": {"before_index": 0, "changes": {"position": true, "flags": true}}},
-        {"Removed": {"index": 1}}
+        {"Modified": {"base_index": 0, "changes": {"position": true, "flags": true}}},
+        {"Removed": {"base_index": 1}}
       ],
-      "box_occluders": [{"Removed": {"index": 1}}],
+      "box_occluders": [{"Removed": {"base_index": 1}}],
       "streaming_extents_min": {"x": true, "z": true},
       "car_generators": true,
-      "occlude_models": [{"Modified": {"before_index": 2, "changes": {"bmax": true}}}]
+      "occlude_models": [{"Modified": {"base_index": 2, "changes": {"bmax": true}}}]
     }),
   )
   .unwrap();
@@ -98,7 +98,7 @@ fn matches_single_precision_values_as_written_in_documents() {
   entities
     .as_array_mut()
     .unwrap()
-    .push(json!({"Added": {"after": 1, "entity": entity, "parent": "None"}}));
+    .push(json!({"Added": {"anchor_base_index": 1, "entity": entity, "parent": "None"}}));
   diff.entities = serde_json::from_value(entities).unwrap();
   let unmatched = skip_diffs(
     &mut diff,
@@ -146,7 +146,7 @@ fn loads_resource_files_keyed_case_insensitively() {
   assert!(Overwrites::load(&root).unwrap().keys().next().is_none());
   fs::create_dir_all(root.join("resources/Cfx-Map/Vanilla")).unwrap();
   let file = json!({
-    "schema_version": 1,
+    "schema_version": 2,
     "source": {"sha256": "a", "size": 1},
     "vanilla": {"sha256": "b", "size": 2},
     "skip": {"content_flags": true}
@@ -163,7 +163,7 @@ fn loads_resource_files_keyed_case_insensitively() {
   // One leaving the file out whole needs nothing else, and always applies.
   fs::write(
     root.join("resources/Cfx-Map/Vanilla/Map.ymap.diff.json"),
-    json!({"schema_version": 1, "ignore": true}).to_string(),
+    json!({"schema_version": 2, "ignore": true}).to_string(),
   )
   .unwrap();
   let overwrite =
@@ -179,13 +179,13 @@ fn loads_resource_files_keyed_case_insensitively() {
   // Others need their fingerprints and selectors, and the current layout version.
   fs::write(
     root.join("resources/Cfx-Map/Vanilla/Map.ymap.diff.json"),
-    json!({"schema_version": 1, "skip": {"content_flags": true}}).to_string(),
+    json!({"schema_version": 2, "skip": {"content_flags": true}}).to_string(),
   )
   .unwrap();
   assert!(Overwrites::load(&root).is_err());
   fs::write(
     root.join("resources/Cfx-Map/Vanilla/Map.ymap.diff.json"),
-    json!({"schema_version": 2, "ignore": true}).to_string(),
+    json!({"schema_version": 3, "ignore": true}).to_string(),
   )
   .unwrap();
   assert!(Overwrites::load(&root).is_err());

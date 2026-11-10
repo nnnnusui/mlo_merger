@@ -253,7 +253,7 @@ fn overwrites_follow_their_source_to_its_next_version() {
       size: document.vanilla.size,
     }),
     skip: Some(serde_json::json!({"entities": [
-      {"Modified": {"before_index": 0, "changes": {"position": true}}},
+      {"Modified": {"base_index": 0, "changes": {"position": true}}},
       {"Added": {"entity": {"guid": 1000}}}
     ]})),
   };
@@ -299,7 +299,7 @@ fn overwrites_follow_their_source_to_its_next_version() {
   assert_eq!(
     on_disk.skip,
     Some(serde_json::json!({"entities": [
-      {"Modified": {"before_index": 0, "changes": {"position": true}}}
+      {"Modified": {"base_index": 0, "changes": {"position": true}}}
     ]}))
   );
   assert_ne!(on_disk.source, written.source);

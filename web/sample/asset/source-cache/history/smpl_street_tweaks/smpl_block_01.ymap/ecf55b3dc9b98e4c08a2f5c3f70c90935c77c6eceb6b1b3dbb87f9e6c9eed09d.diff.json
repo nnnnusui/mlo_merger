@@ -3,15 +3,14 @@
     "car_generators": [
       {
         "Removed": {
-          "index": 0
+          "base_index": 0
         }
       }
     ],
     "entities": [
       {
         "Modified": {
-          "after_index": 2,
-          "before_index": 2,
+          "base_index": 2,
           "changes": {
             "extensions": [
               {
@@ -31,23 +30,24 @@
                 }
               }
             ]
-          }
+          },
+          "target_index": 2
         }
       },
       {
         "Modified": {
-          "after_index": 4,
-          "before_index": 4,
+          "base_index": 4,
           "changes": {
             "position": {
               "x": -7078.5
             }
-          }
+          },
+          "target_index": 4
         }
       },
       {
         "Added": {
-          "after": 6,
+          "anchor_base_index": 6,
           "entity": {
             "ambient_occlusion_multiplier": 255,
             "archetype_name": "smpl_planter",
@@ -76,12 +76,13 @@
             "scale_z": 1.0,
             "tint_value": 0
           },
-          "parent": "None"
+          "parent": "None",
+          "target_index": 7
         }
       },
       {
         "Added": {
-          "after": 6,
+          "anchor_base_index": 6,
           "entity": {
             "ambient_occlusion_multiplier": 255,
             "archetype_name": "smpl_cone",
@@ -110,12 +111,13 @@
             "scale_z": 1.0,
             "tint_value": 0
           },
-          "parent": "None"
+          "parent": "None",
+          "target_index": 8
         }
       }
     ]
   },
-  "schema_version": 11,
+  "schema_version": 12,
   "source": {
     "modified_nanos": 0,
     "modified_seconds": 0,

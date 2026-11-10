@@ -446,17 +446,17 @@ fn arrays_record_added_removed_replaced_and_modified_items() {
     serde_json::to_value(&diff).unwrap(),
     json!({
       "tags": [
-        { "Replaced": { "index": 1, "item": { "name": "B" } } },
-        { "Added": { "after": 2, "item": { "name": "d" } } },
+        { "Replaced": { "base_index": 1, "target_index": 1, "item": { "name": "B" } } },
+        { "Added": { "anchor_base_index": 2, "target_index": 3, "item": { "name": "d" } } },
       ],
       "lights": [
-        { "Modified": { "before_index": 1, "after_index": 0, "changes": { "power": 25 } } },
-        { "Removed": { "index": 0 } },
-        { "Added": { "after": 1, "item": { "id": 3, "power": 30 } } },
+        { "Modified": { "base_index": 1, "target_index": 0, "changes": { "power": 25 } } },
+        { "Removed": { "base_index": 0 } },
+        { "Added": { "anchor_base_index": 1, "target_index": 1, "item": { "id": 3, "power": 30 } } },
       ],
       "markers": [
-        { "Modified": { "before_index": 0, "after_index": 0, "changes": { "label": "z" } } },
-        { "Replaced": { "index": 1, "item": { "at": 20, "label": "y" } } },
+        { "Modified": { "base_index": 0, "target_index": 0, "changes": { "label": "z" } } },
+        { "Replaced": { "base_index": 1, "target_index": 1, "item": { "at": 20, "label": "y" } } },
       ],
     })
   );

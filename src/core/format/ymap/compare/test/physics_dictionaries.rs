@@ -16,14 +16,14 @@ fn physics_dictionaries_compare_by_name() {
     json(&vanilla, &with_dictionaries(&["b", "c"])),
     json!({
       "physics_dictionaries": [
-        { "Removed": { "index": 0 } },
-        { "Added": { "after": 1, "item": "c" } },
+        { "Removed": { "base_index": 0 } },
+        { "Added": { "anchor_base_index": 1, "target_index": 1, "item": "c" } },
       ],
     })
   );
   assert_eq!(
     json(&vanilla, &with_dictionaries(&["b"])),
-    json!({ "physics_dictionaries": [{ "Removed": { "index": 0 } }] })
+    json!({ "physics_dictionaries": [{ "Removed": { "base_index": 0 } }] })
   );
   // Names match by hash.
   assert_eq!(json(&vanilla, &with_dictionaries(&["A", "b"])), json!({}));

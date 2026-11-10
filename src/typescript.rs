@@ -30,8 +30,8 @@ pub fn export_types(output: &Path) -> Result<(), Box<dyn std::error::Error>> {
   let mut types = fs::read_to_string(output)?;
   for (required, optional, count) in [
     (
-      "{ Removed: { index: number; implied: boolean; reason: string | null } }",
-      "{ Removed: { index: number; implied?: boolean; reason?: string | null } }",
+      "{ Removed: { base_index: number; implied: boolean; reason: string | null } }",
+      "{ Removed: { base_index: number; implied?: boolean; reason?: string | null } }",
       1,
     ),
     ("; reason: string | null } }", "; reason?: string | null } }", 3),
@@ -120,9 +120,11 @@ mod tests {
     assert!(actual.contains("minX: number"));
     assert!(actual.contains("originalPath?: string"));
     assert!(
-      actual.contains("{ Removed: { index: number; implied?: boolean; reason?: string | null } }")
+      actual
+        .contains("{ Removed: { base_index: number; implied?: boolean; reason?: string | null } }")
     );
-    assert!(actual.contains("{ Removed: { index: number; reason?: string | null } }"));
+    assert!(actual.contains("{ Removed: { base_index: number; reason?: string | null } }"));
+    assert!(actual.contains("anchor_base_index: number | null; target_index?: number | null"));
     assert!(!actual.contains("reason: string | null"));
     assert!(actual.contains("partner?: YmapComparisonPartner | null"));
     assert!(actual.contains("export type Change = \"Added\" | \"Modified\" | \"Removed\""));

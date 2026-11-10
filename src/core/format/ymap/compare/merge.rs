@@ -139,10 +139,12 @@ pub fn leave_out(
               ..
             } => None,
             ItemDiff::Replaced {
-              index,
+              base_index,
+              target_index,
               item,
             } => Some(ItemDiff::Added {
-              after: Some(index),
+              anchor_base_index: Some(base_index),
+              target_index,
               item,
             }),
             diff => Some(diff),

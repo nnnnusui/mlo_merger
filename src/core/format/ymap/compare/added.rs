@@ -102,7 +102,7 @@ pub fn thin_additions(
 
 /// Whether `entity` is placed as `other` is: the same type, archetype and LOD level, at the
 /// same position within `tolerance`.
-fn placed_alike(
+pub fn placed_alike(
   entity: &YmapEntity,
   other: &YmapEntity,
   tolerance: f32,
@@ -301,7 +301,8 @@ mod tests {
         items
           .into_iter()
           .map(|item| ItemDiff::Added {
-            after: None,
+            anchor_base_index: None,
+            target_index: None,
             item,
           })
           .collect(),
@@ -354,7 +355,8 @@ mod tests {
         entities
           .into_iter()
           .map(|entity| YmapEntityDiff::Added {
-            after: None,
+            anchor_base_index: None,
+            target_index: None,
             entity,
             parent: super::super::EntityParent::None,
           })

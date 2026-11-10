@@ -35,8 +35,8 @@ fn box_occluders_derive_modified_removed_and_added() {
     json(&vanilla, &modded),
     json!({
       "box_occluders": [
-        { "Modified": { "before_index": 1, "after_index": 1, "changes": { "i_width": 8, "i_sin_z": 5 } } },
-        { "Replaced": { "index": 2, "item": serde_json::to_value(occluder(300)).unwrap() } },
+        { "Modified": { "base_index": 1, "target_index": 1, "changes": { "i_width": 8, "i_sin_z": 5 } } },
+        { "Replaced": { "base_index": 2, "target_index": 2, "item": serde_json::to_value(occluder(300)).unwrap() } },
       ],
     })
   );
@@ -52,7 +52,7 @@ fn box_occluders_follow_the_configured_tolerances() {
   assert!(matches!(
     diff(&vanilla, &modded).box_occluders.unwrap().as_slice(),
     [YmapBoxOccluderDiff::Replaced {
-      index: 0,
+      base_index: 0,
       ..
     }]
   ));
@@ -65,7 +65,7 @@ fn box_occluders_follow_the_configured_tolerances() {
     serde_json::to_value(diff_with(&vanilla, &modded, &configured)).unwrap(),
     json!({
       "box_occluders": [{
-        "Modified": { "before_index": 0, "after_index": 0, "changes": { "i_center_x": 2, "i_cos_z": 101 } },
+        "Modified": { "base_index": 0, "target_index": 0, "changes": { "i_center_x": 2, "i_cos_z": 101 } },
       }],
     })
   );
@@ -92,8 +92,8 @@ fn pairs_by_center_and_thresholds_rotation() {
     diffs,
     vec![
       YmapBoxOccluderDiff::Modified {
-        before_index: 1,
-        after_index: 1,
+        base_index: 1,
+        target_index: 1,
         changes: YmapBoxOccluderFieldDiff {
           i_cos_z: Some(102),
           i_height: Some(8),
@@ -102,7 +102,8 @@ fn pairs_by_center_and_thresholds_rotation() {
         reason: None,
       },
       YmapBoxOccluderDiff::Replaced {
-        index: 2,
+        base_index: 2,
+        target_index: Some(2),
         item: occluder(300),
       },
     ]

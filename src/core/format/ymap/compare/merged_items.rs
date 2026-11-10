@@ -62,27 +62,26 @@ impl<T, C> MergedItems<T, C> {
     for change in changes {
       let (index, change) = match change {
         ItemChange::Added {
-          after,
+          anchor_base_index,
           item,
         } => {
-          merged.added.push((after, item.clone()));
+          merged.added.push((anchor_base_index, item.clone()));
           continue;
         }
         ItemChange::Removed {
-          index,
+          base_index,
         } => {
-          merged.removed.insert(index);
+          merged.removed.insert(base_index);
           continue;
         }
         ItemChange::Replaced {
-          index,
+          base_index,
           item,
-        } => (index, InPlace::Replaced(item)),
+        } => (base_index, InPlace::Replaced(item)),
         ItemChange::Modified {
-          before_index,
+          base_index,
           changes,
-          ..
-        } => (before_index, InPlace::Modified(changes)),
+        } => (base_index, InPlace::Modified(changes)),
       };
       match (merged.in_place.entry(index), change) {
         (Entry::Vacant(entry), InPlace::Modified(changes)) => {
@@ -148,42 +147,54 @@ impl<T, C> MergedItems<T, C> {
     self,
     vanilla_len: usize,
   ) -> Vec<ItemDiff<T, C>> {
-    // Where each kept vanilla item ends up, for the record in `Modified`.
-    let mut following = BTreeMap::<Option<usize>, usize>::new();
-    for (after, _) in &self.added {
-      *following.entry(*after).or_default() += 1;
+    // Where each kept vanilla item and each addition ends up, for the target indices.
+    let mut following = BTreeMap::<Option<usize>, Vec<usize>>::new();
+    for (addition, (anchor, _)) in self.added.iter().enumerate() {
+      following.entry(*anchor).or_default().push(addition);
     }
-    let mut position = following.get(&None).copied().unwrap_or(0);
+    let mut added_at = vec![None; self.added.len()];
+    let mut position = 0;
+    let mut place_following = |anchor: Option<usize>, position: &mut usize| {
+      for &addition in following.get(&anchor).map(Vec::as_slice).unwrap_or_default() {
+        added_at[addition] = Some(*position);
+        *position += 1;
+      }
+    };
+    place_following(None, &mut position);
     let mut placed = BTreeMap::new();
     for index in 0..vanilla_len {
       if !self.removed.contains(&index) {
         placed.insert(index, position);
         position += 1;
       }
-      position += following.get(&Some(index)).copied().unwrap_or(0);
+      place_following(Some(index), &mut position);
     }
-    let removed = self.removed.into_iter().map(|index| ItemDiff::Removed {
-      index,
+    let removed = self.removed.into_iter().map(|base_index| ItemDiff::Removed {
+      base_index,
       implied: false,
       reason: None,
     });
-    let in_place = self.in_place.into_iter().map(move |(index, change)| match change {
+    let in_place = self.in_place.into_iter().map(move |(base_index, change)| match change {
       InPlace::Replaced(item) => ItemDiff::Replaced {
-        index,
+        base_index,
+        target_index: placed.get(&base_index).copied(),
         item,
       },
       InPlace::Modified(changes) => ItemDiff::Modified {
-        before_index: index,
+        base_index,
         // Out-of-range vanilla indices are left for applying to reject.
-        after_index: placed.get(&index).copied().unwrap_or(index),
+        target_index: placed.get(&base_index).copied().unwrap_or(base_index),
         changes,
         reason: None,
       },
     });
-    let added = self.added.into_iter().map(|(after, item)| ItemDiff::Added {
-      after,
-      item,
-    });
+    // Additions after an out-of-range vanilla index are left for applying to reject.
+    let added =
+      self.added.into_iter().zip(added_at).map(|((anchor_base_index, item), at)| ItemDiff::Added {
+        anchor_base_index,
+        target_index: at,
+        item,
+      });
     removed.chain(in_place).chain(added).collect()
   }
 }

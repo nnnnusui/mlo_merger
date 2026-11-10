@@ -24,7 +24,7 @@ use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 use std::path::Path;
 
-pub use skip::skip_diffs;
+pub use skip::{selects, skip_diffs};
 pub use vanilla::VanillaOverwrite;
 
 /// The formats, by extension, whose stream files overwrites apply to.
@@ -73,7 +73,7 @@ pub struct StreamFileOverwrite {
 
 impl StreamFileOverwrite {
   /// The current [`Self::schema_version`].
-  pub const SCHEMA_VERSION: u32 = 1;
+  pub const SCHEMA_VERSION: u32 = 2;
 }
 
 /// An overwrite the merge leaves out, as the files it names are missing or differ from those it

@@ -146,10 +146,10 @@ fn shown_removals<T, C>(diffs: Option<&[ItemDiff<T, C>]>) -> BTreeSet<usize> {
     .flatten()
     .filter_map(|diff| match diff {
       ItemDiff::Removed {
-        index,
+        base_index,
         implied: false,
         ..
-      } => Some(*index),
+      } => Some(*base_index),
       _ => None,
     })
     .collect()
@@ -164,17 +164,17 @@ fn imply<T, C>(
   let current = diffs.take().unwrap_or_default();
   let changed = |diff: &ItemDiff<T, C>| match diff {
     ItemDiff::Removed {
-      index,
+      base_index,
       ..
     }
     | ItemDiff::Replaced {
-      index,
+      base_index,
       ..
     }
     | ItemDiff::Modified {
-      before_index: index,
+      base_index,
       ..
-    } => Some(*index),
+    } => Some(*base_index),
     ItemDiff::Added {
       ..
     } => None,
@@ -197,8 +197,8 @@ fn imply<T, C>(
     }
     !dropped
   });
-  removals.extend(implied.iter().map(|&index| ItemDiff::Removed {
-    index,
+  removals.extend(implied.iter().map(|&base_index| ItemDiff::Removed {
+    base_index,
     implied: true,
     reason: None,
   }));

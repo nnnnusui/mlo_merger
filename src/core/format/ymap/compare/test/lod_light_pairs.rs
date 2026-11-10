@@ -103,9 +103,9 @@ fn removals_of_either_side_are_implied_on_the_other() {
     serde_json::to_value(&distant_diff).unwrap(),
     json!({
       "distant_lod_lights": { "items": [
-        { "Removed": { "index": 1 } },
-        { "Removed": { "index": 2, "implied": true } },
-        { "Removed": { "index": 4, "implied": true } },
+        { "Removed": { "base_index": 1 } },
+        { "Removed": { "base_index": 2, "implied": true } },
+        { "Removed": { "base_index": 4, "implied": true } },
       ] },
     })
   );
@@ -132,8 +132,8 @@ fn an_implied_removal_wins_over_a_change_of_the_same_light() {
     serde_json::to_value(&distant_diff).unwrap(),
     json!({
       "distant_lod_lights": { "items": [
-        { "Removed": { "index": 1, "implied": true } },
-        { "Removed": { "index": 2, "implied": true } },
+        { "Removed": { "base_index": 1, "implied": true } },
+        { "Removed": { "base_index": 2, "implied": true } },
       ] },
     })
   );
@@ -151,6 +151,6 @@ fn implied_removals_alone_make_a_diff() {
   LightSide::LodLights.imply_removals(&mut lod_diff, &BTreeSet::from([0]));
   assert_eq!(
     serde_json::to_value(&lod_diff).unwrap(),
-    json!({ "lod_lights": [{ "Removed": { "index": 0, "implied": true } }] })
+    json!({ "lod_lights": [{ "Removed": { "base_index": 0, "implied": true } }] })
   );
 }

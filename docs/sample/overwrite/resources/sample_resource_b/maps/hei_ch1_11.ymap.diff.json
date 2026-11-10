@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "source": {
     "sha256": "e210d419dd9e211fc0e4fce05164cb2b9335a96c26a98d6be06daedd59e2fd6f",
     "size": 4354
@@ -12,9 +12,7 @@
     "entities": [
       {
         "Added": {
-          "entity": {
-            "guid": 1513947137
-          }
+          "target_index": 1
         }
       }
     ]

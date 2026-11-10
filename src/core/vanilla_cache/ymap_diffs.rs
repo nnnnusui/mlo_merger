@@ -230,15 +230,17 @@ fn rewrite_inexact_arrays(
     }
   }
   if rebuilt.entities != current.entities {
-    let removed = (0..previous.entities.len()).map(|index| YmapEntityDiff::Removed {
-      index,
+    let removed = (0..previous.entities.len()).map(|base_index| YmapEntityDiff::Removed {
+      base_index,
       reason: None,
     });
-    let added = current.entities.iter().map(|entity| YmapEntityDiff::Added {
-      after: None,
-      entity: entity.clone(),
-      parent: EntityParent::raw(entity),
-    });
+    let added =
+      current.entities.iter().enumerate().map(|(target_index, entity)| YmapEntityDiff::Added {
+        anchor_base_index: None,
+        target_index: Some(target_index),
+        entity: entity.clone(),
+        parent: EntityParent::raw(entity),
+      });
     diffs.entities = Some(removed.chain(added).collect());
   }
   rewrite(

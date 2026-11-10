@@ -48,7 +48,7 @@ pub(super) fn earlier_versions() -> &'static [(String, Vec<u8>)] {
           {"Added": {"entity": {"guid": guid::CONE}}}
         ]}),
       ),
-      ("smpl_block_rework", serde_json::json!({"entities": [{"Modified": {"before_index": lamp}}]})),
+      ("smpl_block_rework", serde_json::json!({"entities": [{"Modified": {"base_index": lamp}}]})),
     ] {
       let cache = asset.join("source-cache");
       let stream_path =
@@ -70,7 +70,7 @@ pub(super) fn earlier_versions() -> &'static [(String, Vec<u8>)] {
         serde_json::json!({"sha256": document[file]["sha256"], "size": document[file]["size"]})
       };
       let overwrite = serde_json::json!({
-        "schema_version": 1,
+        "schema_version": crate::core::overwrite::StreamFileOverwrite::SCHEMA_VERSION,
         "source": fingerprint("source"),
         "vanilla": fingerprint("vanilla"),
         "skip": skip,

@@ -36,12 +36,12 @@ fn time_cycle_modifiers_pair_by_either_extent() {
       "time_cycle_modifiers": [
         {
           "Modified": {
-            "before_index": 1,
-            "after_index": 1,
+            "base_index": 1,
+            "target_index": 1,
             "changes": { "name": "night", "max_extents": { "z": 30.5 } },
           },
         },
-        { "Added": { "after": 1, "item": serde_json::to_value(modifier(200.0)).unwrap() } },
+        { "Added": { "anchor_base_index": 1, "target_index": 2, "item": serde_json::to_value(modifier(200.0)).unwrap() } },
       ],
     })
   );
@@ -69,8 +69,8 @@ fn pairs_by_either_extent_and_thresholds_floats() {
     diffs,
     vec![
       YmapTimeCycleModifierDiff::Modified {
-        before_index: 1,
-        after_index: 1,
+        base_index: 1,
+        target_index: 1,
         changes: YmapTimeCycleModifierFieldDiff {
           max_extents: Some(PositionDiff {
             z: Some(30.0),
@@ -82,7 +82,8 @@ fn pairs_by_either_extent_and_thresholds_floats() {
         reason: None,
       },
       YmapTimeCycleModifierDiff::Added {
-        after: Some(1),
+        anchor_base_index: Some(1),
+        target_index: Some(2),
         item: modifier(200.0),
       },
     ]

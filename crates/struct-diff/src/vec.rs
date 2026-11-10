@@ -6,10 +6,12 @@
 //! - between two kept items, unpaired items matched in order as [`ItemDiff::Replaced`],
 //! - the remaining unpaired items as [`ItemDiff::Removed`] or [`ItemDiff::Added`].
 //!
-//! Removed, replaced and modified items are named by their index in the earlier array, and added
-//! items by the earlier item they follow, so applying keeps the kept items in their earlier
-//! order and differences of several arrays from one earlier array can be combined without their
-//! indices conflicting. Reordering of kept items is not recorded.
+//! The earlier array is the base and the later one the target. Removed, replaced and modified
+//! items are named by their base index, and added items by the base item they follow, so
+//! applying keeps the kept items in their base order and differences of several arrays from one
+//! base array can be combined without their indices conflicting. Added, replaced and modified
+//! items also record their target index, where the target array has them, which applying does
+//! not use. Reordering of kept items is not recorded.
 //!
 //! `#[derive(Diff)]` implements [`Pair`] as the struct's `#[diff(key = ...)]` or
 //! `#[diff(matching = ...)]` asks, and by equality otherwise, so items are only ever added,
@@ -28,38 +30,47 @@ use super::{ApplyError, Diff};
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "specta", derive(specta::Type))]
 pub enum ItemDiff<T, C> {
-  /// Present only in the later array, right after earlier item `after`, or first when `None`.
+  /// Present only in the target array, at `target_index`, and placed right after base item
+  /// `anchor_base_index`, or first when `None`.
+  ///
+  /// `target_index` is absent from additions written without a target array, such as by hand.
   Added {
-    after: Option<usize>,
+    anchor_base_index: Option<usize>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "specta", specta(optional))]
+    target_index: Option<usize>,
     item: T,
   },
-  /// Present only in the earlier array, at `index`.
+  /// Present only in the base array, at `base_index`.
   ///
   /// `implied` marks a removal the later array does not show but another difference calls for,
   /// such as the removal of the item at the same index of an array kept parallel to this one.
   Removed {
-    index: usize,
+    base_index: usize,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     implied: bool,
-    /// Why the item is removed, when the removal was not taken from the later array itself,
+    /// Why the item is removed, when the removal was not taken from the target array itself,
     /// such as one carried over from another array holding the same item.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[cfg_attr(feature = "specta", specta(optional))]
     reason: Option<String>,
   },
-  /// Earlier item `index` is unpaired, and the later array has `item`, also unpaired, in its
-  /// place.
+  /// Base item `base_index` is unpaired, and the target array has `item`, also unpaired, at
+  /// `target_index` in its place; `target_index` is absent as for [`Self::Added`].
   Replaced {
-    index: usize,
+    base_index: usize,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "specta", specta(optional))]
+    target_index: Option<usize>,
     item: T,
   },
-  /// Paired and differing. `after_index` records where the later array has it; applying keeps
-  /// the item at its earlier place.
+  /// Paired and differing: base item `base_index` is target item `target_index`. Applying keeps
+  /// the item at its base place.
   Modified {
-    before_index: usize,
-    after_index: usize,
+    base_index: usize,
+    target_index: usize,
     changes: C,
-    /// Why the item is modified, when the changes were not taken from the later array itself;
+    /// Why the item is modified, when the changes were not taken from the target array itself;
     /// see `Removed::reason`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[cfg_attr(feature = "specta", specta(optional))]
@@ -187,7 +198,7 @@ pub fn anchors(
 }
 
 impl<T: Clone, C> ItemDiff<T, C> {
-  /// The unpaired items: removed earlier items, those replaced in place, then added `after`
+  /// The unpaired items: removed base items, those replaced in place, then added `after`
   /// items.
   ///
   /// Between two kept items, the unpaired earlier and later items are matched in order; matched
@@ -213,21 +224,23 @@ impl<T: Clone, C> ItemDiff<T, C> {
     let (mut removals, mut replacements, mut additions) = (Vec::new(), Vec::new(), Vec::new());
     for (anchor, (removed, added)) in gaps {
       let replaced = removed.len().min(added.len());
-      replacements.extend(removed.iter().zip(&added).map(|(&index, &after_index)| {
+      replacements.extend(removed.iter().zip(&added).map(|(&base_index, &target_index)| {
         Self::Replaced {
-          index,
-          item: after[after_index].clone(),
+          base_index,
+          target_index: Some(target_index),
+          item: after[target_index].clone(),
         }
       }));
-      removals.extend(removed[replaced..].iter().map(|&index| Self::Removed {
-        index,
+      removals.extend(removed[replaced..].iter().map(|&base_index| Self::Removed {
+        base_index,
         implied: false,
         reason: None,
       }));
       let after_anchor = replaced.checked_sub(1).map_or(anchor, |last| Some(removed[last]));
-      additions.extend(added[replaced..].iter().map(|&index| Self::Added {
-        after: after_anchor,
-        item: after[index].clone(),
+      additions.extend(added[replaced..].iter().map(|&target_index| Self::Added {
+        anchor_base_index: after_anchor,
+        target_index: Some(target_index),
+        item: after[target_index].clone(),
       }));
     }
     removals.into_iter().chain(replacements).chain(additions).collect()
@@ -239,13 +252,14 @@ impl<T: Clone, C> ItemDiff<T, C> {
     before_len: usize,
     after: &[T],
   ) -> Vec<Self> {
-    let removed = (0..before_len).map(|index| Self::Removed {
-      index,
+    let removed = (0..before_len).map(|base_index| Self::Removed {
+      base_index,
       implied: false,
       reason: None,
     });
-    let added = after.iter().map(|item| Self::Added {
-      after: None,
+    let added = after.iter().enumerate().map(|(target_index, item)| Self::Added {
+      anchor_base_index: None,
+      target_index: Some(target_index),
       item: item.clone(),
     });
     removed.chain(added).collect()
@@ -261,8 +275,8 @@ impl<T: Clone, C> ItemDiff<T, C> {
     for &(before_index, after_index) in &pairing.pairs {
       if let Some(changes) = changes(before_index, after_index) {
         diffs.push(Self::Modified {
-          before_index,
-          after_index,
+          base_index: before_index,
+          target_index: after_index,
           changes,
           reason: None,
         });
@@ -289,33 +303,33 @@ impl<T, C> ItemDiff<T, C> {
   pub fn change(&self) -> ItemChange<'_, T, C> {
     match self {
       Self::Added {
-        after,
+        anchor_base_index,
         item,
+        ..
       } => ItemChange::Added {
-        after: *after,
+        anchor_base_index: *anchor_base_index,
         item,
       },
       Self::Removed {
-        index,
+        base_index,
         ..
       } => ItemChange::Removed {
-        index: *index,
+        base_index: *base_index,
       },
       Self::Replaced {
-        index,
+        base_index,
         item,
+        ..
       } => ItemChange::Replaced {
-        index: *index,
+        base_index: *base_index,
         item,
       },
       Self::Modified {
-        before_index,
-        after_index,
+        base_index,
         changes,
         ..
       } => ItemChange::Modified {
-        before_index: *before_index,
-        after_index: *after_index,
+        base_index: *base_index,
         changes,
       },
     }
@@ -346,22 +360,21 @@ impl<T: Pair + Clone> Diff for Vec<T> {
   }
 }
 
-/// One change to an array item, however its diff spells it.
+/// One change to a base array item, however its diff spells it, as applying needs it.
 pub enum ItemChange<'a, T, C> {
   Added {
-    after: Option<usize>,
+    anchor_base_index: Option<usize>,
     item: &'a T,
   },
   Removed {
-    index: usize,
+    base_index: usize,
   },
   Replaced {
-    index: usize,
+    base_index: usize,
     item: &'a T,
   },
   Modified {
-    before_index: usize,
-    after_index: usize,
+    base_index: usize,
     changes: &'a C,
   },
 }
@@ -399,10 +412,10 @@ pub fn apply_changes<'a, T: Clone + 'a, C: 'a>(
   for change in changes {
     match change {
       ItemChange::Added {
-        after,
+        anchor_base_index,
         item,
       } => {
-        let slot = match after {
+        let slot = match anchor_base_index {
           None => 0,
           Some(index) if index < len => index + 1,
           Some(index) => return Err(out_of_range(index)),
@@ -410,17 +423,16 @@ pub fn apply_changes<'a, T: Clone + 'a, C: 'a>(
         following[slot].push(item);
       }
       ItemChange::Removed {
-        index,
-      } => record(index, Applied::Removed)?,
+        base_index,
+      } => record(base_index, Applied::Removed)?,
       ItemChange::Replaced {
-        index,
+        base_index,
         item,
-      } => record(index, Applied::Replaced(item))?,
+      } => record(base_index, Applied::Replaced(item))?,
       ItemChange::Modified {
-        before_index,
+        base_index,
         changes,
-        ..
-      } => record(before_index, Applied::Modified(changes))?,
+      } => record(base_index, Applied::Modified(changes))?,
     }
   }
   let mut items = following[0].iter().map(|item| (*item).clone()).collect::<Vec<_>>();
@@ -475,20 +487,23 @@ mod tests {
   fn additions_follow_their_earlier_item_even_when_it_is_removed() {
     let diffs = [
       ItemDiff::Removed {
-        index: 1,
+        base_index: 1,
         implied: false,
         reason: None,
       },
       ItemDiff::Added {
-        after: Some(1),
+        anchor_base_index: Some(1),
+        target_index: None,
         item: 15,
       },
       ItemDiff::Added {
-        after: None,
+        anchor_base_index: None,
+        target_index: None,
         item: -1,
       },
       ItemDiff::Replaced {
-        index: 2,
+        base_index: 2,
+        target_index: None,
         item: 22,
       },
     ];
@@ -497,12 +512,12 @@ mod tests {
     assert_eq!(items, [-1, 0, 15, 22]);
     let twice = [
       ItemDiff::<i32, ()>::Removed {
-        index: 0,
+        base_index: 0,
         implied: false,
         reason: None,
       },
       ItemDiff::Removed {
-        index: 0,
+        base_index: 0,
         implied: true,
         reason: None,
       },

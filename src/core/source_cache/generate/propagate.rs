@@ -254,12 +254,12 @@ impl Target {
         .map(|(&index, change)| match change {
           Carried::Removed {
             reason,
-          } => serde_json::json!({ "Removed": { "index": index, "reason": reason } }),
+          } => serde_json::json!({ "Removed": { "base_index": index, "reason": reason } }),
           Carried::Modified {
             changes,
             reason,
           } => serde_json::json!({ "Modified": {
-            "before_index": index, "after_index": index, "changes": changes, "reason": reason,
+            "base_index": index, "target_index": index, "changes": changes, "reason": reason,
           }}),
         })
         .collect::<Vec<_>>();
@@ -518,14 +518,14 @@ fn changes(diffs: &Value) -> Vec<Change> {
   for array in Array::ALL {
     let items = array.path().iter().try_fold(diffs, |value, key| value.get(*key));
     for item in items.and_then(Value::as_array).into_iter().flatten() {
-      if let Some(index) = item.pointer("/Removed/index").and_then(Value::as_u64) {
+      if let Some(index) = item.pointer("/Removed/base_index").and_then(Value::as_u64) {
         changes.push(Change {
           array,
           index: index as usize,
           changes: None,
         });
       } else if let Some(modified) = item.get("Modified")
-        && let Some(index) = modified.get("before_index").and_then(Value::as_u64)
+        && let Some(index) = modified.get("base_index").and_then(Value::as_u64)
         && let Some(fields) = modified.get("changes").and_then(Value::as_object)
         && !fields.is_empty()
         && !fields.values().any(Value::is_array)
@@ -598,16 +598,16 @@ mod tests {
   fn changes_read_removals_and_field_changes_of_every_carried_array() {
     let diffs = serde_json::json!({
       "entities": [
-        { "Removed": { "index": 3 } },
-        { "Modified": { "before_index": 1, "after_index": 0, "changes": {}, "parent": "None" } },
-        { "Modified": { "before_index": 2, "after_index": 1, "changes": { "flags": 8 } } },
-        { "Added": { "after": 0, "entity": {}, "parent": "None" } },
+        { "Removed": { "base_index": 3 } },
+        { "Modified": { "base_index": 1, "target_index": 0, "changes": {}, "parent": "None" } },
+        { "Modified": { "base_index": 2, "target_index": 1, "changes": { "flags": 8 } } },
+        { "Added": { "anchor_base_index": 0, "entity": {}, "parent": "None" } },
       ],
-      "distant_lod_lights": { "items": [{ "Removed": { "index": 7, "implied": true } }] },
-      "car_generators": [{ "Replaced": { "index": 0, "item": {} } }],
+      "distant_lod_lights": { "items": [{ "Removed": { "base_index": 7, "implied": true } }] },
+      "car_generators": [{ "Replaced": { "base_index": 0, "item": {} } }],
       "occlude_models": [
-        { "Modified": { "before_index": 0, "after_index": 0, "changes": {
-          "bmin": { "x": 1.0 }, "triangles": [{ "Removed": { "index": 2 } }],
+        { "Modified": { "base_index": 0, "target_index": 0, "changes": {
+          "bmin": { "x": 1.0 }, "triangles": [{ "Removed": { "base_index": 2 } }],
         } } },
       ],
     });
@@ -662,13 +662,13 @@ mod tests {
     assert_eq!(
       json["entities"],
       serde_json::json!([
-        { "Removed": { "index": 4, "reason": "removed" } },
-        { "Removed": { "index": 5, "reason": "removed" } },
+        { "Removed": { "base_index": 4, "reason": "removed" } },
+        { "Removed": { "base_index": 5, "reason": "removed" } },
       ])
     );
     assert_eq!(
       json["lod_lights"],
-      serde_json::json!([{ "Removed": { "index": 2, "reason": "light" } }])
+      serde_json::json!([{ "Removed": { "base_index": 2, "reason": "light" } }])
     );
   }
 }

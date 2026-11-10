@@ -40,9 +40,9 @@ fn distant_lights_pair_by_position_and_report_block_fields() {
       "distant_lod_lights": {
         "num_street_lights": 3,
         "items": [
-          { "Modified": { "before_index": 0, "after_index": 1, "changes": { "rgbi": "11" } } },
-          { "Removed": { "index": 2 } },
-          { "Added": { "after": 0, "item": { "position": "10 11 12", "rgbi": "40" } } },
+          { "Modified": { "base_index": 0, "target_index": 1, "changes": { "rgbi": "11" } } },
+          { "Removed": { "base_index": 2 } },
+          { "Added": { "anchor_base_index": 0, "target_index": 2, "item": { "position": "10 11 12", "rgbi": "40" } } },
         ],
       },
     })
@@ -57,7 +57,7 @@ fn distant_lights_moved_within_the_rounding_report_the_position() {
   assert!(matches!(
     diff(&vanilla, &modded).distant_lod_lights.unwrap().items.unwrap().as_slice(),
     [YmapDistantLodLightDiff::Replaced {
-      index: 0,
+      base_index: 0,
       ..
     }]
   ));
@@ -70,7 +70,7 @@ fn distant_lights_moved_within_the_rounding_report_the_position() {
     json!({
       "distant_lod_lights": {
         "items": [{
-          "Modified": { "before_index": 0, "after_index": 0, "changes": { "position": { "z": 3.25 } } },
+          "Modified": { "base_index": 0, "target_index": 0, "changes": { "position": { "z": 3.25 } } },
         }],
       },
     })
@@ -109,8 +109,8 @@ fn pairs_by_rounded_position_and_reports_block_fields() {
     diff.items.unwrap(),
     vec![
       YmapDistantLodLightDiff::Modified {
-        before_index: 0,
-        after_index: 1,
+        base_index: 0,
+        target_index: 1,
         changes: YmapDistantLodLightFieldDiff {
           rgbi: Some("z".into()),
           ..Default::default()
@@ -118,13 +118,14 @@ fn pairs_by_rounded_position_and_reports_block_fields() {
         reason: None,
       },
       YmapDistantLodLightDiff::Removed {
-        index: 2,
+        base_index: 2,
         implied: false,
         reason: None,
       },
       // After the light the source puts before it, vanilla's first.
       YmapDistantLodLightDiff::Added {
-        after: Some(0),
+        anchor_base_index: Some(0),
+        target_index: Some(2),
         item: light("10 11 12", "d"),
       },
     ]

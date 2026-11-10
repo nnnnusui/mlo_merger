@@ -189,7 +189,7 @@ For an added YMAP:
 - `[prefix_]lodlights_*.ymap` and `[prefix_]distlodlights_*.ymap` hold the `lodLights`
   and `distantLodLightsSOA` of the same lights, read by index, so a light removed from
   either is removed from both. The source cache adds the other YMAP's removals to each
-  one's diff as `{"Removed": {"index": i, "implied": true}}`, and the document's
+  one's diff as `{"Removed": {"base_index": i, "implied": true}}`, and the document's
   `partner` records the files they were taken from. A resource shipping only one of the
   two has its removals merged into the other's vanilla YMAP as well. Pairs whose vanilla
   YMAPs differ in light count are left alone.
