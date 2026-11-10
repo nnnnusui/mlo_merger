@@ -13,7 +13,7 @@ with it, behind the `codewalker` feature; the released executable does not load 
 ## Pipeline
 
 `--pipeline` runs vanilla extraction when no raw archive exists, then
-vanilla-cache, source-cache, merge and deploy in order. Existing raw vanilla is
+vanilla-cache, source-cache, overwrite-cache, merge and deploy in order. Existing raw vanilla is
 validated and reused; missing vanilla requires an installed game path. Nonempty
 directories without an archive manifest are not automatically replaced. Source
 input is controlled by `-i`; final deployment output by `-o`. Intermediate caches
@@ -30,14 +30,14 @@ as the source root.
 Each stage retains its own freshness and prerequisite checks and writes the JSON
 records the next stage needs. A single stage runs through its own operation
 (`--generate-vanilla`, `--generate-vanilla-cache`, `--generate-source-cache`,
-`--merge`, `--deploy`), which brings its prerequisites up to date first.
+`--generate-overwrite-cache`, `--merge`, `--deploy`), which brings its prerequisites up to date first.
 Pipeline force applies to derived stages, not existing raw vanilla. The game build
 applies only to the vanilla-cache stage; raw vanilla always holds every stage.
 
 ## Module Responsibilities
 
 Each artifact has one owning module (`vanilla`, `vanilla_cache`, `source_cache`,
-`overwrite`, merge and deploy). The owner reads its own files, checks their
+`overwrite`, `overwrite_cache`, merge and deploy). The owner reads its own files, checks their
 freshness and exposes the data other stages need; consumers do not walk another
 stage's directories or parse its records. Overwrite application is likewise
 exposed by the overwrite module, and merge reads overwrite data only through it.
@@ -54,14 +54,18 @@ same generation as `--generate-vanilla`, holding no generation logic of its own.
 
 ## Source Cache
 
-Source-cache generation moves vanilla-named inputs from resources into the cache,
-retaining original paths. Unmatched files stay in the resource, as do the
+Source-cache generation moves vanilla-named inputs and every YMAP from resources into the
+cache, retaining original paths. Other files stay in the resource, as do the
 directories the moved files leave empty; replacements archive prior cached files. Resource names must be unique, and colliding stream
 paths are rejected. Scoped updates retain other inventories for global conflict
 and relationship analysis. Missing cached inputs are errors, not silent deletions.
 
 For each cached YMAP that overrides a vanilla YMAP, the source cache writes a diff
-document against the latest vanilla file. The document records both files'
+document against the latest vanilla file. A YMAP that resources add, named after no vanilla
+YMAP, is compared with an empty YMAP, so that its items are additions that overwrites can
+leave out; the baseline depends on no source, so overwrites stay current while their own
+source does. `added_ymap_relationships.json` records the added YMAPs' parents per resource.
+The document records both files'
 fingerprints and the matching tolerances; it is reused while they are unchanged
 and regenerated otherwise. Checking reads every document, so `diff/inputs.json`
 records the diff layout, tolerances and vanilla cache revision the diffs were taken
@@ -85,7 +89,8 @@ diff record and the generation index alone, and are kept while both are unchange
 ## Merge
 
 1. Ensure the derived vanilla and source caches are current.
-2. Dispatch latest vanilla `.ybn` and `.ymap` files to separate merge handlers.
+2. Dispatch latest vanilla `.ybn` and `.ymap` files, and the YMAPs resources add, to
+   separate merge handlers.
 3. For YMAPs, read each source's diff document, leave out the differences its
    resource overwrite selects, add the LOD light removals of resources shipping only
    the other YMAP of a light pair and the changes carried over from older generations,
@@ -98,6 +103,15 @@ diff record and the generation index alone, and are kept while both are unchange
    replay every change. YBNs apply supported source changes directly.
 4. Write merged native stream files under extension subdirectories (`ymap/`, `ybn/`),
    `_omit.txt` and `duplicates.json` at the selected output root.
+
+An added YMAP is merged as the overwrite cache records it. By default it is taken from one
+resource, the one whose name sorts last, as the one loaded last, with a warning when others
+ship it too; its name, flags, extents and block are kept. It is compared with that source
+rather than the empty YMAP, so it is written only when the merge changes it and is otherwise
+deployed as a clone, unless other resources ship it too: then it is always written,
+replacing theirs. When an overwrite names its base source, the base source's YMAP takes the
+place of vanilla, and the other resources' diffs against it are merged into it as
+resources replacing a vanilla YMAP are.
 
 Merge output is staged and replaces the selected output directory after a
 successful run. The default output is `asset/merged`. A missing or stale diff
@@ -125,11 +139,21 @@ resolution reason. They describe competing entity changes, not filename conflict
 ## Overwrites
 
 Overwrites are user edits applied to merge inputs without changing source or
-cache bytes. `overwrite/resources/{resourceName}.json` lists, per stream file of
-that resource, the differences of its diff document to leave out of the merge.
-Array items are selected by content rather than position. An entry applies only
-while the source and vanilla files match the fingerprints it was written against;
-otherwise it is skipped with a warning, as are selectors that match no difference.
+cache bytes; besides the sources, they are the only input written from outside the tool.
+The source cache never reads them: it keeps the sources and preprocesses them for reading.
+What the overwrites call for is derived into the overwrite cache, as the source cache is
+from the sources, by its own stage before the merge: which resource's YMAP wins for each
+YMAP that resources add (`added_ymaps.json`), the other resources' diffs against a base
+source an overwrite names, and the base source's own overwrite as removals from it. The
+cache records a digest of the source and vanilla caches and every overwrite, and a merge
+reading one that no longer matches fails.
+
+`overwrite/resources/{resourceName}/{stream_path}.diff.json` lists the differences of that
+stream file's diff document to leave out of the merge, or leaves the file out whole.
+Array items are selected by content rather than position. An entry leaving out
+differences applies only while the source file and the diff document's baseline match the
+fingerprints it was written against; otherwise it is skipped with a warning, as are
+selectors that match no difference.
 Merge checks every overwrite against the current files on each run, including runs
 that reuse their output, and returns those it leaves out; the pipeline prints them as
 `ignored_overwrites`.
@@ -141,6 +165,9 @@ existing YMAPs. The differences join the merge as the last source rather than
 overriding its result, so the merge policy applies to them unchanged; a file with
 one is merged even when no resource replaces it. It applies only while the latest
 vanilla file matches its fingerprint. YBN overwrites are not yet supported.
+
+`overwrite/added/ymap/{fileName}.json` names the base source of a YMAP that several
+resources add, in place of the default choice.
 
 ## Inspection
 

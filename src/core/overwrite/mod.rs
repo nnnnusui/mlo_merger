@@ -1,13 +1,20 @@
 //! User edits applied to merge inputs without changing source or cache files.
 //!
-//! `<overwrite>/resources/<resource name>.json` holds a [`ResourceOverwrite`]: for each stream file
-//! of that resource, the differences to leave out of the merge. An entry applies only while the
-//! source and vanilla files are those it was written against.
+//! `<overwrite>/resources/<resource name>/<stream path>.diff.json` holds a
+//! [`StreamFileOverwrite`]: the differences of that stream file's diff document to leave out of
+//! the merge, or that the file is left out whole. One leaving out differences applies only while
+//! the source file and the diff document's baseline are those it was written against.
 //!
 //! `<overwrite>/vanilla/latest/ymap/<file name>.diff.json` holds a [`VanillaOverwrite`]:
 //! differences from a latest vanilla YMAP, merged after every resource's. It applies only while
 //! that vanilla file is the one it was written against.
+//!
+//! `<overwrite>/added/ymap/<file name>.json` holds an [`AddedYmapOverwrite`]: the base source of
+//! a YMAP that several resources add, from which the others' differences are taken.
+//!
+//! What these call for is derived into the overwrite cache (see [`crate::core::overwrite_cache`]).
 
+mod added;
 mod skip;
 #[cfg(test)]
 mod test;
@@ -21,41 +28,48 @@ use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 use std::path::Path;
 
+pub use added::AddedYmapOverwrite;
 pub use skip::skip_diffs;
 pub use vanilla::VanillaOverwrite;
 
-/// The overwrites of one resource, read from `resources/<resource name>.json`.
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
-#[cfg_attr(feature = "typescript", derive(specta::Type))]
-pub struct ResourceOverwrite {
-  /// Version of the document layout.
-  pub schema_version: u32,
-  /// The overwrites of each stream file, keyed by its path below the resource's `stream`
-  /// directory, such as `vanilla/hei_ch1_11.ymap`.
-  pub files: BTreeMap<String, StreamFileOverwrite>,
-}
+/// The extension of a resource overwrite document, after the stream file's own path.
+const DOCUMENT_EXTENSION: &str = ".diff.json";
 
-impl ResourceOverwrite {
-  /// The current [`Self::schema_version`].
-  pub const SCHEMA_VERSION: u32 = 1;
-}
-
-/// The overwrites of one stream file of a resource.
+/// The overwrite of one stream file of a resource, read from
+/// `resources/<resource name>/<stream path>.diff.json`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "typescript", derive(specta::Type))]
 pub struct StreamFileOverwrite {
+  /// Version of the document layout.
+  pub schema_version: u32,
+  /// Leaves the stream file out of the merge whole, whatever it holds; `source`, `vanilla` and
+  /// `skip` are then not needed.
+  #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+  pub ignore: bool,
   /// The source file this overwrite was written against.
-  pub source: OverwriteFingerprint,
-  /// The vanilla file this overwrite was written against.
-  pub vanilla: OverwriteFingerprint,
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  #[cfg_attr(feature = "typescript", specta(optional))]
+  pub source: Option<OverwriteFingerprint>,
+  /// The baseline of the diff document this overwrite was written against, its `vanilla`: the
+  /// latest vanilla file, the empty YMAP a YMAP resources add is compared with, or the base
+  /// source's YMAP.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  #[cfg_attr(feature = "typescript", specta(optional))]
+  pub vanilla: Option<OverwriteFingerprint>,
   /// The differences to leave out of the merge, in the shape of the diff document's `diffs`.
   ///
   /// In an object, `true` leaves out the field's whole difference and a nested selector only
   /// the parts it names. In an array, each selector leaves out the items it matches: an item's
   /// variant matches when every field written equals the item's, and its `changes`, when given,
   /// leaves out only the changes it names instead of the whole item.
-  #[cfg_attr(feature = "typescript", specta(type = YmapDiffSkip))]
-  pub skip: serde_json::Value,
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  #[cfg_attr(feature = "typescript", specta(optional, type = Option<YmapDiffSkip>))]
+  pub skip: Option<serde_json::Value>,
+}
+
+impl StreamFileOverwrite {
+  /// The current [`Self::schema_version`].
+  pub const SCHEMA_VERSION: u32 = 1;
 }
 
 /// An overwrite the merge leaves out, as the files it names are missing or differ from those it
@@ -67,7 +81,7 @@ pub struct IgnoredOverwrite {
   #[serde(skip_serializing_if = "Option::is_none")]
   #[cfg_attr(feature = "typescript", specta(optional))]
   pub resource: Option<String>,
-  /// The overwritten file, in lowercase: the key in the resource overwrite's `files`, such as
+  /// The overwritten file, in lowercase: a resource overwrite's stream path, such as
   /// `vanilla/hei_ch1_11.ymap`, or the vanilla overwrite's file name, such as `hei_ch1_11.ymap`.
   pub file: String,
   pub reason: IgnoredOverwriteReason,
@@ -110,16 +124,18 @@ impl OverwriteFingerprint {
 }
 
 impl StreamFileOverwrite {
-  /// Why this overwrite does not apply to the current `source` and `vanilla` files, if it
-  /// does not.
+  /// Why this overwrite does not apply to the current `source` file and diff baseline
+  /// `vanilla`, if it does not. One leaving the file out whole always applies.
   pub fn ignored_because(
     &self,
     source: &OverwriteFingerprint,
     vanilla: &OverwriteFingerprint,
   ) -> Option<IgnoredOverwriteReason> {
-    if self.source != *source {
+    if self.ignore {
+      None
+    } else if self.source.as_ref() != Some(source) {
       Some(IgnoredOverwriteReason::SourceChanged)
-    } else if self.vanilla != *vanilla {
+    } else if self.vanilla.as_ref() != Some(vanilla) {
       Some(IgnoredOverwriteReason::VanillaChanged)
     } else {
       None
@@ -132,8 +148,9 @@ impl StreamFileOverwrite {
   }
 
   /// Leaves this overwrite's skipped differences out of `diff`, the differences of the source
-  /// from vanilla as they are now; does nothing when they are not the files it was written
-  /// against. `label` names the stream file in the log.
+  /// from its baseline as they are now; does nothing when they are not the files it was written
+  /// against, or when it leaves the file out whole, which the merge does instead. `label` names
+  /// the stream file in the log.
   pub fn apply(
     &self,
     diff: &mut YmapDiffFields,
@@ -141,12 +158,15 @@ impl StreamFileOverwrite {
     vanilla: &OverwriteFingerprint,
     label: &str,
   ) -> Result<()> {
+    let Some(skip) = self.skip.as_ref().filter(|_| !self.ignore) else {
+      return Ok(());
+    };
     // `Merge` reports this with every other overwrite it leaves out.
     if self.ignored_because(source, vanilla).is_some() {
       tracing::debug!("Overwrite of {label} was written against other files; not applied");
       return Ok(());
     }
-    let unmatched = skip_diffs(diff, &self.skip).map_err(|error| format!("{label}: {error}"))?;
+    let unmatched = skip_diffs(diff, skip).map_err(|error| format!("{label}: {error}"))?;
     for path in unmatched {
       tracing::warn!("Overwrite of {label} skips {path}, which is not among the differences");
     }
@@ -154,21 +174,33 @@ impl StreamFileOverwrite {
   }
 }
 
-/// Every resource's overwrites, keyed by resource name, and the latest vanilla files'.
+/// Every resource stream file's overwrite, keyed by resource name and stream path, the latest
+/// vanilla files' and the base sources of added YMAPs.
 #[derive(Debug, Clone, Default)]
 pub struct Overwrites {
-  resources: BTreeMap<String, ResourceOverwrite>,
+  resources: BTreeMap<(String, String), StreamFileOverwrite>,
   vanilla: BTreeMap<String, VanillaOverwrite>,
+  added: BTreeMap<String, AddedYmapOverwrite>,
 }
 
 impl Overwrites {
-  /// Reads `<directory>/resources/*.json` and `<directory>/vanilla/latest/ymap/*.diff.json`; a
+  /// Reads `<directory>/resources/<resource>/**/*.diff.json`,
+  /// `<directory>/vanilla/latest/ymap/*.diff.json` and `<directory>/added/ymap/*.json`; a
   /// missing directory has no overwrites.
   pub fn load(directory: &Path) -> Result<Self> {
     Ok(Self {
       resources: load_resources(directory)?,
       vanilla: vanilla::load(directory)?,
+      added: added::load(directory)?,
     })
+  }
+
+  /// The base source of the added YMAP named `file_name`, matched case-insensitively.
+  pub fn added_file(
+    &self,
+    file_name: &str,
+  ) -> Option<&AddedYmapOverwrite> {
+    self.added.get(&file_name.to_ascii_lowercase())
   }
 
   /// The overwrite of the stream file at `stream_path` below the `stream` directory of the
@@ -178,14 +210,12 @@ impl Overwrites {
     resource: &str,
     stream_path: &str,
   ) -> Option<&StreamFileOverwrite> {
-    self.resources.get(&resource.to_ascii_lowercase())?.files.get(&normalize(stream_path))
+    self.resources.get(&(resource.to_ascii_lowercase(), normalize(stream_path)))
   }
 
-  /// Every overwritten stream file as `(resource name, stream path)`.
+  /// Every overwritten stream file as `(resource name, stream path)`, in lowercase.
   pub fn keys(&self) -> impl Iterator<Item = (&str, &str)> {
-    self.resources.iter().flat_map(|(resource, overwrite)| {
-      overwrite.files.keys().map(move |path| (resource.as_str(), path.as_str()))
-    })
+    self.resources.keys().map(|(resource, path)| (resource.as_str(), path.as_str()))
   }
 
   /// The overwrite of the latest vanilla file named `file_name`, matched case-insensitively.
@@ -202,55 +232,61 @@ impl Overwrites {
   }
 }
 
-/// Reads `<directory>/resources/*.json`, keyed by lowercase resource name.
-fn load_resources(directory: &Path) -> Result<BTreeMap<String, ResourceOverwrite>> {
+/// Reads `<directory>/resources/<resource>/**/*.diff.json`, keyed by lowercase resource name and
+/// stream path. Files directly in `resources`, the earlier one-document-per-resource layout, are
+/// reported and not read.
+fn load_resources(directory: &Path) -> Result<BTreeMap<(String, String), StreamFileOverwrite>> {
   let resources_dir = directory.join("resources");
-  let mut resources = BTreeMap::new();
+  let mut overwrites = BTreeMap::new();
   if !fs::is_dir(&resources_dir) {
-    return Ok(resources);
+    return Ok(overwrites);
   }
-  for entry in fs::read_dir(&resources_dir)? {
-    let path = entry?.path();
-    if !fs::is_file(&path) || path.extension().is_none_or(|extension| extension != "json") {
+  for entry in crate::platform::fs::WalkDir::new(&resources_dir).follow_links(false) {
+    let entry = entry?;
+    if !entry.file_type().is_file() {
       continue;
     }
-    let name = path
-      .file_stem()
-      .and_then(|name| name.to_str())
-      .ok_or_else(|| format!("Overwrite file name is not UTF-8: {}", path.display()))?;
-    let overwrite: ResourceOverwrite = crate::common::json::read_json(&path)
+    let path = entry.path();
+    let relative = path.strip_prefix(&resources_dir)?.to_string_lossy().replace('\\', "/");
+    let Some((resource, file)) = relative.split_once('/') else {
+      tracing::warn!(
+        "Resource overwrites are read from resources/<resource>/<stream path>.diff.json; ignoring {}",
+        path.display()
+      );
+      continue;
+    };
+    let Some(stream_path) = file.strip_suffix(DOCUMENT_EXTENSION) else {
+      tracing::warn!("Not a resource overwrite; ignoring {}", path.display());
+      continue;
+    };
+    let overwrite: StreamFileOverwrite = crate::common::json::read_json(path)
       .map_err(|error| format!("Cannot read {}: {error}", path.display()))?;
-    if overwrite.schema_version != ResourceOverwrite::SCHEMA_VERSION {
+    if overwrite.schema_version != StreamFileOverwrite::SCHEMA_VERSION {
       return Err(
         format!(
           "{} has schema version {}; expected {}",
           path.display(),
           overwrite.schema_version,
-          ResourceOverwrite::SCHEMA_VERSION
+          StreamFileOverwrite::SCHEMA_VERSION
         )
         .into(),
       );
     }
-    let files = overwrite
-      .files
-      .into_iter()
-      .map(|(stream_path, file)| (normalize(&stream_path), file))
-      .collect();
-    resources.insert(
-      name.to_ascii_lowercase(),
-      ResourceOverwrite {
-        files,
-        ..overwrite
-      },
-    );
+    if !overwrite.ignore
+      && (overwrite.source.is_none() || overwrite.vanilla.is_none() || overwrite.skip.is_none())
+    {
+      return Err(
+        format!("{} needs source, vanilla and skip unless it sets ignore", path.display()).into(),
+      );
+    }
+    overwrites.insert((resource.to_ascii_lowercase(), normalize(stream_path)), overwrite);
   }
   tracing::info!(
-    "Loaded overwrites of {} stream files in {} resources from {}",
-    resources.values().map(|resource| resource.files.len()).sum::<usize>(),
-    resources.len(),
+    "Loaded overwrites of {} stream files from {}",
+    overwrites.len(),
     resources_dir.display()
   );
-  Ok(resources)
+  Ok(overwrites)
 }
 
 fn normalize(stream_path: &str) -> String {

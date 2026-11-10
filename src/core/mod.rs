@@ -9,6 +9,7 @@ pub mod format;
 pub mod get_diff;
 pub mod merge;
 pub mod overwrite;
+pub mod overwrite_cache;
 pub mod pipeline;
 pub mod read;
 pub mod source_cache;

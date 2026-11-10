@@ -121,8 +121,11 @@ pub(super) fn update_selected_resources(
     let cache_root = output.join("resources").join(cache_name.as_ref());
     let mut retained = previous_inventory.cloned();
     let mut targets = BTreeMap::new();
-    for file in
-      inventory.files_by_format.values().flatten().filter(|file| file.vanilla.is_some()).chain(
+    for file in inventory
+      .files_by_format
+      .iter()
+      .flat_map(|(format, files)| files.iter().filter(move |file| is_collected(format, file)))
+      .chain(
         retained.iter().flat_map(|inventory| inventory.files_by_format.values().flatten()).filter(
           |file| file.cached_path.as_ref().is_some_and(|path| fs::is_file(output.join(path))),
         ),
@@ -188,39 +191,41 @@ pub(super) fn update_selected_resources(
         }
       }
     }
-    for file in inventory.files_by_format.values_mut().flatten() {
-      if file.cached_path.is_some() || file.vanilla.is_none() {
-        continue;
-      }
-      let relative = stream_relative_path(&file.path)?;
-      let destination = cache_root.join(relative);
-      ensure_safe_path(output, &destination)?;
-      let mut replaced = None;
-      if fs::exists(&destination).unwrap_or(false) {
-        fs::create_dir_all(history.as_path())?;
-        if !fs::exists(history.join(crate::core::source_cache::CACHE_INFO)).unwrap_or(false)
-          && let Some(previous) = previous
-        {
-          write_json(&history.join(crate::core::source_cache::CACHE_INFO), previous)?;
+    for (format, files) in &mut inventory.files_by_format {
+      for file in files.iter_mut() {
+        if file.cached_path.is_some() || !is_collected(format, file) {
+          continue;
         }
-        let archived = history.join(cache_name.as_ref()).join(relative);
-        fs::create_dir_all(archived.parent().ok_or("Archive path has no parent")?)?;
-        let old_fingerprint = fingerprint(&destination, None)?;
-        write_json(
-          &archived.with_file_name(format!(
-            "{}.fingerprint.json",
-            archived.file_name().unwrap().to_string_lossy()
-          )),
-          &old_fingerprint,
-        )?;
-        move_file(&destination, &archived)?;
-        replaced = Some(old_fingerprint.sha256);
+        let relative = stream_relative_path(&file.path)?;
+        let destination = cache_root.join(relative);
+        ensure_safe_path(output, &destination)?;
+        let mut replaced = None;
+        if fs::exists(&destination).unwrap_or(false) {
+          fs::create_dir_all(history.as_path())?;
+          if !fs::exists(history.join(crate::core::source_cache::CACHE_INFO)).unwrap_or(false)
+            && let Some(previous) = previous
+          {
+            write_json(&history.join(crate::core::source_cache::CACHE_INFO), previous)?;
+          }
+          let archived = history.join(cache_name.as_ref()).join(relative);
+          fs::create_dir_all(archived.parent().ok_or("Archive path has no parent")?)?;
+          let old_fingerprint = fingerprint(&destination, None)?;
+          write_json(
+            &archived.with_file_name(format!(
+              "{}.fingerprint.json",
+              archived.file_name().unwrap().to_string_lossy()
+            )),
+            &old_fingerprint,
+          )?;
+          move_file(&destination, &archived)?;
+          replaced = Some(old_fingerprint.sha256);
+        }
+        fs::create_dir_all(destination.parent().ok_or("Cache file has no parent")?)?;
+        move_file(&resource.join(&file.path), &destination)?;
+        let cached_path = format!("resources/{cache_name}/{relative}");
+        changes.record(&cached_path, replaced.as_deref(), Some(&file.sha256));
+        file.cached_path = Some(cached_path);
       }
-      fs::create_dir_all(destination.parent().ok_or("Cache file has no parent")?)?;
-      move_file(&resource.join(&file.path), &destination)?;
-      let cached_path = format!("resources/{cache_name}/{relative}");
-      changes.record(&cached_path, replaced.as_deref(), Some(&file.sha256));
-      file.cached_path = Some(cached_path);
     }
     for files in inventory.files_by_format.values_mut() {
       files.sort_by(|left, right| left.path.cmp(&right.path));
@@ -242,6 +247,15 @@ pub(super) fn update_selected_resources(
     );
   }
   Ok(changed)
+}
+
+/// Whether the source cache moves `file`, of `format`, out of its resource: every file named
+/// after a vanilla file, and every YMAP, as the YMAPs resources add are merged too.
+fn is_collected(
+  format: &str,
+  file: &crate::core::source_cache::types::SourceFile,
+) -> bool {
+  file.vanilla.is_some() || format == ".ymap"
 }
 
 pub(super) fn remove_missing_resources(

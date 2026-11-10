@@ -36,13 +36,14 @@ in `web/`, described under `web` in its `release.json`; see [Browser build](web.
 | Source-cache diff documents | `YmapComparisonDiff`, `YmapComparisonFile`, `YmapDiffFields`, `YmapEntityDiff`, `YmapEntityFieldDiff` |
 | Changes carried to newer DLC generations | `YmapPropagatedDiff`, `YmapPropagationOrigin` |
 | Vanilla YMAP generations | `GenerationIndex`, `GenerationUnit` |
-| Overwrite documents | `ResourceOverwrite`, `StreamFileOverwrite`, `OverwriteFingerprint`, `YmapDiffSkip`, `VanillaOverwrite` |
+| Overwrite documents | `StreamFileOverwrite`, `OverwriteFingerprint`, `YmapDiffSkip`, `VanillaOverwrite`, `AddedYmapOverwrite` |
+| Overwrite cache | `AddedYmaps`, `AddedYmap`, `AddedYmapSource`, `AddedYmapChoice` |
 | Pipeline stdout | `PipelineReport`, `PipelineChanges`, `StoreChanges`, `IgnoredOverwrite`, `IgnoredOverwriteReason` |
 | Merge diagnostics | `DuplicateReport` |
 
 ```typescript
 import type {
-  OverwriteFingerprint, PipelineReport, ReadResult, ResourceOverwrite, RTreeIndex, Ymap,
+  OverwriteFingerprint, PipelineReport, ReadResult, RTreeIndex, StreamFileOverwrite, Ymap,
   YmapComparisonDiff, YmapDiffSkip, YmapEntity, YmapEntityDiff, YmapReadDocument,
 } from "./gen_mlo_merger";
 ```
@@ -224,8 +225,9 @@ vanilla. The last stdout line is a `ReadResult`:
 
 ### Diff Documents
 
-Source-cache generation writes one diff document for every source YMAP that replaces a
-vanilla YMAP:
+Source-cache generation writes one diff document for every source YMAP: against the vanilla
+YMAP it replaces, or, for a YMAP the resource adds, against its baseline (see
+[Added YMAPs](reference.md#added-ymaps)):
 
 ```text
 asset/source-cache/diff/{resource}/{stream_path}.diff.json
@@ -235,41 +237,47 @@ asset/source-cache/diff/{resource}/{stream_path}.diff.json
   entries from it.
 - Copy `source.sha256`/`size` and `vanilla.sha256`/`size` into the overwrite unchanged.
   `source.path` and `vanilla.path` name the files relative to their stores, such as
-  `resources/{resource}/{stream_path}` and `latest/ymap/{file_name}`.
+  `resources/{resource}/{stream_path}` and `latest/ymap/{file_name}`. For an added YMAP,
+  `vanilla.path` is empty: it is compared with an empty YMAP.
 - Array differences are `Added`, `Removed`, `Modified` (and `Replaced` for non-entity arrays).
   `Removed.index` and `Modified.before_index` index the vanilla model, and
   `Modified.after_index` indexes the source model. Added entities carry their whole
   entity, including its `guid`.
-- YMAPs without a diff document, such as custom YMAPs that replace no vanilla file, cannot
-  be overwritten.
+- An added YMAP's diff lists each of its items as `Added`, so an overwrite leaves out an
+  entity with `{ "Added": { "entity": { "guid": ... } } }`. When several resources add a
+  YMAP of that name, only the merged resources' overwrites apply; the others' are listed
+  as `missing_source`.
+- YMAPs without a diff document, such as those whose diff could not be taken, cannot be
+  overwritten.
 
 ### Overwrite Documents
 
 ```text
-asset/overwrite/resources/{resource}.json
+asset/overwrite/resources/{resource}/{stream_path}.diff.json
 ```
 
 ```json
 {
   "schema_version": 1,
-  "files": {
-    "hei_ch1_11.ymap": {
-      "source":  { "sha256": "<diff document source.sha256>",  "size": 5638 },
-      "vanilla": { "sha256": "<diff document vanilla.sha256>", "size": 5675 },
-      "skip": {
-        "entities": [
-          { "Modified": { "before_index": 0, "changes": { "position": true } } },
-          { "Added": { "entity": { "guid": 1513947137 } } }
-        ],
-        "box_occluders": [{ "Removed": { "index": 0 } }]
-      }
-    }
+  "source":  { "sha256": "<diff document source.sha256>",  "size": 5638 },
+  "vanilla": { "sha256": "<diff document vanilla.sha256>", "size": 5675 },
+  "skip": {
+    "entities": [
+      { "Modified": { "before_index": 0, "changes": { "position": true } } },
+      { "Added": { "entity": { "guid": 1513947137 } } }
+    ],
+    "box_occluders": [{ "Removed": { "index": 0 } }]
   }
 }
 ```
 
-- `files` is keyed by `stream_path`. There is one document per resource, so read it and
-  replace only the entry you are changing.
+- There is one document per stream file, at the same relative path as its diff document
+  (`asset/source-cache/diff/{resource}/{stream_path}.diff.json`, or the overwrite cache's).
+  Resource names and stream paths are matched case-insensitively.
+- `{ "schema_version": 1, "ignore": true }` leaves the stream file out of the merge whole,
+  whatever it holds; it needs no fingerprints. For a YMAP several resources add, the file is
+  also left out of the choice of which one wins. It does not keep the file from being
+  deployed when nothing merged takes its name.
 - In an object, `true` leaves out a field's whole difference; a nested selector leaves out
   only the parts it names.
 - In an array, a selector leaves out the entries whose written fields all match. With
@@ -311,6 +319,39 @@ asset/overwrite/vanilla/latest/ymap/{file_name}.diff.json
 - A vanilla YMAP with an overwrite is merged even when no resource replaces it.
 - An overwrite whose `vanilla` no longer matches the latest vanilla file is not applied and is
   listed in the pipeline's `ignored_overwrites`. Rewrite it after a vanilla update.
+
+### Added YMAP Overwrite Documents
+
+```text
+asset/overwrite/added/ymap/{file_name}.json
+```
+
+```json
+{ "schema_version": 1, "base_source": "sample_resource_b" }
+```
+
+- Without a document, of resources adding a YMAP of the same name the one whose name sorts
+  last wins, with a warning on every merge. `asset/overwrite-cache/added_ymaps.json`
+  (`AddedYmaps`) lists each added YMAP's winner (`base`), why it won (`chosen_by`: `only`,
+  `last_loaded` or `overwrite`) and every resource shipping it (`shipped_by`).
+- With one, the YMAP of `base_source` (required) takes the place of vanilla, and the choice
+  is only logged. Every other resource's differences from it are written to
+  `asset/overwrite-cache/diff/{resource}/{stream_path}.diff.json` and merged into it, as
+  resources' changes to a vanilla YMAP are: a removal wins, and otherwise the first change.
+  Leave some out with a resource overwrite of that resource's `stream_path` written from it,
+  as from a source-cache diff document, or leave a resource out with `ignore`. Its `vanilla`
+  is the base source's YMAP, so the overwrite is ignored as `vanilla_changed` when the base
+  source changes.
+- An item of the base source that another resource lacks is a removal in that resource's
+  diff, and removals win, so leave such removals out unless the item should go.
+- The base source's own resource overwrite, written against its source-cache diff document,
+  still applies: its YMAP without the items it leaves out is what the others' differences
+  are merged into.
+- The overwrite cache is derived by `--generate-overwrite-cache`, which `--merge` and
+  `--pipeline` run first; run it alone after writing the document to get the diffs to write
+  overwrites from. A merge reading an overwrite cache older than the overwrites fails.
+- Resource names are directory names, matched case-insensitively. A base source that does
+  not ship the YMAP, or whose file is ignored, is left out with a warning.
 
 ### Applying Overwrites
 
@@ -369,8 +410,8 @@ or removed (`PipelineChanges`), and the overwrites the merge did not apply:
 - Only content changes count: a forced rebuild that writes the same bytes lists nothing, and a
   run that changes nothing prints empty lists.
 - `ignored_overwrites` is the current state, not a change: it lists every overwrite that does
-  not apply to the current files, on every run. An entry with `resource` is that resource
-  document's `files[file]`; one without is the vanilla overwrite
+  not apply to the current files, on every run. An entry with `resource` is the resource
+  overwrite `resources/{resource}/{file}.diff.json`; one without is the vanilla overwrite
   `vanilla/latest/ymap/{file}.diff.json`. Both names are lowercase; documents are matched
   case-insensitively. `reason` is one of:
 
@@ -402,7 +443,7 @@ sequenceDiagram
     S-->>C: models and diffs
     C->>C: render in NUI, choose differences to skip
     C->>S: resource, stream_path, fingerprints, skip, GetGameBuildNumber()
-    S->>S: write overwrite/resources/{resource}.json
+    S->>S: write overwrite/resources/{resource}/{stream_path}.diff.json
     S->>M: -y -i ... -o ... --gamebuild {build} (pipeline)
 ```
 
@@ -590,7 +631,7 @@ Entity positions (`YmapEntity.position`) can also be marked in game, for example
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import { basename, dirname, resolve } from "path";
 import type {
-  PipelineReport, ResourceOverwrite, StoreChanges, StreamFileOverwrite, YmapDiffSkip,
+  PipelineReport, StoreChanges, StreamFileOverwrite, YmapDiffSkip,
 } from "../shared/gen_mlo_merger";
 import type { SkipRequest } from "../shared/types";
 import { refreshIndex } from "./inspect";
@@ -600,21 +641,24 @@ const RESOURCES_DIR = "C:/fxserver/resources";
 const DEPLOY_DIR = "C:/fxserver/resources/[local]/mlo_merged";
 
 onNet("mlo:skip", async (request: SkipRequest, gameBuild: number) => {
-  const path = resolve(MERGER_CWD, "asset/overwrite/resources", `${request.resource}.json`);
-  const overwrite: ResourceOverwrite = existsSync(path)
+  const path = resolve(
+    MERGER_CWD, "asset/overwrite/resources", request.resource, `${request.streamPath}.diff.json`,
+  );
+  const current: StreamFileOverwrite | undefined = existsSync(path)
     ? JSON.parse(readFileSync(path, "utf8"))
-    : { schema_version: 1, files: {} };
+    : undefined;
 
   // Keep earlier selectors only while they were written against the same files.
-  const current: StreamFileOverwrite | undefined = overwrite.files[request.streamPath];
   const sameFiles =
-    current?.source.sha256 === request.source.sha256 && current?.vanilla.sha256 === request.vanilla.sha256;
-  const previous: Exclude<YmapDiffSkip, true> = sameFiles && current.skip !== true ? current.skip : {};
+    current?.source?.sha256 === request.source.sha256 && current?.vanilla?.sha256 === request.vanilla.sha256;
+  const previous: Exclude<YmapDiffSkip, true> =
+    sameFiles && current?.skip && current.skip !== true ? current.skip : {};
   const entities = [
     ...(previous.entities === true ? [] : previous.entities ?? []),
     ...(request.skip !== true && request.skip.entities !== true ? request.skip.entities ?? [] : []),
   ];
-  overwrite.files[request.streamPath] = {
+  const overwrite: StreamFileOverwrite = {
+    schema_version: 1,
     source: request.source,
     vanilla: request.vanilla,
     skip: { ...previous, entities },

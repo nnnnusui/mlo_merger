@@ -41,8 +41,9 @@ caches, merges, then deploys, reusing every unchanged stage. Resources are read 
 `asset/source` and the deployable resource is written to `asset/merged_mlo`; see the
 [command reference](docs/reference.md#pipeline) for every path and option.
 
-**Source-cache generation moves vanilla-named YMAP/YBN files out of resource stream
-directories** into `asset/source-cache`; `--restore-source-cache` moves them back.
+**Source-cache generation moves vanilla-named YMAP/YBN files and every other YMAP out of
+resource stream directories** into `asset/source-cache`; `--restore-source-cache` moves them
+back.
 
 ## Supported Files
 

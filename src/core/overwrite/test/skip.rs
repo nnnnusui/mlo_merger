@@ -116,9 +116,11 @@ fn applies_only_against_the_files_it_was_written_for() {
     size: 1,
   };
   let overwrite = StreamFileOverwrite {
-    source: fingerprint("source"),
-    vanilla: fingerprint("vanilla"),
-    skip: json!({"content_flags": true}),
+    schema_version: StreamFileOverwrite::SCHEMA_VERSION,
+    ignore: false,
+    source: Some(fingerprint("source")),
+    vanilla: Some(fingerprint("vanilla")),
+    skip: Some(json!({"content_flags": true})),
   };
   let mut diff = diff();
   overwrite.apply(&mut diff, &fingerprint("other"), &fingerprint("vanilla"), "map").unwrap();
@@ -127,7 +129,7 @@ fn applies_only_against_the_files_it_was_written_for() {
   overwrite.apply(&mut diff, &fingerprint("source"), &fingerprint("vanilla"), "map").unwrap();
   assert_eq!(diff.content_flags, None);
   let invalid = StreamFileOverwrite {
-    skip: json!({"flags": false}),
+    skip: Some(json!({"flags": false})),
     ..overwrite
   };
   let mut diff = self::diff();
@@ -142,29 +144,50 @@ fn loads_resource_files_keyed_case_insensitively() {
   let root = std::env::temp_dir().join(format!("mlo_overwrite_{}", std::process::id()));
   let _ = fs::remove_dir_all(&root);
   assert!(Overwrites::load(&root).unwrap().keys().next().is_none());
-  fs::create_dir_all(root.join("resources")).unwrap();
+  fs::create_dir_all(root.join("resources/Cfx-Map/Vanilla")).unwrap();
   let file = json!({
+    "schema_version": 1,
     "source": {"sha256": "a", "size": 1},
     "vanilla": {"sha256": "b", "size": 2},
     "skip": {"content_flags": true}
   });
-  fs::write(
-    root.join("resources/Cfx-Map.json"),
-    serde_json::to_vec(&json!({"schema_version": 1, "files": {"Vanilla\\Map.ymap": file}}))
-      .unwrap(),
-  )
-  .unwrap();
-  fs::write(root.join("resources/notes.txt"), "ignored").unwrap();
+  fs::write(root.join("resources/Cfx-Map/Vanilla/Map.ymap.diff.json"), file.to_string()).unwrap();
+  fs::write(root.join("resources/Cfx-Map/notes.txt"), "ignored").unwrap();
+  // The earlier one-document-per-resource layout is not read.
+  fs::write(root.join("resources/legacy.json"), "{}").unwrap();
   let overwrites = Overwrites::load(&root).unwrap();
   assert_eq!(overwrites.keys().collect::<Vec<_>>(), [("cfx-map", "vanilla/map.ymap")]);
   let overwrite = overwrites.stream_file("cfx-map", "vanilla/MAP.ymap").unwrap();
-  assert_eq!(overwrite.vanilla.size, 2);
+  assert_eq!(overwrite.vanilla.as_ref().unwrap().size, 2);
+
+  // One leaving the file out whole needs nothing else, and always applies.
   fs::write(
-    root.join("resources/cfx-map.json"),
-    serde_json::to_vec(&json!({"schema_version": 2, "files": {}})).unwrap(),
+    root.join("resources/Cfx-Map/Vanilla/Map.ymap.diff.json"),
+    json!({"schema_version": 1, "ignore": true}).to_string(),
   )
   .unwrap();
-  let _ = fs::remove_file(root.join("resources/Cfx-Map.json"));
+  let overwrite =
+    Overwrites::load(&root).unwrap().stream_file("cfx-map", "vanilla/map.ymap").cloned();
+  let overwrite = overwrite.unwrap();
+  assert!(overwrite.ignore);
+  let fingerprint = OverwriteFingerprint {
+    sha256: "x".into(),
+    size: 1,
+  };
+  assert_eq!(overwrite.ignored_because(&fingerprint, &fingerprint), None);
+
+  // Others need their fingerprints and selectors, and the current layout version.
+  fs::write(
+    root.join("resources/Cfx-Map/Vanilla/Map.ymap.diff.json"),
+    json!({"schema_version": 1, "skip": {"content_flags": true}}).to_string(),
+  )
+  .unwrap();
+  assert!(Overwrites::load(&root).is_err());
+  fs::write(
+    root.join("resources/Cfx-Map/Vanilla/Map.ymap.diff.json"),
+    json!({"schema_version": 2, "ignore": true}).to_string(),
+  )
+  .unwrap();
   assert!(Overwrites::load(&root).is_err());
   fs::remove_dir_all(root).unwrap();
 }

@@ -6,7 +6,7 @@
 
 ## Overwrites
 
-Per-resource overwrites (`overwrite/resources/{resourceName}.json`) leave selected differences of a source YMAP's diff out of the merge. Vanilla overwrites (`overwrite/vanilla/latest/ymap/*.diff.json`) add differences from the latest vanilla YMAP as the last merge source.
+Resource overwrites (`overwrite/resources/{resourceName}/{stream_path}.diff.json`) leave selected differences of a source YMAP's diff out of the merge, or the file whole. Added YMAP overwrites (`overwrite/added/ymap/*.json`) name the base source of a YMAP several resources add; the overwrite cache derives what they call for. Vanilla overwrites (`overwrite/vanilla/latest/ymap/*.diff.json`) add differences from the latest vanilla YMAP as the last merge source.
 
 - [ ] Let a vanilla overwrite take precedence over resources' changes to the same items, if the merge policy gains configured priorities.
 - [ ] Support YBN overwrites.

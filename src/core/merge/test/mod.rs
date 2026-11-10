@@ -5,7 +5,7 @@ use crate::core::vanilla::{
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 
-/// Runs the vanilla and source cache steps before `self`, as `--merge` does.
+/// Runs the vanilla, source and overwrite cache steps before `self`, as `--merge` does.
 impl Merge {
   pub(crate) fn run_after_caches(
     &self,
@@ -21,6 +21,16 @@ impl Merge {
       force: false,
     }
     .run_after_vanilla_cache()?;
+    if let Some(output_dir) = &self.overwrite_cache_dir {
+      crate::core::overwrite_cache::BuildOverwriteCache {
+        source_dir: self.source_dir.clone(),
+        source_cache_dir: self.source_cache_dir.clone(),
+        vanilla_cache_dir: self.vanilla_cache_dir.clone(),
+        overwrite_dir: self.overwrite_dir.clone(),
+        output_dir: output_dir.clone(),
+      }
+      .run()?;
+    }
     self.run()
   }
 }

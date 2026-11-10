@@ -1,5 +1,6 @@
 //! Source stream inventory, vanilla matching, and conflict/load planning.
 
+mod added;
 mod check;
 mod conflicts;
 pub(crate) mod exclusions;
@@ -23,6 +24,9 @@ use crate::common::changes::StoreChanges;
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
+pub use added::{
+  AddedYmapRelationships, added_ymap_relationships, empty_baseline_bytes, empty_baseline_file,
+};
 pub(crate) use check::check;
 pub use restore::restore_source_cache;
 pub(crate) use streams::read_stream_bytes;
@@ -76,7 +80,8 @@ pub struct MergeSourceFile {
 /// Source inputs and vanilla YMAP closure selected by the source-cache analysis.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct MergeInputs {
-  /// Changed or conflicting source YMAPs with a latest vanilla baseline.
+  /// Changed or conflicting source YMAPs with a latest vanilla baseline, and every YMAP a
+  /// resource adds, named in [`Self::added_ymaps`].
   pub ymap: Vec<MergeSourceFile>,
   /// Conflicting source YBNs with a latest vanilla baseline.
   pub ybn: Vec<MergeSourceFile>,
@@ -85,6 +90,9 @@ pub struct MergeInputs {
   pub propagated: Vec<MergeSourceFile>,
   /// Latest vanilla YMAP filenames required by the source load plan.
   pub vanilla_ymaps_to_read: BTreeSet<String>,
+  /// The lowercase file names of the YMAPs resources add, which replace no vanilla YMAP and
+  /// whose diff documents are taken against an empty YMAP ([`empty_baseline_file`]).
+  pub added_ymaps: BTreeSet<String>,
 }
 
 /// `path` with `/` separators, as relative paths are recorded.
@@ -93,7 +101,7 @@ fn slash_path(path: &Path) -> String {
 }
 
 /// The [`SourceCacheMetadata::format_version`] this version writes.
-const FORMAT_VERSION: u32 = 4;
+const FORMAT_VERSION: u32 = 5;
 
 /// Reads the source cache's inventory, rejecting layouts this version cannot read.
 ///
@@ -248,6 +256,8 @@ pub(crate) struct SourceYmapIndex {
   /// file name; a resource may hold several YMAPs with the same name in different stream
   /// directories.
   pub(crate) paths: BTreeMap<(String, String), Vec<PathBuf>>,
+  /// The lowercase file names of the YMAPs resources add, compared with an empty YMAP.
+  pub(crate) added: BTreeSet<String>,
 }
 
 /// Indexes the YMAPs recorded in a generated source cache by resource name and file name; files
@@ -257,6 +267,7 @@ pub(crate) fn load_source_ymap_index(
   source_dir: &Path,
 ) -> Result<SourceYmapIndex> {
   let metadata = read_metadata(cache_dir)?;
+  let added = added::added_names(&metadata);
   let mut paths = BTreeMap::<_, Vec<_>>::new();
   for resource in metadata.resources.into_values() {
     let resource_name =
@@ -275,6 +286,7 @@ pub(crate) fn load_source_ymap_index(
   Ok(SourceYmapIndex {
     latest_vanilla_version: metadata.latest_vanilla_version,
     paths,
+    added,
   })
 }
 
@@ -386,9 +398,19 @@ pub fn load_merge_inputs(
         _ => continue,
       };
       for file in files {
-        let Some(vanilla) = &file.vanilla else {
+        // Every added YMAP is merged against its baseline; one whose diff could not be taken,
+        // as it cannot be read, is left as it is.
+        let added = added::is_added_ymap(&extension, &file)
+          && file.cached_path.is_some()
+          && fs::is_file(
+            cache_dir.join("diff").join(ymap_diff_path(&resource.source, &file.path)?),
+          );
+        if file.vanilla.is_none() && !added {
           continue;
-        };
+        }
+        if added {
+          inputs.added_ymaps.insert(file.file_name.to_ascii_lowercase());
+        }
         let relative_source = slash_path(&resource.source.join(&file.path));
         let original_path = source_dir.join(&relative_source);
         let (source_path, stored_path) = match &file.cached_path {
@@ -405,8 +427,9 @@ pub fn load_merge_inputs(
           .is_some_and(|paths| source_relative.as_ref().is_some_and(|path| paths.contains(path)));
         let required_child = extension == ".ymap"
           && required_ymap_sources.contains(&(resource_id.clone(), file.path.to_ascii_lowercase()));
+        let differs = file.vanilla.as_ref().is_none_or(|vanilla| !vanilla.content_matches);
         let selected_for_merge = match extension.as_str() {
-          ".ymap" => !vanilla.content_matches || conflict || required_child,
+          ".ymap" => differs || conflict || required_child,
           ".ybn" => conflict,
           _ => false,
         };

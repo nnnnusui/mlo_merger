@@ -56,6 +56,40 @@ pub struct Ymap {
   pub container_lods: Vec<YmapContainerLod>,
 }
 
+impl Ymap {
+  /// A YMAP without anything in it: the baseline YMAPs that resources add are compared with.
+  pub fn empty() -> Self {
+    Self {
+      name: String::new(),
+      parent: String::new(),
+      flags: 0,
+      content_flags: 0,
+      streaming_extents_min: Default::default(),
+      streaming_extents_max: Default::default(),
+      entities_extents_min: Default::default(),
+      entities_extents_max: Default::default(),
+      block: super::ymap_block::YmapBlock {
+        version: 0,
+        flags: 0,
+        name: String::new(),
+        exported_by: String::new(),
+        owner: String::new(),
+        time: String::new(),
+      },
+      entities: Vec::new(),
+      box_occluders: Vec::new(),
+      occlude_models: Vec::new(),
+      lod_lights: Vec::new(),
+      distant_lod_lights: super::ymap_distant_lod_lights::YmapDistantLodLights::default(),
+      physics_dictionaries: Vec::new(),
+      instanced_data: super::ymap_instanced_data::YmapInstancedData::default(),
+      time_cycle_modifiers: Vec::new(),
+      car_generators: Vec::new(),
+      container_lods: Vec::new(),
+    }
+  }
+}
+
 #[cfg(test)]
 mod tests {
   use struct_diff::Diff;

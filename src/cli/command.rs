@@ -5,6 +5,7 @@ use super::{
   deploy::{self, Deploy},
   find::{self, Find},
   from_xml::{self, FromXml},
+  generate_overwrite_cache::{self, GenerateOverwriteCache},
   generate_source_cache::{self, GenerateSourceCache},
   generate_vanilla::{self, GenerateVanilla},
   generate_vanilla_cache::{self, GenerateVanillaCache},
@@ -27,6 +28,8 @@ pub enum Command {
   GenerateVanillaCache(GenerateVanillaCache),
   /// Build source resource conflict data.
   GenerateSourceCache(GenerateSourceCache),
+  /// Derive what the overwrites call for.
+  GenerateOverwriteCache(GenerateOverwriteCache),
   /// Move cached files back to their original resource paths.
   RestoreSourceCache(RestoreSourceCache),
   /// Generate RBush-compatible stream-file bounding boxes.
@@ -52,6 +55,8 @@ fn parser() -> impl Parser<Command> {
   let generate_vanilla = generate_vanilla::parser().map(Command::GenerateVanilla);
   let generate_vanilla_cache = generate_vanilla_cache::parser().map(Command::GenerateVanillaCache);
   let generate_source_cache = generate_source_cache::parser().map(Command::GenerateSourceCache);
+  let generate_overwrite_cache =
+    generate_overwrite_cache::parser().map(Command::GenerateOverwriteCache);
   let restore_source_cache = restore_source_cache::parser().map(Command::RestoreSourceCache);
   let merge = merge::parser().map(Command::Merge);
   let deploy = deploy::parser().map(Command::Deploy);
@@ -66,6 +71,7 @@ fn parser() -> impl Parser<Command> {
     generate_vanilla,
     generate_vanilla_cache,
     generate_source_cache,
+    generate_overwrite_cache,
     restore_source_cache,
     merge,
     deploy,
@@ -130,6 +136,7 @@ pub fn stdout(command: Command) -> Output {
     Command::GenerateVanilla(command) => generate_vanilla::run(command).into(),
     Command::GenerateVanillaCache(command) => generate_vanilla_cache::run(command).into(),
     Command::GenerateSourceCache(command) => generate_source_cache::run(command).into(),
+    Command::GenerateOverwriteCache(command) => generate_overwrite_cache::run(command).into(),
     Command::RestoreSourceCache(command) => restore_source_cache::run(command).into(),
     Command::Merge(command) => merge::run(command).into(),
     Command::Deploy(command) => deploy::run(command).into(),

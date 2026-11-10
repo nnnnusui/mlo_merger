@@ -168,29 +168,24 @@ fn sample_sources_and_overwrites_are_current_and_apply_cleanly() {
     generate_diffs(&sources, &root)
   });
 
-  let mut overwrites = BTreeMap::<&str, ResourceOverwrite>::new();
+  let mut overwrites = BTreeMap::<String, StreamFileOverwrite>::new();
   for source in sample_sources() {
-    let document =
-      &diffs[&format!("{}/{}.diff.json", resource_name(source.resource), source.stream_path)];
+    let name = format!("{}/{}.diff.json", resource_name(source.resource), source.stream_path);
+    let document = &diffs[&name];
     let fingerprint = |file: &YmapComparisonFile| OverwriteFingerprint {
       sha256: file.sha256.clone(),
       size: file.size,
     };
-    overwrites
-      .entry(resource_name(source.resource))
-      .or_insert_with(|| ResourceOverwrite {
-        schema_version: ResourceOverwrite::SCHEMA_VERSION,
-        files: BTreeMap::new(),
-      })
-      .files
-      .insert(
-        source.stream_path.to_string(),
-        StreamFileOverwrite {
-          source: fingerprint(&document.source),
-          vanilla: fingerprint(&document.vanilla),
-          skip: source.skip.clone(),
-        },
-      );
+    overwrites.insert(
+      name,
+      StreamFileOverwrite {
+        schema_version: StreamFileOverwrite::SCHEMA_VERSION,
+        ignore: false,
+        source: Some(fingerprint(&document.source)),
+        vanilla: Some(fingerprint(&document.vanilla)),
+        skip: Some(source.skip.clone()),
+      },
+    );
   }
 
   let expected = sources
@@ -199,9 +194,11 @@ fn sample_sources_and_overwrites_are_current_and_apply_cleanly() {
     .chain(
       diffs.iter().map(|(name, document)| (format!("overwrite/diff/{name}"), pretty(document))),
     )
-    .chain(overwrites.iter().map(|(resource, overwrite)| {
-      (format!("overwrite/resources/{resource}.json"), pretty(overwrite))
-    }))
+    .chain(
+      overwrites
+        .iter()
+        .map(|(name, overwrite)| (format!("overwrite/resources/{name}"), pretty(overwrite))),
+    )
     .collect::<BTreeMap<_, _>>();
   for (path, bytes) in &expected {
     let path = docs().join(path);
@@ -227,10 +224,10 @@ fn sample_sources_and_overwrites_are_current_and_apply_cleanly() {
       sha256: file.sha256.clone(),
       size: file.size,
     };
-    assert_eq!(overwrite.source, fingerprint(&document.source), "{name}");
-    assert_eq!(overwrite.vanilla, fingerprint(&document.vanilla), "{name}");
+    assert_eq!(overwrite.source, Some(fingerprint(&document.source)), "{name}");
+    assert_eq!(overwrite.vanilla, Some(fingerprint(&document.vanilla)), "{name}");
     let mut diff = document.diffs.clone();
-    let unmatched = skip_diffs(&mut diff, &overwrite.skip).unwrap();
+    let unmatched = skip_diffs(&mut diff, overwrite.skip.as_ref().unwrap()).unwrap();
     assert!(unmatched.is_empty(), "{name}: {unmatched:?}");
     assert_ne!(
       serde_json::to_value(&diff).unwrap(),

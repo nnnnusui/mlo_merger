@@ -4,8 +4,9 @@ Overwrites leave chosen differences of a source YMAP out of the merge. The
 sources are under `../source`, and their vanilla baseline is `../sample.ymap`
 (vanilla `hei_ch1_11.ymap`).
 
-- `resources/{resourceName}.json` holds the overwrites of one resource, keyed by the
-  path below its `stream` directory. Use it as `asset/overwrite/resources/`.
+- `resources/{resourceName}/{stream-relative-path}.diff.json` holds the overwrite of one
+  source, at the same relative path as its diff document. Use it as
+  `asset/overwrite/resources/`.
 - `diff/{resourceName}/{stream-relative-path}.diff.json` is the diff document the
   source cache writes for each source; the `skip` selectors pick their
   differences from its `diffs`. Paths are repository-relative and modification

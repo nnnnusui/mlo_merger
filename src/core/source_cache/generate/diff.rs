@@ -1,5 +1,8 @@
 //! Writes each source YMAP's differences from vanilla as `diff/{resource}/{path}.diff.json`.
 //!
+//! A YMAP a resource adds, named after no vanilla YMAP, is compared with an empty YMAP instead
+//! (see [`crate::core::source_cache`]'s `added` module).
+//!
 //! A diff is rewritten only when the source or vanilla YMAP it was taken from changed; the
 //! document records both files' fingerprints for that check. Checking reads every document, so
 //! `diff/inputs.json` records what the diffs were taken under: the diff layout, the matching
@@ -29,7 +32,7 @@ use std::{collections::BTreeMap, path::Path};
 /// File name of the record of what the diffs were taken under, in the `diff` directory.
 const INPUTS_FILE: &str = "inputs.json";
 /// Bump when [`DiffRecord`] or what its digests cover changes.
-const RECORD_VERSION: u32 = 1;
+const RECORD_VERSION: u32 = 2;
 
 /// What the diffs in a `diff` directory were taken under; see the module docs.
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
@@ -68,7 +71,8 @@ struct DiffInputs {
   partner: Option<YmapComparisonPartner>,
 }
 
-/// Rebuilds the `diff` directory for every source YMAP that overrides a vanilla YMAP.
+/// Rebuilds the `diff` directory for every source YMAP that overrides a vanilla YMAP or that a
+/// resource adds, which is compared with an empty YMAP.
 ///
 /// Reads the published inventory (`cache_info.json`), so it runs after publication. Diffs whose
 /// source and vanilla YMAPs are unchanged are kept; the rest are regenerated, and diffs of YMAPs
@@ -114,7 +118,8 @@ pub(in crate::core::source_cache) fn write_ymap_diffs(
     let resource_name =
       resource.source.file_name().ok_or("Resource has no name")?.to_string_lossy().into_owned();
     for file in resource.files_by_format.get(".ymap").into_iter().flatten() {
-      if file.vanilla.is_none() {
+      // A YMAP a resource adds is compared with an empty one; only moved ones are merged.
+      if file.vanilla.is_none() && file.cached_path.is_none() {
         continue;
       }
       let file_path = ymap_diff_path(&resource.source, &file.path)?;

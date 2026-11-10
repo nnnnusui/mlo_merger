@@ -37,6 +37,9 @@ pub struct Pipeline {
   pub merged_dir: PathBuf,
   /// Overwrites applied to source diffs before merging; `None` applies none.
   pub overwrite_dir: Option<PathBuf>,
+  /// What the overwrites call for, built from them before merging; `None` works only while no
+  /// overwrite names a base source of an added YMAP.
+  pub overwrite_cache_dir: Option<PathBuf>,
   /// Final deployment directory.
   pub output_dir: PathBuf,
   /// Game build whose last stage the vanilla cache reflects; `None` is the last stage.
@@ -57,6 +60,7 @@ impl Pipeline {
   ///   vanilla_dir: "asset/vanilla".into(), vanilla_cache_dir: "asset/vanilla-cache".into(),
   ///   source_cache_dir: "asset/source-cache".into(), merged_dir: "asset/merged".into(),
   ///   exclusions: None, overwrite_dir: Some("asset/overwrite".into()),
+  ///   overwrite_cache_dir: Some("asset/overwrite-cache".into()),
   ///   output_dir: "merged_mlo".into(), gamebuild: None, force: false,
   /// }.run()?;
   /// # Ok::<(), Box<dyn std::error::Error>>(())
@@ -104,6 +108,18 @@ impl Pipeline {
     }
     .run()?;
 
+    if let Some(overwrite_cache_dir) = &self.overwrite_cache_dir {
+      tracing::info!("Pipeline: generate-overwrite-cache");
+      crate::core::overwrite_cache::BuildOverwriteCache {
+        source_dir: self.source_dir.clone(),
+        source_cache_dir: self.source_cache_dir.clone(),
+        vanilla_cache_dir: self.vanilla_cache_dir.clone(),
+        overwrite_dir: self.overwrite_dir.clone(),
+        output_dir: overwrite_cache_dir.clone(),
+      }
+      .run()?;
+    }
+
     tracing::info!("Pipeline: merge");
     let merged = Merge {
       source_dir: self.source_dir.clone(),
@@ -111,6 +127,7 @@ impl Pipeline {
       source_cache_dir: self.source_cache_dir.clone(),
       output_dir: self.merged_dir.clone(),
       overwrite_dir: self.overwrite_dir.clone(),
+      overwrite_cache_dir: self.overwrite_cache_dir.clone(),
       force: self.force,
     }
     .run()?;
@@ -146,6 +163,7 @@ impl Pipeline {
       ("deployment", &self.output_dir),
     ]
     .into_iter()
+    .chain(self.overwrite_cache_dir.as_ref().map(|path| ("overwrite-cache", path)))
     .map(|(name, path)| Ok((name, absolute_path(path)?)))
     .collect::<Result<Vec<_>, std::io::Error>>()?;
     let workspace = fs::canonicalize(&process::current_dir()?)?;

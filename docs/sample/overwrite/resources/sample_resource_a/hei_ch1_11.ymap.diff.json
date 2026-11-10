@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "source": {
+    "sha256": "51733c11529b45028cb9854e41d81fc52ede13de6d81f5733c6c171879ec0719",
+    "size": 4236
+  },
+  "vanilla": {
+    "sha256": "5ec1c9f8c018d3773fb30efcbe32bf199d57fac8a9468df49143baa9e52d0d13",
+    "size": 5675
+  },
+  "skip": {
+    "box_occluders": [
+      {
+        "Removed": {
+          "index": 0
+        }
+      }
+    ],
+    "content_flags": true,
+    "entities": [
+      {
+        "Modified": {
+          "before_index": 0,
+          "changes": {
+            "position": true
+          }
+        }
+      }
+    ],
+    "occlude_models": [
+      {
+        "Modified": {
+          "before_index": 0,
+          "changes": {
+            "triangles": [
+              {
+                "Removed": {
+                  "index": 10
+                }
+              }
+            ]
+          }
+        }
+      }
+    ]
+  }
+}

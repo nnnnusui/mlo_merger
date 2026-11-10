@@ -26,6 +26,25 @@ impl PlannedMap {
     entities != runtime_entities(self.original.entities.iter())
   }
 
+  /// Whether this map encodes to the same bytes as the original: models that differ only in
+  /// names one side spells as `hash_XXXXXXXX` and the other resolved, as when one was decoded
+  /// with hash names and the other without, are the same file.
+  pub(super) fn encodes_like_original(&self) -> std::io::Result<bool> {
+    let entities = match &self.clone_entities {
+      Some(entities) => runtime_entities(entities.iter()),
+      None => runtime_entities(self.model.entities.iter()),
+    }
+    .into_iter()
+    .cloned()
+    .collect::<Vec<_>>();
+    let original =
+      runtime_entities(self.original.entities.iter()).into_iter().cloned().collect::<Vec<_>>();
+    Ok(
+      crate::core::format::ymap::binary::write_ymap(&self.model, &entities)?
+        == crate::core::format::ymap::binary::write_ymap(&self.original.model, &original)?,
+    )
+  }
+
   pub(super) fn entity_at(
     &self,
     index: usize,

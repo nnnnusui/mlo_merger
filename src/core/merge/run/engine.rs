@@ -115,6 +115,14 @@ impl MergeYmap {
         )?;
       }
     }
+    // Parent indices into a YMAP a resource adds point into the one its resource ships.
+    for (name, versions) in &modded_ymaps_map {
+      if let [single] = versions.as_slice()
+        && self.added.contains(&name.to_ascii_lowercase())
+      {
+        sources.set_original(reference_hash(name.trim_end_matches(".ymap")), &single.mod_name);
+      }
+    }
     let mut references = ParentReferences::default();
     for (name, versions) in &modded_ymaps_map {
       let hash = reference_hash(name.trim_end_matches(".ymap"));
@@ -241,7 +249,11 @@ impl MergeYmap {
           &registered_maps,
         )?;
         log_diff_counts(&ymap_diff);
-        leave_out(&mut ymap_diff, IgnoredChange::MERGE);
+        // An added YMAP's baseline is empty and it has one source, whose name, flags, extents
+        // and block are its own.
+        if !self.added.contains(&ymap_name.to_ascii_lowercase()) {
+          leave_out(&mut ymap_diff, IgnoredChange::MERGE);
+        }
         let source_originals =
           source.entities.iter().map(|entity| (entity.guid, entity)).collect::<HashMap<_, _>>();
         for diff in ymap_diff.entities.iter().flatten() {
@@ -373,6 +385,15 @@ impl MergeYmap {
       let merged_diff = merge_diffs(vanilla_ymap, &ymap_diffs);
       let failed =
         |error: struct_diff::ApplyError| format!("{}: {error}", vanilla_ymap_path.display());
+      // An added YMAP no other resource ships is compared with its source, which is deployed as
+      // it is unless the merge changes it.
+      let name = ymap_name.to_ascii_lowercase();
+      let compared = match mod_refs.as_slice() {
+        [single] if self.added.contains(&name) && !self.replacing.contains(&name) => {
+          sources.get(Some(&single.mod_name), hash)?.unwrap_or_else(|| Rc::clone(&original))
+        }
+        _ => Rc::clone(&original),
+      };
       let mut model = vanilla_ymap.clone();
       model.apply(&merged_diff).map_err(failed)?;
       let (entities, parents) = entities::apply_linked(
@@ -389,7 +410,7 @@ impl MergeYmap {
           name: ymap_name.clone(),
           model,
           clone_entities: None,
-          original,
+          original: compared,
           copy_target: None,
           rebuild: true,
         },
@@ -397,7 +418,14 @@ impl MergeYmap {
     }
     let mut changed_layouts = HashSet::new();
     for (hash, output) in &planned {
-      if let Some(vanilla) = sources.get(None, *hash)? {
+      // Children of an added YMAP point into the YMAP its resource ships, not its baseline.
+      let name = output.name.to_ascii_lowercase();
+      let original = if self.added.contains(&name) && !self.replacing.contains(&name) {
+        Some(Rc::clone(&output.original))
+      } else {
+        sources.get(None, *hash)?
+      };
+      if let Some(vanilla) = original {
         let original_layout = references.runtime_entity_ids(*hash, &vanilla.entities)?;
         if output.guids() != original_layout {
           changed_layouts.insert(*hash);
@@ -471,7 +499,7 @@ impl MergeYmap {
           continue;
         }
         if let std::collections::hash_map::Entry::Vacant(entry) = layouts.entry(owner)
-          && let Some(vanilla) = sources.get(None, owner)?
+          && let Some(vanilla) = sources.original(owner)?
         {
           references.register_entities(owner, &vanilla.entities);
           let layout = references.runtime_entity_ids(owner, &vanilla.entities)?;
@@ -558,7 +586,12 @@ impl MergeYmap {
         }
       }
       if output.rebuild && output.copy_target.is_none() {
-        output.rebuild = output.differs_from_original();
+        let name = output.name.to_ascii_lowercase();
+        // An added YMAP is compared with its source, decoded without the hash names its diff was
+        // taken with, so a difference is checked on the encoded files.
+        output.rebuild = self.replacing.contains(&name)
+          || (output.differs_from_original()
+            && !(self.added.contains(&name) && output.encodes_like_original()?));
       }
     }
     tracing::info!(

@@ -52,6 +52,18 @@ impl IncrementalMerge<'_> {
         connect(&mut graph, &parent, &child.to_ascii_lowercase());
       }
     }
+    // YMAPs resources add, related as the source cache records it.
+    for name in self.added.keys() {
+      let hash = reference_hash(name.trim_end_matches(".ymap"));
+      if hashes.insert(hash, name.clone()).is_some() {
+        return Err("Ambiguous added YMAP hash in merge dependencies".into());
+      }
+      graph.insert(name.clone(), BTreeSet::new());
+    }
+    let added = crate::core::source_cache::added_ymap_relationships(self.source_cache)?;
+    for (parent, child) in added.children_by_file_name() {
+      connect(&mut graph, &parent.to_ascii_lowercase(), &child.to_ascii_lowercase());
+    }
     let metadata: SourceParents = crate::common::json::read_json(
       crate::core::source_cache::cache_info_path(self.source_cache),
     )?;

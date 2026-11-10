@@ -82,6 +82,15 @@ pub(in crate::core::merge) struct FileRecord {
   pub merge_sources: Vec<InputFile>,
   pub vanilla: Option<InputFile>,
   pub dependencies: BTreeSet<String>,
+  /// For a YMAP resources add, the ID of the resource whose YMAP is merged, into which the other
+  /// sources' differences from it are merged.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  #[cfg_attr(feature = "typescript", specta(optional))]
+  pub added_base: Option<String>,
+  /// Whether other resources ship this added YMAP too, so it is written to replace theirs.
+  #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+  #[cfg_attr(feature = "typescript", specta(optional))]
+  pub replaces_other_resources: bool,
   pub dependency_fingerprint: String,
   pub output: Option<OutputFile>,
   pub merged_at: String,
@@ -164,7 +173,14 @@ pub(super) fn signature(
           value
         })
         .collect::<Vec<_>>();
-      (name, serde_json::json!({"dependencies": record.dependencies, "inputs": inputs}))
+      let mut value = serde_json::json!({"dependencies": record.dependencies, "inputs": inputs});
+      if record.replaces_other_resources {
+        value["replaces_other_resources"] = true.into();
+      }
+      if let Some(base) = &record.added_base {
+        value["added_base"] = base.as_str().into();
+      }
+      (name, value)
     })
     .collect::<BTreeMap<_, _>>();
   Ok(hex::encode(Sha256::digest(serde_json::to_vec(&(
@@ -283,6 +299,8 @@ mod tests {
           merge_sources: Vec::new(),
           vanilla: None,
           dependencies: BTreeSet::new(),
+          added_base: None,
+          replaces_other_resources: false,
           dependency_fingerprint: original.clone(),
           output: None,
           merged_at: "before".into(),
@@ -306,6 +324,8 @@ mod tests {
       merge_sources: vec![],
       vanilla: None,
       dependencies: BTreeSet::new(),
+      added_base: None,
+      replaces_other_resources: false,
       dependency_fingerprint: "signature".into(),
       output: Some(OutputFile {
         path: "ybn/map.ybn".into(),

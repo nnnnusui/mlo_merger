@@ -15,8 +15,8 @@ fn builds_source_inventory_and_skips_unchanged_inputs_without_diffing() {
   fs::create_dir_all(vanilla.join("0000-base/ymap")).unwrap();
   fs::write(source_resource.join("fxmanifest.lua"), b"fx_version 'cerulean'").unwrap();
   fs::write(second_resource.join("fxmanifest.lua"), b"fx_version 'cerulean'").unwrap();
-  fs::write(source_resource.join("stream/unmatched.ymap"), b"source bytes").unwrap();
-  fs::write(second_resource.join("stream/unmatched.ymap"), b"other source bytes").unwrap();
+  fs::write(source_resource.join("stream/unmatched.ytyp"), b"source bytes").unwrap();
+  fs::write(second_resource.join("stream/unmatched.ytyp"), b"other source bytes").unwrap();
   fs::write(source_resource.join("stream/unmatched.ybn"), b"source ybn").unwrap();
   fs::write(second_resource.join("stream/unmatched.ybn"), b"other source ybn").unwrap();
   let raw_manifest = VanillaCacheManifest {
@@ -46,7 +46,7 @@ fn builds_source_inventory_and_skips_unchanged_inputs_without_diffing() {
     ..build()
   };
   assert!(excluded().run_after_vanilla_cache().unwrap());
-  assert!(second_resource.join("stream/unmatched.ymap").is_file());
+  assert!(second_resource.join("stream/unmatched.ytyp").is_file());
   assert!(!excluded().run_after_vanilla_cache().unwrap());
   let excluded_info: SourceCacheMetadata =
     serde_json::from_reader(fs::File::open(output.join("cache_info.json")).unwrap()).unwrap();
@@ -83,15 +83,15 @@ fn builds_source_inventory_and_skips_unchanged_inputs_without_diffing() {
   let info: SourceCacheMetadata =
     serde_json::from_reader(fs::File::open(output.join("cache_info.json")).unwrap()).unwrap();
   let resource_info = &info.resources["resource_a"];
-  assert_eq!(resource_info.files_by_format[".ymap"].len(), 1);
-  assert!(resource_info.files_by_format[".ymap"][0].vanilla.is_none());
+  assert_eq!(resource_info.files_by_format[".ytyp"].len(), 1);
+  assert!(resource_info.files_by_format[".ytyp"][0].vanilla.is_none());
   assert_eq!(info.resources.len(), 2);
   assert_eq!(info.conflict_count, 0);
   let report: SourceCacheConflictReport =
     serde_json::from_reader(fs::File::open(output.join("stream_conflicts.json")).unwrap()).unwrap();
   assert!(report.report.conflicts.is_empty());
   assert_eq!(report.source_conflicts.as_ref().unwrap().values().map(Vec::len).sum::<usize>(), 2);
-  assert_eq!(info.format_version, 4);
+  assert_eq!(info.format_version, 5);
   let merge_inputs = crate::core::source_cache::load_merge_inputs(&output, &source).unwrap();
   assert!(merge_inputs.ymap.is_empty());
   assert!(merge_inputs.ybn.is_empty());

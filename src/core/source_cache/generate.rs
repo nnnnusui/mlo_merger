@@ -82,7 +82,15 @@ pub(super) fn run(build: &BuildSourceCache) -> Result<SourceCacheResult> {
   let vanilla_dir = vanilla.vanilla_dir.clone();
   let vanilla_cache_dir = vanilla.vanilla_cache_dir.clone();
   let changes = std::mem::take(&mut state.changes);
+  let vanilla_ymap_names = vanilla
+    .derived
+    .files
+    .keys()
+    .filter(|name| name.ends_with(".ymap"))
+    .map(|name| name.to_ascii_lowercase())
+    .collect::<BTreeSet<_>>();
   let published = publish::publish_if_changed(source, vanilla, publication, state, changed)?;
+  super::added::write_added_ymaps(&output, &vanilla_ymap_names)?;
   crate::core::config::matching::with_config(|| {
     diff::write_ymap_diffs(&source_dir, &output, &vanilla_dir, &vanilla_cache_dir)
   })??;

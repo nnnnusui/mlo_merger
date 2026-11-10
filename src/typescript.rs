@@ -23,9 +23,10 @@ pub fn export_types(output: &Path) -> Result<(), Box<dyn std::error::Error>> {
     path,
     &ExportConfiguration::new().bigint(BigIntExportBehavior::Number),
   )?;
-  // Specta 1 makes every field of an enum variant required, but `ItemDiff::Removed` leaves out
-  // `implied` when it is false, and the removals and modifications of `ItemDiff` and
-  // `YmapEntityDiff` leave out `reason` when it is `None`.
+  // Specta 1 makes every field of an enum variant, and every field that is not an `Option`,
+  // required, but `ItemDiff::Removed` leaves out `implied` and `StreamFileOverwrite` `ignore`
+  // when they are false, and the removals and modifications of `ItemDiff` and `YmapEntityDiff`
+  // leave out `reason` when it is `None`.
   let mut types = fs::read_to_string(output)?;
   for (required, optional, count) in [
     (
@@ -34,6 +35,7 @@ pub fn export_types(output: &Path) -> Result<(), Box<dyn std::error::Error>> {
       1,
     ),
     ("; reason: string | null } }", "; reason?: string | null } }", 3),
+    ("schema_version: number; ignore: boolean;", "schema_version: number; ignore?: boolean;", 1),
   ] {
     if types.matches(required).count() != count {
       return Err(format!("Generated diff types no longer spell `{required}` as expected").into());
@@ -82,10 +84,14 @@ mod tests {
       "YmapDiffFields",
       "YmapEntityDiff",
       "YmapEntityFieldDiff",
-      "ResourceOverwrite",
+      "AddedYmaps",
+      "AddedYmap",
+      "AddedYmapSource",
+      "AddedYmapChoice",
       "StreamFileOverwrite",
       "OverwriteFingerprint",
       "VanillaOverwrite",
+      "AddedYmapOverwrite",
       "YmapDiffSkip",
       "PipelineChanges",
       "PipelineReport",
@@ -121,7 +127,8 @@ mod tests {
     assert!(actual.contains("modified_seconds: number"));
     assert!(actual.contains("algorithm_versions?: { [key: string]: number }"));
     assert!(actual.contains("entities?: YmapEntityDiff[]"));
-    assert!(actual.contains("skip: YmapDiffSkip"));
+    assert!(actual.contains("ignore?: boolean; source?: OverwriteFingerprint | null"));
+    assert!(actual.contains("skip?: YmapDiffSkip | null"));
     assert!(actual.contains("vanilla_cache: StoreChanges"));
     assert!(actual.contains("added: string[]"));
     assert!(!actual.contains(": bigint"));

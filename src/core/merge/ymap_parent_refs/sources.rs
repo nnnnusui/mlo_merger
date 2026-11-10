@@ -33,6 +33,9 @@ impl OriginalMap {
 pub(in crate::core::merge) struct SourceMaps {
   paths: HashMap<(Option<String>, u32), PathBuf>,
   loaded: HashMap<(Option<String>, u32), Rc<OriginalMap>>,
+  /// The resource whose map other maps' parent indices point into, for maps whose vanilla
+  /// baseline is not the map they shipped with: the YMAPs resources add.
+  originals: HashMap<u32, String>,
 }
 
 impl SourceMaps {
@@ -83,6 +86,27 @@ impl SourceMaps {
     let map = Rc::new(OriginalMap::load(path)?);
     self.loaded.insert(key, Rc::clone(&map));
     Ok(Some(map))
+  }
+
+  /// Makes [`Self::original`] of map `hash` the map `namespace` ships.
+  pub(in crate::core::merge) fn set_original(
+    &mut self,
+    hash: u32,
+    namespace: &str,
+  ) {
+    self.originals.insert(hash, namespace.to_string());
+  }
+
+  /// The map other maps' parent indices into map `hash` point into: vanilla's, or for a YMAP a
+  /// resource adds, whose vanilla baseline is empty, the one that resource ships.
+  pub(in crate::core::merge) fn original(
+    &mut self,
+    hash: u32,
+  ) -> io::Result<Option<Rc<OriginalMap>>> {
+    match self.originals.get(&hash).cloned() {
+      Some(namespace) => self.get(Some(&namespace), hash),
+      None => self.get(None, hash),
+    }
   }
 
   /// Normalizes original parent indices into merge-stable handles.

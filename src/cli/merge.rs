@@ -13,6 +13,8 @@ pub struct Merge {
   pub exclusions: Option<Vec<String>>,
   /// Overwrites applied to source diffs before merging.
   pub overwrite_dir: PathBuf,
+  /// What the overwrites call for, derived from them before merging.
+  pub overwrite_cache_dir: PathBuf,
   /// Shared execution options.
   pub common: CommonOptions,
 }
@@ -29,14 +31,19 @@ pub fn parser() -> impl Parser<Merge> {
     .help("Overwrites applied to source diffs before merging (default: asset/overwrite)")
     .argument::<PathBuf>("DIR")
     .fallback(PathBuf::from("asset/overwrite"));
+  let overwrite_cache_dir = long("overwrite-cache")
+    .help("What the overwrites call for, derived from them (default: asset/overwrite-cache)")
+    .argument::<PathBuf>("DIR")
+    .fallback(PathBuf::from("asset/overwrite-cache"));
   let common = common::parser(PathBuf::from("asset/merged"));
   let exclusions = super::generate_source_cache::exclusions_parser();
-  construct!(command, source_dir, overwrite_dir, common, exclusions).map(
-    |(_, source_dir, overwrite_dir, common, exclusions)| Merge {
+  construct!(command, source_dir, overwrite_dir, overwrite_cache_dir, common, exclusions).map(
+    |(_, source_dir, overwrite_dir, overwrite_cache_dir, common, exclusions)| Merge {
       source_dir,
       common,
       exclusions,
       overwrite_dir,
+      overwrite_cache_dir,
     },
   )
 }
@@ -57,12 +64,21 @@ pub fn run(command: Merge) -> Result<String, Box<dyn std::error::Error>> {
     force: false,
   }
   .run()?;
+  crate::core::overwrite_cache::BuildOverwriteCache {
+    source_dir: command.source_dir.clone(),
+    source_cache_dir: command.common.source_cache.clone(),
+    vanilla_cache_dir: command.common.vanilla_cache.clone(),
+    overwrite_dir: Some(command.overwrite_dir.clone()),
+    output_dir: command.overwrite_cache_dir.clone(),
+  }
+  .run()?;
   crate::core::merge::Merge {
     source_dir: command.source_dir,
     vanilla_cache_dir: command.common.vanilla_cache,
     source_cache_dir: command.common.source_cache,
     output_dir: command.common.output,
     overwrite_dir: Some(command.overwrite_dir),
+    overwrite_cache_dir: Some(command.overwrite_cache_dir),
     force: command.common.force,
   }
   .run()?;

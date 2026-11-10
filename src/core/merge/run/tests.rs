@@ -36,6 +36,8 @@ fn latest_ymap_merge_writes_binary_without_xml() {
     rebuild_all: true,
     overwrites: Default::default(),
     vanilla_overwrites: Default::default(),
+    added: Default::default(),
+    replacing: Default::default(),
     propagated: Vec::new(),
   };
   merge
@@ -121,6 +123,8 @@ fn native_ymap_merge_deletion_wins_over_retained_entities_in_both_orders() {
     rebuild_all: true,
     overwrites: Default::default(),
     vanilla_overwrites: Default::default(),
+    added: Default::default(),
+    replacing: Default::default(),
     propagated: Vec::new(),
   };
   for reverse in [false, true] {
@@ -184,6 +188,8 @@ fn merge_emits_only_edited_ymaps_when_rebuilding() {
     rebuild_all: true,
     overwrites: Default::default(),
     vanilla_overwrites: Default::default(),
+    added: Default::default(),
+    replacing: Default::default(),
     propagated: Vec::new(),
   };
   let run = |sources: &[SourceYmap]| {
@@ -240,6 +246,8 @@ fn merge_deletes_omitted_entities_and_detaches_dependent_children() {
     rebuild_all: false,
     overwrites: Default::default(),
     vanilla_overwrites: Default::default(),
+    added: Default::default(),
+    replacing: Default::default(),
     propagated: Vec::new(),
   }
   .run_with_latest_vanilla_files(
@@ -334,6 +342,8 @@ fn sources_with_a_diff_document_merge_through_it_and_reject_stale_ones() {
     rebuild_all: true,
     overwrites: Default::default(),
     vanilla_overwrites: Default::default(),
+    added: Default::default(),
+    replacing: Default::default(),
     propagated: Vec::new(),
   };
   let sources = [("resource".to_string(), source.clone(), Some(document.clone()))];
@@ -408,6 +418,8 @@ fn lod_light_removals_of_either_ymap_of_a_pair_are_made_in_both() {
     rebuild_all: true,
     overwrites: Default::default(),
     vanilla_overwrites: Default::default(),
+    added: Default::default(),
+    replacing: Default::default(),
     propagated: Vec::new(),
   }
   .run_with_latest_vanilla_files(
@@ -468,6 +480,8 @@ fn propagated_changes_merge_into_vanilla_ymaps_and_reject_stale_documents() {
       rebuild_all: false,
       overwrites: Default::default(),
       vanilla_overwrites: Default::default(),
+      added: Default::default(),
+      replacing: Default::default(),
       propagated: vec![("resource".into(), "parent.ymap".into(), document.clone())],
     }
     .run_with_latest_vanilla_files(std::slice::from_ref(&vanilla), &[])

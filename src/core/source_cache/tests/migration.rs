@@ -98,6 +98,7 @@ fn moves_vanilla_files_retains_history_and_updates_only_selected_resources() {
   assert_eq!(
     crate::core::source_cache::moved_source_paths(&output),
     BTreeSet::from([
+      "resource_a/stream/custom.ymap".into(),
       "resource_a/stream/nested/collision.ybn".into(),
       "resource_b/streams/nested/collision.ybn".into(),
     ])
@@ -115,7 +116,7 @@ fn moves_vanilla_files_retains_history_and_updates_only_selected_resources() {
     fs::create_dir_all(old.parent().unwrap()).unwrap();
     fs::rename(&original, &old).unwrap();
     for file in legacy.resources.get_mut(name).unwrap().files_by_format.values_mut().flatten() {
-      if file.cached_path.is_some() {
+      if file.cached_path.is_some() && file.path.ends_with("collision.ybn") {
         file.cached_path =
           Some(old.strip_prefix(&output).unwrap().to_string_lossy().replace('\\', "/"));
       }
@@ -373,6 +374,7 @@ fn moves_vanilla_files_retains_history_and_updates_only_selected_resources() {
     crate::core::source_cache::moved_source_paths(&output),
     BTreeSet::from([
       "[changed]/resource_a/stream/custom.ybn".into(),
+      "[changed]/resource_a/stream/custom.ymap".into(),
       "[changed]/resource_a/stream/nested/collision.ybn".into(),
       "resource_b/streams/custom.ybn".into(),
       "resource_b/streams/nested/collision.ybn".into(),
@@ -544,7 +546,8 @@ fn moves_vanilla_files_retains_history_and_updates_only_selected_resources() {
   assert!(!excluded.source_inputs.keys().any(|key| key.starts_with("[changed]/resource_a/")));
   assert!(!excluded.resource_checks.contains_key(cache_resource));
   assert!(!output.join("resources/resource_a").exists());
-  assert!(first.join("stream/custom.ymap").is_file());
+  // The added YMAP was collected too, so it is archived with the resource's cache.
+  assert!(!first.join("stream/custom.ymap").exists());
   let archived = crate::platform::fs::WalkDir::new(output.join("_old"))
     .into_iter()
     .filter_map(|entry| entry.ok())

@@ -70,6 +70,7 @@ impl Workspace {
       exclusions: None,
       merged_dir: self.asset("merged"),
       overwrite_dir: None,
+      overwrite_cache_dir: None,
       output_dir: self.asset("merged_mlo"),
       gamebuild: gamebuild.map(|build| builds.resolve(build).unwrap()),
       force: false,
@@ -127,7 +128,8 @@ fn parent_indices(map: &Ymap) -> Vec<i32> {
 fn pipeline_runs_on_the_web_sample() {
   let workspace = Workspace::new("pipeline");
   let latest = workspace.pipeline(None);
-  assert_eq!(latest.deploy.copied, 10);
+  // Nine stream files merged or cloned, and the custom map, which the source cache collects too.
+  assert_eq!(latest.deploy.copied, 11);
 
   // Relationships: the block and its generations are children of the LOD map, and the LOD lights
   // of their distant partner.

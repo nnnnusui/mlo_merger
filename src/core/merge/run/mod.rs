@@ -39,6 +39,15 @@ pub struct MergeYmap {
   /// Changes carried over to newer generations of vanilla YMAPs, merged into those as the
   /// resources' diffs are. A vanilla file with one is merged even when no source replaces it.
   pub propagated: Vec<PropagatedYmap>,
+  /// The lowercase file names of the latest files that are the empty baselines of YMAPs
+  /// resources add rather than vanilla YMAPs (see
+  /// [`crate::core::source_cache::added_ymap_baselines`]). Each has one source, whose name,
+  /// flags, extents and block are kept, and which is compared with that source rather than its
+  /// baseline, so it is written only when the merge changes it, unless in [`Self::replacing`].
+  pub added: HashSet<String>,
+  /// The lowercase names of the YMAPs resources add that more resources ship than the merge
+  /// takes, whose merged YMAP is always written so that it replaces theirs.
+  pub replacing: HashSet<String>,
 }
 
 impl MergeYmap {
@@ -169,7 +178,7 @@ fn unresolved(
   owner: u32,
   index: i32,
 ) -> Result<i32, Box<dyn std::error::Error>> {
-  let layout = match sources.get(None, owner)? {
+  let layout = match sources.original(owner)? {
     Some(vanilla) => Some(references.runtime_entity_ids(owner, &vanilla.entities)?),
     None => None,
   };
@@ -182,7 +191,7 @@ fn vanilla_index(
   owner: u32,
   guid: u32,
 ) -> Result<Option<i32>, Box<dyn std::error::Error>> {
-  let Some(vanilla) = sources.get(None, owner)? else {
+  let Some(vanilla) = sources.original(owner)? else {
     return Ok(None);
   };
   Ok(

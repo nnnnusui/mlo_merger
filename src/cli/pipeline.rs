@@ -17,6 +17,8 @@ pub struct Pipeline {
   pub exclusions: Option<Vec<String>>,
   /// Overwrites applied to source diffs before merging.
   pub overwrite_dir: PathBuf,
+  /// What the overwrites call for, derived from them before merging.
+  pub overwrite_cache_dir: PathBuf,
   /// Shared artifact paths and deployment output options.
   pub common: CommonOptions,
 }
@@ -44,20 +46,45 @@ pub fn parser() -> impl Parser<Pipeline> {
     .help("Overwrites applied to source diffs before merging (default: asset/overwrite)")
     .argument::<PathBuf>("DIR")
     .fallback(PathBuf::from("asset/overwrite"));
+  let overwrite_cache_dir = long("overwrite-cache")
+    .help("What the overwrites call for, derived from them (default: asset/overwrite-cache)")
+    .argument::<PathBuf>("DIR")
+    .fallback(PathBuf::from("asset/overwrite-cache"));
   let common = common::parser(PathBuf::from("asset/merged_mlo"));
   let exclusions = super::generate_source_cache::exclusions_parser();
-  construct!(command, source_dir, game_dir, magic, merged_dir, overwrite_dir, common, exclusions)
-    .map(|(_, source_dir, game_dir, magic, merged_dir, overwrite_dir, common, exclusions)| {
-      Pipeline {
-        source_dir,
-        game_dir,
-        magic,
-        merged_dir,
-        common,
-        exclusions,
-        overwrite_dir,
-      }
-    })
+  construct!(
+    command,
+    source_dir,
+    game_dir,
+    magic,
+    merged_dir,
+    overwrite_dir,
+    overwrite_cache_dir,
+    common,
+    exclusions
+  )
+  .map(
+    |(
+      _,
+      source_dir,
+      game_dir,
+      magic,
+      merged_dir,
+      overwrite_dir,
+      overwrite_cache_dir,
+      common,
+      exclusions,
+    )| Pipeline {
+      source_dir,
+      game_dir,
+      magic,
+      merged_dir,
+      common,
+      exclusions,
+      overwrite_dir,
+      overwrite_cache_dir,
+    },
+  )
 }
 
 /// Runs all cached stages with deployment-scoped `-o`; prints the report as one line of JSON.
@@ -77,6 +104,7 @@ pub fn run(command: Pipeline) -> Result<String, Box<dyn std::error::Error>> {
     exclusions: command.exclusions,
     merged_dir: command.merged_dir,
     overwrite_dir: Some(command.overwrite_dir),
+    overwrite_cache_dir: Some(command.overwrite_cache_dir),
     output_dir: command.common.output,
     gamebuild: super::common::gamebuild(command.common.gamebuild.as_deref())?,
     force: command.common.force,

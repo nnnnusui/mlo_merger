@@ -38,6 +38,8 @@ fn sample_parent_relink_survives_native_and_codewalker_rebuild() {
     rebuild_all: false,
     overwrites: Default::default(),
     vanilla_overwrites: Default::default(),
+    added: Default::default(),
+    replacing: Default::default(),
   }
   .run_with_latest_vanilla_files(&vanilla, &sources)
   .unwrap();

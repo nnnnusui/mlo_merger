@@ -10,7 +10,7 @@ use crate::platform::fs;
 use std::{collections::BTreeSet, path::Path};
 
 /// Entries of the cache directory.
-const CACHE_ENTRIES: [&str; 9] = [
+const CACHE_ENTRIES: [&str; 10] = [
   "cache_info.json",
   "stream_conflicts.json",
   "vanilla_ymaps_to_read.json",
@@ -19,13 +19,14 @@ const CACHE_ENTRIES: [&str; 9] = [
   "resources",
   "diff",
   "propagated",
+  "added_ymap_relationships.json",
   // Archived history, which nothing reads.
   "_old",
 ];
 
 /// Checks that each file the inventory records as moved into the cache is there with its
 /// recorded size (and SHA-256 when `deep`), that `resources/` holds nothing else, and that each
-/// diff document belongs to a source YMAP replacing a vanilla one.
+/// diff document belongs to a source YMAP replacing a vanilla one or one a resource adds.
 pub(crate) fn check(
   dir: &Path,
   deep: bool,
@@ -47,7 +48,8 @@ pub(crate) fn check(
           findings.recorded_file(dir, path, Some(file.size), &file.sha256, deep)?;
           cached.insert(path.clone());
         }
-        if format == ".ymap" && file.vanilla.is_some() {
+        let added = super::added::is_added_ymap(format, file) && file.cached_path.is_some();
+        if format == ".ymap" && (file.vanilla.is_some() || added) {
           let diff = Path::new("diff").join(ymap_diff_path(&resource.source, &file.path)?);
           diffs.insert(diff.to_string_lossy().replace('\\', "/"));
         }

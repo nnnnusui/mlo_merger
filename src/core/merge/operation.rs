@@ -1,7 +1,7 @@
 use crate::platform::fs;
 use crate::platform::process;
 use std::{
-  collections::BTreeMap,
+  collections::{BTreeMap, BTreeSet},
   path::{Path, PathBuf},
 };
 
@@ -42,6 +42,10 @@ pub struct Merge {
   pub output_dir: PathBuf,
   /// User edits of the source diffs (`resources/<resource name>.json`); `None` applies none.
   pub overwrite_dir: Option<PathBuf>,
+  /// What the overwrites call for, built from them beforehand (see
+  /// [`crate::core::overwrite_cache`]); `None` derives the choices of added YMAPs here, which
+  /// works only while no overwrite names a base source.
+  pub overwrite_cache_dir: Option<PathBuf>,
   /// Rebuilds merge groups regardless of freshness.
   pub force: bool,
 }
@@ -58,7 +62,8 @@ impl Merge {
   /// mlo_merger::core::merge::Merge {
   ///   source_dir: "asset/source".into(), vanilla_cache_dir: "asset/vanilla-cache".into(),
   ///   source_cache_dir: "asset/source-cache".into(), output_dir: "asset/merged".into(),
-  ///   overwrite_dir: Some("asset/overwrite".into()), force: false,
+  ///   overwrite_dir: Some("asset/overwrite".into()),
+  ///   overwrite_cache_dir: Some("asset/overwrite-cache".into()), force: false,
   /// }.run()?;
   /// # Ok::<(), Box<dyn std::error::Error>>(())
   /// ```
@@ -70,13 +75,35 @@ impl Merge {
     let source_dir = fs::canonicalize(&self.source_dir)?;
     let vanilla_cache_dir = fs::canonicalize(&self.vanilla_cache_dir)?;
     let source_cache_dir = fs::canonicalize(&self.source_cache_dir)?;
-    let merge_inputs = source_cache::load_merge_inputs(&source_cache_dir, &source_dir)?;
+    let mut merge_inputs = source_cache::load_merge_inputs(&source_cache_dir, &source_dir)?;
     let overwrites = match &self.overwrite_dir {
       Some(directory) => Overwrites::load(directory)?,
       None => Overwrites::default(),
     };
+    let added_files = match &self.overwrite_cache_dir {
+      Some(directory) => {
+        crate::core::overwrite_cache::load(
+          directory,
+          &source_cache_dir,
+          &vanilla_cache_dir,
+          self.overwrite_dir.as_deref(),
+        )?
+        .files
+      }
+      None => crate::core::overwrite_cache::resolve_without_cache(&merge_inputs, &overwrites)?,
+    };
+    let shipped = merge_inputs.ymap.iter().filter_map(stream_file_key).collect::<BTreeSet<_>>();
+    let added =
+      super::added::apply(&added_files, &mut merge_inputs, self.overwrite_cache_dir.as_deref())?;
+    // A stream file an overwrite ignores is left out of the merge whole.
+    merge_inputs.ymap.retain(|source| {
+      stream_file_key(source).is_none_or(|(resource, stream_path)| {
+        !overwrites.stream_file(&resource, &stream_path).is_some_and(|overwrite| overwrite.ignore)
+      })
+    });
     let latest_files = dispatch_vanilla_stream_files(&vanilla_cache_dir.join("latest"))?;
-    let ignored_overwrites = ignored_overwrites(&overwrites, &merge_inputs, &latest_files.ymap)?;
+    let ignored_overwrites =
+      ignored_overwrites(&overwrites, &merge_inputs, &shipped, &added, &latest_files.ymap)?;
     let output_dir = prepare_output_path(&self.output_dir)?;
     let staging = Staging(create_staging_directory(&output_dir)?);
     let staged = IncrementalMerge {
@@ -88,6 +115,7 @@ impl Merge {
       ymap: &latest_files.ymap,
       inputs: &merge_inputs,
       overwrites: &overwrites,
+      added: &added,
       force: self.force,
     }
     .run()?;
@@ -116,6 +144,14 @@ pub struct MergeSummary {
   pub ignored_overwrites: Vec<IgnoredOverwrite>,
 }
 
+/// A source YMAP's resource name and stream path, in lowercase, as overwrites name them.
+fn stream_file_key(
+  source: &crate::core::source_cache::MergeSourceFile
+) -> Option<(String, String)> {
+  let resource = Path::new(&source.resource).file_name()?.to_str()?.to_ascii_lowercase();
+  Some((resource, source.stream_path.replace('\\', "/").to_ascii_lowercase()))
+}
+
 /// The overwrites that do not apply to the current files, each logged as a warning.
 ///
 /// Checked on every run, as a merge reusing its previous output does not look at overwrites.
@@ -124,6 +160,8 @@ pub struct MergeSummary {
 fn ignored_overwrites(
   overwrites: &Overwrites,
   inputs: &MergeInputs,
+  shipped: &BTreeSet<(String, String)>,
+  added: &BTreeMap<String, super::added::AddedPlan>,
   latest_ymaps: &[PathBuf],
 ) -> Result<Vec<IgnoredOverwrite>> {
   let latest = latest_ymaps
@@ -143,13 +181,26 @@ fn ignored_overwrites(
     let Some(overwrite) = overwrites.stream_file(resource, stream_path) else {
       continue;
     };
+    // One leaving out a stream file applies while a resource ships it.
+    if overwrite.ignore && shipped.contains(&(resource.to_string(), stream_path.to_string())) {
+      continue;
+    }
     let source = sources.get(&(resource.to_string(), stream_path.to_string()));
-    let vanilla = source.and_then(|source| latest.get(&source.file_name.to_ascii_lowercase()));
+    // A YMAP a resource adds is compared with an empty YMAP, or with its base source's.
+    let vanilla = match source {
+      Some(source) => match super::added::overwrite_vanilla(added, inputs, source)? {
+        Some(vanilla) => Some(vanilla),
+        None => latest
+          .get(&source.file_name.to_ascii_lowercase())
+          .map(|path| OverwriteFingerprint::read(path))
+          .transpose()?,
+      },
+      None => None,
+    };
     let reason = match (source, vanilla) {
-      (Some(source), Some(vanilla)) => overwrite.ignored_because(
-        &OverwriteFingerprint::read(&source.path)?,
-        &OverwriteFingerprint::read(vanilla)?,
-      ),
+      (Some(source), Some(vanilla)) => {
+        overwrite.ignored_because(&OverwriteFingerprint::read(&source.path)?, &vanilla)
+      }
       _ => Some(IgnoredOverwriteReason::MissingSource),
     };
     if let Some(reason) = reason {

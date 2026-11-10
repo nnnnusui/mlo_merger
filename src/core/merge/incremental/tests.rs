@@ -57,6 +57,8 @@ fn ybn_version_change_reuses_current_ymap_groups() {
       }],
       vanilla: None,
       dependencies: BTreeSet::new(),
+      added_base: None,
+      replaces_other_resources: false,
       dependency_fingerprint: String::new(),
       output: None,
       merged_at: "cached".into(),
@@ -84,6 +86,7 @@ fn ybn_version_change_reuses_current_ymap_groups() {
     ybn: vec![ybn],
     propagated: Vec::new(),
     vanilla_ymaps_to_read: BTreeSet::new(),
+    added_ymaps: BTreeSet::new(),
   };
   assert!(
     IncrementalMerge {
@@ -96,6 +99,7 @@ fn ybn_version_change_reuses_current_ymap_groups() {
       inputs: &inputs,
       force: false,
       overwrites: &Default::default(),
+      added: &Default::default(),
     }
     .run()
     .unwrap()
@@ -157,6 +161,8 @@ fn dependency_groups_invalidate_connected_maps_but_not_independent_maps() {
       overwrite: None,
     }),
     dependencies: graph[name].clone(),
+    added_base: None,
+    replaces_other_resources: false,
     dependency_fingerprint: String::new(),
     output: None,
     merged_at: "cached".into(),
