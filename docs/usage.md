@@ -25,7 +25,7 @@ Release archives also contain `release.json`, naming the build they hold:
 ```
 
 `targets` lists the platforms whose executables the archive holds: one in a platform
-archive, every one in `mlo_merger-all.zip`. `mlo_merger-all.zip` also holds the browser build
+archive, every one in `mlo_merger-all-<tag>.zip`. `mlo_merger-all-<tag>.zip` also holds the browser build
 in `web/`, described under `web` in its `release.json`; see [Browser build](web.md).
 
 | Data | Type |

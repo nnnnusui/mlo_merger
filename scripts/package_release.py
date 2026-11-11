@@ -8,7 +8,7 @@
       asset/gen_mlo_merger.ts as dist/mlo_merger-TARGET.{zip,tar.gz}
   package_release.py all
       combines dist/'s platform archives and the browser build in web-build/ into
-      dist/mlo_merger-all.zip
+      dist/mlo_merger-all-TAG.zip, whose top directory is mlo_merger-all
 
 The release targets, and how each is built and named, are .github/release-targets.json.
 `platform` reads the commit and repository from GITHUB_SHA, GITHUB_SERVER_URL and
@@ -90,7 +90,7 @@ def all_platforms():
     platforms = {entry["target"]: entry["platform"] for entry in targets()}
     dist = ROOT / "dist"
     archives = sorted(dist.glob("mlo_merger-*.zip")) + sorted(dist.glob("mlo_merger-*.tar.gz"))
-    archives = [archive for archive in archives if not archive.name.startswith("mlo_merger-all.")]
+    archives = [archive for archive in archives if not archive.name.startswith("mlo_merger-all")]
     if not archives:
         raise SystemExit("No platform archives to combine")
     name = "mlo_merger-all"
@@ -142,7 +142,7 @@ def all_platforms():
             },
         }
         (package / "release.json").write_text(json.dumps(release, indent=2) + "\n", encoding="utf-8")
-        shutil.make_archive(str(dist / name), "zip", root_dir=temporary, base_dir=name)
+        shutil.make_archive(str(dist / f"{name}-{release['tag']}"), "zip", root_dir=temporary, base_dir=name)
 
 
 def main():
