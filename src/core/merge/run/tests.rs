@@ -268,6 +268,64 @@ fn merge_deletes_omitted_entities_and_detaches_dependent_children() {
 }
 
 #[test]
+fn removing_a_child_counts_it_out_of_its_parent_in_an_unchanged_ymap() {
+  use crate::core::format::gamefile::test_support::sample_ymap;
+  let root = std::env::temp_dir().join(format!("ymap_child_counts_{}", std::process::id()));
+  let _ = fs::remove_dir_all(&root);
+  let output = root.join("output");
+  let vanilla =
+    ["parent.ymap", "child.ymap", "sibling.ymap"].map(|name| root.join("vanilla").join(name));
+  // Entity 200 of the parent has two children, one in each child YMAP.
+  let mut parent = sample_ymap("parent_refs/vanilla_parent.ymap");
+  parent.entities[1].num_children = 2;
+  write_sample(&vanilla[0], &parent, &parent.entities);
+  copy_sample("child.ymap", &vanilla[1]);
+  copy_sample("child.ymap", &vanilla[2]);
+  // The resource removes the child of `child.ymap` and sets a child count of its own, which the
+  // merge counts instead.
+  let mut child = sample_ymap("parent_refs/child.ymap");
+  child.entities.clear();
+  write_sample(&root.join("a/child.ymap"), &child, &[]);
+  let mut stated = sample_ymap("parent_refs/vanilla_parent.ymap");
+  stated.entities[0].num_children = 9;
+  stated.entities[1].num_children = 2;
+  write_sample(&root.join("a/parent.ymap"), &stated, &stated.entities);
+  let merge = MergeYmap {
+    vanilla_dir: root.join("vanilla"),
+    output_dir: output.clone(),
+    rebuild_all: true,
+    overwrites: Default::default(),
+    vanilla_overwrites: Default::default(),
+    added: Default::default(),
+    replacing: Default::default(),
+    propagated: Vec::new(),
+  };
+  let counts = |path: &Path| -> Vec<u32> {
+    OriginalMap::load(path).unwrap().entities.iter().map(|entity| entity.num_children).collect()
+  };
+
+  // Without a source of the parent YMAP, it is written for the child count alone.
+  merge
+    .run_with_latest_vanilla_files(&vanilla, &[("a".into(), root.join("a/child.ymap"), None)])
+    .unwrap();
+  assert_eq!(counts(&output.join("parent.ymap")), vec![0, 1]);
+  assert!(!output.join("sibling.ymap").exists());
+
+  // With one, its own child counts give way to the merge's.
+  merge
+    .run_with_latest_vanilla_files(
+      &vanilla,
+      &[
+        ("a".into(), root.join("a/child.ymap"), None),
+        ("a".into(), root.join("a/parent.ymap"), None),
+      ],
+    )
+    .unwrap();
+  assert_eq!(counts(&output.join("parent.ymap")), vec![0, 1]);
+  fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 #[ignore = "requires local vanilla YMAP schemas"]
 fn sources_with_a_diff_document_merge_through_it_and_reject_stale_ones() {
   use crate::common::fingerprint::Fingerprint;

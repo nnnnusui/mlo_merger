@@ -235,6 +235,10 @@ visible through another copy.
   map's `parent` no longer names, is detached with a warning: `parentIndex` becomes `-1`,
   flag 8 (parent in the parent YMAP) is cleared, and `LODTYPES_DEPTH_HD` becomes
   `LODTYPES_DEPTH_ORPHANHD`; other LOD levels are kept.
+- `numChildren` is counted by the merge: changes to it in diffs and overwrites are left out,
+  and each parent takes its vanilla count changed by the children the merged YMAPs add or
+  remove. A vanilla YMAP whose entities' counts change is written even when no source
+  replaces it.
 - An index into a parent YMAP the merge cannot read is kept as it is.
 - A parent without a unique, non-zero GUID is kept by index only while the array it
   indexes is unchanged; otherwise that merge group fails.

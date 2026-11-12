@@ -3,21 +3,12 @@
 use super::*;
 
 impl<'a> MergeRun<'a> {
-  /// Sets the child counts of the YMAPs whose entities moved, restores the entities' GUIDs, and
-  /// decides which planned YMAPs are written: the merged ones that differ from what they replace,
-  /// and the kept ones whose parent references were repaired.
-  pub(super) fn decide_outputs(
-    &mut self,
-    changed_layouts: &HashSet<u32>,
-    child_counts: &HashMap<(u32, u32), u32>,
-  ) -> Result<(), Box<dyn std::error::Error>> {
+  /// Restores the entities' GUIDs and decides which planned YMAPs are written: the merged ones
+  /// that differ from what they replace, and the kept ones whose parent references or child
+  /// counts were repaired.
+  pub(super) fn decide_outputs(&mut self) -> Result<(), Box<dyn std::error::Error>> {
     let mut repaired = 0usize;
-    for (hash, output) in &mut self.planned {
-      if changed_layouts.contains(hash) {
-        for entity in output.entities_mut() {
-          entity.num_children = child_counts.get(&(*hash, entity.guid)).copied().unwrap_or(0);
-        }
-      }
+    for output in self.planned.values_mut() {
       for entity in output.entities_mut() {
         entity.guid = self.references.original_guid(entity.guid)?;
       }

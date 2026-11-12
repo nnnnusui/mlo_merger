@@ -23,6 +23,7 @@ Resource overwrites (`overwrite/resources/{resourceName}/{stream_path}.diff.json
 - [ ] Define the resource-priority configuration format, resource matching rules, and behavior for equal or unspecified priorities. Currently the first source that modifies or replaces an item wins, in source order.
 - [ ] Merge overlapping resource edits by configured priority and record the selected source. Precedence must never depend on filesystem enumeration order.
 - [ ] Report unsupported hierarchy/shape changes and conflicts for each format, and document the conservative fallback behavior.
+- [ ] Remove a removed child's geometry from the LOD and SLOD models of its parents, which bake every child in; the merge only updates the parents' `numChildren` now.
 
 ## YMAP Baseline Inference
 

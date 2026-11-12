@@ -26,9 +26,32 @@ fn write_vanilla(
   vanilla: &Path,
   bytes: &[u8],
 ) {
-  let object = "0000-base/ymap/map.ymap";
+  write_vanilla_files(vanilla, &[("map.ymap", bytes)]);
+}
+
+/// Writes a raw vanilla archive at `vanilla` of one stage, `0000-base`, holding `files`, each a
+/// YMAP's name and bytes.
+fn write_vanilla_files(
+  vanilla: &Path,
+  files: &[(&str, &[u8])],
+) {
   fs::create_dir_all(vanilla.join("0000-base/ymap")).unwrap();
-  fs::write(vanilla.join(object), bytes).unwrap();
+  let mut changes = BTreeMap::new();
+  for (name, bytes) in files {
+    let object = format!("0000-base/ymap/{name}");
+    fs::write(vanilla.join(&object), bytes).unwrap();
+    changes.insert(
+      (*name).into(),
+      FileChange {
+        previous_sha256: None,
+        file: CachedFile {
+          sha256: hex::encode(Sha256::digest(bytes)),
+          object,
+          source: format!("base.rpf/{name}"),
+        },
+      },
+    );
+  }
   write_json(
     &vanilla.join("cache_info.json"),
     &VanillaCacheManifest {
@@ -39,17 +62,7 @@ fn write_vanilla(
         parent: None,
         archives: vec![],
         unchanged: 0,
-        changes: BTreeMap::from([(
-          "map.ymap".into(),
-          FileChange {
-            previous_sha256: None,
-            file: CachedFile {
-              sha256: hex::encode(Sha256::digest(bytes)),
-              object: object.into(),
-              source: "base.rpf/map.ymap".into(),
-            },
-          },
-        )]),
+        changes,
       }],
     },
   )
@@ -746,5 +759,95 @@ fn added_ymaps_keep_parent_indices_into_added_parents() {
   assert!(!output.join("ymap/added_lod.ymap").exists());
   assert!(!output.join("ymap/added_child.ymap").exists());
   let _ = catalog;
+  fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn a_child_a_vanilla_overwrite_removes_is_counted_out_of_its_parent() {
+  use crate::core::format::ymap::compare::{YmapDiffFields, YmapEntityDiff};
+  let (_, catalog) = sample_bytes();
+  let root = std::env::temp_dir().join(format!("merge_child_counts_{}", std::process::id()));
+  let _ = fs::remove_dir_all(&root);
+  let vanilla = root.join("vanilla");
+  let overwrite_dir = root.join("overwrite");
+  let output = root.join("merged");
+  // Entity 200 of the parent has two children, one in each child YMAP.
+  let mut parent = sample_ymap("parent_refs/vanilla_parent.ymap");
+  parent.entities[1].num_children = 2;
+  let parent_bytes = write_ymap(&parent, &parent.entities).unwrap();
+  let child_bytes =
+    fs::read(Path::new(env!("CARGO_MANIFEST_DIR")).join("docs/sample/parent_refs/child.ymap"))
+      .unwrap();
+  write_vanilla_files(
+    &vanilla,
+    &[("parent.ymap", &parent_bytes), ("child.ymap", &child_bytes), ("sibling.ymap", &child_bytes)],
+  );
+  fs::create_dir_all(root.join("source/resource/stream")).unwrap();
+  fs::write(root.join("source/resource/fxmanifest.lua"), []).unwrap();
+  let write_overwrite = |name: &str, bytes: &[u8], entities: YmapEntityDiff| {
+    let overwrite = VanillaOverwrite {
+      schema_version: VanillaOverwrite::SCHEMA_VERSION,
+      base: OverwriteFingerprint {
+        sha256: hex::encode(Sha256::digest(bytes)),
+        size: bytes.len() as u64,
+      },
+      diffs: YmapDiffFields {
+        entities: Some(vec![entities]),
+        ..Default::default()
+      },
+    };
+    let directory = overwrite_dir.join("vanilla/0000-base/ymap");
+    fs::create_dir_all(&directory).unwrap();
+    write_json(&directory.join(format!("{name}.diff.json")), &overwrite).unwrap();
+  };
+  // The overwrite removes the child of `child.ymap`; one stating the parent's child count is
+  // left out, as the merge counts it.
+  write_overwrite(
+    "child.ymap",
+    &child_bytes,
+    serde_json::from_value(serde_json::json!({"Removed": {"base_index": 0}})).unwrap(),
+  );
+  write_overwrite(
+    "parent.ymap",
+    &parent_bytes,
+    serde_json::from_value(serde_json::json!(
+      {"Modified": {"base_index": 1, "target_index": 1, "changes": {"num_children": 9}}}
+    ))
+    .unwrap(),
+  );
+  let merge = Merge {
+    source_dir: root.join("source"),
+    vanilla_cache_dir: root.join("vanilla-cache"),
+    source_cache_dir: root.join("source-cache"),
+    output_dir: output.clone(),
+    overwrite_dir: Some(overwrite_dir.clone()),
+    overwrite_cache_dir: root.join("overwrite-cache"),
+    force: false,
+  };
+  let counts = |name: &str| -> Vec<u32> {
+    let bytes = fs::read(output.join("ymap").join(name)).unwrap();
+    let model = ymap_to_model(&bytes, &catalog.hash_names).unwrap();
+    model.entities.iter().map(|entity| entity.num_children).collect()
+  };
+  let merged_at = || {
+    serde_json::from_reader::<_, serde_json::Value>(
+      fs::File::open(output.join("cache_info.json")).unwrap(),
+    )
+    .unwrap()["files"]["parent.ymap"]["merged_at"]
+      .clone()
+  };
+
+  merge.run_after_caches(&vanilla).unwrap();
+  assert_eq!(counts("parent.ymap"), [0, 1]);
+  assert!(output.join("ymap/child.ymap").is_file());
+  assert!(!output.join("ymap/sibling.ymap").exists());
+  let merged = merged_at();
+  merge.run_after_caches(&vanilla).unwrap();
+  assert_eq!(merged_at(), merged, "a current merge is reused");
+
+  // Without the removal the parent keeps its vanilla count and is not written.
+  fs::remove_file(overwrite_dir.join("vanilla/0000-base/ymap/child.ymap.diff.json")).unwrap();
+  merge.run_after_caches(&vanilla).unwrap();
+  assert!(!output.join("ymap/parent.ymap").exists());
   fs::remove_dir_all(root).unwrap();
 }

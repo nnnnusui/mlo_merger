@@ -5,6 +5,7 @@ use super::propagated::PropagatedDiffs;
 use super::*;
 use crate::core::merge::duplicates::EntityDuplicate;
 
+mod child_counts;
 mod outputs;
 mod parents;
 mod plan;
@@ -26,7 +27,7 @@ impl MergeYmap {
 
   /// Merges in phases: grouping the sources by YMAP, registering them and their parents, merging
   /// each YMAP's diffs, relinking the children of YMAPs whose entities moved, restoring parent
-  /// indices, and deciding which YMAPs are written.
+  /// indices, counting each parent's children, and deciding which YMAPs are written.
   fn run_configured_inner(
     &self,
     latest_files: &[PathBuf],
@@ -60,7 +61,8 @@ impl MergeYmap {
     let changed_layouts = run.relink_vanilla_children()?;
     let (child_counts, resolved_links) = run.restore_parent_indices()?;
     run.check_local_hierarchies(resolved_links)?;
-    run.decide_outputs(&changed_layouts, &child_counts)?;
+    run.update_child_counts(&changed_layouts, &child_counts)?;
+    run.decide_outputs()?;
     let MergeRun {
       planned,
       duplicate_files,

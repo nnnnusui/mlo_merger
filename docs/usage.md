@@ -359,6 +359,8 @@ Its path is the file's path in the vanilla archive, `{version}/ymap/{file_name}`
   resource's extents, for example, copy its `streaming_extents_*`/`entities_extents_*`
   differences from the resource's diff document into the vanilla overwrite. The value is
   tied only to the vanilla file, so it is not updated when the resource changes.
+- Entities' `num_children` is left out: the merge counts each parent's children, so removing
+  a child, as here, updates its parent's count, in whichever YMAP the parent is.
 - A vanilla YMAP with an overwrite is merged even when no resource replaces it.
 - An overwrite whose `{version}` is not the latest file's, as after a game update or with
   another `--gamebuild`, or whose `base` no longer matches the latest vanilla file, is not

@@ -162,6 +162,26 @@ fn content_flags_are_combined_and_other_metadata_stays_vanilla() {
 }
 
 #[test]
+fn child_counts_are_left_out_without_hiding_another_sources_change() {
+  let vanilla = Ymap {
+    entities: vec![entity(1)],
+    ..base()
+  };
+  // A child count alone would otherwise win as the first modification of the entity.
+  let mut counted = vanilla.clone();
+  counted.entities[0].num_children = 5;
+  let mut moved = vanilla.clone();
+  moved.entities[0].lod_dist = 250.0;
+  moved.entities[0].num_children = 7;
+  let merged = merged(&vanilla, &[&counted, &moved]);
+  assert_eq!(merged.entities[0].lod_dist, 250.0);
+  assert_eq!(merged.entities[0].num_children, vanilla.entities[0].num_children);
+  let mut diff = diff(&vanilla, &counted);
+  leave_out(&mut diff, IgnoredChange::DERIVED);
+  assert_eq!(diff.entities, None);
+}
+
+#[test]
 fn without_ignored_changes_metadata_keeps_the_first_change() {
   let vanilla = Ymap {
     content_flags: 1,

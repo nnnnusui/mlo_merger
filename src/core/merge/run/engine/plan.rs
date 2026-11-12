@@ -105,13 +105,17 @@ impl<'a> MergeRun<'a> {
       ymap_diffs.push(ymap_diff);
     }
     // Merged as the last source, so the merge policy weighs it against the resources'. The
-    // changes left out of the resources' diffs are kept: they apply only from here.
+    // changes left out of the resources' diffs are kept, as they apply only from here, except
+    // the values the merge derives.
     if let Some(overwrite) = vanilla_overwrite
       && let Some(ymap_diff) =
         overwrite.diffs_for(&OverwriteFingerprint::read(&vanilla_ymap_path)?, ymap_name)
     {
       tracing::info!("  Vanilla overwrite of {ymap_name}");
       log_diff_counts(ymap_diff);
+      let mut ymap_diff = ymap_diff.clone();
+      leave_out(&mut ymap_diff, IgnoredChange::DERIVED);
+      let ymap_diff = &ymap_diff;
       let added_entities = ymap_diff
         .entities
         .iter()

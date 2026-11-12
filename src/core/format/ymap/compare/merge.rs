@@ -12,7 +12,7 @@
 //!
 //! Every change of `sources` is combined; [`leave_out`] removes changes from one source's diff
 //! beforehand. The merge stage leaves those listed in [`IgnoredChange::MERGE`] out of every
-//! resource's diff, but not out of a vanilla overwrite's.
+//! resource's diff, and those in [`IgnoredChange::DERIVED`] out of a vanilla overwrite's too.
 
 use std::collections::HashSet;
 
@@ -39,6 +39,9 @@ pub enum IgnoredChange {
   DistantLodLightCounts,
   /// Removals and replacements of vanilla physics dictionaries; replacing names are added.
   PhysicsDictionaryRemovals,
+  /// Entities' `numChildren`, which the merge counts from the final parent references. An
+  /// entity modification making no other change is dropped with it.
+  EntityChildCounts,
 }
 
 impl IgnoredChange {
@@ -53,7 +56,12 @@ impl IgnoredChange {
     Self::Block,
     Self::DistantLodLightCounts,
     Self::PhysicsDictionaryRemovals,
+    Self::EntityChildCounts,
   ];
+
+  /// What the merge stage leaves out of every diff, a vanilla overwrite's included: values it
+  /// derives from the merged YMAPs.
+  pub const DERIVED: &[Self] = &[Self::EntityChildCounts];
 
   /// The field this change belongs to, as logs name it.
   fn field(self) -> &'static str {
@@ -65,6 +73,7 @@ impl IgnoredChange {
       Self::Block => "block",
       Self::DistantLodLightCounts => "distantLodLights counts",
       Self::PhysicsDictionaryRemovals => "physicsDictionaries removals",
+      Self::EntityChildCounts => "entities numChildren",
     }
   }
 
@@ -92,6 +101,9 @@ impl IgnoredChange {
         .iter()
         .flatten()
         .any(|diff| matches!(diff, ItemDiff::Removed { .. } | ItemDiff::Replaced { .. })),
+      Self::EntityChildCounts => diff.entities.iter().flatten().any(|diff| {
+        matches!(diff, entities::YmapEntityDiff::Modified { changes, .. } if changes.num_children.is_some())
+      }),
     }
   }
 }
@@ -151,6 +163,29 @@ pub fn leave_out(
           })
           .collect();
         diff.physics_dictionaries = non_empty(kept);
+      }
+      IgnoredChange::EntityChildCounts => {
+        let kept = diff
+          .entities
+          .take()
+          .into_iter()
+          .flatten()
+          .filter_map(|mut diff| {
+            if let entities::YmapEntityDiff::Modified {
+              changes,
+              parent,
+              ..
+            } = &mut diff
+            {
+              changes.num_children = None;
+              if parent.is_none() && *changes == Default::default() {
+                return None;
+              }
+            }
+            Some(diff)
+          })
+          .collect();
+        diff.entities = non_empty(kept);
       }
     }
   }

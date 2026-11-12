@@ -99,7 +99,9 @@ diff record and the generation index alone, and are kept while both are unchange
    every change of its inputs; the merge stage first leaves name, flag, extent, block and
    distant LOD light count changes and physics dictionary removals out of each
    resource's diff, keeping vanilla's, but not out of the vanilla overwrite, through
-   which they can still be set. Diffs and their application stay complete, so other uses
+   which they can still be set. Entities' child counts are left out of every diff,
+   the vanilla overwrite's included: the merge counts each parent's children from the
+   final parent references. Diffs and their application stay complete, so other uses
    replay every change. YBNs apply supported source changes directly.
 4. Write merged native stream files under extension subdirectories (`ymap/`, `ybn/`),
    `_omit.txt` and `duplicates.json` at the selected output root.
