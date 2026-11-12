@@ -7,7 +7,7 @@ use super::{
 use crate::common::{changes::StoreChanges, json::write_json, path::ensure_safe_path};
 use crate::core::source_cache::{
   exclusions::{is_excluded, parse_exclusions},
-  inventory::{discover_resources, resource_id, source_fingerprints},
+  inventory::{discover_resources, resource_id},
   publication::{create_staging_directory, prepare_output_path},
 };
 use crate::core::{vanilla::load_manifest_with_revision, vanilla_cache::load_cache};
@@ -181,12 +181,6 @@ pub(super) fn prepare(build: &BuildSourceCache) -> Result<Prepared> {
       || metadata.vanilla_manifest_sha256 != manifest_sha256
       || metadata.vanilla_cache_revision != derived_revision
   });
-  let empty_inputs = BTreeMap::new();
-  let current_inputs = source_fingerprints(
-    &source_dir,
-    &selected,
-    if build.force { &empty_inputs } else { &cached_inputs },
-  )?;
   let source_inputs = cached_inputs.clone();
   let generated_at = chrono::Utc::now().to_rfc3339();
   let history =
@@ -221,7 +215,6 @@ pub(super) fn prepare(build: &BuildSourceCache) -> Result<Prepared> {
       inventories,
       cached_inputs,
       checks,
-      current_inputs,
       source_inputs,
       changes,
     },

@@ -40,7 +40,6 @@ struct CacheState {
   inventories: BTreeMap<String, ResourceInventory>,
   cached_inputs: BTreeMap<String, FileFingerprint>,
   checks: BTreeMap<String, ResourceCheck>,
-  current_inputs: BTreeMap<String, FileFingerprint>,
   source_inputs: BTreeMap<String, FileFingerprint>,
   /// Cached stream files this run moved in, replaced, archived or dropped.
   changes: StoreChanges,

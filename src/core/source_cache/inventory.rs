@@ -28,7 +28,6 @@ pub(super) fn source_fingerprints(
 ) -> Result<BTreeMap<String, FileFingerprint>> {
   // The inputs are listed first and hashed in parallel; hashing dominates for new files.
   let mut inputs = Vec::new();
-  let mut ids = Vec::with_capacity(resources.len());
   for resource in resources {
     let id = resource_id(source_dir, resource)?;
     inputs.push((input_key(&id, ""), resource.clone(), false));
@@ -52,7 +51,6 @@ pub(super) fn source_fingerprints(
         inputs.push((input_key(&id, &relative), entry.path().to_path_buf(), true));
       }
     }
-    ids.push(id);
   }
   let files = inputs
     .par_iter()
@@ -63,28 +61,7 @@ pub(super) fn source_fingerprints(
         .map_err(|error| format!("{}: {error}", path.display()))
     })
     .collect::<std::result::Result<BTreeMap<_, _>, String>>()?;
-  let total = ids.len();
-  for (index, id) in ids.iter().enumerate() {
-    if resource_fingerprints_changed(id, &files, cached) {
-      let prefix = input_key(id, "");
-      let count =
-        files.range(prefix.clone()..).take_while(|(key, _)| key.starts_with(&prefix)).count();
-      tracing::info!("Fingerprinting source resource {}/{}: {id}", index + 1, total);
-      tracing::info!("Fingerprint complete for {id}: {count} files");
-    }
-  }
   Ok(files)
-}
-
-fn resource_fingerprints_changed(
-  id: &str,
-  current: &BTreeMap<String, FileFingerprint>,
-  cached: &BTreeMap<String, FileFingerprint>,
-) -> bool {
-  let prefix = input_key(id, "");
-  let current = current.range(prefix.clone()..).take_while(|(key, _)| key.starts_with(&prefix));
-  let cached = cached.range(prefix.clone()..).take_while(|(key, _)| key.starts_with(&prefix));
-  !current.eq(cached)
 }
 
 pub(super) fn source_inventory(
@@ -95,10 +72,8 @@ pub(super) fn source_inventory(
   cached: Option<&ResourceInventory>,
 ) -> Result<BTreeMap<String, ResourceInventory>> {
   let mut inventories = BTreeMap::new();
-  let total = resources.len();
-  for (index, resource) in resources.iter().enumerate() {
+  for resource in resources {
     let id = resource_id(source_dir, resource)?;
-    tracing::info!("Inventorying source resource {}/{}: {id}", index + 1, total);
     let mut files_by_format: BTreeMap<String, Vec<SourceFile>> = BTreeMap::new();
     for stream_name in ["stream", "streams"] {
       let stream = resource.join(stream_name);
@@ -170,7 +145,6 @@ pub(super) fn source_inventory(
         });
       }
     }
-    let file_count: usize = files_by_format.values().map(Vec::len).sum();
     for files in files_by_format.values_mut() {
       files.sort_by(|left, right| left.path.cmp(&right.path));
     }
@@ -181,7 +155,6 @@ pub(super) fn source_inventory(
         files_by_format,
       },
     );
-    tracing::info!("Inventory complete for {id}: {file_count} stream files");
   }
   Ok(inventories)
 }
@@ -261,41 +234,6 @@ pub(super) fn fingerprint(
 #[cfg(test)]
 mod tests {
   use super::*;
-
-  #[test]
-  fn fingerprint_progress_requires_changes_in_the_current_resource() {
-    let fingerprint = FileFingerprint {
-      sha256: "hash".into(),
-      modified_seconds: 1,
-      modified_nanos: 0,
-      size: 10,
-    };
-    let cached = BTreeMap::from([
-      ("resource/".into(), fingerprint.clone()),
-      ("resource/stream/map.ymap".into(), fingerprint.clone()),
-      ("resource_other/".into(), fingerprint.clone()),
-    ]);
-    let mut current = cached.clone();
-    assert!(!resource_fingerprints_changed("resource", &current, &cached));
-    current.get_mut("resource_other/").unwrap().sha256 = "other change".into();
-    assert!(!resource_fingerprints_changed("resource", &current, &cached));
-    for change in 0..3 {
-      let mut changed = current.clone();
-      let entry = changed.get_mut("resource/stream/map.ymap").unwrap();
-      match change {
-        0 => entry.sha256 = "changed".into(),
-        1 => entry.modified_nanos = 1,
-        _ => entry.size = 11,
-      }
-      assert!(resource_fingerprints_changed("resource", &changed, &cached));
-    }
-    current.insert("resource/stream/added.ymap".into(), fingerprint);
-    assert!(resource_fingerprints_changed("resource", &current, &cached));
-    current.remove("resource/stream/added.ymap");
-    current.remove("resource/stream/map.ymap");
-    assert!(resource_fingerprints_changed("resource", &current, &cached));
-    assert!(resource_fingerprints_changed("resource", &cached, &BTreeMap::new()));
-  }
 
   #[test]
   fn unchanged_file_metadata_reuses_hash_and_changed_metadata_rehashes() {

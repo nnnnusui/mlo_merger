@@ -150,16 +150,22 @@ pub(in crate::core::source_cache) fn write_ymap_diffs(
         })
     })
     .collect::<Vec<_>>();
-  let mut stale = Vec::new();
-  for ((stream_file, file_path, previous, path, _), current) in entries.into_iter().zip(current) {
-    if current {
-      fs::create_dir_all(path.parent().ok_or("Diff path has no parent")?)?;
-      fs::rename(&previous, &path)?;
-      counts.reused += 1;
-    } else {
-      stale.push((stream_file, file_path, path));
-    }
-  }
+  let (kept, stale): (Vec<_>, Vec<_>) =
+    entries.into_iter().zip(current).partition(|(_, current)| *current);
+  kept
+    .par_iter()
+    .map(|((_, _, previous, path, _), _)| {
+      let parent = path.parent().ok_or("Diff path has no parent")?;
+      fs::create_dir_all(parent)
+        .and_then(|()| fs::rename(previous, path))
+        .map_err(|error| format!("{}: {error}", path.display()))
+    })
+    .collect::<std::result::Result<(), String>>()?;
+  counts.reused = kept.len();
+  let stale = stale
+    .into_iter()
+    .map(|((stream_file, file_path, _, path, _), _)| (stream_file, file_path, path))
+    .collect::<Vec<_>>();
   if !stale.is_empty() {
     let hash_names = load_hash_names_or_empty(&vanilla_dir.join("hash_names.json"));
     let context = YmapComparisonContext::new(source_dir, output, vanilla_cache_dir, hash_names)?;

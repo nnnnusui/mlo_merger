@@ -52,6 +52,22 @@ impl StoreChanges {
     }
   }
 
+  /// Records the changes of `other`, recorded after those already here.
+  pub(crate) fn merge(
+    &mut self,
+    other: Self,
+  ) {
+    for path in other.added {
+      self.record(path, None, Some("after"));
+    }
+    for path in other.modified {
+      self.record(path, Some("before"), Some("after"));
+    }
+    for path in other.removed {
+      self.record(path, Some("before"), None);
+    }
+  }
+
   /// Whether the run changed no file.
   pub fn is_empty(&self) -> bool {
     self.added.is_empty() && self.modified.is_empty() && self.removed.is_empty()
