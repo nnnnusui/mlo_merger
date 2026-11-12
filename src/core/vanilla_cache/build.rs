@@ -100,16 +100,29 @@ impl BuildVanillaCache {
     current: &BTreeMap<String, (String, CachedFile)>,
     input_timestamps: &BTreeMap<String, SourceTimestamp>,
   ) -> Result<BTreeMap<String, LatestFile>> {
+    use rayon::prelude::*;
+    let streams =
+      current.iter().filter(|(name, _)| is_supported_stream_file(name)).collect::<Vec<_>>();
+    tracing::info!("Reading {} vanilla stream files", streams.len());
+    // Each YMAP is read whole for its parent, so they are read in parallel.
+    let parents = streams
+      .par_iter()
+      .map(|(name, (_, file))| {
+        let parent = || -> Result<Option<u32>> {
+          let source = existing_artifact_path(vanilla_dir, file)?;
+          let is_ymap = Path::new(name)
+            .extension()
+            .is_some_and(|extension| extension.eq_ignore_ascii_case("ymap"));
+          is_ymap.then(|| ymap_parent_hash(&source)).transpose()
+        };
+        parent().map_err(|error| format!("{name}: {error}"))
+      })
+      .collect::<std::result::Result<Vec<_>, String>>()?;
     let mut latest_files = BTreeMap::new();
     let mut parent_by_child = BTreeMap::new();
-    for (name, (version, file)) in current {
-      if !is_supported_stream_file(name) {
-        continue;
-      }
-      let source = existing_artifact_path(vanilla_dir, file)?;
-      if Path::new(name).extension().is_some_and(|extension| extension.eq_ignore_ascii_case("ymap"))
-      {
-        parent_by_child.insert(name.to_ascii_lowercase(), ymap_parent_hash(&source)?);
+    for ((name, (version, file)), parent) in streams.into_iter().zip(parents) {
+      if let Some(parent) = parent {
+        parent_by_child.insert(name.to_ascii_lowercase(), parent);
       }
       latest_files.insert(
         name.clone(),
