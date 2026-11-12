@@ -85,8 +85,7 @@ Each trimmed entry matches a case-insensitive substring of the resource path rel
 `-i`; resource names and group paths can both be used. Backslashes are normalized to `/`;
 entries are literal text, not globs.
 
-- Excluded resources are not inventoried, fingerprinted, moved, or included in source
-  conflict reports.
+- Excluded resources stay in place, outside the inventory and the source conflict reports.
 - Exclusions apply only to the current execution and are not saved. Omitting `--exclude`
   or passing `--exclude ''` means no exclusions. Pipeline and merge pass them to their
   source-cache updates.
@@ -104,8 +103,7 @@ resource paths under `-i`, preserving modification times.
 - Different existing destination contents, missing cached files and symlink paths are
   rejected before any file moves; identical destination files are kept and their cached
   duplicates removed.
-- `_old/`, `history/` and unrecorded files are left untouched. Merged and deployed output is
-  not changed.
+- Merged and deployed output stays as it is until the next merge and deployment.
 - Run it while no other cache or pipeline operation is active. The next source-cache or
   pipeline run indexes the resources again and moves the same files back into the cache.
 - Given resource names or input-relative resource paths, only those resources are
@@ -124,8 +122,8 @@ Merge applies every source's differences from the latest vanilla file together t
 vanilla. YMAP differences are read from the source cache's
 `diff/{resource}/{stream-relative-path}.diff.json`, which source-cache generation keeps
 while their source and vanilla files and the matching tolerances are unchanged; a missing
-or stale document fails the merge instead of being recomputed, so rebuild the source cache
-first (`--merge` and the pipeline do). Only YMAPs that still differ from vanilla after
+or stale document fails the merge, so `--merge` and the pipeline update the source cache
+first. Only YMAPs that still differ from vanilla after
 merging are written.
 
 ### Added Stream Files
@@ -163,8 +161,7 @@ For an added YMAP:
 - A removal wins over every other change of that vanilla item, including another source's
   replacement of it, whatever the source order. An added entity equal to a removed vanilla
   entity is dropped too, so deleting wins over re-adding.
-- Otherwise the first source to modify or replace an item wins; resource priority is not
-  configurable. Occlude models are the exception: each field comes from the first source
+- Otherwise the first source to modify or replace an item wins. Occlude models are the exception: each field comes from the first source
   changing it, and every source's triangle changes are applied.
 - Removed and modified items are named by their vanilla index. An unpaired source item
   takes the place of an unpaired vanilla item between the same kept items (a
@@ -179,13 +176,12 @@ For an added YMAP:
   counts are left out, keeping vanilla's values.
 - Added physics dictionaries and prop instances skip names already present; resources'
   dictionary removals are not applied, and their replacements are applied as additions.
-- A [vanilla overwrite](#overwrites) is not limited this way: its changes to these
-  fields apply. To keep a resource's value of one of them, write it into the vanilla
+- A [vanilla overwrite](#overwrites)'s changes to these fields apply. To keep a resource's value of one of them, write it into the vanilla
   overwrite.
 - Entity extensions (light effects, doors, spawn point overrides and cloth bounds) are
   compared as a whole, ignoring number changes below the `ymap` tolerance; a change
   replaces all of the entity's extensions with the source's. A YMAP with another
-  extension type fails to load rather than lose it.
+  extension type fails to load.
 - `[prefix_]lodlights_*.ymap` and `[prefix_]distlodlights_*.ymap` hold the `lodLights`
   and `distantLodLightsSOA` of the same lights, read by index, so a light removed from
   either is removed from both. The source cache adds the other YMAP's removals to each
@@ -241,7 +237,7 @@ visible through another copy.
   `LODTYPES_DEPTH_ORPHANHD`; other LOD levels are kept.
 - An index into a parent YMAP the merge cannot read is kept as it is.
 - A parent without a unique, non-zero GUID is kept by index only while the array it
-  indexes is unchanged; otherwise that merge group fails rather than guess.
+  indexes is unchanged; otherwise that merge group fails.
 
 ### YBN
 
@@ -295,17 +291,16 @@ change are described in [usage.md](usage.md#overwrite-documents); complete examp
 
 ## Deploy
 
-Deploy consumes existing merge and source-cache data without regenerating them:
+Deploy writes from the existing merge and source-cache data:
 
 - Merged files: `stream/{extension}/merged/{filename}`.
 - Remaining cached files: `stream/{extension}/clone/{resourceName}/{stream-relative-path}`.
 - `files.txt`: original source-relative paths of active moved files.
 
 Deploy skips unchanged copies, repairs missing or changed outputs, and removes stale
-managed files. Unrelated files are preserved; locally modified stale files are rejected
-rather than deleted. Empty managed stream directories are pruned. Deploy also creates
-`fxmanifest.lua` with the FiveM map declaration and `/assetpacks` dependency when
-absent; existing manifests are never overwritten.
+managed files. Unrelated files are preserved; locally modified stale files are rejected.
+Empty managed stream directories are pruned. Deploy also creates `fxmanifest.lua` with the
+FiveM map declaration and `/assetpacks` dependency when absent.
 
 ## Game Builds
 
@@ -372,8 +367,7 @@ ymap_grass_position = 0.01
 
 - Position tolerances end in `_position`. The former names `ybn`, `ymap_occlude_model` and
   `ymap_box_occluder` are still read.
-- YMAP comparisons are exclusive of the boundary; extents compare exactly. These settings
-  do not change search radii.
+- YMAP comparisons are exclusive of the boundary; extents compare exactly.
 - All other values must be positive; floating values must also be finite. Unknown keys and
   invalid TOML are errors.
 - Effective settings are part of merge freshness, so changing them regenerates on the
@@ -390,7 +384,7 @@ mlo_merger --find file-from-position 1211.126,-507.5948,67.54723
 mlo_merger --find occlude-position 3.5,4.2,0.0 --radius 1.0
 ```
 
-Searches write XML to stdout without running the pipeline or modifying artifacts.
+Searches write XML to stdout.
 
 - `entity-guid` searches by entity GUID. Position searches accept `X,Y,Z`; use `--radius`
   for `entity-position`, `ybn-position` and `occlude-position` (default: `1.0`).
@@ -431,8 +425,8 @@ hashes. A resource's file is written to
 `asset/read-cache/resources/{resourceName}/{stream-relative-path}.json` and a vanilla
 file to `asset/read-cache/vanilla/{version}/ymap/{fileName}.json`, where `{version}` is the
 version folder holding the file in the vanilla archive: the last version, up to the stage
-read, that changed it. Versions holding the same file share its document. A JSON still
-describing its file is not written again; `-f` writes it anyway.
+read, that changed it. Versions holding the same file share its document. A JSON is
+written again when its file changed, or with `-f`.
 
 Vanilla files are read from the stage the vanilla cache was built for (`latest_version` in
 `asset/vanilla-cache/cache_info.json`, `--vanilla-cache` to change the cache), so they match
@@ -467,7 +461,7 @@ mlo_merger --check
 mlo_merger --check --deep --merged asset/merged -o asset/merged_mlo
 ```
 
-`--check` compares every store with its own metadata without changing any file, prints one
+`--check` compares every store with its own metadata, prints one
 line of JSON (`CheckReport`) and fails when it finds an inconsistency. Each issue names its
 `store`, its `kind` and the `path` relative to the store; stores whose directory does not
 exist are skipped. Store paths take the same options and defaults as the other commands.
@@ -491,8 +485,8 @@ exist are skipped. Store paths take the same options and defaults as the other c
 - Without `--deep`, contents are compared by size; the vanilla archive and cache record no
   sizes, so only `--deep` compares their contents. `--deep` reads every file, a few seconds
   for a full vanilla archive.
-- The vanilla cache holds no copies of the latest files: each is checked in the vanilla
-  archive its metadata names, and reported by its path from the cache directory, such as
+- The vanilla cache's latest files are checked in the vanilla archive its metadata names,
+  and reported by their path from the cache directory, such as
   `../vanilla/0000-base/ymap/{file name}`.
 - Nothing is repaired. The next merge and deployment rebuild their missing or changed
   files. A damaged vanilla archive is reused as it is, so extract it again with
@@ -511,7 +505,7 @@ mlo_merger --from-xml map.ymap.xml -o rebuilt --vanilla asset/vanilla
 
 Inputs can be files or directories. Conversion output defaults to the current directory.
 META resources need compatible schemas; `--vanilla` supplies schema or template inputs.
-YBN conversion does not require an external schema directory.
+YBN conversion needs no schemas.
 
 ## TypeScript Types
 
@@ -533,8 +527,7 @@ const config: MatchingConfig = { tolerance: { ybn_position: 0.05 } };
 
 Types preserve JSON field names, nullability and optional inputs. Paths are strings; sets
 are arrays. File sizes and timestamps are JSON numbers, represented as TypeScript
-`number`, not `bigint`; values above `Number.MAX_SAFE_INTEGER` need a precision-aware
-JSON reader. The definitions do not validate data at runtime.
+`number`; values above `Number.MAX_SAFE_INTEGER` need a precision-aware JSON reader.
 
 ## Limitations
 

@@ -9,9 +9,9 @@
 
 ### Vanilla Extraction
 
-Game archives are read natively, without CodeWalker. Their tables of contents are
-encrypted: the AES key is located in the installed `GTA5.exe`, and decodes CodeWalker's
-`magic.dat`, which holds the remaining NG keys and tables. Neither is redistributed. Copy
+Game archives are read natively. Their tables of contents are encrypted: the AES key is
+located in the installed `GTA5.exe`, and decodes CodeWalker's `magic.dat`, which holds the
+remaining NG keys and tables. Copy
 `CodeWalker.Core/Resources/magic.dat` from the
 [CodeWalker](https://github.com/dexyfex/CodeWalker) sources to `./magic.dat`, or pass its
 path with `--magic`. The GUI can download it from the same place.
@@ -22,8 +22,8 @@ path with `--magic`. The GUI can download it from the same place.
 cargo build
 ```
 
-The documentation uses `mlo_merger` as the executable name. If it is not on your `PATH`,
-invoke it by its path (for example, `./target/debug/mlo_merger`).
+The documentation uses `mlo_merger` as the executable name, such as
+`./target/debug/mlo_merger` after this build.
 
 A Windows executable can be built from Linux with MinGW:
 
@@ -106,9 +106,8 @@ Tests and native-only code (`src/main.rs`, `src/gui`, `build.rs`) may use `std` 
 
 ## TypeScript Types
 
-TypeScript definitions are generated from Rust's Serde models. The optional `typescript`
-feature is required only for generation and verification, not for normal builds. The
-release workflow regenerates `asset/gen_mlo_merger.ts`.
+TypeScript definitions are generated from Rust's Serde models with the optional `typescript`
+feature. The release workflow regenerates `asset/gen_mlo_merger.ts`.
 
 ```bash
 cargo export-types
@@ -121,8 +120,10 @@ cargo test --features typescript --lib typescript::tests
 Pushing a `v*` tag runs `.github/workflows/release.yml` on the tagged commit, with that commit's
 workflow. It first checks the tag against `Cargo.toml`'s version, then builds every target
 `.github/release-targets.json` lists (runner, executable, archive format and the executable's
-name in `mlo_merger-all`), and the browser build. `scripts/package_release.py` packages the
-archives; with the builds in place, it runs locally too:
+name in `mlo_merger-all`), and the browser build. The publishing job packages every
+platform's executable with the third-party notices and TypeScript bindings on Linux.
+`scripts/package_release.py` packages the archives; with the builds in place, it runs locally
+too:
 
 ```bash
 python3 scripts/package_release.py check v3.1.1   # fails unless Cargo.toml says 3.1.1
@@ -136,10 +137,9 @@ notices and `mlo_merger-all` follow it.
 
 Every release archive, including `mlo_merger-all`, contains `third_party_notices.json`
 next to `LICENSE.md` and `release.json`. It lists the crates compiled into the released
-executables for any release target, or into the browser build of `mlo_merger-all` (the normal dependency graph; no build or dev
-dependencies, and not this workspace's own crates), with their license texts.
-`THIRD_PARTY_NOTICES.md` renders the same data for reading. CodeWalker is not shipped and
-not listed.
+executables for any release target, or into the browser build of `mlo_merger-all` (normal
+dependencies of the workspace's crates), with their license texts. `THIRD_PARTY_NOTICES.md`
+renders the same data for reading.
 
 ```json
 {

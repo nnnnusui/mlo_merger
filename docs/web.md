@@ -21,8 +21,8 @@ web/
 ```
 
 The module is built with the release profile tuned for size and optimized with `wasm-opt`, and
-holds no debug information; `scripts/build_web.sh --bundle DIR` builds this directory, and the
-release fails rather than publish a bundle without it. Under `web` in `release.json`,
+holds no debug information; `scripts/build_web.sh --bundle DIR` builds this directory, and fails
+when `wasm-opt` is missing. Under `web` in `release.json`,
 `wasm_bindgen` gives the wasm-bindgen `target` and `version`, and `files` the SHA-256 of every
 file in `web/`, by path relative to it. The bundle's `version` and `commit` apply to it as well.
 

@@ -4,11 +4,11 @@
 
 MLO Merger prepares vanilla data, merges supported FiveM map and collision
 changes, and deploys the resulting stream files. Inspection and conversion are
-separate operations that do not run the pipeline.
+separate operations.
 
 Native Rust handles game-file conversion, merging and RPF reading for vanilla
 generation. CodeWalker is used only by round-trip tests that compare conversion
-with it, behind the `codewalker` feature; the released executable does not load it.
+with it, behind the `codewalker` feature.
 
 ## Pipeline
 
@@ -50,7 +50,7 @@ resources rather than its path: a source root holding none of them is rejected.
 Format codecs (`format/*`) stay independent of artifact layout and batch processing.
 The GUI, opened when the executable starts without arguments, is a front end for
 vanilla generation only: it collects the game directory and `magic.dat` and runs the
-same generation as `--generate-vanilla`, holding no generation logic of its own.
+same generation as `--generate-vanilla`.
 
 ## Source Cache
 
@@ -58,7 +58,7 @@ Source-cache generation moves vanilla-named inputs and every YMAP from resources
 cache, retaining original paths. Other files stay in the resource, as do the
 directories the moved files leave empty; replacements archive prior cached files. Resource names must be unique, and colliding stream
 paths are rejected. Scoped updates retain other inventories for global conflict
-and relationship analysis. Missing cached inputs are errors, not silent deletions.
+and relationship analysis. Missing cached inputs are errors.
 
 For each cached YMAP that overrides a vanilla YMAP, the source cache writes a diff
 document against the latest vanilla file. A YMAP that resources add, named after no vanilla
@@ -120,11 +120,9 @@ theirs.
 
 Merge output is staged and replaces the selected output directory after a
 successful run. The default output is `asset/merged`. A missing or stale diff
-document fails the merge rather than being recomputed silently. YMAP output is
-limited to final models that differ from vanilla after merging and parent-reference
-repairs. Identical inputs and basename conflicts alone do not cause output. A run
-with no edited YMAPs succeeds without generating YMAP files. Only source YMAPs
-replaced by generated output are listed in `_omit.txt`. Merged YMAPs are written
+document fails the merge. YMAP output is limited to final models that differ from
+vanilla after merging and parent-reference repairs. Only source YMAPs replaced by
+generated output are listed in `_omit.txt`. Merged YMAPs are written
 as RSC7 META with one schema table shared by every YMAP, taken from the latest
 vanilla YMAPs (whose structures each have a single layout), embedding the schemas
 their blocks use.
@@ -139,14 +137,13 @@ publication. Failed merges leave prior outputs intact; fully current runs do not
 republish. Algorithm versions are tracked separately for YMAP and YBN.
 
 YMAP duplicate diagnostics identify applied and ignored source edits with their
-resolution reason. They describe competing entity changes, not filename conflicts.
+resolution reason. They describe competing entity changes.
 
 ## Overwrites
 
 Overwrites are user edits applied to merge inputs without changing source or
 cache bytes; besides the sources, they are the only input written from outside the tool.
-The source cache never reads them: it keeps the sources and preprocesses them for reading.
-What the overwrites call for is derived into the overwrite cache, as the source cache is
+The source cache preprocesses the sources alone. What the overwrites call for is derived into the overwrite cache, as the source cache is
 from the sources, by its own stage before the merge: the resources' files each stream file
 that resources add is merged from, in merge order (`added_stream_files.json`), and the
 overwrites that
@@ -192,7 +189,7 @@ files from a version of the raw archive.
 ### Read-Only Searches
 
 GUID, entity-position, YBN-center, occluder and file-from-position searches read
-existing native files and return matches as XML, without writing artifacts.
+existing native files and return matches as XML.
 Filename globs limit reads; position searches use an inclusive 3D radius. YBN
 centers are resolved to world space, and indices are local to each input, not
 persistent IDs.
@@ -208,20 +205,17 @@ decoding the rest of a file: a YMAP's entity extents, a YBN's bound tree without
 geometry.
 
 Optional pre-merge inspection reads recorded vanilla and source inputs, verifies
-their fingerprints and marks absent matches. Changed inputs are rejected rather
-than presented as historical data. The same predicate applies to every stage.
+their fingerprints and marks absent matches. Changed inputs are rejected. The same predicate applies to every stage.
 
 ## Deploy
 
 Deployment consumes existing merged output and the files the source-cache inventory
-records as moved, without regenerating either input; other files under
-`source-cache/resources` are not part of the cache and are not deployed, and a recorded
-file that is missing is an error. Merged stream files go to
+records as moved; a recorded file that is missing is an error. Merged stream files go to
 `stream/{extension}/merged/{filename}`. Source-cache files not replaced by a
 merged basename go to
 `stream/{extension}/clone/{resourceName}/{stream-relative-path}`. Matching is
 case-insensitive; archive and report files are excluded. Duplicate merged
-basenames are rejected rather than selected arbitrarily.
+basenames are rejected.
 
 Deployment freshness is tracked independently of merge freshness. Unchanged
 copies are skipped, and missing or altered outputs are repaired. Only managed
@@ -229,16 +223,15 @@ files are removed when stale; modified stale files are rejected and unrelated
 files are preserved. Empty stream directories are pruned without following
 symlinks. Force affects copying, not cache generation or merging.
 
-The source omission list includes active moved merged/clone inputs, not archived
-history or untouched source files. Original resource paths remain available for
+The source omission list includes active moved merged/clone inputs. Original resource paths remain available for
 inspection.
 
 ## Source Restoration
 
 The explicit restore-source-cache operation returns recorded active cached files
 to their original resource-relative paths under the selected source root. It
-checks all paths and destination conflicts before moving files, preserves file
-modification times, and does not restore archived history or unrecorded files.
+checks all paths and destination conflicts before moving files and preserves file
+modification times.
 Cache directories the restored files leave empty are removed, recreating source
 directories as needed. Successful restoration invalidates source-cache indexes without modifying merge
 or deployment output. Restoring selected resources keeps the inventory, recording
@@ -259,23 +252,22 @@ does not automatically restore archived files.
 
 ## Merge Policy
 
-Sources are compared with the latest selected vanilla files. Historical baseline
-inference is not part of the merge workflow. YMAP and YBN use independent
-format-specific policies.
+Sources are compared with the latest selected vanilla files. YMAP and YBN use
+independent format-specific policies.
 
 The outcome never depends on processing or filesystem order: a removal wins over
 every other change to the same vanilla item, and otherwise the first source in
-source order wins. Configured resource priority is not implemented. YMAP parent
+source order wins. YMAP parent
 relationships are resolved before merging and repaired after the final entity layout
 is known, so files affected by those repairs are rebuilt even when their own data is
-unchanged; ambiguous references are rejected rather than guessed. YBN shapes are
+unchanged; ambiguous references are rejected. YBN shapes are
 matched by geometry within the configured tolerance, not by polygon or vertex index.
 The exact rules are in the [command reference](reference.md#merge).
 
 Matching tolerances are validated from configuration before each operation and
 kept constant throughout it. Effective values participate in diff-document and
 merge freshness so configuration changes cannot reuse results computed under
-another matching policy. They do not change search radii.
+another matching policy.
 
 ## Vanilla Archive And Derived Cache
 
@@ -284,10 +276,9 @@ update and DLCs, stored by version and extension, with a global hash-name table.
 pack's stage reads its `dlc.rpf`, then the subpacks (`dlc1.rpf`, …) its `setup2.xml`
 declares, as the game mounts them, then its title-update patch. The derived cache selects
 the latest files through the last stage of the chosen game build and indexes YMAP
-parent/child relationships. It neither copies nor links the latest files: its metadata
-names the raw archive, relative to the cache when they share a root, and each latest
-file's path in it, and every reader resolves the files through that metadata, so the
-cache needs no filesystem privileges and moves together with the archive. A game build is placed among the stages by the `[gamebuild]`
+parent/child relationships. Its metadata names the raw archive, relative to the cache
+when they share a root so that the two move together, and each latest file's path in it;
+every reader resolves the files through that metadata. A game build is placed among the stages by the `[gamebuild]`
 table in configuration, which names the DLCs each FiveM build first includes. It can be
 recreated from the raw archive without re-extracting the game. An existing raw archive is
 not checked against changes to the installed game.
@@ -307,9 +298,8 @@ previous cache's diffs between unchanged files while the diff layout, algorithm
 version and hash names match; a forced rebuild takes them all again.
 
 Input fingerprints and upstream state drive reuse. Raw vanilla and merge outputs
-are staged before publication; failed builds do not publish incomplete results.
-Source-cache file moves are incremental, so the whole pipeline is not one
-transaction. Version lookup reads overlay metadata without modifying artifacts.
+are staged before publication. Source-cache file moves are incremental, so the whole
+pipeline is not one transaction.
 
 ## Conversion and Dependencies
 
@@ -317,14 +307,12 @@ Binary/XML conversion, semantic comparison and in-game behavior provide differen
 guarantees. META rebuilding requires compatible schemas; PSO editing uses an
 existing binary template and cannot change allocated shapes or capacities.
 The CodeWalker round-trip tests require locally supplied assemblies, and RPF decryption a locally
-supplied `magic.dat`. Unsupported required data must
-fail explicitly rather than be silently discarded.
+supplied `magic.dat`. Unsupported required data fails explicitly.
 
 TypeScript consumers use declarations generated at release time for persisted
 reports, diff documents, overwrites, read documents and configuration inputs,
-derived from the serialization models rather than separate handwritten contracts.
-Generation is independent of the asset pipeline and does not provide runtime JSON
-validation or lossless handling of large JavaScript numbers.
+derived from the serialization models. They provide no runtime JSON validation or
+lossless handling of large JavaScript numbers.
 
 ## Boundaries
 

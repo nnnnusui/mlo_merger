@@ -118,8 +118,7 @@ export const gameBuildArgs = (build: number): string[] =>
   build > 0 ? ["--gamebuild", String(build)] : [];
 ```
 
-Paths below are defaults. If you change them with options such as `--source-cache`,
-`--overwrite` or `-o`, change the paths you read accordingly.
+Paths below are defaults.
 
 ## Recorded Paths
 
@@ -207,8 +206,7 @@ vanilla. The last stdout line is a `ReadResult`:
 ```
 
 - `output` is the `YmapReadDocument` to read; its `model` is the `Ymap`.
-- `updated: false` means the existing JSON still describes the file and was not rewritten.
-  It is still valid to read.
+- `updated` tells whether the JSON was rewritten; either way it describes the file.
 - For `origin.Resource`, `resource` (the resource directory name) and `stream_path`
   (the path below `stream/`) also key the diff document and the overwrite.
 - For `origin.Vanilla`, `version` is the version folder holding the file: the last version,
@@ -315,8 +313,8 @@ A resource overwrite cancels differences of the diff document at the same path (
   Resource names and stream paths are matched case-insensitively.
 - `{ "schema_version": 2, "ignore": true }` leaves the stream file out of the merge whole,
   whatever it holds; it needs no fingerprints. For a YMAP several resources add, the file is
-  also left out of the choice of which one wins. It does not keep the file from being
-  deployed when nothing merged takes its name.
+  also left out of the choice of which one wins. When nothing merged takes its name, the file
+  is deployed from its resource.
 - In an object, `true` leaves out a field's whole difference; a nested selector leaves out
   only the parts it names.
 - In an array, a selector leaves out the entries whose written fields all match. With
@@ -428,8 +426,8 @@ warning starting with `Overwrite of`.
 An overwrite is written against the files its fingerprints name. When the game build moves
 the latest vanilla file, or a resource is updated and its overwrite cannot be followed (see
 below), the next run (the pipeline updates the source cache first) merges the file again
-without the overwrite: the overwrite is left out whole, not partially applied, and the
-overwrite document is not changed. The merge does not fail.
+without the overwrite: the overwrite is left out whole, its document stays as it is, and the
+merge succeeds.
 
 When only the resource's file changed, the source cache keeps the version the overwrite was
 written against (`asset/source-cache/history/{resource}/{stream_path}/{sha256}.*`), and
@@ -477,7 +475,7 @@ run, and the pipeline prints the same lists (see [Pipeline Output](#pipeline-out
 {
   "ignored_overwrites": [
     { "resource": "resource_a", "file": "hei_ch1_11.ymap", "reason": "source_changed" },
-    { "file": "hei_ch1_12.ymap", "reason": "vanilla_changed" }
+    { "file": "0000-base/ymap/hei_ch1_12.ymap", "reason": "vanilla_changed" }
   ]
 }
 ```
@@ -502,7 +500,7 @@ or removed (`PipelineChanges`), and the [overwrite warnings](#overwrite-warnings
   "merged": { "added": [], "modified": ["asset/merged/ymap/hei_ch1_11.ymap"], "removed": [] },
   "ignored_overwrites": [
     { "resource": "sample_resource_a", "file": "hei_ch1_11.ymap", "reason": "source_changed" },
-    { "file": "hei_ch1_12.ymap", "reason": "vanilla_changed" }
+    { "file": "0000-base/ymap/hei_ch1_12.ymap", "reason": "vanilla_changed" }
   ]
 }
 ```
@@ -513,7 +511,6 @@ or removed (`PipelineChanges`), and the [overwrite warnings](#overwrite-warnings
   (`--vanilla`) since the vanilla cache names them there; a file a newer stage replaces is
   listed as removed and the newer stage's file as added. `source_cache` lists the stream files
   moved into the cache, and `merged` the merged stream files.
-  Metadata, indexes and diff documents are not listed.
 - Only content changes count: a forced rebuild that writes the same bytes lists nothing, and a
   run that changes nothing prints empty lists.
 - `ignored_overwrites` is the current state, not a change, as `warnings.json` records it.
@@ -531,7 +528,7 @@ or removed (`PipelineChanges`), and the [overwrite warnings](#overwrite-warnings
   | `vanilla_changed` | The latest vanilla file differs from `base` (the source, if any, is unchanged), or a vanilla overwrite names another version of the file than the latest |
   | `missing_source` | The resource merges no stream file at `file`, for example after it was removed or excluded |
   | `missing_vanilla` | No latest vanilla file has the file name of `file` |
-- Deployment is not included; its counts are logged on stderr.
+- Deployment's counts are logged on stderr.
 
 ## Example: From Player Position To Overwrite
 
