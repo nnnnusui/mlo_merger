@@ -285,8 +285,11 @@ fn pipeline_runs_on_the_web_sample() {
   let vanilla = |path: &str| workspace.asset(&format!("vanilla/{path}"));
   assert_eq!(
     build.changes.vanilla_cache.added,
-    [vanilla("0000-base/ybn/smpl_block_01.ybn"), vanilla("0003-smpl_patch_01/ymap/smpl_block_02.ymap")]
-      .into()
+    [
+      vanilla("0000-base/ybn/smpl_block_01.ybn"),
+      vanilla("0003-smpl_patch_01/ymap/smpl_block_02.ymap")
+    ]
+    .into()
   );
   assert_eq!(
     build.changes.vanilla_cache.removed,

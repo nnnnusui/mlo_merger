@@ -19,4 +19,3 @@ pub fn is_file(path: impl AsRef<Path>) -> bool {
 pub fn is_dir(path: impl AsRef<Path>) -> bool {
   path.as_ref().is_dir()
 }
-

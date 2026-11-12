@@ -269,8 +269,9 @@ YMAPs; one of another format is reported as `unsupported_format` and not applied
   merge, or sets `ignore` to leave the file out whole. The diff document is the source
   cache's, against vanilla or, for an [added stream file](#added-stream-files), an empty file of
   its format.
-- `vanilla/latest/ymap/{fileName}.diff.json` (`VanillaOverwrite`) holds differences
-  written directly against a latest vanilla YMAP. They are merged as one more source
+- `vanilla/{version}/ymap/{fileName}.diff.json` (`VanillaOverwrite`) holds differences
+  written directly against the latest vanilla YMAP at `{version}/ymap/{fileName}` in the
+  vanilla archive, and applies only while that version is the latest. They are merged as one more source
   after every resource's, under the same merge policy, and also into vanilla YMAPs no
   resource replaces. Unlike resources' changes, their name, flags, extents, block,
   distant LOD light count and physics dictionary changes apply (see

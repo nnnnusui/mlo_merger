@@ -30,7 +30,7 @@ impl IncrementalMerge<'_> {
   pub(super) fn ymap_graph(&self) -> Result<BTreeMap<String, BTreeSet<String>>> {
     if self.inputs.ymap.is_empty()
       && self.inputs.propagated.is_empty()
-      && self.overwrites.vanilla_files().is_empty()
+      && self.vanilla_overwrites.is_empty()
     {
       return Ok(BTreeMap::new());
     }

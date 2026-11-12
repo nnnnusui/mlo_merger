@@ -50,7 +50,8 @@ impl OverwriteWarnings {
 ///
 /// A resource overwrite is compared with its source YMAP and the baseline its diff is taken
 /// against: the latest vanilla file of that name, or the empty YMAP for an added YMAP. A vanilla
-/// overwrite is compared with the latest vanilla file.
+/// overwrite applies to the latest vanilla file only when that file is the version it names, and
+/// is then compared with it.
 pub fn collect(
   inputs: &MergeInputs,
   overwrites: &Overwrites,
@@ -59,7 +60,7 @@ pub fn collect(
   let mut warnings = OverwriteWarnings::default();
   let latest = crate::core::vanilla_cache::latest_files(vanilla_cache_dir)?
     .into_iter()
-    .map(|file| (file.name.to_ascii_lowercase(), file.path))
+    .map(|file| (file.name.to_ascii_lowercase(), file))
     .collect::<BTreeMap<_, _>>();
   let sources = inputs.ymap_by_key();
   for (resource, stream_path) in overwrites.keys() {
@@ -88,7 +89,7 @@ pub fn collect(
       }
       Some(source) => latest
         .get(&source.file_name.to_ascii_lowercase())
-        .map(|path| OverwriteFingerprint::read(path))
+        .map(|file| OverwriteFingerprint::read(&file.path))
         .transpose()?,
       None => None,
     };
@@ -106,16 +107,21 @@ pub fn collect(
       });
     }
   }
-  for (name, overwrite) in overwrites.vanilla_files() {
+  for (object, overwrite) in overwrites.vanilla_files() {
+    let name = object.rsplit('/').next().unwrap_or(object);
     let reason = match latest.get(name) {
-      Some(vanilla) => (overwrite.base != OverwriteFingerprint::read(vanilla)?)
+      // A newer version of the file replaced the one the overwrite names.
+      Some(vanilla) if !vanilla.object.eq_ignore_ascii_case(object) => {
+        Some(IgnoredOverwriteReason::VanillaChanged)
+      }
+      Some(vanilla) => (overwrite.base != OverwriteFingerprint::read(&vanilla.path)?)
         .then_some(IgnoredOverwriteReason::VanillaChanged),
       None => Some(IgnoredOverwriteReason::MissingVanilla),
     };
     if let Some(reason) = reason {
       warnings.ignored_overwrites.push(IgnoredOverwrite {
         resource: None,
-        file: name.clone(),
+        file: object.clone(),
         reason,
       });
     }

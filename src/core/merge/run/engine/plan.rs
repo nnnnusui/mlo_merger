@@ -3,7 +3,7 @@
 use super::*;
 
 /// The resource a vanilla overwrite's contributions are reported under in duplicate reports.
-const VANILLA_OVERWRITE_SOURCE: &str = "overwrite/vanilla/latest";
+const VANILLA_OVERWRITE_SOURCE: &str = "overwrite/vanilla";
 
 impl<'a> MergeRun<'a> {
   /// Plans the YMAP named `ymap_name`: kept from its single source as it is when nothing else

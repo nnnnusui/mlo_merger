@@ -99,6 +99,7 @@ fn ybn_version_change_reuses_current_ymap_groups() {
       inputs: &inputs,
       force: false,
       overwrites: &Default::default(),
+      vanilla_overwrites: &Default::default(),
       added: &Default::default(),
     }
     .run()

@@ -237,7 +237,7 @@ its own base:
 |---|---|---|
 | `asset/source-cache/diff/{resource}/{stream_path}.diff.json` | The resource's baseline YMAP: the vanilla YMAP of that name, an empty YMAP, or the base source's YMAP | `diffs`, the resource's differences |
 | `asset/overwrite/resources/{resource}/{stream_path}.diff.json` | The source-cache diff document at the same path | `skip`, the differences of that document to cancel |
-| `asset/overwrite/vanilla/latest/ymap/{file_name}.diff.json` | The latest vanilla YMAP | `diffs`, differences of its own |
+| `asset/overwrite/vanilla/{version}/ymap/{file_name}.diff.json` | The latest vanilla YMAP, `{version}/ymap/{file_name}` in the vanilla archive | `diffs`, differences of its own |
 
 - A diff document leads from its `base` file to its `target` file. Array differences name
   base items by `base_index`, so the diffs of several resources from one base combine
@@ -331,11 +331,14 @@ See [docs/sample/overwrite](sample/overwrite/README.md) for complete examples.
 ### Vanilla Overwrite Documents
 
 ```text
-asset/overwrite/vanilla/latest/ymap/{file_name}.diff.json
+asset/overwrite/vanilla/{version}/ymap/{file_name}.diff.json
 ```
 
-A vanilla overwrite is a diff document of its own against the latest vanilla YMAP, merged
+A vanilla overwrite is a diff document of its own against a latest vanilla YMAP, merged
 after every resource's (see [How Diff Documents Compose](#how-diff-documents-compose)).
+Its path is the file's path in the vanilla archive, `{version}/ymap/{file_name}`, with
+`.diff.json` appended: `{version}` is the stage folder holding the latest file, the
+`origin.Vanilla.version` `--read` reports for it.
 
 ```json
 {
@@ -359,8 +362,11 @@ after every resource's (see [How Diff Documents Compose](#how-diff-documents-com
   differences from the resource's diff document into the vanilla overwrite. The value is
   tied only to the vanilla file, so it is not updated when the resource changes.
 - A vanilla YMAP with an overwrite is merged even when no resource replaces it.
-- An overwrite whose `base` no longer matches the latest vanilla file is not applied and is
-  listed in the pipeline's `ignored_overwrites`. Rewrite it after a vanilla update.
+- An overwrite whose `{version}` is not the latest file's, as after a game update or with
+  another `--gamebuild`, or whose `base` no longer matches the latest vanilla file, is not
+  applied and is listed in the pipeline's `ignored_overwrites`. Write it for the new version
+  after a vanilla update. Overwrites of several versions of a file can be kept side by side;
+  only the latest version's applies.
 
 ### Added Stream Files Several Resources Ship
 
@@ -514,16 +520,17 @@ or removed (`PipelineChanges`), and the [overwrite warnings](#overwrite-warnings
 - `ignored_overwrites` lists every overwrite that does
   not apply to the current files, on every run. An entry with `resource` is the resource
   overwrite `resources/{resource}/{file}.diff.json`; one without is the vanilla overwrite
-  `vanilla/latest/ymap/{file}.diff.json`. Both names are lowercase; documents are matched
+  `vanilla/{file}.diff.json`, `file` being its path in the vanilla archive such as
+  `0000-base/ymap/{file_name}`. Both names are lowercase; documents are matched
   case-insensitively. `reason` is one of:
 
   | `reason` | Meaning |
   |---|---|
   | `unsupported_format` | `file` is of a format overwrites do not support yet (only YMAPs are supported) |
   | `source_changed` | The source stream file differs from `target` |
-  | `vanilla_changed` | The latest vanilla file differs from `base` (the source, if any, is unchanged) |
+  | `vanilla_changed` | The latest vanilla file differs from `base` (the source, if any, is unchanged), or a vanilla overwrite names another version of the file than the latest |
   | `missing_source` | The resource merges no stream file at `file`, for example after it was removed or excluded |
-  | `missing_vanilla` | No latest vanilla file is named `file` |
+  | `missing_vanilla` | No latest vanilla file has the file name of `file` |
 - Deployment is not included; its counts are logged on stderr.
 
 ## Example: From Player Position To Overwrite

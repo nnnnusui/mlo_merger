@@ -169,13 +169,15 @@ SHA-256 under `history/`: the overwrite cache compares that version's diff docum
 current one, rewrites the overwrite in the overwrites when its selectors carry over, and
 records what it did under `source_updates/`, which, unlike the rest of the cache, is kept.
 
-`overwrite/vanilla/latest/ymap/{fileName}.diff.json` holds differences written
-directly against a latest vanilla YMAP. Only `latest` is read: merges compare
-sources with the latest vanilla files, and recent game updates rarely replace
-existing YMAPs. The differences join the merge as the last source rather than
-overriding its result, so the merge policy applies to them unchanged; a file with
-one is merged even when no resource replaces it. It applies only while the latest
-vanilla file matches its fingerprint. YBN overwrites are not yet supported.
+`overwrite/vanilla/{version}/ymap/{fileName}.diff.json` holds differences written
+directly against the vanilla YMAP at `{version}/ymap/{fileName}` in the vanilla
+archive. Merges compare sources with the latest vanilla files, so it applies only
+while that file is the latest one of its name, selected by the game build, and
+matches its fingerprint; once a newer stage replaces the file, it is left out with a
+warning until it is written for the new version. The differences join the merge as
+the last source rather than overriding its result, so the merge policy applies to
+them unchanged; a file with one is merged even when no resource replaces it. YBN
+overwrites are not yet supported.
 
 ## Inspection
 

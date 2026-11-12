@@ -39,7 +39,7 @@ impl IncrementalMerge<'_> {
       }
     }
     // A vanilla overwrite is merged like a source, even into a file no resource replaces.
-    for name in self.overwrites.vanilla_files().keys() {
+    for name in self.vanilla_overwrites.keys() {
       if self.vanilla_overwrite(name).is_some() && baselines.contains_key(name) {
         sources.entry(name.clone()).or_default();
       } else {

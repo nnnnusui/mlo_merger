@@ -5,9 +5,10 @@
 //! the merge, or that the file is left out whole. One leaving out differences applies only while
 //! the source file and the diff document's baseline are those it was written against.
 //!
-//! `<overwrite>/vanilla/latest/ymap/<file name>.diff.json` holds a [`VanillaOverwrite`]:
-//! differences from a latest vanilla YMAP, merged after every resource's. It applies only while
-//! that vanilla file is the one it was written against.
+//! `<overwrite>/vanilla/<version>/ymap/<file name>.diff.json` holds a [`VanillaOverwrite`]:
+//! differences from the vanilla YMAP at `<version>/ymap/<file name>` in the vanilla archive,
+//! merged after every resource's. It applies only while that file is the latest one of its name
+//! and the one it was written against.
 //!
 //! What these call for is derived into the overwrite cache (see [`crate::core::overwrite_cache`]).
 
@@ -87,7 +88,8 @@ pub struct IgnoredOverwrite {
   #[serde(default)]
   pub resource: Option<String>,
   /// The overwritten file, in lowercase: a resource overwrite's stream path, such as
-  /// `vanilla/hei_ch1_11.ymap`, or the vanilla overwrite's file name, such as `hei_ch1_11.ymap`.
+  /// `vanilla/hei_ch1_11.ymap`, or the vanilla overwrite's path in the vanilla archive, such as
+  /// `0000-base/ymap/hei_ch1_11.ymap`.
   pub file: String,
   pub reason: IgnoredOverwriteReason,
 }
@@ -106,8 +108,9 @@ pub enum IgnoredOverwriteReason {
   SourceChanged,
   /// No latest vanilla file has the overwrite's file name.
   MissingVanilla,
-  /// The latest vanilla file differs from the one the overwrite was written against; reported
-  /// only when the source, if any, is unchanged.
+  /// The latest vanilla file differs from the one the overwrite was written against, or, for a
+  /// vanilla overwrite, is of another version than the one it names; reported only when the
+  /// source, if any, is unchanged.
   VanillaChanged,
 }
 
@@ -197,7 +200,7 @@ impl StreamFileOverwrite {
 }
 
 /// Every resource stream file's overwrite, keyed by resource name and stream path, and the
-/// latest vanilla files'.
+/// vanilla files', keyed by their path in the vanilla archive.
 #[derive(Debug, Clone, Default)]
 pub struct Overwrites {
   resources: BTreeMap<(String, String), StreamFileOverwrite>,
@@ -208,7 +211,7 @@ pub struct Overwrites {
 
 impl Overwrites {
   /// Reads `<directory>/resources/<resource>/**/*.diff.json` and
-  /// `<directory>/vanilla/latest/ymap/*.diff.json`; a missing directory has no overwrites.
+  /// `<directory>/vanilla/<version>/ymap/*.diff.json`; a missing directory has no overwrites.
   pub fn load(directory: &Path) -> Result<Self> {
     let (resources, paths) = load_resources(directory)?;
     Ok(Self {
@@ -253,17 +256,32 @@ impl Overwrites {
     self.resources.keys().map(|(resource, path)| (resource.as_str(), path.as_str()))
   }
 
-  /// The overwrite of the latest vanilla file named `file_name`, matched case-insensitively.
+  /// The overwrite of the vanilla file at `object` in the vanilla archive, such as
+  /// `0000-base/ymap/map.ymap`, matched case-insensitively.
   pub fn vanilla_file(
     &self,
-    file_name: &str,
+    object: &str,
   ) -> Option<&VanillaOverwrite> {
-    self.vanilla.get(&file_name.to_ascii_lowercase())
+    self.vanilla.get(&object.replace('\\', "/").to_ascii_lowercase())
   }
 
-  /// Every latest vanilla file's overwrite, keyed by lowercase file name.
+  /// Every vanilla file's overwrite, keyed by its lowercase path in the vanilla archive.
   pub fn vanilla_files(&self) -> &BTreeMap<String, VanillaOverwrite> {
     &self.vanilla
+  }
+
+  /// The overwrites of `latest`, the latest vanilla files, that are written against those files'
+  /// versions, keyed by lowercase file name.
+  pub fn latest_vanilla_files<'a>(
+    &self,
+    latest: impl IntoIterator<Item = &'a crate::core::vanilla_cache::VanillaLatestFile>,
+  ) -> BTreeMap<String, VanillaOverwrite> {
+    latest
+      .into_iter()
+      .filter_map(|file| {
+        Some((file.name.to_ascii_lowercase(), self.vanilla_file(&file.object)?.clone()))
+      })
+      .collect()
   }
 }
 

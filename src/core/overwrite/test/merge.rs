@@ -397,7 +397,8 @@ fn vanilla_overwrites_merge_after_the_sources() {
       &YmapDiffContext::new(matching::current(), (&vanilla_model, None), (&edited, None)),
     )
     .unwrap();
-  let write_overwrite = |sha256: &str| {
+  // Written against the file's version in the vanilla archive, `0000-base/ymap/map.ymap`.
+  let write_version = |version: &str, sha256: &str| {
     let overwrite = VanillaOverwrite {
       schema_version: VanillaOverwrite::SCHEMA_VERSION,
       base: OverwriteFingerprint {
@@ -406,9 +407,11 @@ fn vanilla_overwrites_merge_after_the_sources() {
       },
       diffs: diffs.clone(),
     };
-    fs::create_dir_all(overwrite_dir.join("vanilla/latest/ymap")).unwrap();
-    write_json(&overwrite_dir.join("vanilla/latest/ymap/Map.ymap.diff.json"), &overwrite).unwrap();
+    let directory = overwrite_dir.join("vanilla").join(version).join("ymap");
+    fs::create_dir_all(&directory).unwrap();
+    write_json(&directory.join("Map.ymap.diff.json"), &overwrite).unwrap();
   };
+  let write_overwrite = |sha256: &str| write_version("0000-base", sha256);
   write_overwrite(&hex::encode(Sha256::digest(&bytes)));
 
   let merge = Merge {
@@ -442,22 +445,33 @@ fn vanilla_overwrites_merge_after_the_sources() {
   assert_eq!(result.entities_extents_min, vanilla_model.entities_extents_min);
   let duplicates = fs::read_to_string(output.join("duplicates.json")).unwrap();
   assert!(duplicates.contains("first_change_wins"), "{duplicates}");
-  assert!(duplicates.contains("overwrite/vanilla/latest"), "{duplicates}");
+  assert!(duplicates.contains("overwrite/vanilla"), "{duplicates}");
   let applied = merged_at();
   merge.run_after_caches(&vanilla).unwrap();
   assert_eq!(merged_at(), applied);
 
   // One written against another vanilla file is not applied.
   write_overwrite("stale");
+  let ignored = |file: &str| IgnoredOverwrite {
+    resource: None,
+    file: file.into(),
+    reason: IgnoredOverwriteReason::VanillaChanged,
+  };
   assert_eq!(
     merge.run_after_caches(&vanilla).unwrap().warnings.ignored_overwrites,
-    vec![IgnoredOverwrite {
-      resource: None,
-      file: "map.ymap".into(),
-      reason: IgnoredOverwriteReason::VanillaChanged,
-    }]
+    vec![ignored("0000-base/ymap/map.ymap")]
   );
   assert_eq!(merged().content_flags, vanilla_model.content_flags);
+
+  // Nor is one naming another version than the latest file's, even with the same contents.
+  fs::remove_dir_all(overwrite_dir.join("vanilla/0000-base")).unwrap();
+  write_version("0001-update", &hex::encode(Sha256::digest(&bytes)));
+  assert_eq!(
+    merge.run_after_caches(&vanilla).unwrap().warnings.ignored_overwrites,
+    vec![ignored("0001-update/ymap/map.ymap")]
+  );
+  assert_eq!(merged().content_flags, vanilla_model.content_flags);
+  fs::remove_dir_all(overwrite_dir.join("vanilla/0001-update")).unwrap();
 
   // Without a source replacing the file, the overwrite alone is merged into it.
   write_overwrite(&hex::encode(Sha256::digest(&bytes)));

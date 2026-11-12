@@ -86,7 +86,9 @@ impl Merge {
     merge_inputs
       .ymap
       .retain(|source| !overwrites.for_source(source).is_some_and(|overwrite| overwrite.ignore));
-    let latest_files = latest_vanilla_stream_files(&vanilla_cache_dir)?;
+    let latest = crate::core::vanilla_cache::latest_files(&vanilla_cache_dir)?;
+    let vanilla_overwrites = overwrites.latest_vanilla_files(&latest);
+    let latest_files = latest_vanilla_stream_files(latest);
     let vanilla_archive = crate::core::vanilla_cache::archive_dir(&vanilla_cache_dir)?;
     let output_dir = prepare_output_path(&self.output_dir)?;
     let staging = Staging(create_staging_directory(&output_dir)?);
@@ -100,6 +102,7 @@ impl Merge {
       ymap: &latest_files.ymap,
       inputs: &merge_inputs,
       overwrites: &overwrites,
+      vanilla_overwrites: &vanilla_overwrites,
       added: &added,
       force: self.force,
     }
@@ -129,13 +132,15 @@ pub struct MergeSummary {
   pub warnings: OverwriteWarnings,
 }
 
-/// The latest vanilla YMAPs and YBNs the vanilla cache at `vanilla_cache_dir` records.
-fn latest_vanilla_stream_files(vanilla_cache_dir: &Path) -> Result<VanillaStreamFiles> {
+/// The YMAPs and YBNs of `latest`, the latest vanilla files.
+fn latest_vanilla_stream_files(
+  latest: Vec<crate::core::vanilla_cache::VanillaLatestFile>
+) -> VanillaStreamFiles {
   let mut files = VanillaStreamFiles {
     ymap: Vec::new(),
     ybn: Vec::new(),
   };
-  for file in crate::core::vanilla_cache::latest_files(vanilla_cache_dir)? {
+  for file in latest {
     match Path::new(&file.name).extension().and_then(|extension| extension.to_str()) {
       Some(extension) if extension.eq_ignore_ascii_case("ymap") => files.ymap.push(file.path),
       Some(extension) if extension.eq_ignore_ascii_case("ybn") => files.ybn.push(file.path),
@@ -144,7 +149,7 @@ fn latest_vanilla_stream_files(vanilla_cache_dir: &Path) -> Result<VanillaStream
   }
   files.ymap.sort();
   files.ybn.sort();
-  Ok(files)
+  files
 }
 
 fn prepare_output_path(output: &Path) -> Result<PathBuf> {

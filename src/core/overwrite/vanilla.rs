@@ -12,8 +12,9 @@ use std::path::Path;
 /// The extension of a vanilla overwrite document, after the stream file's own name.
 const DOCUMENT_EXTENSION: &str = ".diff.json";
 
-/// Differences of one latest vanilla stream file, read from
-/// `vanilla/latest/<file type>/<file name>.diff.json`.
+/// Differences of one vanilla stream file, read from
+/// `vanilla/<version>/<file type>/<file name>.diff.json`, the file's path in the vanilla archive
+/// with `.diff.json` appended. It applies while that file is the latest one of its name.
 ///
 /// They are merged as one more source after every resource's, so the merge policy decides
 /// between them and the resources' changes to the same items.
@@ -55,68 +56,70 @@ impl VanillaOverwrite {
   }
 }
 
-/// Reads the YMAP overwrites under `<directory>/vanilla`, keyed by lowercase file name.
+/// Reads the YMAP overwrites under `<directory>/vanilla`, keyed by the lowercase path in the
+/// vanilla archive of the file each was written against, such as `0000-base/ymap/map.ymap`.
 ///
-/// Only `latest` is read, since merges compare sources with the latest vanilla files; other
-/// versions and file types are reported and ignored.
+/// Other file types are reported and ignored.
 pub(super) fn load(directory: &Path) -> Result<BTreeMap<String, VanillaOverwrite>> {
   let vanilla_dir = directory.join("vanilla");
   let mut overwrites = BTreeMap::new();
   if !fs::is_dir(&vanilla_dir) {
     return Ok(overwrites);
   }
-  for entry in fs::read_dir(&vanilla_dir)? {
-    let path = entry?.path();
-    if path.file_name().is_some_and(|name| name != "latest") {
-      tracing::warn!("Vanilla overwrites are read from latest only; ignoring {}", path.display());
-    }
-  }
-  let latest = vanilla_dir.join("latest");
-  if !fs::is_dir(&latest) {
-    return Ok(overwrites);
-  }
-  for entry in fs::read_dir(&latest)? {
-    let path = entry?.path();
-    if path.file_name().is_none_or(|name| name != "ymap") {
-      tracing::warn!("Only YMAP vanilla overwrites are supported; ignoring {}", path.display());
-    }
-  }
-  let ymap_dir = latest.join("ymap");
-  if !fs::is_dir(&ymap_dir) {
-    return Ok(overwrites);
-  }
-  for entry in fs::read_dir(&ymap_dir)? {
-    let path = entry?.path();
-    let name = path
-      .file_name()
-      .and_then(|name| name.to_str())
-      .ok_or_else(|| format!("Overwrite file name is not UTF-8: {}", path.display()))?
-      .to_ascii_lowercase();
-    let Some(stream_name) = name.strip_suffix(DOCUMENT_EXTENSION).filter(|name| {
-      fs::is_file(&path) && Path::new(name).extension().is_some_and(|extension| extension == "ymap")
-    }) else {
-      tracing::warn!("Not a YMAP vanilla overwrite; ignoring {}", path.display());
+  for version in fs::read_dir(&vanilla_dir)? {
+    let version_dir = version?.path();
+    if !fs::is_dir(&version_dir) {
+      tracing::warn!("Not a vanilla version directory; ignoring {}", version_dir.display());
       continue;
-    };
-    let overwrite: VanillaOverwrite = crate::common::json::read_json(&path)
-      .map_err(|error| format!("Cannot read {}: {error}", path.display()))?;
-    if overwrite.schema_version != VanillaOverwrite::SCHEMA_VERSION {
-      return Err(
-        format!(
-          "{} has schema version {}; expected {}",
-          path.display(),
-          overwrite.schema_version,
-          VanillaOverwrite::SCHEMA_VERSION
-        )
-        .into(),
-      );
     }
-    overwrites.insert(stream_name.to_string(), overwrite);
+    let version = utf8_name(&version_dir)?.to_ascii_lowercase();
+    for entry in fs::read_dir(&version_dir)? {
+      let path = entry?.path();
+      if path.file_name().is_none_or(|name| name != "ymap") {
+        tracing::warn!("Only YMAP vanilla overwrites are supported; ignoring {}", path.display());
+      }
+    }
+    let ymap_dir = version_dir.join("ymap");
+    if !fs::is_dir(&ymap_dir) {
+      continue;
+    }
+    for entry in fs::read_dir(&ymap_dir)? {
+      let path = entry?.path();
+      let name = utf8_name(&path)?.to_ascii_lowercase();
+      let Some(stream_name) = name.strip_suffix(DOCUMENT_EXTENSION).filter(|name| {
+        fs::is_file(&path)
+          && Path::new(name).extension().is_some_and(|extension| extension == "ymap")
+      }) else {
+        tracing::warn!("Not a YMAP vanilla overwrite; ignoring {}", path.display());
+        continue;
+      };
+      let overwrite: VanillaOverwrite = crate::common::json::read_json(&path)
+        .map_err(|error| format!("Cannot read {}: {error}", path.display()))?;
+      if overwrite.schema_version != VanillaOverwrite::SCHEMA_VERSION {
+        return Err(
+          format!(
+            "{} has schema version {}; expected {}",
+            path.display(),
+            overwrite.schema_version,
+            VanillaOverwrite::SCHEMA_VERSION
+          )
+          .into(),
+        );
+      }
+      overwrites.insert(format!("{version}/ymap/{stream_name}"), overwrite);
+    }
   }
   tracing::info!(
     "Loaded vanilla overwrites of {} YMAP files from {}",
     overwrites.len(),
-    ymap_dir.display()
+    vanilla_dir.display()
   );
   Ok(overwrites)
+}
+
+fn utf8_name(path: &Path) -> Result<&str> {
+  path
+    .file_name()
+    .and_then(|name| name.to_str())
+    .ok_or_else(|| format!("Overwrite file name is not UTF-8: {}", path.display()).into())
 }
