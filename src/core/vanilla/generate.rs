@@ -189,6 +189,7 @@ impl BuildVanillaArchive {
   ) -> Result<()> {
     write_json(&build.join("cache_info.json"), &manifest)?;
     write_hash_index(build, manifest, rpf_names)?;
+    tracing::info!("Publishing {} vanilla stages", manifest.versions.len());
     publish_cache(build, output_dir, manifest)?;
     tracing::info!("Saved {} vanilla stages to {}", manifest.versions.len(), output_dir.display());
     Ok(())

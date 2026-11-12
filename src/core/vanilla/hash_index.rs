@@ -6,6 +6,7 @@ use std::{
   path::{Component, Path, PathBuf},
 };
 
+use rayon::prelude::*;
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 
@@ -43,29 +44,38 @@ pub(super) fn write_hash_index(
   let files = manifest.resolve_version(&latest_version)?;
   let revision = hex::encode(Sha256::digest(&manifest_bytes));
 
+  let ymaps = files
+    .iter()
+    .filter(|(file_name, _)| file_name.to_ascii_lowercase().ends_with(".ymap"))
+    .collect::<Vec<_>>();
+  tracing::info!("Extracting hash names from {} vanilla YMAPs", ymaps.len());
+  // Each YMAP is read and parsed whole, so they are read in parallel and merged in order.
+  let parsed = ymaps
+    .par_iter()
+    .map(|(_, file)| -> std::result::Result<Option<ParsedYmapNames>, String> {
+      let path =
+        checked_artifact_path(vanilla_dir, &file.object).map_err(|error| error.to_string())?;
+      let bytes = fs::read(&path).map_err(|error| format!("{}: {error}", path.display()))?;
+      if !bytes.starts_with(b"RSC7") {
+        tracing::debug!("Skipping non-RSC7 YMAP hash extraction: {}", path.display());
+        return Ok(None);
+      }
+      let parsed = Rsc7Resource::decode(&bytes).and_then(|resource| {
+        let meta = MetaResource::parse(&resource)?;
+        parse_ymap_names(&meta)
+      });
+      match parsed {
+        Ok(parsed) => Ok(Some(parsed)),
+        Err(error) => {
+          tracing::warn!("Could not extract YMAP names from {}: {error}", path.display());
+          Ok(None)
+        }
+      }
+    })
+    .collect::<std::result::Result<Vec<_>, String>>()?;
   let mut names = BTreeMap::new();
   let mut archetypes = BTreeSet::new();
-  for (file_name, file) in files {
-    if !file_name.to_ascii_lowercase().ends_with(".ymap") {
-      continue;
-    }
-    let path = checked_artifact_path(vanilla_dir, &file.object)?;
-    let bytes = fs::read(&path)?;
-    if !bytes.starts_with(b"RSC7") {
-      tracing::debug!("Skipping non-RSC7 YMAP hash extraction: {}", path.display());
-      continue;
-    }
-    let parsed = Rsc7Resource::decode(&bytes).and_then(|resource| {
-      let meta = MetaResource::parse(&resource)?;
-      parse_ymap_names(&meta)
-    });
-    let parsed = match parsed {
-      Ok(parsed) => parsed,
-      Err(error) => {
-        tracing::warn!("Could not extract YMAP names from {}: {error}", path.display());
-        continue;
-      }
-    };
+  for parsed in parsed.into_iter().flatten() {
     for (hash, name) in parsed.names {
       names.entry(format!("{hash:08X}")).or_insert(name);
     }
