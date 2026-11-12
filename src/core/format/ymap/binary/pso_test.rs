@@ -1,4 +1,4 @@
-use std::{collections::HashMap, path::Path};
+use std::collections::HashMap;
 
 use crate::common::{position::Position, rotation::Rotation};
 use crate::core::format::{
@@ -7,9 +7,7 @@ use crate::core::format::{
 };
 
 fn read(name: &str) -> Ymap {
-  let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-    .join("asset/vanilla-cache/latest/ymap")
-    .join(format!("{name}.ymap"));
+  let path = crate::core::vanilla_cache::test_support::asset_latest_file(&format!("{name}.ymap"));
   let resource = PsoResource::parse(&crate::platform::fs::read(path).unwrap()).unwrap();
   super::pso_to_ymap(&resource, &HashMap::new()).unwrap()
 }

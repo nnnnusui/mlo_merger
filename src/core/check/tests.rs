@@ -164,20 +164,20 @@ fn each_store_whose_metadata_cannot_be_read_is_reported_once() {
 #[test]
 fn issues_serialize_with_snake_case_kinds_and_without_empty_details() {
   let issue = |detail: Option<&str>| CheckIssue {
-    store: "vanilla-cache".into(),
-    kind: CheckIssueKind::BrokenLink,
-    path: "latest/ymap/map.ymap".into(),
+    store: "merged".into(),
+    kind: CheckIssueKind::Changed,
+    path: "ymap/map.ymap".into(),
     detail: detail.map(Into::into),
   };
   let report = CheckReport {
-    issues: vec![issue(None), issue(Some("../missing.ymap"))],
+    issues: vec![issue(None), issue(Some("size 1 instead of 2"))],
   };
   assert_eq!(
     serde_json::to_value(&report).unwrap(),
     serde_json::json!({"issues": [
-      {"store": "vanilla-cache", "kind": "broken_link", "path": "latest/ymap/map.ymap"},
-      {"store": "vanilla-cache", "kind": "broken_link", "path": "latest/ymap/map.ymap",
-       "detail": "../missing.ymap"},
+      {"store": "merged", "kind": "changed", "path": "ymap/map.ymap"},
+      {"store": "merged", "kind": "changed", "path": "ymap/map.ymap",
+       "detail": "size 1 instead of 2"},
     ]})
   );
 }

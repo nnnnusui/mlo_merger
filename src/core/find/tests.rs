@@ -135,10 +135,7 @@ fn find_searches_native_merged_and_recorded_before_entities_without_writes() {
     meta::{MetaResource, MetaSchemaCatalog},
     rsc7::Rsc7Resource,
   };
-  let base = Path::new(env!("CARGO_MANIFEST_DIR")).join("asset/vanilla-cache/latest/ymap");
-  let mut paths =
-    fs::read_dir(base).unwrap().map(|entry| entry.unwrap().path()).collect::<Vec<_>>();
-  paths.sort();
+  let paths = crate::core::vanilla_cache::test_support::asset_latest_files("ymap");
   let bytes = fs::read(
     paths
       .iter()

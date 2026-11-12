@@ -88,7 +88,7 @@ fn merge_dispatches_latest_vanilla_ybn_and_writes_omit_list() {
   .run_after_caches(&vanilla_dir)
   .unwrap();
 
-  assert!(vanilla_cache_dir.join("latest/ybn/collision.ybn").is_file());
+  assert!(vanilla_cache_dir.join("cache_info.json").is_file());
   assert!(source_cache_dir.join("cache_info.json").is_file());
   let merged =
     crate::core::format::ybn::read_ybn(&fs::read(output_dir.join("ybn/collision.ybn")).unwrap())

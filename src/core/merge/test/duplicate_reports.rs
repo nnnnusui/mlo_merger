@@ -9,10 +9,7 @@ fn incremental_merge_preserves_and_restores_duplicate_reports() {
     rsc7::Rsc7Resource,
   };
   use crate::core::format::ymap::binary::ymap_to_model;
-  let local = Path::new(env!("CARGO_MANIFEST_DIR")).join("asset/vanilla-cache/latest/ymap");
-  let mut paths =
-    fs::read_dir(local).unwrap().map(|entry| entry.unwrap().path()).collect::<Vec<_>>();
-  paths.sort();
+  let paths = crate::core::vanilla_cache::test_support::asset_latest_files("ymap");
   let sample = paths
     .iter()
     .find(|path| {

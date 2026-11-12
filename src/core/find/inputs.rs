@@ -31,14 +31,16 @@ impl Default for InputStores {
 }
 
 impl InputStores {
-  /// Where a recorded merge input is: a vanilla file in the vanilla cache, a source in the
-  /// source root when it is recorded at its original path, otherwise in the source cache.
+  /// Where a recorded merge input is: a vanilla file in `vanilla_archive`, the vanilla archive
+  /// the vanilla cache names, a source in the source root when it is recorded at its original
+  /// path, otherwise in the source cache.
   pub(super) fn resolve(
     &self,
     input: &mut Input,
+    vanilla_archive: &Path,
   ) {
     let store = match &input.original_path {
-      None => &self.vanilla_cache_dir,
+      None => vanilla_archive,
       Some(original) if *original == input.path => &self.source_dir,
       Some(_) => &self.source_cache_dir,
     };
@@ -103,9 +105,11 @@ pub(super) fn search_inputs(
     if cache.format_version != 1 {
       return Err("Unsupported merge cache schema for --diff-all".into());
     }
+    let vanilla_archive =
+      crate::core::vanilla_cache::archive_dir(&search.stores.vanilla_cache_dir)?;
     for record in cache.files.values_mut() {
       for input in record.vanilla.iter_mut().chain(&mut record.merge_sources) {
-        search.stores.resolve(input);
+        search.stores.resolve(input, &vanilla_archive);
       }
     }
     Some(cache)

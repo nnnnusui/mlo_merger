@@ -90,6 +90,7 @@ fn ybn_version_change_reuses_current_ymap_groups() {
   assert!(
     IncrementalMerge {
       vanilla_cache: &vanilla,
+      vanilla_archive: &vanilla,
       source_cache: &cache,
       output: &output,
       staging: &staging,

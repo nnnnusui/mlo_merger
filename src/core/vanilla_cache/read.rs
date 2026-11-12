@@ -7,7 +7,7 @@ use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use std::{
   collections::BTreeMap,
-  path::{Path, PathBuf},
+  path::{Component, Path, PathBuf},
   sync::Arc,
 };
 
@@ -42,6 +42,32 @@ pub fn cache_info_path(cache_dir: &Path) -> PathBuf {
   cache_dir.join("cache_info.json")
 }
 
+/// The vanilla archive the cache in `cache_dir` names its latest files in.
+pub(crate) fn archive_dir(cache_dir: &Path) -> Result<PathBuf> {
+  Ok(archive_dir_of(cache_dir, &read_derived(cache_dir)?.manifest))
+}
+
+/// `cache_dir` joined with the recorded archive, its `..` resolved without following links, so
+/// that paths in the archive keep `cache_dir`'s spelling.
+fn archive_dir_of(
+  cache_dir: &Path,
+  manifest: &DerivedManifest,
+) -> PathBuf {
+  let mut archive = PathBuf::new();
+  for component in cache_dir.join(&manifest.vanilla_dir).components() {
+    match component {
+      Component::CurDir => {}
+      Component::ParentDir
+        if matches!(archive.components().next_back(), Some(Component::Normal(_))) =>
+      {
+        archive.pop();
+      }
+      component => archive.push(component),
+    }
+  }
+  archive
+}
+
 /// One latest vanilla stream file of the derived cache.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VanillaLatestFile {
@@ -49,32 +75,31 @@ pub struct VanillaLatestFile {
   pub name: String,
   /// The vanilla version the file comes from.
   pub version: String,
-  /// The cached file, below the cache directory.
+  /// The file's path in the vanilla archive, with `/` separators, such as
+  /// `0000-base/ymap/hei_ch1_11.ymap`.
+  pub object: String,
+  /// The file, in the vanilla archive.
   pub path: PathBuf,
 }
 
-/// Lists the latest vanilla stream files recorded in the derived cache's metadata, without
-/// checking it against the raw archive.
+/// Lists the latest vanilla stream files recorded in the derived cache's metadata, as files of
+/// the vanilla archive it names, without checking them against the archive.
 pub fn latest_files(cache_dir: &Path) -> Result<Vec<VanillaLatestFile>> {
   let loaded = read_derived(cache_dir)?;
   let metadata = &loaded.manifest;
   if metadata.format_version != CACHE_SCHEMA {
     return Err(format!("Unsupported vanilla-cache schema {}", metadata.format_version).into());
   }
+  let archive = archive_dir_of(cache_dir, metadata);
   metadata
     .files
     .iter()
     .map(|(name, file)| {
-      let object = Path::new(&file.object);
-      if object.is_absolute()
-        || object.components().any(|part| !matches!(part, std::path::Component::Normal(_)))
-      {
-        return Err(format!("Unsafe vanilla-cache artifact path: {}", file.object).into());
-      }
       Ok(VanillaLatestFile {
         name: name.clone(),
         version: file.version.clone(),
-        path: cache_dir.join(object),
+        object: file.object.clone(),
+        path: super::checked_source_path(&archive, &file.object)?,
       })
     })
     .collect()
@@ -108,16 +133,15 @@ pub(crate) fn load_cache(
   {
     return Err("Derived vanilla YMAP relationship index is stale".into());
   }
-  for format in ["ymap", "ybn"] {
-    if !fs::is_dir(directory.join("latest").join(format)) {
-      return Err(format!("Derived vanilla cache is missing latest/{format}").into());
-    }
-  }
   // One stat per latest file, tens of thousands in all, so they run in parallel.
-  let objects = metadata.files.values().map(|file| file.object.as_str()).collect::<Vec<_>>();
-  if let Some(missing) = objects.par_iter().find_any(|object| !fs::is_file(directory.join(object)))
-  {
-    return Err(format!("Derived vanilla latest file is missing: {missing}").into());
+  let archive = archive_dir_of(directory, metadata);
+  let paths = metadata
+    .files
+    .values()
+    .map(|file| super::checked_source_path(&archive, &file.object))
+    .collect::<Result<Vec<_>>>()?;
+  if let Some(missing) = paths.par_iter().find_any(|path| !fs::is_file(path)) {
+    return Err(format!("Latest vanilla file is missing: {}", missing.display()).into());
   }
   let mut digest = Sha256::new();
   digest.update(b"cache_info.json");

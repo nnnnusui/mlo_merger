@@ -9,34 +9,25 @@ impl Drop for Staging {
   }
 }
 
-pub(super) fn relative_link_target(
-  link_parent: &Path,
-  source: &Path,
-) -> PathBuf {
-  let from: Vec<_> = link_parent.components().collect();
-  let to: Vec<_> = source.components().collect();
+/// The vanilla archive `vanilla_dir` as the cache at `output_dir` records it: relative to the
+/// cache, with `/` separators, when the two share a root, so both can move together; otherwise
+/// absolute.
+pub(super) fn recorded_vanilla_dir(
+  output_dir: &Path,
+  vanilla_dir: &Path,
+) -> String {
+  let from: Vec<_> = output_dir.components().collect();
+  let to: Vec<_> = vanilla_dir.components().collect();
   let common = from.iter().zip(&to).take_while(|(left, right)| left == right).count();
   if common == 0 {
-    return source.to_path_buf();
+    return vanilla_dir.to_string_lossy().into_owned();
   }
-  let mut relative = PathBuf::new();
-  for component in from.iter().skip(common) {
-    if matches!(component, Component::Normal(_)) {
-      relative.push("..");
-    }
-  }
-  for component in to.iter().skip(common) {
-    relative.push(component.as_os_str());
-  }
-  relative
-}
-
-pub(super) fn create_file_symlink(
-  target: &Path,
-  link: &Path,
-) -> Result<()> {
-  fs::symlink_file(target, link)?;
-  Ok(())
+  let parents = from.iter().skip(common).filter(|part| matches!(part, Component::Normal(_)));
+  let parts = parents
+    .map(|_| "..".to_owned())
+    .chain(to.iter().skip(common).map(|part| part.as_os_str().to_string_lossy().into_owned()))
+    .collect::<Vec<_>>();
+  if parts.is_empty() { ".".to_owned() } else { parts.join("/") }
 }
 
 pub(super) fn prepare_output_path(

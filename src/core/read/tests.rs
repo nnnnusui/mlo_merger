@@ -120,17 +120,12 @@ impl Fixture {
     &self,
     version: &str,
   ) {
-    let cache = self.root.join("vanilla-cache");
-    fs::create_dir_all(&cache).unwrap();
-    fs::write(
-      cache.join("cache_info.json"),
-      serde_json::to_vec(&json!({
-        "format_version": 4, "vanilla_manifest_sha256": "", "latest_version": version,
-        "vanilla_input_timestamps": {}, "files": {},
-      }))
-      .unwrap(),
-    )
-    .unwrap();
+    crate::core::vanilla_cache::test_support::write_cache_info(
+      &self.root.join("vanilla-cache"),
+      "../vanilla",
+      version,
+      &[],
+    );
   }
 
   fn outputs(result: &ReadResult) -> Vec<String> {

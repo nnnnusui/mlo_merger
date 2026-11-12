@@ -100,39 +100,23 @@ impl BuildVanillaCache {
     current: &BTreeMap<String, (String, CachedFile)>,
     input_timestamps: &BTreeMap<String, SourceTimestamp>,
   ) -> Result<BTreeMap<String, LatestFile>> {
-    let latest_dir = staging.join("latest");
-    fs::create_dir_all(latest_dir.join("ymap"))?;
-    fs::create_dir_all(latest_dir.join("ybn"))?;
     let mut latest_files = BTreeMap::new();
     let mut parent_by_child = BTreeMap::new();
     for (name, (version, file)) in current {
-      let extension = Path::new(name)
-        .extension()
-        .and_then(|extension| extension.to_str())
-        .unwrap_or_default()
-        .to_ascii_lowercase();
-      if extension != "ymap" && extension != "ybn" {
+      if !is_supported_stream_file(name) {
         continue;
       }
       let source = existing_artifact_path(vanilla_dir, file)?;
-      if extension == "ymap" {
+      if Path::new(name).extension().is_some_and(|extension| extension.eq_ignore_ascii_case("ymap"))
+      {
         parent_by_child.insert(name.to_ascii_lowercase(), ymap_parent_hash(&source)?);
       }
-      let destination_relative = format!("latest/{extension}/{name}");
-      let destination = staging.join(&destination_relative);
-      let final_destination = output_dir.join(&destination_relative);
-      let link_target = relative_link_target(
-        final_destination.parent().ok_or("Latest output has no parent")?,
-        &source,
-      );
-      create_file_symlink(&link_target, &destination)?;
       latest_files.insert(
         name.clone(),
         LatestFile {
           version: version.clone(),
           sha256: file.sha256.clone(),
-          object: destination_relative,
-          vanilla_object: file.object.clone(),
+          object: file.object.clone(),
           source: file.source.clone(),
         },
       );
@@ -142,6 +126,7 @@ impl BuildVanillaCache {
       &staging.join("cache_info.json"),
       &DerivedManifest {
         format_version: CACHE_SCHEMA,
+        vanilla_dir: recorded_vanilla_dir(output_dir, vanilla_dir),
         vanilla_manifest_sha256: revision.to_owned(),
         latest_version: latest_version.to_owned(),
         vanilla_input_timestamps: input_timestamps.clone(),

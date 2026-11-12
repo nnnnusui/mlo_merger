@@ -282,7 +282,10 @@ update and DLCs, stored by version and extension, with a global hash-name table.
 pack's stage reads its `dlc.rpf`, then the subpacks (`dlc1.rpf`, …) its `setup2.xml`
 declares, as the game mounts them, then its title-update patch. The derived cache selects
 the latest files through the last stage of the chosen game build and indexes YMAP
-parent/child relationships. A game build is placed among the stages by the `[gamebuild]`
+parent/child relationships. It neither copies nor links the latest files: its metadata
+names the raw archive, relative to the cache when they share a root, and each latest
+file's path in it, and every reader resolves the files through that metadata, so the
+cache needs no filesystem privileges and moves together with the archive. A game build is placed among the stages by the `[gamebuild]`
 table in configuration, which names the DLCs each FiveM build first includes. It can be
 recreated from the raw archive without re-extracting the game. An existing raw archive is
 not checked against changes to the installed game.

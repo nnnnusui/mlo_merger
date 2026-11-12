@@ -248,11 +248,9 @@ mod tests {
   #[test]
   #[ignore = "requires local asset/vanilla-cache"]
   fn the_table_holds_the_latest_vanilla_schemas() {
-    let directory = Path::new(env!("CARGO_MANIFEST_DIR")).join("asset/vanilla-cache/latest/ymap");
     let mut catalog = MetaSchemaCatalog::default();
     let mut conflicts = Vec::new();
-    for entry in fs::read_dir(directory).unwrap() {
-      let path = entry.unwrap().path();
+    for path in crate::core::vanilla_cache::test_support::asset_latest_files("ymap") {
       let Ok(Resource::Rsc7(resource)) = Resource::decode(&fs::read(&path).unwrap()) else {
         continue;
       };

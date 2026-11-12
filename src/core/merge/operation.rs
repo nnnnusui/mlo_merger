@@ -87,10 +87,12 @@ impl Merge {
       .ymap
       .retain(|source| !overwrites.for_source(source).is_some_and(|overwrite| overwrite.ignore));
     let latest_files = latest_vanilla_stream_files(&vanilla_cache_dir)?;
+    let vanilla_archive = crate::core::vanilla_cache::archive_dir(&vanilla_cache_dir)?;
     let output_dir = prepare_output_path(&self.output_dir)?;
     let staging = Staging(create_staging_directory(&output_dir)?);
     let staged = IncrementalMerge {
       vanilla_cache: &vanilla_cache_dir,
+      vanilla_archive: &vanilla_archive,
       source_cache: &source_cache_dir,
       output: &output_dir,
       staging: &staging.0,

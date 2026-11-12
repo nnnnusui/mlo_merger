@@ -99,8 +99,8 @@ fn pipeline_routes_resources_through_merge_and_deploy_and_reuses_vanilla() {
   let first = pipeline.run().unwrap();
   assert_eq!(
     first.changes.vanilla_cache.added,
-    ["latest/ybn/collision.ybn", "latest/ybn/unique.ybn"]
-      .map(|path| pipeline.vanilla_cache_dir.join(path))
+    ["0000-base/ybn/collision.ybn", "0000-base/ybn/unique.ybn"]
+      .map(|path| pipeline.vanilla_dir.join(path))
       .into()
   );
   assert_eq!(
@@ -154,9 +154,9 @@ fn pipeline_routes_resources_through_merge_and_deploy_and_reuses_vanilla() {
   assert_eq!(check.run().unwrap().issues, []);
   let stray = pipeline.source_cache_dir.join("resources/resource_a/stray.ybn");
   fs::write(&stray, b"stray").unwrap();
-  let link = pipeline.vanilla_cache_dir.join("latest/ybn/unique.ybn");
-  let aside = pipeline.vanilla_cache_dir.join("unique.ybn.aside");
-  fs::rename(&link, &aside).unwrap();
+  let latest = pipeline.vanilla_dir.join("0000-base/ybn/unique.ybn");
+  let aside = root.join("unique.ybn.aside");
+  fs::rename(&latest, &aside).unwrap();
   let kinds = |report: crate::core::check::CheckReport| {
     report.issues.into_iter().map(|issue| (issue.store, issue.kind, issue.path)).collect::<Vec<_>>()
   };
@@ -164,13 +164,13 @@ fn pipeline_routes_resources_through_merge_and_deploy_and_reuses_vanilla() {
   assert_eq!(
     kinds(check.run().unwrap()),
     [
-      ("vanilla-cache".to_string(), Missing, "latest/ybn/unique.ybn".to_string()),
-      ("vanilla-cache".to_string(), Unrecorded, "unique.ybn.aside".to_string()),
+      ("vanilla".to_string(), Missing, "0000-base/ybn/unique.ybn".to_string()),
+      ("vanilla-cache".to_string(), Missing, "../vanilla/0000-base/ybn/unique.ybn".to_string()),
       ("source-cache".to_string(), Unrecorded, "resources/resource_a/stray.ybn".to_string()),
     ]
   );
   fs::remove_file(&stray).unwrap();
-  fs::rename(&aside, &link).unwrap();
+  fs::rename(&aside, &latest).unwrap();
 
   // Moved elsewhere and named by other paths, every store is still current.
   let merge_metadata = fs::read(pipeline.merged_dir.join("cache_info.json")).unwrap();

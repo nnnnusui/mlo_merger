@@ -281,15 +281,23 @@ fn pipeline_runs_on_the_web_sample() {
     workspace.json("vanilla-cache/cache_info.json")["latest_version"],
     "0003-smpl_patch_01"
   );
-  let vanilla_cache = |path: &str| workspace.asset(&format!("vanilla-cache/latest/{path}"));
+  // The latest files go back to the stages before `smpl_summer`.
+  let vanilla = |path: &str| workspace.asset(&format!("vanilla/{path}"));
   assert_eq!(
-    build.changes.vanilla_cache.modified,
-    [vanilla_cache("ybn/smpl_block_01.ybn"), vanilla_cache("ymap/smpl_block_02.ymap")].into()
+    build.changes.vanilla_cache.added,
+    [vanilla("0000-base/ybn/smpl_block_01.ybn"), vanilla("0003-smpl_patch_01/ymap/smpl_block_02.ymap")]
+      .into()
   );
   assert_eq!(
     build.changes.vanilla_cache.removed,
-    [vanilla_cache("ymap/summer_smpl_block_01.ymap")].into()
+    [
+      vanilla("0004-smpl_summer/ybn/smpl_block_01.ybn"),
+      vanilla("0004-smpl_summer/ymap/smpl_block_02.ymap"),
+      vanilla("0004-smpl_summer/ymap/summer_smpl_block_01.ymap"),
+    ]
+    .into()
   );
+  assert!(build.changes.vanilla_cache.modified.is_empty());
   assert!(!workspace.asset("merged/ymap/summer_smpl_block_01.ymap").exists());
   assert_eq!(workspace.merged_polygons("smpl_block_01.ybn"), 4);
   assert_ne!(

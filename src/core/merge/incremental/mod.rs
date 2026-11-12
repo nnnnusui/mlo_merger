@@ -36,6 +36,8 @@ fn algorithm_version(extension: &str) -> Result<u32> {
 
 pub(super) struct IncrementalMerge<'a> {
   pub vanilla_cache: &'a Path,
+  /// The vanilla archive the vanilla cache names the latest files in.
+  pub vanilla_archive: &'a Path,
   pub source_cache: &'a Path,
   pub output: &'a Path,
   pub staging: &'a Path,
@@ -50,12 +52,12 @@ pub(super) struct IncrementalMerge<'a> {
 }
 
 impl IncrementalMerge<'_> {
-  /// A latest vanilla file's path relative to the vanilla cache, as merge records name it.
+  /// A latest vanilla file's path relative to the vanilla archive, as merge records name it.
   fn stored_vanilla_path(
     &self,
     path: &Path,
   ) -> PathBuf {
-    path.strip_prefix(self.vanilla_cache).unwrap_or(path).to_path_buf()
+    path.strip_prefix(self.vanilla_archive).unwrap_or(path).to_path_buf()
   }
 
   /// The overwrite of a source YMAP, if any.

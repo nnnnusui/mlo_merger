@@ -1,6 +1,6 @@
 //! The operating system's filesystem.
 
-use std::{io, path::Path};
+use std::path::Path;
 
 pub use std::fs::*;
 
@@ -20,20 +20,3 @@ pub fn is_dir(path: impl AsRef<Path>) -> bool {
   path.as_ref().is_dir()
 }
 
-/// Creates a symlink at `link` pointing to the file `target`.
-#[cfg(unix)]
-pub fn symlink_file(
-  target: impl AsRef<Path>,
-  link: impl AsRef<Path>,
-) -> io::Result<()> {
-  std::os::unix::fs::symlink(target, link)
-}
-
-/// Creates a symlink at `link` pointing to the file `target`.
-#[cfg(windows)]
-pub fn symlink_file(
-  target: impl AsRef<Path>,
-  link: impl AsRef<Path>,
-) -> io::Result<()> {
-  std::os::windows::fs::symlink_file(target, link)
-}

@@ -25,19 +25,21 @@ pub(crate) fn sample_ymap_catalog() -> &'static MetaSchemaCatalog {
   CATALOG.get_or_init(|| {
     let base = Path::new(env!("CARGO_MANIFEST_DIR"));
     let mut catalog = MetaSchemaCatalog::default();
-    for entry in ["docs/sample", "asset/extracted", "asset/vanilla-cache/latest/ymap"]
+    // The latest vanilla YMAPs are in the vanilla archive the local vanilla cache names.
+    let latest = crate::core::vanilla_cache::latest_files(&base.join("asset/vanilla-cache"))
+      .unwrap_or_default()
+      .into_iter()
+      .map(|file| file.path);
+    let paths = ["docs/sample", "asset/extracted"]
       .into_iter()
       .flat_map(|directory| crate::platform::fs::WalkDir::new(base.join(directory)))
-    {
-      let Ok(entry) = entry else {
-        continue;
-      };
-      if !entry.path().is_file()
-        || entry.path().extension().is_none_or(|extension| extension != "ymap")
-      {
+      .filter_map(|entry| Some(entry.ok()?.into_path()))
+      .chain(latest);
+    for path in paths {
+      if !path.is_file() || path.extension().is_none_or(|extension| extension != "ymap") {
         continue;
       }
-      let Ok(bytes) = crate::platform::fs::read(entry.path()) else {
+      let Ok(bytes) = crate::platform::fs::read(&path) else {
         continue;
       };
       let Ok(resource) = Rsc7Resource::decode(&bytes) else {

@@ -36,22 +36,21 @@ fn generate(
   output_path: &Path,
 ) -> Result<Vec<PathBuf>> {
   let sources = collect_source_ymaps(source_input)?;
-  let vanilla_dir = vanilla_cache_dir.join("latest/ymap");
+  let latest = crate::core::vanilla_cache::latest_files(vanilla_cache_dir)?
+    .into_iter()
+    .map(|file| (file.name.to_ascii_lowercase(), file.path))
+    .collect::<HashMap<_, _>>();
   let source_paths = by_reference(sources.iter().cloned());
-  let vanilla_paths = by_reference(
-    crate::platform::fs::read_dir(&vanilla_dir)?
-      .filter_map(|entry| entry.ok().map(|entry| entry.path())),
-  );
+  let vanilla_paths = by_reference(latest.values().cloned());
   let mut outputs = Vec::with_capacity(sources.len());
   for source_path in &sources {
     let name = source_path.file_name().ok_or("Source YMAP has no filename")?;
-    let vanilla_path = vanilla_dir.join(name);
-    if !fs::is_file(&vanilla_path) {
-      return Err(
-        format!("Latest vanilla YMAP baseline is missing: {}", vanilla_path.display()).into(),
-      );
-    }
-    let vanilla = read_ymap(&vanilla_path)?;
+    let name = name.to_string_lossy();
+    let vanilla_path = latest
+      .get(&name.to_ascii_lowercase())
+      .filter(|path| fs::is_file(path))
+      .ok_or_else(|| format!("Latest vanilla YMAP baseline is missing: {name}"))?;
+    let vanilla = read_ymap(vanilla_path)?;
     let source = read_ymap(source_path)?;
     let parent = |ymap: &Ymap, own: Option<&HashMap<u32, PathBuf>>| -> Result<Option<Ymap>> {
       let hash = reference_hash(&ymap.parent);

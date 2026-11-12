@@ -123,21 +123,22 @@ Paths below are defaults. If you change them with options such as `--source-cach
 
 ## Recorded Paths
 
-Every path recorded in a JSON file is relative to a store, never absolute, so the files stay
-valid when `asset/` is moved or the stores are named by other paths; only their contents
-decide whether a stage reuses its output.
+Every path recorded in a JSON file is relative to a store, so the files stay valid when
+`asset/` is moved or the stores are named by other paths; only their contents decide whether
+a stage reuses its output. The one exception is the vanilla cache's path to the vanilla
+archive, which is absolute when the two are on different drives.
 
 | Path relative to | Recorded for |
 |---|---|
 | The source cache (`asset/source-cache`) | Source files moved into the cache: `resources/{resource}/{stream path}` |
 | The source root (`asset/source`) | Resources (their IDs), source files left in them, and each source's original path |
-| The vanilla cache (`asset/vanilla-cache`) | Latest vanilla files: `latest/{ymap,ybn}/{file name}` |
-| The vanilla archive (`asset/vanilla`) | Vanilla versions read by `--read`, and `hash_names.json` |
+| The vanilla cache (`asset/vanilla-cache`) | The vanilla archive the cache was built from (`vanilla_dir` in its `cache_info.json`, absolute only when the two share no root) |
+| The vanilla archive (`asset/vanilla`) | Latest vanilla files and vanilla versions read by `--read`: `{version}/{ymap,ybn}/{file name}`; and `hash_names.json` |
 | The merge output (`asset/merged`) | Merged files: `{ymap,ybn}/{file name}` |
 
 A bounds index's `path` and a merge input's `path` name the file relative to its own store:
-a source file moved into the cache relative to the source cache, otherwise relative to the
-source root. `originalPath` and a merge input's `original_path` are always relative to the
+a latest vanilla file relative to the vanilla archive, a source file moved into the cache
+relative to the source cache, otherwise relative to the source root. `originalPath` and a merge input's `original_path` are always relative to the
 source root.
 
 ## Commands And Files
@@ -267,7 +268,8 @@ asset/source-cache/diff/{resource}/{stream_path}.diff.json
 - `target` is the source YMAP and `base` its baseline, the YMAP the differences are taken
   from. Copy `target.sha256`/`size` and `base.sha256`/`size` into the overwrite unchanged.
   `target.path` and `base.path` name the files relative to their stores, such as
-  `resources/{resource}/{stream_path}` and `latest/ymap/{file_name}`. For an added YMAP,
+  `resources/{resource}/{stream_path}` and `{version}/ymap/{file_name}` in the vanilla archive.
+  For an added YMAP,
   `base.path` is empty: it is compared with an empty YMAP.
 - Array differences are `Added`, `Removed`, `Modified` (and `Replaced` for non-entity arrays).
   `base_index` indexes the baseline (vanilla) model and `target_index` the source model:
@@ -501,8 +503,10 @@ or removed (`PipelineChanges`), and the [overwrite warnings](#overwrite-warnings
 
 - Each path is placed below the directory the pipeline used for that store (`--vanilla-cache`,
   `--source-cache`, `--merged`), so with the defaults it is relative to the working directory.
-- `vanilla_cache` lists the latest vanilla YMAP/YBN links of `asset/vanilla-cache/latest/`,
-  `source_cache` the stream files moved into the cache, and `merged` the merged stream files.
+- `vanilla_cache` lists the latest vanilla YMAP/YBN files, placed below the vanilla archive
+  (`--vanilla`) since the vanilla cache names them there; a file a newer stage replaces is
+  listed as removed and the newer stage's file as added. `source_cache` lists the stream files
+  moved into the cache, and `merged` the merged stream files.
   Metadata, indexes and diff documents are not listed.
 - Only content changes count: a forced rebuild that writes the same bytes lists nothing, and a
   run that changes nothing prints empty lists.

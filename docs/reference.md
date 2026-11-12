@@ -326,7 +326,7 @@ supports a new one.
   under several builds selects the latest. A build without DLC names (such as 3323)
   includes what the build before it does, and build 1 stops at the title update.
 - The build applies only to the vanilla-cache step: `--generate-vanilla` always extracts
-  every stage, and the vanilla cache builds `latest` from the stages up to the build's
+  every stage, and the vanilla cache selects the latest files from the stages up to the build's
   last one. The base and title-update files come from the installed game, not from the
   target build.
 - The pipeline, `--generate-source-cache` and `--merge` pass their `--gamebuild` to the
@@ -476,8 +476,6 @@ exist are skipped. Store paths take the same options and defaults as the other c
 | `missing` | The metadata records the file, but it does not exist |
 | `unrecorded` | The file exists, but the metadata does not record it, such as a stray file in `source-cache/resources/` or a leftover staging directory |
 | `changed` | The file's size, or with `--deep` its SHA-256, differs from the record |
-| `broken_link` | A `vanilla-cache/latest/` link whose target does not exist |
-| `wrong_link` | A `vanilla-cache/latest/` entry that does not link to the archive file the metadata names |
 | `unreadable` | The store's metadata cannot be read, so the store was not checked further |
 | `stale` | The overwrite cache was built from other source or vanilla caches or overwrites than the current ones |
 
@@ -492,9 +490,12 @@ exist are skipped. Store paths take the same options and defaults as the other c
 - Without `--deep`, contents are compared by size; the vanilla archive and cache record no
   sizes, so only `--deep` compares their contents. `--deep` reads every file, a few seconds
   for a full vanilla archive.
+- The vanilla cache holds no copies of the latest files: each is checked in the vanilla
+  archive its metadata names, and reported by its path from the cache directory, such as
+  `../vanilla/0000-base/ymap/{file name}`.
 - Nothing is repaired. The next merge and deployment rebuild their missing or changed
-  files, and the next vanilla-cache update its links. A damaged vanilla archive is reused as
-  it is, so extract it again with `--generate-vanilla`; a source-cache file that is missing
+  files. A damaged vanilla archive is reused as it is, so extract it again with
+  `--generate-vanilla`; a source-cache file that is missing
   is restored from its resource when the resource still has it, and a stale overwrite cache
   is rebuilt by `--generate-overwrite-cache` or a command running it. Unrecorded files are left
   for you to remove.

@@ -8,12 +8,12 @@ use crate::platform::process;
 #[cfg(not(test))]
 use crate::platform::progress::ProgressDrawTarget;
 use crate::platform::progress::{ProgressBar, ProgressStyle};
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 #[cfg(not(test))]
 use std::io::IsTerminal;
 use std::{
-  collections::{BTreeMap, HashMap},
-  path::{Component, Path, PathBuf},
+  collections::HashMap,
+  path::{Path, PathBuf},
   time::Duration,
 };
 
@@ -53,18 +53,6 @@ pub(super) struct Candidate {
   pub(super) original_path: Option<String>,
   pub(super) version: Option<String>,
   pub(super) strict: bool,
-}
-
-#[derive(Deserialize)]
-struct VanillaCacheIndex {
-  format_version: u32,
-  files: BTreeMap<String, VanillaCacheFile>,
-}
-
-#[derive(Deserialize)]
-struct VanillaCacheFile {
-  version: String,
-  object: PathBuf,
 }
 
 pub(super) fn run(
@@ -384,21 +372,15 @@ fn collect_vanilla_candidates(
       .println(format!("Warning: vanilla-cache manifest is missing: {}", manifest_path.display()));
     return Ok(());
   }
-  let index: VanillaCacheIndex = crate::common::json::read_json(manifest_path)?;
-  if index.format_version != crate::core::vanilla_cache::CACHE_SCHEMA {
-    return Err(format!("Unsupported vanilla-cache schema {}", index.format_version).into());
-  }
-  for (name, file) in index.files {
+  for file in crate::core::vanilla_cache::latest_files(cache_root)? {
+    let name = file.name;
     let Some((_, extension)) = stream_name(Path::new(&name)) else {
       continue;
     };
     if !filter_matches(filter, &name.to_ascii_lowercase()) {
       continue;
     }
-    if !safe_relative(&file.object) {
-      return Err("Unsafe vanilla-cache artifact path".into());
-    }
-    let path = cache_root.join(file.object);
+    let path = file.path;
     if !fs::is_file(&path) {
       progress.println(format!("Warning: vanilla-cache artifact is missing: {}", path.display()));
       continue;
@@ -423,9 +405,9 @@ fn collect_vanilla_candidates(
 
 /// The files already collected, by the file each path resolves to.
 ///
-/// Merge provenance records absolute paths, and latest vanilla files through `latest/` links,
-/// while the stores are scanned relative to the working directory, so one file reaches the
-/// candidates by several spellings.
+/// Merge provenance records absolute paths, and the vanilla cache names latest files through
+/// its path to the vanilla archive, while the stores are scanned relative to the working
+/// directory, so one file reaches the candidates by several spellings.
 struct SeenPaths {
   /// The index of each resolved path's candidate.
   resolved: HashMap<PathBuf, usize>,
@@ -489,12 +471,6 @@ pub(super) fn stream_name(path: &Path) -> Option<(String, &'static str)> {
     _ => return None,
   };
   Some((name, extension))
-}
-
-fn safe_relative(path: &Path) -> bool {
-  !path.as_os_str().is_empty()
-    && !path.to_string_lossy().contains(['\\', ':'])
-    && path.components().all(|component| matches!(component, Component::Normal(_)))
 }
 
 fn filter_matches(
@@ -587,32 +563,23 @@ mod tests {
     let merged = root.join("merged");
     fs::create_dir_all(source.join("resource/stream")).unwrap();
     fs::create_dir_all(source_cache.join("resources/moved/stream")).unwrap();
-    fs::create_dir_all(vanilla_cache.join("latest/ymap")).unwrap();
+    fs::create_dir_all(root.join("vanilla/0029-mpapartment/ymap")).unwrap();
     fs::create_dir_all(merged.join("ymap")).unwrap();
     fs::create_dir_all(merged.join("ybn")).unwrap();
     fs::write(source.join("resource/stream/live.ymap"), b"source").unwrap();
     fs::write(merged.join("ymap/merged.ymap"), b"merged").unwrap();
     fs::write(source_cache.join("resources/moved/stream/moved.ybn"), b"cached").unwrap();
-    fs::write(vanilla_cache.join("latest/ymap/vanilla.ymap"), b"vanilla").unwrap();
+    fs::write(root.join("vanilla/0029-mpapartment/ymap/vanilla.ymap"), b"vanilla").unwrap();
     crate::core::source_cache::write_test_inventory(
       &source_cache,
       &["resources/moved/stream/moved.ybn"],
     );
-    fs::write(
-      vanilla_cache.join("cache_info.json"),
-      serde_json::to_vec(&serde_json::json!({
-        "format_version": crate::core::vanilla_cache::CACHE_SCHEMA,
-        "latest_version": "0029-mpapartment",
-        "files": {
-          "vanilla.ymap": {
-            "version": "0029-mpapartment",
-            "object": "latest/ymap/vanilla.ymap"
-          }
-        }
-      }))
-      .unwrap(),
-    )
-    .unwrap();
+    crate::core::vanilla_cache::test_support::write_cache_info(
+      &vanilla_cache,
+      "../vanilla",
+      "0029-mpapartment",
+      &[("vanilla.ymap", "0029-mpapartment/ymap/vanilla.ymap")],
+    );
 
     let progress = ProgressBar::hidden();
     let search = FindEntity {
@@ -646,6 +613,7 @@ mod tests {
       candidate.name == "vanilla.ymap"
         && candidate.stage == "vanilla-cache"
         && candidate.version.as_deref() == Some("0029-mpapartment")
+        && candidate.path.ends_with("vanilla/0029-mpapartment/ymap/vanilla.ymap")
     }));
 
     fs::remove_dir_all(root).unwrap();
@@ -656,7 +624,7 @@ mod tests {
     let relative = PathBuf::from(format!("target/find_seen_paths_{}", std::process::id()));
     let _ = fs::remove_dir_all(&relative);
     fs::create_dir_all(relative.join("objects")).unwrap();
-    fs::create_dir_all(relative.join("latest")).unwrap();
+    fs::create_dir_all(relative.join("links")).unwrap();
     let object = relative.join("objects/map.ymap");
     fs::write(&object, b"vanilla").unwrap();
     let candidate = |path: PathBuf, stage, version: Option<&str>| Candidate {
@@ -671,10 +639,10 @@ mod tests {
     };
     let mut paths = SeenPaths::new();
     let mut candidates = Vec::new();
-    // Merge provenance names vanilla files absolutely, through the `latest/` link.
+    // Merge provenance names files absolutely, here through a link.
     #[cfg(unix)]
     let absolute = {
-      let link = relative.join("latest/map.ymap");
+      let link = relative.join("links/map.ymap");
       std::os::unix::fs::symlink(object.canonicalize().unwrap(), &link).unwrap();
       std::env::current_dir().unwrap().join(link)
     };

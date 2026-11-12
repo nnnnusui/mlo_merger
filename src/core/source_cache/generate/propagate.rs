@@ -118,9 +118,14 @@ pub(in crate::core::source_cache) fn write_propagated_diffs(
   fs::create_dir_all(&staging)?;
   let mut documents = Vec::new();
   if let Some(index) = &index {
+    let vanilla_files = crate::core::vanilla_cache::latest_files(vanilla_cache_dir)?
+      .into_iter()
+      .map(|file| (file.name.to_ascii_lowercase(), (file.path, file.object)))
+      .collect();
     let propagation = Propagation {
       output,
       vanilla_cache_dir,
+      vanilla_files,
       index,
       units: HashMap::new(),
       unpaired: 0,
@@ -289,6 +294,9 @@ struct Change {
 struct Propagation<'a> {
   output: &'a Path,
   vanilla_cache_dir: &'a Path,
+  /// The latest vanilla files keyed by lowercase file name, as files of the vanilla archive
+  /// with their paths in it.
+  vanilla_files: HashMap<String, (std::path::PathBuf, String)>,
   index: &'a GenerationIndex,
   units: HashMap<String, GenerationUnit>,
   /// How many changes found no counterpart in a newer generation.
@@ -496,11 +504,13 @@ impl Propagation<'_> {
     &self,
     file_name: &str,
   ) -> Result<YmapComparisonFile> {
-    let stored = format!("latest/ymap/{file_name}");
-    let path = fs::canonicalize(self.vanilla_cache_dir.join(&stored))?;
-    let fingerprint = crate::common::fingerprint::Fingerprint::read(&path, None, false)?;
+    let (path, object) = self
+      .vanilla_files
+      .get(&file_name.to_ascii_lowercase())
+      .ok_or_else(|| format!("No latest vanilla YMAP named {file_name}"))?;
+    let fingerprint = crate::common::fingerprint::Fingerprint::read(path, None, false)?;
     Ok(YmapComparisonFile {
-      path: stored,
+      path: object.clone(),
       sha256: fingerprint.sha256,
       size: fingerprint.size,
       modified_seconds: fingerprint.modified_seconds,
@@ -579,10 +589,15 @@ mod tests {
     println!("{} documents -> {}", counts.documents, output.join(PROPAGATED_DIR).display());
     assert!(!counts.reused);
     let record = read_record(&output).unwrap();
+    let latest = crate::core::vanilla_cache::latest_files(&vanilla_cache)
+      .unwrap()
+      .into_iter()
+      .map(|file| (file.name, file.path))
+      .collect::<HashMap<_, _>>();
     for document in &record.documents {
       let path = output.join(&document.path);
-      let vanilla = vanilla_cache.join("latest/ymap").join(&document.file_name);
-      assert!(YmapPropagatedDiff::read_current(&path, &vanilla).unwrap().is_some());
+      let vanilla = &latest[&document.file_name.to_ascii_lowercase()];
+      assert!(YmapPropagatedDiff::read_current(&path, vanilla).unwrap().is_some());
     }
     let rerun = write_propagated_diffs(&output, &vanilla_cache).unwrap();
     assert_eq!(

@@ -75,7 +75,7 @@ impl IncrementalMerge<'_> {
         .filter_map(|source| Some((source.path.clone(), self.overwrite(source)?.clone())))
         .collect();
       MergeYmap {
-        vanilla_dir: self.vanilla_cache.join("latest/ymap"),
+        vanilla_dir: self.vanilla_archive.to_path_buf(),
         output_dir: directory.clone(),
         rebuild_all: true,
         overwrites,

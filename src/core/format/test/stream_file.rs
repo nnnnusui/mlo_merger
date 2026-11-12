@@ -23,10 +23,17 @@ fn stream_files(directory: &str) -> Vec<PathBuf> {
   paths
 }
 
-/// Reads all files across threads and fails listing every path that could not be decoded.
+/// Reads every YMAP and YBN file below `asset/<directory>`; see [`assert_readable`].
 fn assert_all_readable(directory: &str) {
-  let paths = stream_files(directory);
-  assert!(!paths.is_empty(), "no stream files in asset/{directory}");
+  assert_readable(&format!("asset/{directory}"), &stream_files(directory));
+}
+
+/// Reads all `paths` across threads and fails listing every path that could not be decoded.
+fn assert_readable(
+  label: &str,
+  paths: &[PathBuf],
+) {
+  assert!(!paths.is_empty(), "no stream files in {label}");
   let threads = std::thread::available_parallelism().map_or(1, usize::from);
   let chunk = paths.len().div_ceil(threads);
   let failures = std::thread::scope(|scope| {
@@ -51,7 +58,7 @@ fn assert_all_readable(directory: &str) {
   });
   assert!(
     failures.is_empty(),
-    "{} of {} files in asset/{directory} failed:\n{}",
+    "{} of {} files in {label} failed:\n{}",
     failures.len(),
     paths.len(),
     failures.join("\n")
@@ -61,7 +68,9 @@ fn assert_all_readable(directory: &str) {
 #[test]
 #[ignore = "reads every local vanilla-cache stream file"]
 fn reads_all_vanilla_cache_latest_stream_files() {
-  assert_all_readable("vanilla-cache/latest");
+  let mut paths = crate::core::vanilla_cache::test_support::asset_latest_files("ymap");
+  paths.extend(crate::core::vanilla_cache::test_support::asset_latest_files("ybn"));
+  assert_readable("the latest files of asset/vanilla-cache", &paths);
 }
 
 #[test]

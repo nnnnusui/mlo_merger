@@ -675,6 +675,13 @@ mod tests {
     let record = serde_json::json!({"vanilla": input(&vanilla, None), "merge_sources": [input(&source, Some("retains")), input(&missing, Some("removes"))]});
     let cache = serde_json::json!({"format_version": 1, "files": {"collision.ybn": record.clone(), "hei_collision.ybn": record}});
     crate::core::vanilla::write_json(&merged.join("cache_info.json"), &cache).unwrap();
+    // Recorded vanilla inputs are named in the archive the vanilla cache names.
+    let vanilla_cache = directory.join("vanilla-cache");
+    crate::core::vanilla_cache::test_support::write_cache_info(&vanilla_cache, "..", "v1", &[]);
+    let stores = crate::core::find::InputStores {
+      vanilla_cache_dir: vanilla_cache,
+      ..Default::default()
+    };
     let mut query = FindEntity {
       query: EntityQuery::YbnPosition {
         position: [0.0; 3],
@@ -682,7 +689,7 @@ mod tests {
         kind: Some("box".into()),
       },
       merged_dir: merged.clone(),
-      stores: Default::default(),
+      stores: stores.clone(),
       filter: Some("COLLISION.YBN".into()),
       diff_all: true,
     };
@@ -699,7 +706,7 @@ mod tests {
         position: [0.0; 3],
       },
       merged_dir: merged.clone(),
-      stores: Default::default(),
+      stores,
       filter: Some("collision.ybn".into()),
       diff_all: true,
     }

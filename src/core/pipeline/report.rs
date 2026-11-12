@@ -8,7 +8,8 @@ use serde::Serialize;
 #[derive(Debug, Default, PartialEq, Eq, Serialize)]
 #[cfg_attr(feature = "typescript", derive(specta::Type))]
 pub struct PipelineChanges {
-  /// Latest vanilla files in the derived vanilla cache.
+  /// Latest vanilla files the derived vanilla cache names, as files of the vanilla archive; a
+  /// file a newer stage replaces is removed and its replacement added.
   pub vanilla_cache: StoreChanges,
   /// Source stream files moved into the source cache.
   pub source_cache: StoreChanges,

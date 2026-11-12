@@ -30,13 +30,7 @@ fn direct_ymap_binary_preserves_order_and_duplicate_entity_guids() {
 #[ignore = "requires local vanilla YMAP schemas"]
 fn direct_ymap_writer_roundtrips_local_vanilla() {
   use crate::core::format::ymap::binary::ymap_to_model;
-  let root =
-    std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("asset/vanilla-cache/latest/ymap");
-  let mut paths = crate::platform::fs::read_dir(root)
-    .unwrap()
-    .map(|entry| entry.unwrap().path())
-    .collect::<Vec<_>>();
-  paths.sort();
+  let paths = crate::core::vanilla_cache::test_support::asset_latest_files("ymap");
   let mut selected = paths.iter().take(20).collect::<Vec<_>>();
   for pattern in ["occl", "lodlights", "distlodlights", "interior", "grass"] {
     if let Some(path) =
@@ -66,8 +60,7 @@ fn direct_ymap_writer_rejects_container_lods_without_a_schema() {
   use crate::core::format::ymap::binary::ymap_to_model;
   // No vanilla YMAP uses containerLods, so the shared schemas lack rage__fwContainerLodDef and
   // CodeWalker has no META layout for it; writing them must fail rather than drop them.
-  let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-    .join("asset/vanilla-cache/latest/ymap/ap1_01_a.ymap");
+  let path = crate::core::vanilla_cache::test_support::asset_latest_file("ap1_01_a.ymap");
   let bytes = crate::platform::fs::read(path).unwrap();
   let mut model = ymap_to_model(&bytes, &HashMap::new()).unwrap();
   model.container_lods = vec![YmapContainerLod {

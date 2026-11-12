@@ -64,13 +64,6 @@ extern "C" {
     from: &str,
     to: &str,
   ) -> Result<(), JsValue>;
-  #[wasm_bindgen(catch, js_name = symlink)]
-  fn js_symlink(
-    target: &str,
-    link: &str,
-  ) -> Result<(), JsValue>;
-  #[wasm_bindgen(catch, js_name = readLink)]
-  fn js_read_link(path: &str) -> Result<String, JsValue>;
   #[wasm_bindgen(catch, js_name = realpath)]
   fn js_realpath(path: &str) -> Result<String, JsValue>;
 
@@ -552,22 +545,6 @@ pub fn hard_link(
   link: impl AsRef<Path>,
 ) -> io::Result<()> {
   call(js_hard_link(&resolve(original.as_ref())?, &resolve(link.as_ref())?))
-}
-
-/// Creates a symlink at `link` pointing to the file `target`, kept as written.
-pub fn symlink_file(
-  target: impl AsRef<Path>,
-  link: impl AsRef<Path>,
-) -> io::Result<()> {
-  let target = target
-    .as_ref()
-    .to_str()
-    .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "Symlink target is not UTF-8"))?;
-  call(js_symlink(target, &resolve(link.as_ref())?))
-}
-
-pub fn read_link(path: impl AsRef<Path>) -> io::Result<PathBuf> {
-  call(js_read_link(&resolve(path.as_ref())?)).map(PathBuf::from)
 }
 
 pub fn canonicalize(path: impl AsRef<Path>) -> io::Result<PathBuf> {

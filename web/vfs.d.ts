@@ -70,8 +70,6 @@ export function rename(from: string, to: string): void;
 /** Copies a file's contents and returns their length. */
 export function copyFile(from: string, to: string): number;
 export function hardLink(from: string, to: string): void;
-export function symlink(target: string, path: string): void;
-export function readLink(path: string): string;
 /** The path with symlinks, `.` and `..` resolved. */
 export function realpath(path: string): string;
 /** Sets a file's modification time, milliseconds since the epoch. */

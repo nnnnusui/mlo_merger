@@ -8,10 +8,8 @@ fn incremental_ymap_merge_caches_noop_results_and_removes_obsolete_outputs() {
     rsc7::Rsc7Resource,
   };
   use crate::core::format::ymap::binary::ymap_to_model;
-  let local = Path::new(env!("CARGO_MANIFEST_DIR")).join("asset/vanilla-cache/latest/ymap");
-  let sample = fs::read_dir(local)
-    .unwrap()
-    .map(|entry| entry.unwrap().path())
+  let sample = crate::core::vanilla_cache::test_support::asset_latest_files("ymap")
+    .into_iter()
     .find(|path| path.file_name().unwrap().to_string_lossy().contains("occl"))
     .unwrap();
   let bytes = fs::read(sample).unwrap();

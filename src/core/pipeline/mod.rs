@@ -139,7 +139,7 @@ impl Pipeline {
     .run()?;
     Ok(PipelineSummary {
       changes: PipelineChanges {
-        vanilla_cache: vanilla_cache.changes.under(&self.vanilla_cache_dir),
+        vanilla_cache: vanilla_cache.changes.under(&self.vanilla_dir),
         source_cache: source_cache.changes.under(&self.source_cache_dir),
         merged: merged.changes.under(&self.merged_dir),
       },

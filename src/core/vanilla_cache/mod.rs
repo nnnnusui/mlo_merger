@@ -1,5 +1,8 @@
 //! Derived latest-file and YMAP relationship indexes, and YMAP version diffs, for raw vanilla
 //! history.
+//!
+//! The latest files are not copied or linked: `cache_info.json` names the vanilla archive and
+//! each latest file's path in it, and readers resolve them through [`latest_files`].
 
 use crate::platform::fs;
 use std::{
@@ -24,7 +27,7 @@ use sha2::{Digest, Sha256};
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
-pub(crate) const CACHE_SCHEMA: u32 = 4;
+pub(crate) const CACHE_SCHEMA: u32 = 5;
 
 /// Outcome of building or reusing a derived vanilla cache.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -33,7 +36,7 @@ pub struct VanillaCacheResult {
   pub latest_version: String,
   /// Whether the cache was rebuilt and published.
   pub rebuilt: bool,
-  /// Latest files whose links the rebuild added, changed or removed, relative to the cache.
+  /// Latest files the rebuild added, changed or removed, relative to the vanilla archive.
   pub changes: StoreChanges,
 }
 
@@ -73,6 +76,9 @@ pub struct BuildVanillaCache {
 #[cfg_attr(feature = "typescript", derive(specta::Type))]
 struct DerivedManifest {
   format_version: u32,
+  /// The vanilla archive the latest files are in, relative to the cache directory when they
+  /// share a root, with `/` separators.
+  vanilla_dir: String,
   vanilla_manifest_sha256: String,
   latest_version: String,
   vanilla_input_timestamps: BTreeMap<String, SourceTimestamp>,
@@ -92,8 +98,8 @@ struct SourceTimestamp {
 struct LatestFile {
   version: String,
   sha256: String,
+  /// The file's path in the vanilla archive, such as `0000-base/ymap/{file name}`.
   object: String,
-  vanilla_object: String,
   source: String,
 }
 
@@ -121,6 +127,7 @@ pub(crate) use check::check;
 use filesystem::*;
 use freshness::{cache_is_current, previous_manifest};
 use generations::write_generations;
+pub(crate) use read::archive_dir;
 pub(crate) use read::{DerivedVanillaFile, LoadedCache, load_cache};
 pub use read::{VanillaLatestFile, cache_info_path, latest_files};
 use relationships::children_by_parent;
@@ -147,3 +154,67 @@ pub(crate) fn target_version(
 
 #[cfg(test)]
 mod tests;
+
+/// The latest files of the local `asset/vanilla-cache`, for tests that need real vanilla files.
+#[cfg(test)]
+pub(crate) mod test_support {
+  use std::path::{Path, PathBuf};
+
+  /// The latest files with `extension`, sorted by file name.
+  pub(crate) fn asset_latest_files(extension: &str) -> Vec<PathBuf> {
+    let cache = Path::new(env!("CARGO_MANIFEST_DIR")).join("asset/vanilla-cache");
+    let mut files = super::latest_files(&cache)
+      .unwrap()
+      .into_iter()
+      .filter(|file| {
+        Path::new(&file.name).extension().is_some_and(|value| value.eq_ignore_ascii_case(extension))
+      })
+      .map(|file| (file.name, file.path))
+      .collect::<Vec<_>>();
+    files.sort();
+    files.into_iter().map(|(_, path)| path).collect()
+  }
+
+  /// Writes the metadata of a vanilla cache at `cache_dir` whose latest `files`, each a file name
+  /// and its path in the archive, are of stage `version` of the archive `vanilla_dir`, as the
+  /// metadata records it.
+  pub(crate) fn write_cache_info(
+    cache_dir: &Path,
+    vanilla_dir: &str,
+    version: &str,
+    files: &[(&str, &str)],
+  ) {
+    let manifest = super::DerivedManifest {
+      format_version: super::CACHE_SCHEMA,
+      vanilla_dir: vanilla_dir.into(),
+      vanilla_manifest_sha256: String::new(),
+      latest_version: version.into(),
+      vanilla_input_timestamps: Default::default(),
+      files: files
+        .iter()
+        .map(|(name, object)| {
+          let file = super::LatestFile {
+            version: version.into(),
+            sha256: String::new(),
+            object: (*object).into(),
+            source: String::new(),
+          };
+          ((*name).to_owned(), file)
+        })
+        .collect(),
+    };
+    crate::platform::fs::create_dir_all(cache_dir).unwrap();
+    super::write_json(&super::cache_info_path(cache_dir), &manifest).unwrap();
+  }
+
+  /// The latest file named `name`.
+  pub(crate) fn asset_latest_file(name: &str) -> PathBuf {
+    let cache = Path::new(env!("CARGO_MANIFEST_DIR")).join("asset/vanilla-cache");
+    super::latest_files(&cache)
+      .unwrap()
+      .into_iter()
+      .find(|file| file.name.eq_ignore_ascii_case(name))
+      .unwrap_or_else(|| panic!("No latest vanilla file named {name}"))
+      .path
+  }
+}

@@ -82,8 +82,9 @@ struct RTreeItem {
   #[serde(rename = "maxZ")]
   max_z: f64,
   name: String,
-  /// The file relative to its store: the indexed store's directory, or the source root for a
-  /// source file that was not moved into the source cache.
+  /// The file relative to its store: the indexed store's directory, the vanilla archive for a
+  /// latest vanilla file, or the source root for a source file that was not moved into the
+  /// source cache.
   path: String,
   #[serde(default, skip_serializing_if = "Option::is_none")]
   #[cfg_attr(feature = "typescript", specta(optional))]
@@ -136,7 +137,7 @@ impl Store<'_> {
   }
 
   /// The YMAP and YBN files of the store at `directory`, as its metadata lists them, each with
-  /// its path relative to its store.
+  /// its path relative to the store holding it.
   fn candidates(
     self,
     directory: &Path,
@@ -160,11 +161,11 @@ impl Store<'_> {
     let mut candidates = Vec::new();
     match self {
       Self::Vanilla => {
+        // Named by their path in the vanilla archive, the store holding them.
         for file in crate::core::vanilla_cache::latest_files(directory)? {
-          let stored = relative(&file.path);
           if let Some(mut found) = candidate(&file.name, file.path, "vanilla-cache") {
             found.version = Some(file.version);
-            candidates.push((found, stored));
+            candidates.push((found, file.object));
           }
         }
       }
@@ -382,24 +383,17 @@ mod tests {
     )
     .unwrap();
     let vanilla = root.join("vanilla-cache");
-    write(&vanilla.join("objects/map.ymap"), &ymap);
-    write(&vanilla.join("objects/collision.ybn"), &ybn);
-    let vanilla_file = |object: &str| {
-      json!({"version": "0001-update", "sha256": "", "object": object,
-        "vanilla_object": object, "source": "base.rpf"})
-    };
-    write(
-      &vanilla.join("cache_info.json"),
-      &serde_json::to_vec(&json!({
-        "format_version": crate::core::vanilla_cache::CACHE_SCHEMA,
-        "vanilla_manifest_sha256": "", "latest_version": "0001-update",
-        "vanilla_input_timestamps": {},
-        "files": {
-          "map.ymap": vanilla_file("objects/map.ymap"),
-          "collision.ybn": vanilla_file("objects/collision.ybn"),
-        }
-      }))
-      .unwrap(),
+    // Latest files are named by their path in the vanilla archive.
+    write(&root.join("vanilla/0001-update/ymap/map.ymap"), &ymap);
+    write(&root.join("vanilla/0001-update/ybn/collision.ybn"), &ybn);
+    crate::core::vanilla_cache::test_support::write_cache_info(
+      &vanilla,
+      "../vanilla",
+      "0001-update",
+      &[
+        ("map.ymap", "0001-update/ymap/map.ymap"),
+        ("collision.ybn", "0001-update/ybn/collision.ybn"),
+      ],
     );
     let source_dir = root.join("source");
     let source = source_dir.join("[maps]/resource");
@@ -486,7 +480,7 @@ mod tests {
     assert_eq!(live["path"], "[maps]/resource/stream/custom.ymap");
     assert!(live.get("originalPath").is_none());
     assert_eq!(source_index["input"]["path"], "cache_info.json");
-    assert_eq!(index(&vanilla)["ymap"][0]["path"], "objects/map.ymap");
+    assert_eq!(index(&vanilla)["ymap"][0]["path"], "0001-update/ymap/map.ymap");
     let merged_index = index(&merged);
     assert_eq!(merged_index["fileCount"], 1);
     assert_eq!(merged_index["ymap"][0]["path"], "ymap/map.ymap");

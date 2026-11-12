@@ -9,10 +9,7 @@ fn latest_ymap_merge_writes_binary_without_xml() {
     rsc7::Rsc7Resource,
   };
   use crate::core::format::ymap::binary::ymap_to_model;
-  let base = Path::new(env!("CARGO_MANIFEST_DIR")).join("asset/vanilla-cache/latest/ymap");
-  let mut files =
-    fs::read_dir(base).unwrap().map(|entry| entry.unwrap().path()).collect::<Vec<_>>();
-  files.sort();
+  let files = crate::core::vanilla_cache::test_support::asset_latest_files("ymap");
   let root = std::env::temp_dir().join(format!("ymap_direct_merge_{}", std::process::id()));
   let _ = fs::remove_dir_all(&root);
   fs::create_dir_all(root.join("vanilla")).unwrap();
@@ -85,10 +82,7 @@ fn native_ymap_merge_deletion_wins_over_retained_entities_in_both_orders() {
     rsc7::Rsc7Resource,
   };
   use crate::core::format::ymap::binary::ymap_to_model;
-  let base = Path::new(env!("CARGO_MANIFEST_DIR")).join("asset/vanilla-cache/latest/ymap");
-  let mut files =
-    fs::read_dir(base).unwrap().map(|entry| entry.unwrap().path()).collect::<Vec<_>>();
-  files.sort();
+  let files = crate::core::vanilla_cache::test_support::asset_latest_files("ymap");
   let sample = files
     .iter()
     .find(|path| {
@@ -285,10 +279,7 @@ fn sources_with_a_diff_document_merge_through_it_and_reject_stale_ones() {
     binary::ymap_to_model,
     compare::{YmapComparisonDiff, YmapComparisonFile},
   };
-  let base = Path::new(env!("CARGO_MANIFEST_DIR")).join("asset/vanilla-cache/latest/ymap");
-  let mut files =
-    fs::read_dir(base).unwrap().map(|entry| entry.unwrap().path()).collect::<Vec<_>>();
-  files.sort();
+  let files = crate::core::vanilla_cache::test_support::asset_latest_files("ymap");
   let file =
     files.iter().find(|file| file.file_stem().unwrap().to_string_lossy().contains("occl")).unwrap();
   let bytes = fs::read(file).unwrap();
@@ -366,10 +357,11 @@ fn lod_light_removals_of_either_ymap_of_a_pair_are_made_in_both() {
     rsc7::Rsc7Resource,
   };
   use crate::core::format::ymap::binary::{write_ymap, ymap_to_model};
-  let base = Path::new(env!("CARGO_MANIFEST_DIR")).join("asset/vanilla-cache/latest/ymap");
   let names = ["vw_lodlights_large000.ymap", "vw_distlodlights_large000.ymap"];
   let mut catalog = MetaSchemaCatalog::default();
-  let bytes = names.map(|name| fs::read(base.join(name)).unwrap());
+  let bytes = names.map(|name| {
+    fs::read(crate::core::vanilla_cache::test_support::asset_latest_file(name)).unwrap()
+  });
   for bytes in &bytes {
     catalog.add_resource(&MetaResource::parse(&Rsc7Resource::decode(bytes).unwrap()).unwrap());
   }

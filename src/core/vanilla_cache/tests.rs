@@ -68,23 +68,29 @@ fn builds_latest_files_through_selected_stage_and_reuses_valid_output() {
   assert!(built.rebuilt);
   assert_eq!(built.latest_version, "0000-update");
   assert_eq!(built.summary(), "Built vanilla derived cache through 0000-update");
-  assert_eq!(fs::read(output.join("latest/ybn/map.ybn")).unwrap(), b"base");
+  assert_eq!(built.changes.added, ["0000-update/ybn/map.ybn".into()].into());
+  let latest = |output: &Path| {
+    let files = latest_files(output).unwrap();
+    assert_eq!(files.len(), 1);
+    fs::read(&files[0].path).unwrap()
+  };
+  assert_eq!(latest(&output), b"base");
+  assert!(!output.join("latest").exists());
   let relationships: YmapRelationshipIndex =
     serde_json::from_reader(fs::File::open(output.join("ymap_relationships.json")).unwrap())
       .unwrap();
   assert_eq!(relationships.version, "0000-update");
   assert!(relationships.children_by_parent.is_empty());
-  let latest_link = output.join("latest/ybn/map.ybn");
-  assert!(fs::symlink_metadata(&latest_link).unwrap().file_type().is_symlink());
-  let target = fs::read_link(&latest_link).unwrap();
-  assert!(!target.is_absolute());
-  assert_eq!(
-    latest_link.parent().unwrap().join(target).canonicalize().unwrap(),
-    vanilla.join("0000-update/ybn/map.ybn").canonicalize().unwrap()
-  );
   let derived: DerivedManifest =
     serde_json::from_reader(fs::File::open(output.join("cache_info.json")).unwrap()).unwrap();
   assert_eq!(derived.latest_version, "0000-update");
+  // The archive is named relative to the cache, so the two can move together.
+  assert_eq!(derived.vanilla_dir, "../vanilla");
+  assert_eq!(derived.files["map.ybn"].object, "0000-update/ybn/map.ybn");
+  assert_eq!(
+    latest_files(&output).unwrap()[0].path,
+    fs::canonicalize(&root).unwrap().join("vanilla/0000-update/ybn/map.ybn")
+  );
   let timestamp_key = "0000-update/ybn/map.ybn";
   let source_file = vanilla.join(timestamp_key);
   let changed_time =
@@ -114,7 +120,6 @@ fn builds_latest_files_through_selected_stage_and_reuses_valid_output() {
     refreshed.vanilla_input_timestamps[timestamp_key],
     source_timestamps(&vanilla, &resolve_files(&manifest, 0).unwrap()).unwrap()[timestamp_key]
   );
-  assert!(fs::symlink_metadata(&latest_link).unwrap().file_type().is_symlink());
 
   let reused = BuildVanillaCache {
     vanilla_dir: root.join("vanilla"),
@@ -127,18 +132,23 @@ fn builds_latest_files_through_selected_stage_and_reuses_valid_output() {
   assert!(!reused.rebuilt);
   assert_eq!(reused.latest_version, "0000-update");
   assert_eq!(reused.summary(), "Vanilla derived cache is current through 0000-update");
-  assert_eq!(fs::read(output.join("latest/ybn/map.ybn")).unwrap(), b"base");
+  assert_eq!(latest(&output), b"base");
 
-  fs::remove_file(output.join("latest/ybn/map.ybn")).unwrap();
-  BuildVanillaCache {
+  // A cache moved away from its archive is built again, naming the archive where it is now.
+  let moved = root.join("moved/cache");
+  fs::create_dir_all(moved.parent().unwrap()).unwrap();
+  fs::rename(&output, &moved).unwrap();
+  let rebuilt = BuildVanillaCache {
     vanilla_dir: root.join("vanilla"),
-    output_dir: output.clone(),
+    output_dir: moved.clone(),
     gamebuild: no_dlc(),
     force: false,
   }
   .run()
   .unwrap();
-  assert_eq!(fs::read(output.join("latest/ybn/map.ybn")).unwrap(), b"base");
+  assert!(rebuilt.rebuilt);
+  assert_eq!(latest(&moved), b"base");
+  fs::rename(&moved, &output).unwrap();
 
   let latest = BuildVanillaCache {
     vanilla_dir: root.join("vanilla"),
@@ -150,7 +160,11 @@ fn builds_latest_files_through_selected_stage_and_reuses_valid_output() {
   .unwrap();
   assert!(latest.rebuilt);
   assert_eq!(latest.latest_version, "0001-patch");
-  assert_eq!(fs::read(output.join("latest/ybn/map.ybn")).unwrap(), b"patch");
+  // The replaced stage's file leaves the latest files and the newer stage's takes its place.
+  assert_eq!(latest.changes.removed, ["0000-update/ybn/map.ybn".into()].into());
+  assert_eq!(latest.changes.added, ["0001-patch/ybn/map.ybn".into()].into());
+  assert_eq!(latest_files(&output).unwrap()[0].version, "0001-patch");
+  assert_eq!(fs::read(vanilla.join(&latest_files(&output).unwrap()[0].object)).unwrap(), b"patch");
   let relationships: YmapRelationshipIndex =
     serde_json::from_reader(fs::File::open(output.join("ymap_relationships.json")).unwrap())
       .unwrap();
@@ -182,26 +196,21 @@ fn builds_latest_files_through_selected_stage_and_reuses_valid_output() {
       .contains("relationship index is stale")
   );
   fs::write(&relationship_path, relationship_bytes).unwrap();
-  fs::remove_file(output.join("latest/ybn/map.ybn")).unwrap();
+  fs::remove_file(vanilla.join("0001-patch/ybn/map.ybn")).unwrap();
   assert!(
     load_cache(&output, &raw_revision)
       .err()
       .unwrap()
       .to_string()
-      .contains("latest file is missing")
-  );
-  fs::remove_dir(output.join("latest/ybn")).unwrap();
-  assert!(
-    load_cache(&output, &raw_revision).err().unwrap().to_string().contains("missing latest/ybn")
+      .contains("Latest vanilla file is missing")
   );
   fs::remove_dir_all(root).unwrap();
 }
 
 #[test]
-#[ignore = "requires generated asset/vanilla-cache latest YMAP links"]
+#[ignore = "requires generated asset/vanilla-cache"]
 fn direct_parent_reader_matches_latest_ymap_model() {
-  let path =
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("asset/vanilla-cache/latest/ymap/airfield.ymap");
+  let path = super::test_support::asset_latest_file("airfield.ymap");
   let ymap = read_ymap(&path).unwrap();
   assert_eq!(ymap_parent_hash(&path).unwrap(), reference_hash(&ymap.parent));
 }

@@ -24,10 +24,8 @@ use crate::core::format::{
 #[ignore = "requires a local vanilla-cache YMAP"]
 fn get_diff_fingerprints_both_files_and_derives_their_differences() {
   let name = "ap1_01_a.ymap";
-  let vanilla_bytes = fs::read(
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("asset/vanilla-cache/latest/ymap").join(name),
-  )
-  .unwrap();
+  let vanilla_bytes =
+    fs::read(crate::core::vanilla_cache::test_support::asset_latest_file(name)).unwrap();
   let mut catalog = MetaSchemaCatalog::default();
   catalog
     .add_resource(&MetaResource::parse(&Rsc7Resource::decode(&vanilla_bytes).unwrap()).unwrap());
@@ -43,10 +41,15 @@ fn get_diff_fingerprints_both_files_and_derives_their_differences() {
   let root = std::env::temp_dir().join(format!("ymap_compare_document_{}", std::process::id()));
   let _ = fs::remove_dir_all(&root);
   let (vanilla_cache, source_cache) = (root.join("vanilla-cache"), root.join("source-cache"));
-  fs::create_dir_all(vanilla_cache.join("latest/ymap")).unwrap();
-  fs::write(vanilla_cache.join("latest/ymap").join(name), &vanilla_bytes).unwrap();
-  fs::write(vanilla_cache.join("cache_info.json"), json!({ "latest_version": "v1" }).to_string())
-    .unwrap();
+  let object = format!("v1/ymap/{name}");
+  fs::create_dir_all(root.join("vanilla/v1/ymap")).unwrap();
+  fs::write(root.join("vanilla").join(&object), &vanilla_bytes).unwrap();
+  crate::core::vanilla_cache::test_support::write_cache_info(
+    &vanilla_cache,
+    "../vanilla",
+    "v1",
+    &[(name, &object)],
+  );
   let cached = format!("resources/mod/stream/{name}");
   fs::create_dir_all(source_cache.join("resources/mod/stream")).unwrap();
   fs::write(source_cache.join(&cached), &modded_bytes).unwrap();
@@ -106,6 +109,7 @@ fn get_diff_fingerprints_both_files_and_derives_their_differences() {
   assert_eq!(document["target"]["sha256"], json!(sha256(&modded_bytes)));
   assert_eq!(document["target"]["size"], json!(modded_bytes.len()));
   assert_eq!(document["base"]["sha256"], json!(sha256(&vanilla_bytes)));
+  assert_eq!(document["base"]["path"], json!(object));
   assert!(document["target"]["path"].as_str().unwrap().ends_with(&cached));
   assert_eq!(document["diffs"]["flags"], json!(modded.flags));
   assert_eq!(

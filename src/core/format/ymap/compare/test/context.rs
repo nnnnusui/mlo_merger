@@ -20,12 +20,13 @@ fn reads_vanilla_and_source_ymaps_once() {
   )
   .unwrap();
   // Pick any uniquely named source YMAP that overrides a vanilla one.
-  let latest = asset.join("vanilla-cache/latest/ymap");
   let (resource_name, file_name) = context
     .source_index
     .paths
     .iter()
-    .find(|((_, file_name), paths)| paths.len() == 1 && latest.join(file_name).is_file())
+    .find(|((_, file_name), paths)| {
+      paths.len() == 1 && context.vanilla_files.contains_key(file_name)
+    })
     .map(|(key, _)| key.clone())
     .expect("no source YMAP overrides a vanilla one");
   let vanilla = StreamFileRef {
@@ -50,16 +51,17 @@ fn reads_vanilla_and_source_ymaps_once() {
   assert!(Arc::ptr_eq(&context.get_cache(&vanilla).unwrap(), &first));
 
   // A resource without the requested YMAP falls back to vanilla.
-  let missing_in_resource = fs::read_dir(&latest)
-    .unwrap()
-    .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+  let missing_in_resource = context
+    .vanilla_files
+    .keys()
     .find(|file_name| {
       !context
         .source_index
         .paths
-        .contains_key(&(source.resource_name.clone().unwrap(), file_name.clone()))
+        .contains_key(&(source.resource_name.clone().unwrap(), (*file_name).clone()))
     })
-    .unwrap();
+    .unwrap()
+    .clone();
   let fallback = StreamFileRef {
     file_name: missing_in_resource.clone(),
     ..source.clone()
@@ -173,7 +175,7 @@ fn dump_source_ymaps_with_changed_parents() {
     .paths
     .iter()
     .filter(|((_, file_name), paths)| {
-      paths.len() == 1 && context.vanilla_file_names.contains(file_name)
+      paths.len() == 1 && context.vanilla_files.contains_key(file_name)
     })
     .map(|((resource_name, file_name), _)| (resource_name.clone(), file_name.clone()))
     .collect::<Vec<_>>();

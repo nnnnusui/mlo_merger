@@ -234,19 +234,6 @@ export function hardLink(from, to) {
   emit("create", target.path);
 }
 
-export function symlink(target, path) {
-  const location = locate(path, false);
-  if (location.node) throw fail("EEXIST", path);
-  link(location.parent, location.name, { kind: "symlink", target, mtime: now() });
-  emit("create", location.path);
-}
-
-export function readLink(path) {
-  const { node } = existing(path, false);
-  if (node.kind !== "symlink") throw fail("EINVAL", path, "not a symlink");
-  return node.target;
-}
-
 export function realpath(path) {
   return existing(path, true).path;
 }

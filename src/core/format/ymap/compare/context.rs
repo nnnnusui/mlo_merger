@@ -1,6 +1,6 @@
 use crate::platform::fs;
 use std::{
-  collections::{BTreeSet, HashMap, HashSet},
+  collections::{BTreeSet, HashMap},
   path::{Path, PathBuf},
   sync::{Arc, Mutex},
 };
@@ -50,13 +50,13 @@ struct VanillaCacheInfo {
 /// Shared between threads: diffs of several files can be taken at once, and a YMAP two of them
 /// read is decoded at most once per thread that reaches it first.
 pub struct YmapComparisonContext {
-  vanilla_cache_dir: PathBuf,
-  /// The stores files are named relative to in diff documents, most specific first.
-  stores: [PathBuf; 3],
+  /// The latest vanilla YMAPs keyed by lowercase file name, as files of the vanilla archive with
+  /// their paths in it.
+  pub(super) vanilla_files: HashMap<String, (PathBuf, String)>,
+  /// The stores source files are named relative to in diff documents, most specific first.
+  stores: [PathBuf; 2],
   pub(super) vanilla_version: String,
   pub(super) source_index: SourceYmapIndex,
-  /// Lowercase YMAP file names in the vanilla cache.
-  pub(super) vanilla_file_names: HashSet<String>,
   /// Lowercase YMAP file names in the vanilla and source caches keyed by their reference hash.
   file_names_by_hash: HashMap<u32, BTreeSet<String>>,
   /// Names used to resolve hashes while decoding, e.g. vanilla `hash_names.json`.
@@ -77,25 +77,22 @@ impl YmapComparisonContext {
       serde_json::from_slice(&fs::read(vanilla_cache_dir.join("cache_info.json"))?)?;
     let source_index = load_source_ymap_index(source_cache_dir, source_dir)?;
     let mut file_names_by_hash = HashMap::<u32, BTreeSet<String>>::new();
-    let vanilla_file_names = fs::read_dir(vanilla_cache_dir.join("latest/ymap"))?
-      .map(|entry| Ok(entry?.file_name().to_string_lossy().to_ascii_lowercase()))
-      .collect::<Result<HashSet<_>>>()?;
+    let vanilla_files = crate::core::vanilla_cache::latest_files(vanilla_cache_dir)?
+      .into_iter()
+      .filter(|file| file.name.to_ascii_lowercase().ends_with(".ymap"))
+      .map(|file| (file.name.to_ascii_lowercase(), (file.path, file.object)))
+      .collect::<HashMap<_, _>>();
     let source_names = source_index.paths.keys().map(|(_, file_name)| file_name.clone());
-    for file_name in vanilla_file_names.iter().cloned().chain(source_names) {
+    for file_name in vanilla_files.keys().cloned().chain(source_names) {
       if let Some(stem) = file_name.strip_suffix(".ymap") {
         file_names_by_hash.entry(reference_hash(stem)).or_default().insert(file_name);
       }
     }
     Ok(Self {
-      vanilla_cache_dir: vanilla_cache_dir.to_path_buf(),
-      stores: [
-        source_cache_dir.to_path_buf(),
-        vanilla_cache_dir.to_path_buf(),
-        source_dir.to_path_buf(),
-      ],
+      vanilla_files,
+      stores: [source_cache_dir.to_path_buf(), source_dir.to_path_buf()],
       vanilla_version: info.latest_version,
       source_index,
-      vanilla_file_names,
       file_names_by_hash,
       hash_names,
       cache_by_ref: Mutex::new(HashMap::new()),
@@ -116,12 +113,8 @@ impl YmapComparisonContext {
       return Ok(self.cache().entry(file.clone()).or_insert(Arc::new(Ymap::empty())).clone());
     }
     // Decoded without holding the lock, so other threads keep reading their own YMAPs.
-    let (path, _) = resolve_stream_file(
-      &self.vanilla_cache_dir,
-      &self.vanilla_version,
-      &self.source_index,
-      file,
-    )?;
+    let (path, _) =
+      resolve_stream_file(&self.vanilla_files, &self.vanilla_version, &self.source_index, file)?;
     let ymap = Arc::new(ymap_to_model(&read_stream_bytes(&path)?, &self.hash_names)?);
     Ok(self.cache().entry(file.clone()).or_insert(ymap).clone())
   }
@@ -134,7 +127,7 @@ impl YmapComparisonContext {
   ) -> bool {
     let name = file.file_name.to_ascii_lowercase();
     file.resource_name.is_none()
-      && !self.vanilla_file_names.contains(&name)
+      && !self.vanilla_files.contains_key(&name)
       && self.source_index.added.contains(&name)
   }
 
@@ -222,7 +215,7 @@ impl YmapComparisonContext {
     else {
       return Ok(None);
     };
-    if !self.vanilla_file_names.contains(&name) {
+    if !self.vanilla_files.contains_key(&name) {
       return Ok(None);
     }
     let baseline = StreamFileRef {
@@ -308,12 +301,8 @@ impl YmapComparisonContext {
     if self.is_added_baseline(file) {
       return crate::core::source_cache::empty_baseline_file();
     }
-    let (path, vanilla) = resolve_stream_file(
-      &self.vanilla_cache_dir,
-      &self.vanilla_version,
-      &self.source_index,
-      file,
-    )?;
+    let (path, vanilla) =
+      resolve_stream_file(&self.vanilla_files, &self.vanilla_version, &self.source_index, file)?;
     let stored = match vanilla {
       Some(stored) => stored,
       None => self
@@ -370,7 +359,7 @@ impl YmapComparisonContext {
       .into_iter()
       .flatten()
       .filter(|file_name| {
-        in_resource(file_name).is_some() || self.vanilla_file_names.contains(*file_name)
+        in_resource(file_name).is_some() || self.vanilla_files.contains_key(*file_name)
       })
       .collect::<Vec<_>>();
     match candidates.as_slice() {
@@ -390,10 +379,10 @@ impl YmapComparisonContext {
 /// Locates `file` in its source resource, falling back to vanilla when the resource has no
 /// YMAP of that name or `file` names no resource.
 ///
-/// Vanilla cache entries are links into the raw vanilla tree, so their targets are returned,
-/// with the entry's path in the vanilla cache, `latest/ymap/{file name}`, to record.
+/// A vanilla YMAP is returned with its path in the vanilla archive, such as
+/// `0000-base/ymap/{file name}`, to record.
 fn resolve_stream_file(
-  vanilla_cache_dir: &Path,
+  vanilla_files: &HashMap<String, (PathBuf, String)>,
   vanilla_version: &str,
   source_index: &SourceYmapIndex,
   file: &StreamFileRef,
@@ -430,10 +419,8 @@ fn resolve_stream_file(
       .into(),
     );
   }
-  let stored = format!("latest/ymap/{}", file.file_name);
-  let path = vanilla_cache_dir.join(&stored);
-  if !fs::is_file(&path) {
-    return Err(format!("No source or vanilla YMAP named {}", file.file_name).into());
+  match vanilla_files.get(&file.file_name.to_ascii_lowercase()) {
+    Some((path, object)) if fs::is_file(path) => Ok((path.clone(), Some(object.clone()))),
+    _ => Err(format!("No source or vanilla YMAP named {}", file.file_name).into()),
   }
-  Ok((fs::canonicalize(&path)?, Some(stored)))
 }

@@ -48,10 +48,6 @@ pub enum CheckIssueKind {
   Unrecorded,
   /// The file's size, or with `--deep` its SHA-256, differs from the record.
   Changed,
-  /// A link whose target does not exist.
-  BrokenLink,
-  /// A link, or a file in its place, that does not point where the metadata says.
-  WrongLink,
   /// The metadata cannot be read, so the store was not checked further.
   Unreadable,
   /// The store was built from inputs that changed since; its stage rebuilds it.
@@ -93,7 +89,7 @@ impl Check {
       crate::core::vanilla::check(&self.vanilla_dir, deep, findings)
     })?;
     check_store(&mut issues, "vanilla-cache", &self.vanilla_cache_dir, |findings| {
-      crate::core::vanilla_cache::check(&self.vanilla_cache_dir, &self.vanilla_dir, deep, findings)
+      crate::core::vanilla_cache::check(&self.vanilla_cache_dir, deep, findings)
     })?;
     check_store(&mut issues, "source-cache", &self.source_cache_dir, |findings| {
       crate::core::source_cache::check(&self.source_cache_dir, deep, findings)

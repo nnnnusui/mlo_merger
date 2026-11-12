@@ -25,17 +25,18 @@ impl Fixture {
     let source = root.join("source/resource_a");
     let vanilla_cache = root.join("vanilla-cache");
     fs::create_dir_all(source.join("stream")).unwrap();
-    fs::create_dir_all(vanilla_cache.join("latest/ymap")).unwrap();
+    fs::create_dir_all(root.join("vanilla/v1/ymap")).unwrap();
     fs::create_dir_all(&output).unwrap();
     let source_ymap = source.join("stream/map.ymap");
-    let vanilla_ymap = vanilla_cache.join("latest/ymap/map.ymap");
+    let vanilla_ymap = root.join("vanilla/v1/ymap/map.ymap");
     fs::write(&source_ymap, b"source bytes").unwrap();
     fs::write(&vanilla_ymap, b"vanilla bytes").unwrap();
-    write_json(
-      &vanilla_cache.join("cache_info.json"),
-      &serde_json::json!({ "latest_version": "v1" }),
-    )
-    .unwrap();
+    crate::core::vanilla_cache::test_support::write_cache_info(
+      &vanilla_cache,
+      "../vanilla",
+      "v1",
+      &[("map.ymap", "v1/ymap/map.ymap")],
+    );
     write_json(
       &output.join("cache_info.json"),
       &SourceCacheMetadata {
