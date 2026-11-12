@@ -18,6 +18,8 @@ Merges FiveM YMAP resources and conflicting YBN collision files against vanilla 
 Starting the executable without arguments, for example by double-clicking it, opens a
 window that generates the vanilla archive:
 
+![The vanilla generator window](docs/asset/gui-vanilla-generator.png)
+
 1. Choose the GTA V Legacy directory. Common Steam, Epic and Rockstar installs are
    detected.
 2. Choose `magic.dat`, or press **Download from GitHub** to save CodeWalker's copy next to
