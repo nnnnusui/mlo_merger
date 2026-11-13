@@ -2511,7 +2511,7 @@ dependencies = [
 
 [[package]]
 name = "mlo_merger"
-version = "5.1.1"
+version = "5.1.2"
 dependencies = [
  "aes",
  "bpaf",
