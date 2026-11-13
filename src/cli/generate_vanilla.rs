@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use bpaf::*;
 
@@ -16,13 +16,13 @@ pub struct GenerateVanilla {
 }
 
 /// Parses `--generate-vanilla` arguments.
-pub fn parser() -> impl Parser<GenerateVanilla> {
+pub fn parser(asset: &Path) -> impl Parser<GenerateVanilla> + use<> {
   let command = long("generate-vanilla")
     .help("Generate versioned vanilla stream files from game archives")
     .req_flag(());
   let game_dir = short('i').long("input").argument::<PathBuf>("GAME_DIR");
   let magic = magic_parser();
-  let common = common::parser(PathBuf::from("asset/vanilla"));
+  let common = common::parser(asset, asset.join("vanilla"));
   construct!(command, game_dir, magic, common).map(|(_, game_dir, magic, common)| GenerateVanilla {
     game_dir,
     magic,

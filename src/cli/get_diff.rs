@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use bpaf::*;
 
@@ -16,11 +16,11 @@ pub struct GetDiff {
 }
 
 /// Parses `--get-diff <source> [target]` arguments.
-pub fn parser() -> impl Parser<GetDiff> {
+pub fn parser(asset: &Path) -> impl Parser<GetDiff> + use<> {
   let command = long("get-diff")
     .help("Generate a YMAP diff JSON against the latest vanilla baseline")
     .req_flag(());
-  let common = common::parser(PathBuf::from("."));
+  let common = common::parser(asset, PathBuf::from("."));
   let before = positional::<PathBuf>("SOURCE");
   let after = positional::<PathBuf>("TARGET").optional();
   construct!(command, common, before, after).map(|(_, common, before, after)| GetDiff {

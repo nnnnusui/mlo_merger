@@ -57,7 +57,9 @@ Start the executable from server-side code with `spawn` (spawnProcess).
 - Always pass an operation flag. Without arguments the executable opens the vanilla
   generator GUI; run the pipeline as `mlo_merger --pipeline`.
 - Set the working directory to the directory containing `asset/`. Every path
-  below, and every command default, is relative to it.
+  below, and every command default, is relative to it. `--asset DIR` puts every default
+  under `DIR` instead of `asset/`; an option given for one path still overrides its
+  default.
 - Paths recorded in the JSON files are relative to the store holding each file (see
   [Recorded Paths](#recorded-paths)), so they stay valid when `asset/` moves. Command results
   on stdout name files as the command was given them.

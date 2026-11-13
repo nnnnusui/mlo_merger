@@ -17,7 +17,6 @@ fn main() {
 
 fn run_cli() -> Result<(), Box<dyn std::error::Error>> {
   let args = parse_args();
-  mlo_merger::core::config::set_path(args.config);
   let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
   let terminal =
     log::tree_layer(std::io::stderr, std::io::stderr().is_terminal()).with_filter(filter);
@@ -25,7 +24,7 @@ fn run_cli() -> Result<(), Box<dyn std::error::Error>> {
   let file = log::tree_layer(file, false).with_filter(EnvFilter::new("info,mlo_merger=debug"));
   tracing_subscriber::registry().with(terminal).with(file).try_init()?;
 
-  let result = run(args.command);
+  let result = run(args);
   // Flush the background log writer; `process::exit` skips destructors.
   drop(guard);
   result

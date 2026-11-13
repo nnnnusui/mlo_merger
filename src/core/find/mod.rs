@@ -41,6 +41,8 @@ pub struct FindEntityGuid {
   pub guid: u32,
   /// Directory containing grouped or legacy flat merged YMAPs.
   pub merged_dir: PathBuf,
+  /// Where `diff_all` reads the recorded inputs.
+  pub stores: InputStores,
   /// Optional case-insensitive filename glob filter.
   pub filter: Option<String>,
   /// Include recorded vanilla and source inputs without regenerating artifacts.
@@ -51,8 +53,10 @@ impl FindEntityGuid {
   /// Returns one XML document containing every occurrence, including duplicate GUID entries.
   ///
   /// ```no_run
-  /// let xml = mlo_merger::core::find::FindEntityGuid {
+  /// use mlo_merger::core::find::{FindEntityGuid, InputStores};
+  /// let xml = FindEntityGuid {
   ///   guid: 2443198849, merged_dir: "asset/merged".into(),
+  ///   stores: InputStores::under("asset".as_ref()),
   ///   filter: Some("lr_cs4_10_strm_0.ymap".into()), diff_all: true,
   /// }.run()?;
   /// # Ok::<(), Box<dyn std::error::Error>>(())
@@ -61,7 +65,7 @@ impl FindEntityGuid {
     FindEntity {
       query: EntityQuery::Guid(self.guid),
       merged_dir: self.merged_dir.clone(),
-      stores: InputStores::default(),
+      stores: self.stores.clone(),
       filter: self.filter.clone(),
       diff_all: self.diff_all,
     }
@@ -73,10 +77,11 @@ impl FindEntity {
   /// Returns a read-only XML search result using the same condition for all stages.
   ///
   /// ```no_run
-  /// use mlo_merger::core::find::{EntityQuery, FindEntity};
+  /// use mlo_merger::core::find::{EntityQuery, FindEntity, InputStores};
   /// let xml = FindEntity {
   ///   query: EntityQuery::Position { position: [3.5, 4.2, 0.0], radius: 1.0 },
-  ///   merged_dir: "asset/merged".into(), stores: Default::default(), filter: None,
+  ///   merged_dir: "asset/merged".into(), stores: InputStores::under("asset".as_ref()),
+  ///   filter: None,
   ///   diff_all: false,
   /// }.run()?;
   /// # Ok::<(), Box<dyn std::error::Error>>(())

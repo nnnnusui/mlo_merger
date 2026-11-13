@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use bpaf::*;
 
@@ -32,11 +32,14 @@ pub(crate) fn gamebuild(
   let Some(requested) = requested else {
     return Ok(None);
   };
-  Ok(Some(GameBuilds::load(crate::core::config::path())?.resolve(requested)?))
+  Ok(Some(GameBuilds::load(&crate::core::config::path())?.resolve(requested)?))
 }
 
 /// Parses paths and execution controls shared by CLI commands.
-pub fn parser(default_output: PathBuf) -> impl Parser<CommonOptions> {
+pub fn parser(
+  asset: &Path,
+  default_output: PathBuf,
+) -> impl Parser<CommonOptions> + use<> {
   let output = short('o')
     .long("output")
     .help("Output directory")
@@ -45,15 +48,15 @@ pub fn parser(default_output: PathBuf) -> impl Parser<CommonOptions> {
   let vanilla = long("vanilla")
     .help("Vanilla archive directory (default: asset/vanilla)")
     .argument::<PathBuf>("DIR")
-    .fallback(PathBuf::from("asset/vanilla"));
+    .fallback(asset.join("vanilla"));
   let vanilla_cache = long("vanilla-cache")
     .help("Derived vanilla cache directory (default: asset/vanilla-cache)")
     .argument::<PathBuf>("DIR")
-    .fallback(PathBuf::from("asset/vanilla-cache"));
+    .fallback(asset.join("vanilla-cache"));
   let source_cache = long("source-cache")
     .help("Derived source cache directory (default: asset/source-cache)")
     .argument::<PathBuf>("DIR")
-    .fallback(PathBuf::from("asset/source-cache"));
+    .fallback(asset.join("source-cache"));
   let gamebuild = long("gamebuild")
     .help("Game build the vanilla cache targets: a build number or DLC name from [gamebuild] in the config file")
     .argument::<String>("BUILD")

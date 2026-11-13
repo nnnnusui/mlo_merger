@@ -181,6 +181,7 @@ fn find_searches_native_merged_and_recorded_before_entities_without_writes() {
   let query = FindEntityGuid {
     guid: 2443198849,
     merged_dir: merged.clone(),
+    stores: crate::core::find::InputStores::under(std::path::Path::new("asset")),
     filter: Some("LR_CS4_10_STRM_0.YMAP".into()),
     diff_all: false,
   };
@@ -195,7 +196,7 @@ fn find_searches_native_merged_and_recorded_before_entities_without_writes() {
       radius: 1.0,
     },
     merged_dir: merged.clone(),
-    stores: Default::default(),
+    stores: crate::core::find::InputStores::under(std::path::Path::new("asset")),
     filter: query.filter.clone(),
     diff_all: true,
   };
@@ -216,7 +217,7 @@ fn find_searches_native_merged_and_recorded_before_entities_without_writes() {
       ],
     },
     merged_dir: merged.clone(),
-    stores: Default::default(),
+    stores: crate::core::find::InputStores::under(std::path::Path::new("asset")),
     filter: query.filter.clone(),
     diff_all: true,
   }

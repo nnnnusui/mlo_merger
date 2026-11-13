@@ -680,7 +680,7 @@ mod tests {
     crate::core::vanilla_cache::test_support::write_cache_info(&vanilla_cache, "..", "v1", &[]);
     let stores = crate::core::find::InputStores {
       vanilla_cache_dir: vanilla_cache,
-      ..Default::default()
+      ..crate::core::find::InputStores::under(std::path::Path::new("asset"))
     };
     let mut query = FindEntity {
       query: EntityQuery::YbnPosition {

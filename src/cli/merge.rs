@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use bpaf::*;
 
@@ -20,22 +20,22 @@ pub struct Merge {
 }
 
 /// Parses `--merge` arguments.
-pub fn parser() -> impl Parser<Merge> {
+pub fn parser(asset: &Path) -> impl Parser<Merge> + use<> {
   let command = long("merge").help("Merge source conflicts into vanilla stream files").req_flag(());
   let source_dir = short('i')
     .long("input")
     .help("Source resource directory (default: asset/source)")
     .argument::<PathBuf>("DIR")
-    .fallback(PathBuf::from("asset/source"));
+    .fallback(asset.join("source"));
   let overwrite_dir = long("overwrite")
     .help("Overwrites applied to source diffs before merging (default: asset/overwrite)")
     .argument::<PathBuf>("DIR")
-    .fallback(PathBuf::from("asset/overwrite"));
+    .fallback(asset.join("overwrite"));
   let overwrite_cache_dir = long("overwrite-cache")
     .help("What the overwrites call for, derived from them (default: asset/overwrite-cache)")
     .argument::<PathBuf>("DIR")
-    .fallback(PathBuf::from("asset/overwrite-cache"));
-  let common = common::parser(PathBuf::from("asset/merged"));
+    .fallback(asset.join("overwrite-cache"));
+  let common = common::parser(asset, asset.join("merged"));
   let exclusions = super::generate_source_cache::exclusions_parser();
   construct!(command, source_dir, overwrite_dir, overwrite_cache_dir, common, exclusions).map(
     |(_, source_dir, overwrite_dir, overwrite_cache_dir, common, exclusions)| Merge {

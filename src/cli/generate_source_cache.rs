@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use bpaf::*;
 
@@ -18,7 +18,7 @@ pub struct GenerateSourceCache {
 }
 
 /// Parses `--generate-source-cache` arguments.
-pub fn parser() -> impl Parser<GenerateSourceCache> {
+pub fn parser(asset: &Path) -> impl Parser<GenerateSourceCache> + use<> {
   let command = long("generate-source-cache")
     .help("Build or update source resource conflict data")
     .req_flag(());
@@ -27,8 +27,8 @@ pub fn parser() -> impl Parser<GenerateSourceCache> {
     .long("input")
     .help("Source resource directory (default: asset/source)")
     .argument::<PathBuf>("DIR")
-    .fallback(PathBuf::from("asset/source"));
-  let common = common::parser(PathBuf::from("asset/source-cache"));
+    .fallback(asset.join("source"));
+  let common = common::parser(asset, asset.join("source-cache"));
   let exclusions = exclusions_parser();
   construct!(command, source_dir, common, exclusions, resource).map(
     |(_, source_dir, common, exclusions, resource)| GenerateSourceCache {

@@ -1,6 +1,6 @@
 use super::common::{self, CommonOptions};
 use bpaf::*;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// Arguments for deploying generated merged and cached stream files.
 #[derive(Debug, Clone)]
@@ -12,15 +12,15 @@ pub struct Deploy {
 }
 
 /// Parses `--deploy` arguments.
-pub fn parser() -> impl Parser<Deploy> {
+pub fn parser(asset: &Path) -> impl Parser<Deploy> + use<> {
   let command =
     long("deploy").help("Copy merged and remaining cached files into a stream layout").req_flag(());
   let merged_dir = short('i')
     .long("input")
     .help("Merged directory (default: asset/merged)")
     .argument::<PathBuf>("DIR")
-    .fallback(PathBuf::from("asset/merged"));
-  let common = common::parser(PathBuf::from("asset/merged_mlo"));
+    .fallback(asset.join("merged"));
+  let common = common::parser(asset, asset.join("merged_mlo"));
   construct!(command, merged_dir, common).map(|(_, merged_dir, common)| Deploy {
     merged_dir,
     common,

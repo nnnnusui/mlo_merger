@@ -5,22 +5,26 @@ use serde::Deserialize;
 use std::{
   collections::BTreeMap,
   io,
-  path::{Path, PathBuf},
-  sync::OnceLock,
+  path::PathBuf,
+  sync::{Mutex, PoisonError},
 };
 
-static PATH: OnceLock<PathBuf> = OnceLock::new();
+static PATH: Mutex<Option<PathBuf>> = Mutex::new(None);
 
-/// Sets the config file every operation reads for the rest of the process.
-///
-/// Only the first call takes effect; without one, the file is `asset/config.toml`.
+/// Sets the config file operations read from now on; without it, the file is
+/// `asset/config.toml`.
 pub fn set_path(path: PathBuf) {
-  let _ = PATH.set(path);
+  *PATH.lock().unwrap_or_else(PoisonError::into_inner) = Some(path);
 }
 
-/// The config file operations read: the one given to [`set_path`], or `asset/config.toml`.
-pub fn path() -> &'static Path {
-  PATH.get_or_init(|| PathBuf::from("asset/config.toml"))
+/// The config file operations read: the one last given to [`set_path`], or
+/// `asset/config.toml`.
+pub fn path() -> PathBuf {
+  PATH
+    .lock()
+    .unwrap_or_else(PoisonError::into_inner)
+    .clone()
+    .unwrap_or_else(|| PathBuf::from("asset/config.toml"))
 }
 
 /// The config file ([`path`]), each table optional.

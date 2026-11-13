@@ -1,5 +1,5 @@
 use crate::platform::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use bpaf::*;
 
@@ -15,11 +15,11 @@ pub struct FromXml {
 }
 
 /// Parses `--from-xml <path>` arguments.
-pub fn parser() -> impl Parser<FromXml> {
+pub fn parser(asset: &Path) -> impl Parser<FromXml> + use<> {
   let input = long("from-xml")
     .help("Convert an XML game file or directory to native files")
     .argument::<PathBuf>("PATH");
-  let common = common::parser(PathBuf::from("."));
+  let common = common::parser(asset, PathBuf::from("."));
   construct!(input, common).map(|(input, common)| FromXml {
     input,
     common,

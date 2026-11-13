@@ -20,17 +20,16 @@ pub struct InputStores {
   pub vanilla_cache_dir: PathBuf,
 }
 
-impl Default for InputStores {
-  fn default() -> Self {
+impl InputStores {
+  /// The stores at their default places under `asset`.
+  pub fn under(asset: &Path) -> Self {
     Self {
-      source_dir: "asset/source".into(),
-      source_cache_dir: "asset/source-cache".into(),
-      vanilla_cache_dir: "asset/vanilla-cache".into(),
+      source_dir: asset.join("source"),
+      source_cache_dir: asset.join("source-cache"),
+      vanilla_cache_dir: asset.join("vanilla-cache"),
     }
   }
-}
 
-impl InputStores {
   /// Where a recorded merge input is: a vanilla file in `vanilla_archive`, the vanilla archive
   /// the vanilla cache names, a source in the source root when it is recorded at its original
   /// path, otherwise in the source cache.

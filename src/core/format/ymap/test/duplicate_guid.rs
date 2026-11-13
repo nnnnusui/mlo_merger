@@ -7,7 +7,7 @@ use std::{
 };
 
 use crate::core::{
-  conversion::load_vanilla_hash_names,
+  conversion::load_hash_names_or_empty,
   format::{
     gamefile::{meta::MetaResource, rsc7::Rsc7Resource},
     ymap::{binary::ymap_to_model, model::YmapEntity},
@@ -47,7 +47,7 @@ fn dump_duplicate_guid_entities(
 
   // Names embedded in later files are not known yet while decoding, so archetype names are
   // resolved against the full set once every file has been read.
-  let mut hash_names = load_vanilla_hash_names();
+  let mut hash_names = load_hash_names_or_empty(&manifest.join("asset/vanilla/hash_names.json"));
   let no_shared_names = HashMap::new();
   let mut groups = Vec::new();
   for path in paths {

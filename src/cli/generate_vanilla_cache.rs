@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::Path;
 
 use bpaf::*;
 
@@ -12,11 +12,11 @@ pub struct GenerateVanillaCache {
 }
 
 /// Parses `--generate-vanilla-cache` arguments.
-pub fn parser() -> impl Parser<GenerateVanillaCache> {
+pub fn parser(asset: &Path) -> impl Parser<GenerateVanillaCache> + use<> {
   let command = long("generate-vanilla-cache")
     .help("Build derived vanilla indexes and latest stream files")
     .req_flag(());
-  let common = common::parser(PathBuf::from("asset/vanilla-cache"));
+  let common = common::parser(asset, asset.join("vanilla-cache"));
   construct!(command, common).map(|(_, common)| GenerateVanillaCache {
     common,
   })

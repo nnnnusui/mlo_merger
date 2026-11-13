@@ -1,4 +1,8 @@
 use bpaf::*;
+use std::{
+  ffi::{OsStr, OsString},
+  path::{Path, PathBuf},
+};
 
 use super::{
   check,
@@ -51,22 +55,24 @@ pub enum Command {
   Read(read::ReadCommand),
 }
 
-fn parser() -> impl Parser<Command> {
-  let generate_vanilla = generate_vanilla::parser().map(Command::GenerateVanilla);
-  let generate_vanilla_cache = generate_vanilla_cache::parser().map(Command::GenerateVanillaCache);
-  let generate_source_cache = generate_source_cache::parser().map(Command::GenerateSourceCache);
+fn commands(asset: &Path) -> impl Parser<Command> + use<> {
+  let generate_vanilla = generate_vanilla::parser(asset).map(Command::GenerateVanilla);
+  let generate_vanilla_cache =
+    generate_vanilla_cache::parser(asset).map(Command::GenerateVanillaCache);
+  let generate_source_cache =
+    generate_source_cache::parser(asset).map(Command::GenerateSourceCache);
   let generate_overwrite_cache =
-    generate_overwrite_cache::parser().map(Command::GenerateOverwriteCache);
-  let restore_source_cache = restore_source_cache::parser().map(Command::RestoreSourceCache);
-  let merge = merge::parser().map(Command::Merge);
-  let deploy = deploy::parser().map(Command::Deploy);
-  let to_xml = to_xml::parser().map(Command::ToXml);
-  let from_xml = from_xml::parser().map(Command::FromXml);
-  let get_diff = get_diff::parser().map(Command::GetDiff);
-  let read = read::parser().map(Command::Read);
-  let find = find::parser().map(Command::Find);
-  let check = check::parser().map(Command::Check);
-  let pipeline = pipeline::parser().map(Command::Pipeline);
+    generate_overwrite_cache::parser(asset).map(Command::GenerateOverwriteCache);
+  let restore_source_cache = restore_source_cache::parser(asset).map(Command::RestoreSourceCache);
+  let merge = merge::parser(asset).map(Command::Merge);
+  let deploy = deploy::parser(asset).map(Command::Deploy);
+  let to_xml = to_xml::parser(asset).map(Command::ToXml);
+  let from_xml = from_xml::parser(asset).map(Command::FromXml);
+  let get_diff = get_diff::parser(asset).map(Command::GetDiff);
+  let read = read::parser(asset).map(Command::Read);
+  let find = find::parser(asset).map(Command::Find);
+  let check = check::parser(asset).map(Command::Check);
+  let pipeline = pipeline::parser(asset).map(Command::Pipeline);
   construct!([
     generate_vanilla,
     generate_vanilla_cache,
@@ -85,30 +91,56 @@ fn parser() -> impl Parser<Command> {
   ])
 }
 
-/// The executable's command line: one operation, the config file it reads and where the
-/// run's log file goes.
+/// A parsed command line: one operation, the directory its default paths are under, the config
+/// file it reads and where the run's log file goes.
 #[derive(Debug, Clone)]
 pub struct Args {
+  /// Directory the default paths are under.
+  pub asset: PathBuf,
   /// Directory the run's log file is written to.
-  pub log_dir: std::path::PathBuf,
+  pub log_dir: PathBuf,
   /// Config file for tolerances and game builds.
-  pub config: std::path::PathBuf,
+  pub config: PathBuf,
   /// The operation to run.
   pub command: Command,
 }
 
-fn args_parser() -> impl Parser<Args> {
+/// The value of `--asset` in `args`, or `asset` without one.
+///
+/// Every default path is under it, so it is read before the rest of the command line.
+fn asset_dir<'a>(args: impl IntoIterator<Item = &'a OsStr>) -> PathBuf {
+  let mut args = args.into_iter();
+  while let Some(arg) = args.next() {
+    if arg == "--" {
+      break;
+    }
+    if arg == "--asset" {
+      return args.next().map_or_else(|| PathBuf::from("asset"), PathBuf::from);
+    }
+    if let Some(value) = arg.to_str().and_then(|arg| arg.strip_prefix("--asset=")) {
+      return PathBuf::from(value);
+    }
+  }
+  PathBuf::from("asset")
+}
+
+fn parser(asset: &Path) -> impl Parser<Args> + use<> {
+  let asset_option = long("asset")
+    .help("Directory the asset/ defaults of every path are under (default: asset)")
+    .argument::<PathBuf>("DIR")
+    .fallback(PathBuf::from("asset"));
   let log_dir = long("log-dir")
     .help("Directory the run's log file is written to (default: asset/log)")
-    .argument::<std::path::PathBuf>("DIR")
-    .fallback(std::path::PathBuf::from("asset/log"));
+    .argument::<PathBuf>("DIR")
+    .fallback(asset.join("log"));
   let config = long("config")
     .help("Config file for tolerances and game builds (default: asset/config.toml)")
-    .argument::<std::path::PathBuf>("FILE")
+    .argument::<PathBuf>("FILE")
     .guard(|path| path.is_file(), "--config must name an existing file")
-    .fallback(std::path::PathBuf::from("asset/config.toml"));
-  let command = parser();
+    .fallback(asset.join("config.toml"));
+  let command = commands(asset);
   construct!(Args {
+    asset(asset_option),
     log_dir,
     config,
     command
@@ -117,14 +149,16 @@ fn args_parser() -> impl Parser<Args> {
 
 /// Parses the executable's command-line arguments.
 pub fn parse_args() -> Args {
-  args_parser().to_options().run()
+  let args = std::env::args_os().skip(1).collect::<Vec<_>>();
+  parser(&asset_dir(args.iter().map(OsString::as_os_str))).to_options().run()
 }
 
 /// Parses `args`, which leave out the executable name, as the command line would.
 ///
 /// Help and parse errors come back as the text the executable would print.
-pub fn parse_args_from(args: &[&str]) -> Result<Command, String> {
-  parser().to_options().run_inner(args).map_err(|failure| match failure {
+pub fn parse_args_from(args: &[&str]) -> Result<Args, String> {
+  let asset = asset_dir(args.iter().map(OsStr::new));
+  parser(&asset).to_options().run_inner(args).map_err(|failure| match failure {
     ParseFailure::Stdout(doc, _) | ParseFailure::Stderr(doc) => doc.to_string(),
     ParseFailure::Completion(text) => text,
   })
@@ -157,11 +191,13 @@ impl From<Result<String, Box<dyn std::error::Error>>> for Output {
   }
 }
 
-/// Runs an operation and returns what the executable writes on standard output for it.
+/// Runs an operation with its config file and returns what the executable writes on standard
+/// output for it.
 ///
 /// The executable and the browser build both print through this, so their output is the same.
-pub fn stdout(command: Command) -> Output {
-  match command {
+pub fn stdout(args: Args) -> Output {
+  crate::core::config::set_path(args.config);
+  match args.command {
     Command::Pipeline(command) => pipeline::run(command).into(),
     Command::GenerateVanilla(command) => generate_vanilla::run(command).into(),
     Command::GenerateVanillaCache(command) => generate_vanilla_cache::run(command).into(),
@@ -180,9 +216,9 @@ pub fn stdout(command: Command) -> Output {
 }
 
 /// Runs an operation, writes its [`stdout`] and returns its result.
-pub fn run(command: Command) -> Result<(), Box<dyn std::error::Error>> {
+pub fn run(args: Args) -> Result<(), Box<dyn std::error::Error>> {
   use std::io::Write;
-  let output = stdout(command);
+  let output = stdout(args);
   let mut out = std::io::stdout().lock();
   out.write_all(output.stdout.as_bytes())?;
   out.flush()?;
@@ -192,7 +228,14 @@ pub fn run(command: Command) -> Result<(), Box<dyn std::error::Error>> {
 #[cfg(test)]
 mod tests {
   use super::*;
-  use std::path::PathBuf;
+
+  fn parser() -> impl Parser<Command> {
+    commands(Path::new("asset"))
+  }
+
+  fn args_parser() -> impl Parser<Args> {
+    super::parser(Path::new("asset"))
+  }
 
   #[test]
   fn log_dir_defaults_to_asset_log_and_accepts_a_path() {
@@ -203,6 +246,47 @@ mod tests {
       let args = args_parser().to_options().run_inner(argv.as_slice()).unwrap();
       assert_eq!(args.log_dir, PathBuf::from("logs"), "{argv:?}");
     }
+  }
+
+  #[test]
+  fn asset_moves_every_default_path() {
+    for args in [
+      &["--generate-vanilla", "-i", "game"][..],
+      &["--generate-vanilla-cache"],
+      &["--generate-source-cache"],
+      &["--generate-overwrite-cache"],
+      &["--restore-source-cache"],
+      &["--merge"],
+      &["--deploy"],
+      &["--to-xml", "input"],
+      &["--from-xml", "input"],
+      &["--get-diff", "before.ybn", "after.ybn"],
+      &["--find", "entity-guid", "1"],
+      &["--check"],
+      &["--read"],
+      &["--pipeline"],
+    ] {
+      let args = [&["--asset", "other"], args].concat();
+      let parsed = format!("{:?}", parse_args_from(&args).unwrap());
+      assert!(!parsed.contains("\"asset"), "{args:?} keeps an asset/ default: {parsed}");
+    }
+  }
+
+  #[test]
+  fn asset_is_overridden_by_each_path() {
+    let args = parse_args_from(&["--merge", "--asset=other", "--source-cache", "cache"]).unwrap();
+    assert_eq!(args.asset, PathBuf::from("other"));
+    assert_eq!(args.log_dir, PathBuf::from("other/log"));
+    assert_eq!(args.config, PathBuf::from("other/config.toml"));
+    let Command::Merge(merge) = args.command else {
+      panic!("Expected merge")
+    };
+    assert_eq!(merge.source_dir, PathBuf::from("other/source"));
+    assert_eq!(merge.common.vanilla_cache, PathBuf::from("other/vanilla-cache"));
+    assert_eq!(merge.common.source_cache, PathBuf::from("cache"));
+    assert_eq!(merge.common.output, PathBuf::from("other/merged"));
+    let args = parse_args_from(&["--read", "--", "--asset"]).unwrap();
+    assert_eq!(args.asset, PathBuf::from("asset"));
   }
 
   #[test]

@@ -140,7 +140,7 @@ fn pso_batch_commands_preserve_suffix_and_template_format() {
   crate::platform::fs::create_dir_all(input.join("nested")).unwrap();
   let source = base.join("asset/vanilla/0000-base/ymap/cs1_railwyc.ymap");
   crate::platform::fs::copy(&source, input.join("nested/cs1_railwyc.ymap")).unwrap();
-  assert_eq!(to_xml(&input, &xml_dir).unwrap(), (1, 0));
+  assert_eq!(to_xml(&input, &xml_dir, &base.join("asset/vanilla")).unwrap(), (1, 0));
   assert!(xml_dir.join("nested/cs1_railwyc.ymap.pso.xml").is_file());
   assert_eq!(
     FileType::from_xml_path(&xml_dir.join("nested/cs1_railwyc.ymap.pso.xml")).unwrap(),

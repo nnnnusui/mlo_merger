@@ -587,7 +587,7 @@ mod tests {
         position: [0.0; 3],
       },
       merged_dir: merged,
-      stores: Default::default(),
+      stores: crate::core::find::InputStores::under(std::path::Path::new("asset")),
       filter: None,
       diff_all: true,
     };

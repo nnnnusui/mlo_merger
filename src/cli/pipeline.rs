@@ -1,6 +1,6 @@
 use super::common::{self, CommonOptions};
 use bpaf::*;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// Arguments for the `--pipeline` vanilla-to-deployment run.
 #[derive(Debug, Clone)]
@@ -24,7 +24,7 @@ pub struct Pipeline {
 }
 
 /// Parses `--pipeline` arguments.
-pub fn parser() -> impl Parser<Pipeline> {
+pub fn parser(asset: &Path) -> impl Parser<Pipeline> + use<> {
   let command = long("pipeline")
     .help("Run the cached pipeline: vanilla, caches, merge and deployment")
     .req_flag(());
@@ -32,7 +32,7 @@ pub fn parser() -> impl Parser<Pipeline> {
     .long("input")
     .help("Source resource directory (default: asset/source)")
     .argument::<PathBuf>("DIR")
-    .fallback(PathBuf::from("asset/source"));
+    .fallback(asset.join("source"));
   let game_dir = long("game-dir")
     .help("Game directory for missing vanilla archives (default: /mnt/gtav)")
     .argument::<PathBuf>("DIR")
@@ -41,16 +41,16 @@ pub fn parser() -> impl Parser<Pipeline> {
   let merged_dir = long("merged")
     .help("Intermediate merged directory (default: asset/merged)")
     .argument::<PathBuf>("DIR")
-    .fallback(PathBuf::from("asset/merged"));
+    .fallback(asset.join("merged"));
   let overwrite_dir = long("overwrite")
     .help("Overwrites applied to source diffs before merging (default: asset/overwrite)")
     .argument::<PathBuf>("DIR")
-    .fallback(PathBuf::from("asset/overwrite"));
+    .fallback(asset.join("overwrite"));
   let overwrite_cache_dir = long("overwrite-cache")
     .help("What the overwrites call for, derived from them (default: asset/overwrite-cache)")
     .argument::<PathBuf>("DIR")
-    .fallback(PathBuf::from("asset/overwrite-cache"));
-  let common = common::parser(PathBuf::from("asset/merged_mlo"));
+    .fallback(asset.join("overwrite-cache"));
+  let common = common::parser(asset, asset.join("merged_mlo"));
   let exclusions = super::generate_source_cache::exclusions_parser();
   construct!(
     command,

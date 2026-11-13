@@ -21,7 +21,7 @@ use crate::core::format::{
 
 mod names;
 
-pub(crate) use names::{load_hash_names_or_empty, load_vanilla_hash_names};
+pub(crate) use names::load_hash_names_or_empty;
 
 #[cfg(test)]
 mod tests;
@@ -31,13 +31,16 @@ fn invalid_data(message: &str) -> io::Error {
 }
 
 /// Converts supported native binary resources from a file or directory to XML.
+///
+/// Hash names come from `hash_names.json` in `vanilla_dir` when it is there.
 pub fn to_xml(
   input: &Path,
   output_dir: &Path,
+  vanilla_dir: &Path,
 ) -> Result<(usize, usize), Box<dyn Error>> {
   let inputs = collect_inputs(input, &|path| FileType::from_path(path).is_ok())?;
   fs::create_dir_all(output_dir)?;
-  let mut shared_names = load_vanilla_hash_names();
+  let mut shared_names = load_hash_names_or_empty(&vanilla_dir.join("hash_names.json"));
   for source in &inputs {
     if !matches!(FileType::from_path(source), Ok(FileType::Ymap | FileType::Ytyp | FileType::Ymt)) {
       continue;

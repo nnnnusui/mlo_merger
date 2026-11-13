@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use bpaf::*;
 
@@ -15,7 +15,7 @@ pub struct ReadCommand {
 
 /// Parses `--read [--resource NAME [--version SHA256] | --vanilla | --all] [--gamebuild BUILD]
 /// [FILE...]`.
-pub fn parser() -> impl Parser<ReadCommand> {
+pub fn parser(asset: &Path) -> impl Parser<ReadCommand> + use<> {
   let command = long("read")
     .help("Write stream file models as JSON under read-cache, skipping current ones")
     .req_flag(());
@@ -34,24 +34,24 @@ pub fn parser() -> impl Parser<ReadCommand> {
   let source_dir = long("source")
     .help("Source resource directory, for resource files not moved into the source cache (default: asset/source)")
     .argument::<PathBuf>("DIR")
-    .fallback(PathBuf::from("asset/source"));
+    .fallback(asset.join("source"));
   let source_cache_dir = long("source-cache")
     .help("Source cache directory (default: asset/source-cache)")
     .argument::<PathBuf>("DIR")
-    .fallback(PathBuf::from("asset/source-cache"));
+    .fallback(asset.join("source-cache"));
   let vanilla_dir = long("vanilla-dir")
     .help("Vanilla archive directory (default: asset/vanilla)")
     .argument::<PathBuf>("DIR")
-    .fallback(PathBuf::from("asset/vanilla"));
+    .fallback(asset.join("vanilla"));
   let vanilla_cache_dir = long("vanilla-cache")
     .help("Vanilla cache whose game build vanilla is read as of without --gamebuild (default: asset/vanilla-cache)")
     .argument::<PathBuf>("DIR")
-    .fallback(PathBuf::from("asset/vanilla-cache"));
+    .fallback(asset.join("vanilla-cache"));
   let output_dir = short('o')
     .long("output")
     .help("Output directory (default: asset/read-cache)")
     .argument::<PathBuf>("DIR")
-    .fallback(PathBuf::from("asset/read-cache"));
+    .fallback(asset.join("read-cache"));
   let force = short('f').long("force").help("Write every JSON again").switch();
   let version = long("version")
     .help("With --resource, read the earlier version with this SHA-256 of each named file, from the source cache's history")
@@ -113,6 +113,10 @@ pub fn run(command: ReadCommand) -> Result<String, Box<dyn std::error::Error>> {
 #[cfg(test)]
 mod tests {
   use super::*;
+
+  fn parser() -> impl Parser<ReadCommand> {
+    super::parser(Path::new("asset"))
+  }
 
   fn parse(args: &[&str]) -> Read {
     parser().to_options().run_inner(args).unwrap().read

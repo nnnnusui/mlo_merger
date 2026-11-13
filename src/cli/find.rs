@@ -1,6 +1,6 @@
 use crate::core::find::{EntityQuery, InputStores};
 use bpaf::*;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// Arguments for a read-only search of merged native files and optional source inputs.
 #[derive(Debug, Clone)]
@@ -18,8 +18,8 @@ pub struct Find {
 }
 
 /// Parses find searches without invoking any pipeline stages.
-pub fn parser() -> impl Parser<Find> {
-  let defaults = InputStores::default();
+pub fn parser(asset: &Path) -> impl Parser<Find> + use<> {
+  let defaults = InputStores::under(asset);
   let source_dir = long("source")
     .help("Source resource directory, for --all (default: asset/source)")
     .argument::<PathBuf>("DIR")
@@ -37,7 +37,7 @@ pub fn parser() -> impl Parser<Find> {
     source_cache_dir,
     vanilla_cache_dir
   });
-  let search = search_parser();
+  let search = search_parser(asset);
   // The search ends with the positional GUID or position, which bpaf requires last.
   construct!(stores, search).map(|(stores, search)| Find {
     stores,
@@ -45,7 +45,7 @@ pub fn parser() -> impl Parser<Find> {
   })
 }
 
-fn search_parser() -> impl Parser<Find> {
+fn search_parser(asset: &Path) -> impl Parser<Find> + use<> {
   let kind = long("find").argument::<String>("KIND").guard(
     |kind| {
       matches!(
@@ -63,7 +63,7 @@ fn search_parser() -> impl Parser<Find> {
     .long("input")
     .help("Merged directory (default: asset/merged)")
     .argument::<PathBuf>("DIR")
-    .fallback(PathBuf::from("asset/merged"));
+    .fallback(asset.join("merged"));
   let filter = long("filter")
     .help("Restrict resource filenames with a case-insensitive glob (quote wildcard patterns)")
     .argument::<String>("GLOB")
@@ -82,8 +82,10 @@ fn search_parser() -> impl Parser<Find> {
     .argument::<String>("TYPE")
     .optional();
   let value = any::<String, _, _>("GUID|X,Y,Z", Some);
+  // Replaced by the parsed stores in `parser`.
+  let stores = InputStores::under(asset);
   construct!(kind, merged_dir, filter, all, radius, shape_type, value).parse(
-    |(kind, merged_dir, filter, all, radius, shape_type, value)| {
+    move |(kind, merged_dir, filter, all, radius, shape_type, value)| {
       if kind != "ybn-position" && shape_type.is_some() {
         return Err("--type applies only to ybn-position".to_string());
       }
@@ -153,7 +155,7 @@ fn search_parser() -> impl Parser<Find> {
         merged_dir,
         filter,
         diff_all: all,
-        stores: InputStores::default(),
+        stores: stores.clone(),
       })
     },
   )

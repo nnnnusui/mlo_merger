@@ -30,6 +30,11 @@ else on stderr.
 | Overwrite cache | `asset/overwrite-cache` | `--overwrite-cache` |
 | Deployment | `asset/merged_mlo` | `-o` |
 
+Every command takes `--asset DIR`, which puts each default under `DIR` instead of `asset/`,
+including the config file (`--config`) and the log directory (`--log-dir`). A path given by
+its own option is used as given: `--asset other --source-cache cache` reads
+`other/vanilla-cache` and `cache`.
+
 Overlapping artifact directories are rejected. The source root can contain them: for
 example, use `resources` as source while running the tool from `resources/mlo_merged`.
 Resources holding `deploy_cache_info.json` are deployments, and source discovery skips them.

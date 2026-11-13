@@ -72,15 +72,16 @@ pub fn run(
 
 fn execute(args: &[String]) -> Result<String, String> {
   let args = args.iter().map(String::as_str).collect::<Vec<_>>();
-  let command = match parse_args_from(&args)? {
-    command @ (Command::Pipeline(_) | Command::Read(_) | Command::RestoreSourceCache(_)) => command,
-    _ => {
-      return Err(
-        "Only --pipeline, --read and --restore-source-cache run in the browser".to_string(),
-      );
-    }
-  };
-  let output = cli::command::stdout(command);
+  let args = parse_args_from(&args)?;
+  if !matches!(
+    args.command,
+    Command::Pipeline(_) | Command::Read(_) | Command::RestoreSourceCache(_)
+  ) {
+    return Err(
+      "Only --pipeline, --read and --restore-source-cache run in the browser".to_string(),
+    );
+  }
+  let output = cli::command::stdout(args);
   output.result.map(|()| output.stdout).map_err(|error| {
     tracing::error!("{error}");
     error.to_string()

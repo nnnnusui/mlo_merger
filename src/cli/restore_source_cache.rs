@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use bpaf::*;
 
@@ -14,7 +14,7 @@ pub struct RestoreSourceCache {
 }
 
 /// Parses `--restore-source-cache [RESOURCE...]` arguments.
-pub fn parser() -> impl Parser<RestoreSourceCache> {
+pub fn parser(asset: &Path) -> impl Parser<RestoreSourceCache> + use<> {
   let command = long("restore-source-cache")
     .help(
       "Move active cached files back to their original source paths without overwriting changes",
@@ -24,11 +24,11 @@ pub fn parser() -> impl Parser<RestoreSourceCache> {
     .long("input")
     .help("Source resource directory (default: asset/source)")
     .argument::<PathBuf>("DIR")
-    .fallback(PathBuf::from("asset/source"));
+    .fallback(asset.join("source"));
   let cache_dir = long("source-cache")
     .help("Source cache directory (default: asset/source-cache)")
     .argument::<PathBuf>("DIR")
-    .fallback(PathBuf::from("asset/source-cache"));
+    .fallback(asset.join("source-cache"));
   let yes = short('y').long("yes").help("Accepted for non-interactive execution").switch();
   let resources = positional::<String>("RESOURCE")
     .help("Restore only these resources (names or source-relative paths)")
@@ -55,6 +55,10 @@ pub fn run(command: RestoreSourceCache) -> Result<String, Box<dyn std::error::Er
 #[cfg(test)]
 mod tests {
   use super::*;
+
+  fn parser() -> impl Parser<RestoreSourceCache> {
+    super::parser(Path::new("asset"))
+  }
 
   #[test]
   fn restores_every_resource_or_the_named_ones() {
