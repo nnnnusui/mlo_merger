@@ -1,6 +1,9 @@
 //! Consistency of the deployment with its metadata.
 
-use super::{Result, metadata::read_metadata};
+use super::{
+  Result,
+  metadata::{METADATA_FILE, read_metadata},
+};
 use crate::core::check::{CheckIssueKind, Findings, files_below};
 use std::path::Path;
 
@@ -12,10 +15,10 @@ pub(crate) fn check(
   deep: bool,
   findings: &mut Findings,
 ) -> Result<()> {
-  let metadata = match read_metadata(&output.join("deploy_cache_info.json")) {
+  let metadata = match read_metadata(&output.join(METADATA_FILE)) {
     Ok(metadata) => metadata,
     Err(error) => {
-      findings.add(CheckIssueKind::Unreadable, "deploy_cache_info.json", Some(error.to_string()));
+      findings.add(CheckIssueKind::Unreadable, METADATA_FILE, Some(error.to_string()));
       return Ok(());
     }
   };

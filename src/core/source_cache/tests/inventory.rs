@@ -146,3 +146,19 @@ fn builds_source_inventory_and_skips_unchanged_inputs_without_diffing() {
   assert!(build().run_after_vanilla_cache().unwrap());
   fs::remove_dir_all(root).unwrap();
 }
+
+#[test]
+fn resource_discovery_skips_deployments() {
+  let root = std::env::temp_dir().join(format!("source_cache_merged_{}", std::process::id()));
+  let _ = fs::remove_dir_all(&root);
+  let source = root.join("[maps]/source");
+  let merged = root.join("[maps]/mlo_merged");
+  for resource in [&source, &merged] {
+    fs::create_dir_all(resource).unwrap();
+    fs::write(resource.join("fxmanifest.lua"), b"fx_version 'cerulean'").unwrap();
+  }
+  fs::write(merged.join("deploy_cache_info.json"), b"{}").unwrap();
+  assert_eq!(super::super::inventory::discover_resources(&root).unwrap(), vec![source]);
+  assert!(super::super::inventory::discover_resources(&merged).is_err());
+  fs::remove_dir_all(root).unwrap();
+}

@@ -11,11 +11,20 @@ use crate::core::vanilla::write_json;
 use crate::platform::fs;
 use crate::platform::process;
 use files::{copy_file, destination, prepare_output, remove_empty_stream_directories};
-use metadata::{CopiedFile, DeployMetadata, fingerprint, read_metadata};
+use metadata::{CopiedFile, DeployMetadata, METADATA_FILE, fingerprint, read_metadata};
 use plan::plan;
-use std::{collections::BTreeMap, io::Write, path::PathBuf};
+use std::{
+  collections::BTreeMap,
+  io::Write,
+  path::{Path, PathBuf},
+};
 
 pub(crate) use check::check;
+
+/// Whether `resource` is a deployment, which holds merge results rather than source files.
+pub fn is_merged_resource(resource: &Path) -> bool {
+  fs::is_file(resource.join(METADATA_FILE))
+}
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
@@ -64,7 +73,7 @@ impl Deploy {
     moved_files.sort_unstable();
     let moved_files = moved_files.join("\n");
     let moved_files_path = destination(&output, "files.txt")?;
-    let metadata_path = destination(&output, "deploy_cache_info.json")?;
+    let metadata_path = destination(&output, METADATA_FILE)?;
     let previous =
       fs::is_file(&metadata_path).then(|| read_metadata(&metadata_path)).transpose()?;
     for relative in planned.keys().chain(previous.iter().flat_map(|metadata| metadata.files.keys()))

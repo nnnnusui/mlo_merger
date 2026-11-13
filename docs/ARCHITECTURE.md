@@ -25,7 +25,8 @@ GenerateVanilla owns raw-archive validation and the generate-or-reuse decision;
 explicit vanilla generation can still rebuild an existing archive. Overwrite
 and artifact paths share one overlap check. Source nesting is intentionally
 allowed for execution and artifacts under `resources/mlo_merged` with `resources`
-as the source root.
+as the source root. Source discovery skips deployments, identified by
+`deploy_cache_info.json`.
 
 Each stage retains its own freshness and prerequisite checks and writes the JSON
 records the next stage needs. A single stage runs through its own operation

@@ -122,6 +122,7 @@ fn find_stream_directories(input_dir: &Path) -> io::Result<Vec<PathBuf>> {
   Ok(
     resources
       .into_iter()
+      .filter(|resource| !crate::core::deploy::is_merged_resource(resource))
       .flat_map(|resource| ["stream", "streams"].into_iter().map(move |name| resource.join(name)))
       .filter(|stream| fs::is_dir(stream))
       .collect(),
@@ -154,6 +155,12 @@ mod tests {
     crate::platform::fs::write(first_stream.join("shared.ytyp"), []).unwrap();
     crate::platform::fs::write(third_stream.join("SHARED.YTYP"), []).unwrap();
     crate::platform::fs::write(unmanifested_stream.join("mission.ymap"), []).unwrap();
+    // A deployment holds merge results, not sources.
+    let deployed_stream = temp_dir.join("mlo_merged/stream/ymap");
+    crate::platform::fs::create_dir_all(&deployed_stream).unwrap();
+    crate::platform::fs::write(temp_dir.join("mlo_merged/fxmanifest.lua"), []).unwrap();
+    crate::platform::fs::write(temp_dir.join("mlo_merged/deploy_cache_info.json"), []).unwrap();
+    crate::platform::fs::write(deployed_stream.join("mission.ymap"), []).unwrap();
     // Each resource's own manifest is no conflict.
     crate::platform::fs::write(first_stream.join("_manifest.ymf"), []).unwrap();
     crate::platform::fs::write(second_stream.join("_MANIFEST.ymf"), []).unwrap();

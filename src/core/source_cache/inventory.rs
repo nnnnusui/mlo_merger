@@ -11,10 +11,19 @@ use super::{
   types::{FileFingerprint, ResourceInventory, SourceFile, VanillaMatch},
 };
 use crate::common::function::get_resource_directories;
+use crate::core::deploy::is_merged_resource;
 use crate::core::vanilla_cache::{DerivedVanillaFile, ymap_parent_hash};
 
+/// The resources under `source_dir`, leaving out deployments.
 pub(super) fn discover_resources(source_dir: &Path) -> Result<Vec<PathBuf>> {
-  let resources = get_resource_directories(source_dir)?;
+  let mut resources = get_resource_directories(source_dir)?;
+  resources.retain(|resource| {
+    let merged = is_merged_resource(resource);
+    if merged {
+      tracing::info!("Skipping merged resource {}", resource.display());
+    }
+    !merged
+  });
   if resources.is_empty() {
     return Err(format!("No FiveM resources found in {}", source_dir.display()).into());
   }

@@ -10,6 +10,9 @@ use std::{
   path::{Path, PathBuf},
 };
 
+/// The metadata file at the root of a deployment.
+pub(super) const METADATA_FILE: &str = "deploy_cache_info.json";
+
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 #[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[cfg_attr(feature = "typescript", specta(rename = "DeployFingerprint"))]

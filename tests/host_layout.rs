@@ -77,7 +77,7 @@ fn runs_with_resources_outside_the_working_directory() {
     "--output",
     merged_arg,
     "--exclude",
-    "smpl_custom_props,mlo_merged",
+    "smpl_custom_props",
     "--gamebuild",
     "100",
   ];
@@ -86,7 +86,7 @@ fn runs_with_resources_outside_the_working_directory() {
   assert!(!report["merged"]["added"].as_array().unwrap().is_empty(), "{report}");
   assert!(merged.join("stream/ymap/merged/smpl_block_01.ymap").is_file());
   assert!(!root.join("smpl_block_rework/stream/maps/smpl_block_01.ymap").exists());
-  // The deployed resource lies under the input root; a second run excludes it and changes nothing.
+  // The deployed resource lies under the input root; a second run skips it and changes nothing.
   let again: serde_json::Value = serde_json::from_str(line(&run(&host, &pipeline))).unwrap();
   assert_eq!(again["merged"]["added"], serde_json::json!([]), "{again}");
 

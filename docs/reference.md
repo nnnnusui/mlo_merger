@@ -32,6 +32,7 @@ else on stderr.
 
 Overlapping artifact directories are rejected. The source root can contain them: for
 example, use `resources` as source while running the tool from `resources/mlo_merged`.
+Resources holding `deploy_cache_info.json` are deployments, and source discovery skips them.
 
 Caches record paths relative to their stores, so moving `asset/`, or naming the same
 directories by other paths, keeps every stage current. A source root holding none of the
