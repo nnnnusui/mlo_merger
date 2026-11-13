@@ -19,9 +19,13 @@ pub struct GenerateSourceCache {
 
 /// Parses `--generate-source-cache` arguments.
 pub fn parser(asset: &Path) -> impl Parser<GenerateSourceCache> + use<> {
-  let command = long("generate-source-cache")
-    .help("Build or update source resource conflict data")
-    .req_flag(());
+  options(asset)
+    .to_options()
+    .descr("Build or update source resource conflict data")
+    .command("--generate-source-cache")
+}
+
+fn options(asset: &Path) -> impl Parser<GenerateSourceCache> + use<> {
   let resource = positional::<String>("RESOURCE").optional();
   let source_dir = short('i')
     .long("input")
@@ -30,8 +34,8 @@ pub fn parser(asset: &Path) -> impl Parser<GenerateSourceCache> + use<> {
     .fallback(asset.join("source"));
   let common = common::parser(asset, asset.join("source-cache"));
   let exclusions = exclusions_parser();
-  construct!(command, source_dir, common, exclusions, resource).map(
-    |(_, source_dir, common, exclusions, resource)| GenerateSourceCache {
+  construct!(source_dir, common, exclusions, resource).map(
+    |(source_dir, common, exclusions, resource)| GenerateSourceCache {
       source_dir,
       resource,
       exclusions,

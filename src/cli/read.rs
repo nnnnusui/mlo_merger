@@ -16,9 +16,13 @@ pub struct ReadCommand {
 /// Parses `--read [--resource NAME [--version SHA256] | --vanilla | --all] [--gamebuild BUILD]
 /// [FILE...]`.
 pub fn parser(asset: &Path) -> impl Parser<ReadCommand> + use<> {
-  let command = long("read")
-    .help("Write stream file models as JSON under read-cache, skipping current ones")
-    .req_flag(());
+  options(asset)
+    .to_options()
+    .descr("Write stream file models as JSON under read-cache, skipping current ones")
+    .command("--read")
+}
+
+fn options(asset: &Path) -> impl Parser<ReadCommand> + use<> {
   let resource = long("resource")
     .help("Read from this resource (name or source-relative ID)")
     .argument::<String>("NAME")
@@ -58,7 +62,6 @@ pub fn parser(asset: &Path) -> impl Parser<ReadCommand> + use<> {
     .argument::<String>("SHA256")
     .optional();
   construct!(
-    command,
     target,
     gamebuild,
     source_dir,
@@ -72,7 +75,6 @@ pub fn parser(asset: &Path) -> impl Parser<ReadCommand> + use<> {
   )
   .map(
     |(
-      _,
       target,
       gamebuild,
       source_dir,

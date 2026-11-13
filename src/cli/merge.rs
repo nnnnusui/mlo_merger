@@ -21,7 +21,13 @@ pub struct Merge {
 
 /// Parses `--merge` arguments.
 pub fn parser(asset: &Path) -> impl Parser<Merge> + use<> {
-  let command = long("merge").help("Merge source conflicts into vanilla stream files").req_flag(());
+  options(asset)
+    .to_options()
+    .descr("Merge source conflicts into vanilla stream files")
+    .command("--merge")
+}
+
+fn options(asset: &Path) -> impl Parser<Merge> + use<> {
   let source_dir = short('i')
     .long("input")
     .help("Source resource directory (default: asset/source)")
@@ -37,8 +43,8 @@ pub fn parser(asset: &Path) -> impl Parser<Merge> + use<> {
     .fallback(asset.join("overwrite-cache"));
   let common = common::parser(asset, asset.join("merged"));
   let exclusions = super::generate_source_cache::exclusions_parser();
-  construct!(command, source_dir, overwrite_dir, overwrite_cache_dir, common, exclusions).map(
-    |(_, source_dir, overwrite_dir, overwrite_cache_dir, common, exclusions)| Merge {
+  construct!(source_dir, overwrite_dir, overwrite_cache_dir, common, exclusions).map(
+    |(source_dir, overwrite_dir, overwrite_cache_dir, common, exclusions)| Merge {
       source_dir,
       common,
       exclusions,

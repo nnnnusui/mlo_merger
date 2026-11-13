@@ -15,11 +15,15 @@ pub struct RestoreSourceCache {
 
 /// Parses `--restore-source-cache [RESOURCE...]` arguments.
 pub fn parser(asset: &Path) -> impl Parser<RestoreSourceCache> + use<> {
-  let command = long("restore-source-cache")
-    .help(
+  options(asset)
+    .to_options()
+    .descr(
       "Move active cached files back to their original source paths without overwriting changes",
     )
-    .req_flag(());
+    .command("--restore-source-cache")
+}
+
+fn options(asset: &Path) -> impl Parser<RestoreSourceCache> + use<> {
   let source_dir = short('i')
     .long("input")
     .help("Source resource directory (default: asset/source)")
@@ -33,13 +37,13 @@ pub fn parser(asset: &Path) -> impl Parser<RestoreSourceCache> + use<> {
   let resources = positional::<String>("RESOURCE")
     .help("Restore only these resources (names or source-relative paths)")
     .many();
-  construct!(command, source_dir, cache_dir, yes, resources).map(
-    |(_, source_dir, cache_dir, _, resources)| RestoreSourceCache {
+  construct!(source_dir, cache_dir, yes, resources).map(|(source_dir, cache_dir, _, resources)| {
+    RestoreSourceCache {
       source_dir,
       cache_dir,
       resources,
-    },
-  )
+    }
+  })
 }
 
 /// Restores source files without generating caches, merging or deploying.

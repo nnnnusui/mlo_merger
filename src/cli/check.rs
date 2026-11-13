@@ -6,9 +6,10 @@ use crate::core::check::Check;
 
 /// Parses `--check`, which checks every store against its metadata without changing files.
 pub fn parser(asset: &Path) -> impl Parser<Check> + use<> {
-  let command = long("check")
-    .help("Check every store for files missing from, or not recorded in, its metadata, and broken vanilla-cache links")
-    .req_flag(());
+  options(asset).to_options().descr("Check every store for files missing from, or not recorded in, its metadata, and broken vanilla-cache links").command("--check")
+}
+
+fn options(asset: &Path) -> impl Parser<Check> + use<> {
   let directory = |name: &'static str, help: &'static str, default: &str| {
     long(name).help(help).argument::<PathBuf>("DIR").fallback(asset.join(default))
   };
@@ -42,7 +43,6 @@ pub fn parser(asset: &Path) -> impl Parser<Check> + use<> {
     .fallback(asset.join("merged_mlo"));
   let deep = long("deep").help("Also compare the SHA-256 of every recorded file").switch();
   construct!(
-    command,
     vanilla_dir,
     vanilla_cache_dir,
     source_cache_dir,
@@ -54,7 +54,6 @@ pub fn parser(asset: &Path) -> impl Parser<Check> + use<> {
   )
   .map(
     |(
-      _,
       vanilla_dir,
       vanilla_cache_dir,
       source_cache_dir,

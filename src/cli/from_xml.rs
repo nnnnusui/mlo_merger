@@ -16,11 +16,16 @@ pub struct FromXml {
 
 /// Parses `--from-xml <path>` arguments.
 pub fn parser(asset: &Path) -> impl Parser<FromXml> + use<> {
-  let input = long("from-xml")
-    .help("Convert an XML game file or directory to native files")
-    .argument::<PathBuf>("PATH");
+  options(asset)
+    .to_options()
+    .descr("Convert an XML game file or directory to native files")
+    .command("--from-xml")
+}
+
+fn options(asset: &Path) -> impl Parser<FromXml> + use<> {
+  let input = positional::<PathBuf>("PATH").help("File or directory to convert");
   let common = common::parser(asset, PathBuf::from("."));
-  construct!(input, common).map(|(input, common)| FromXml {
+  construct!(common, input).map(|(common, input)| FromXml {
     input,
     common,
   })

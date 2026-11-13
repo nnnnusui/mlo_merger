@@ -13,15 +13,20 @@ pub struct Deploy {
 
 /// Parses `--deploy` arguments.
 pub fn parser(asset: &Path) -> impl Parser<Deploy> + use<> {
-  let command =
-    long("deploy").help("Copy merged and remaining cached files into a stream layout").req_flag(());
+  options(asset)
+    .to_options()
+    .descr("Copy merged and remaining cached files into a stream layout")
+    .command("--deploy")
+}
+
+fn options(asset: &Path) -> impl Parser<Deploy> + use<> {
   let merged_dir = short('i')
     .long("input")
     .help("Merged directory (default: asset/merged)")
     .argument::<PathBuf>("DIR")
     .fallback(asset.join("merged"));
   let common = common::parser(asset, asset.join("merged_mlo"));
-  construct!(command, merged_dir, common).map(|(_, merged_dir, common)| Deploy {
+  construct!(merged_dir, common).map(|(merged_dir, common)| Deploy {
     merged_dir,
     common,
   })

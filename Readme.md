@@ -91,7 +91,8 @@ Each stream file type is supported at one of three levels:
 | [Convert to and from XML](docs/reference.md#convert-files) | `--to-xml`, `--from-xml` |
 | [Check the stores for inconsistencies](docs/reference.md#check-the-stores) | `--check` |
 
-Run `mlo_merger --help` for every option.
+Run `mlo_merger --help` for the operations, and `mlo_merger --pipeline --help` (or any
+other operation) for its options.
 
 Release archives include the third-party license notices (`THIRD_PARTY_NOTICES.md`) and
 TypeScript types for the JSON files (`asset/gen_mlo_merger.ts`).

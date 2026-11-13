@@ -1,9 +1,10 @@
 # Command Reference
 
-Every operation, its files and its behavior. Run `mlo_merger --help` for the full option
-list and per-command defaults; convenience aliases are in
-[.cargo/config.toml](../.cargo/config.toml). For calling the executable from a FiveM
-resource, see [usage.md](usage.md); for the design, [ARCHITECTURE.md](ARCHITECTURE.md).
+Every operation, its files and its behavior. Run `mlo_merger --help` for the operations and
+`mlo_merger --pipeline --help` (or any other operation) for its options and defaults;
+convenience aliases are in [.cargo/config.toml](../.cargo/config.toml). For calling the
+executable from a FiveM resource, see [usage.md](usage.md); for the design,
+[ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## Pipeline
 

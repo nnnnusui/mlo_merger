@@ -373,9 +373,30 @@ mod tests {
   }
 
   #[test]
-  fn help_renders() {
-    let help = parser().to_options().run_inner(&["--help"]).unwrap_err().unwrap_stdout();
+  fn help_lists_the_operations() {
+    let help = parse_args_from(&["--help"]).unwrap_err();
+    assert!(help.contains("Available commands:"), "{help}");
     assert!(help.contains("--check") && help.contains("--find"), "{help}");
+    assert!(!help.contains("--deep") && !help.contains("--game-dir"), "{help}");
+  }
+
+  #[test]
+  fn operation_help_shows_only_its_options() {
+    let help = parse_args_from(&["--pipeline", "--help"]).unwrap_err();
+    assert!(help.contains("Run the cached pipeline"), "{help}");
+    assert!(help.contains("--game-dir") && !help.contains("--deep"), "{help}");
+    let help = parse_args_from(&["--find", "--help"]).unwrap_err();
+    assert!(help.contains("KIND") && !help.contains("--game-dir"), "{help}");
+  }
+
+  #[test]
+  fn global_options_go_before_or_after_the_operation() {
+    for args in [["--asset", "other", "--check"], ["--check", "--asset", "other"]] {
+      let args = parse_args_from(&args).unwrap();
+      assert_eq!(args.asset, PathBuf::from("other"));
+      assert!(matches!(args.command, Command::Check(_)));
+    }
+    assert!(parse_args_from(&["--check", "--merge"]).is_err());
   }
 
   #[test]

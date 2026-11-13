@@ -19,6 +19,13 @@ pub struct Find {
 
 /// Parses find searches without invoking any pipeline stages.
 pub fn parser(asset: &Path) -> impl Parser<Find> + use<> {
+  options(asset)
+    .to_options()
+    .descr("Search merged files, and with --all their inputs, by entity GUID or position")
+    .command("--find")
+}
+
+fn options(asset: &Path) -> impl Parser<Find> + use<> {
   let defaults = InputStores::under(asset);
   let source_dir = long("source")
     .help("Source resource directory, for --all (default: asset/source)")
@@ -46,7 +53,9 @@ pub fn parser(asset: &Path) -> impl Parser<Find> + use<> {
 }
 
 fn search_parser(asset: &Path) -> impl Parser<Find> + use<> {
-  let kind = long("find").argument::<String>("KIND").guard(
+  let kind = positional::<String>("KIND")
+    .help("entity-guid, entity-position, ybn-position, file-from-position or occlude-position")
+    .guard(
     |kind| {
       matches!(
         kind.as_str(),
@@ -57,8 +66,8 @@ fn search_parser(asset: &Path) -> impl Parser<Find> + use<> {
           | "occlude-position"
       )
     },
-    "Use --find entity-guid, entity-position, ybn-position, file-from-position or occlude-position",
-  );
+      "Use --find entity-guid, entity-position, ybn-position, file-from-position or occlude-position",
+    );
   let merged_dir = short('i')
     .long("input")
     .help("Merged directory (default: asset/merged)")
@@ -81,11 +90,14 @@ fn search_parser(asset: &Path) -> impl Parser<Find> + use<> {
     .help("YBN shape type: box, triangle, sphere, capsule or cylinder (default: all)")
     .argument::<String>("TYPE")
     .optional();
-  let value = any::<String, _, _>("GUID|X,Y,Z", Some);
+  // `any` takes values starting with `-`, such as negative coordinates, but leaves help.
+  let value = any::<String, _, _>("GUID|X,Y,Z", |value| {
+    (!matches!(value.as_str(), "-h" | "--help")).then_some(value)
+  });
   // Replaced by the parsed stores in `parser`.
   let stores = InputStores::under(asset);
-  construct!(kind, merged_dir, filter, all, radius, shape_type, value).parse(
-    move |(kind, merged_dir, filter, all, radius, shape_type, value)| {
+  construct!(merged_dir, filter, all, radius, shape_type, kind, value).parse(
+    move |(merged_dir, filter, all, radius, shape_type, kind, value)| {
       if kind != "ybn-position" && shape_type.is_some() {
         return Err("--type applies only to ybn-position".to_string());
       }

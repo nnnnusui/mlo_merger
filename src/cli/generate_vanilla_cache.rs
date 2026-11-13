@@ -13,11 +13,15 @@ pub struct GenerateVanillaCache {
 
 /// Parses `--generate-vanilla-cache` arguments.
 pub fn parser(asset: &Path) -> impl Parser<GenerateVanillaCache> + use<> {
-  let command = long("generate-vanilla-cache")
-    .help("Build derived vanilla indexes and latest stream files")
-    .req_flag(());
+  options(asset)
+    .to_options()
+    .descr("Build derived vanilla indexes and latest stream files")
+    .command("--generate-vanilla-cache")
+}
+
+fn options(asset: &Path) -> impl Parser<GenerateVanillaCache> + use<> {
   let common = common::parser(asset, asset.join("vanilla-cache"));
-  construct!(command, common).map(|(_, common)| GenerateVanillaCache {
+  common.map(|common| GenerateVanillaCache {
     common,
   })
 }

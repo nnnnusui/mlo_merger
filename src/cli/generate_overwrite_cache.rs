@@ -19,9 +19,10 @@ pub struct GenerateOverwriteCache {
 
 /// Parses `--generate-overwrite-cache` arguments.
 pub fn parser(asset: &Path) -> impl Parser<GenerateOverwriteCache> + use<> {
-  let command = long("generate-overwrite-cache")
-    .help("Build or update what the overwrites call for: the sources of added YMAPs and the overwrite warnings")
-    .req_flag(());
+  options(asset).to_options().descr("Build or update what the overwrites call for: the sources of added YMAPs and the overwrite warnings").command("--generate-overwrite-cache")
+}
+
+fn options(asset: &Path) -> impl Parser<GenerateOverwriteCache> + use<> {
   let source_dir = short('i')
     .long("input")
     .help("Source resource directory (default: asset/source)")
@@ -33,8 +34,8 @@ pub fn parser(asset: &Path) -> impl Parser<GenerateOverwriteCache> + use<> {
     .fallback(asset.join("overwrite"));
   let common = common::parser(asset, asset.join("overwrite-cache"));
   let exclusions = super::generate_source_cache::exclusions_parser();
-  construct!(command, source_dir, overwrite_dir, common, exclusions).map(
-    |(_, source_dir, overwrite_dir, common, exclusions)| GenerateOverwriteCache {
+  construct!(source_dir, overwrite_dir, common, exclusions).map(
+    |(source_dir, overwrite_dir, common, exclusions)| GenerateOverwriteCache {
       source_dir,
       overwrite_dir,
       exclusions,

@@ -17,13 +17,17 @@ pub struct GetDiff {
 
 /// Parses `--get-diff <source> [target]` arguments.
 pub fn parser(asset: &Path) -> impl Parser<GetDiff> + use<> {
-  let command = long("get-diff")
-    .help("Generate a YMAP diff JSON against the latest vanilla baseline")
-    .req_flag(());
+  options(asset)
+    .to_options()
+    .descr("Generate a YMAP diff JSON against the latest vanilla baseline")
+    .command("--get-diff")
+}
+
+fn options(asset: &Path) -> impl Parser<GetDiff> + use<> {
   let common = common::parser(asset, PathBuf::from("."));
   let before = positional::<PathBuf>("SOURCE");
   let after = positional::<PathBuf>("TARGET").optional();
-  construct!(command, common, before, after).map(|(_, common, before, after)| GetDiff {
+  construct!(common, before, after).map(|(common, before, after)| GetDiff {
     before,
     after,
     common,

@@ -17,13 +17,17 @@ pub struct GenerateVanilla {
 
 /// Parses `--generate-vanilla` arguments.
 pub fn parser(asset: &Path) -> impl Parser<GenerateVanilla> + use<> {
-  let command = long("generate-vanilla")
-    .help("Generate versioned vanilla stream files from game archives")
-    .req_flag(());
+  options(asset)
+    .to_options()
+    .descr("Generate versioned vanilla stream files from game archives")
+    .command("--generate-vanilla")
+}
+
+fn options(asset: &Path) -> impl Parser<GenerateVanilla> + use<> {
   let game_dir = short('i').long("input").argument::<PathBuf>("GAME_DIR");
   let magic = magic_parser();
   let common = common::parser(asset, asset.join("vanilla"));
-  construct!(command, game_dir, magic, common).map(|(_, game_dir, magic, common)| GenerateVanilla {
+  construct!(game_dir, magic, common).map(|(game_dir, magic, common)| GenerateVanilla {
     game_dir,
     magic,
     common,

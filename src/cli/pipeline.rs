@@ -25,9 +25,13 @@ pub struct Pipeline {
 
 /// Parses `--pipeline` arguments.
 pub fn parser(asset: &Path) -> impl Parser<Pipeline> + use<> {
-  let command = long("pipeline")
-    .help("Run the cached pipeline: vanilla, caches, merge and deployment")
-    .req_flag(());
+  options(asset)
+    .to_options()
+    .descr("Run the cached pipeline: vanilla, caches, merge and deployment")
+    .command("--pipeline")
+}
+
+fn options(asset: &Path) -> impl Parser<Pipeline> + use<> {
   let source_dir = short('i')
     .long("input")
     .help("Source resource directory (default: asset/source)")
@@ -53,7 +57,6 @@ pub fn parser(asset: &Path) -> impl Parser<Pipeline> + use<> {
   let common = common::parser(asset, asset.join("merged_mlo"));
   let exclusions = super::generate_source_cache::exclusions_parser();
   construct!(
-    command,
     source_dir,
     game_dir,
     magic,
@@ -65,7 +68,6 @@ pub fn parser(asset: &Path) -> impl Parser<Pipeline> + use<> {
   )
   .map(
     |(
-      _,
       source_dir,
       game_dir,
       magic,

@@ -54,8 +54,9 @@ The examples below copy it to `shared/gen_mlo_merger.ts`.
 
 Start the executable from server-side code with `spawn` (spawnProcess).
 
-- Always pass an operation flag. Without arguments the executable opens the vanilla
-  generator GUI; run the pipeline as `mlo_merger --pipeline`.
+- Always pass an operation flag, followed by its options. Without arguments the executable
+  opens the vanilla generator GUI; run the pipeline as `mlo_merger --pipeline`. `--asset`,
+  `--config` and `--log-dir` go before or after the operation and its options.
 - Set the working directory to the directory containing `asset/`. Every path
   below, and every command default, is relative to it. `--asset DIR` puts every default
   under `DIR` instead of `asset/`; an option given for one path still overrides its
