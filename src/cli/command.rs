@@ -48,7 +48,7 @@ pub enum Command {
   /// Compare two stream files.
   GetDiff(GetDiff),
   /// Write stream file models as JSON.
-  Read(crate::core::read::Read),
+  Read(read::ReadCommand),
 }
 
 fn parser() -> impl Parser<Command> {
@@ -85,11 +85,14 @@ fn parser() -> impl Parser<Command> {
   ])
 }
 
-/// The executable's command line: one operation and where the run's log file goes.
+/// The executable's command line: one operation, the config file it reads and where the
+/// run's log file goes.
 #[derive(Debug, Clone)]
 pub struct Args {
   /// Directory the run's log file is written to.
   pub log_dir: std::path::PathBuf,
+  /// Config file for tolerances and game builds.
+  pub config: std::path::PathBuf,
   /// The operation to run.
   pub command: Command,
 }
@@ -99,8 +102,17 @@ fn args_parser() -> impl Parser<Args> {
     .help("Directory the run's log file is written to (default: asset/log)")
     .argument::<std::path::PathBuf>("DIR")
     .fallback(std::path::PathBuf::from("asset/log"));
+  let config = long("config")
+    .help("Config file for tolerances and game builds (default: asset/config.toml)")
+    .argument::<std::path::PathBuf>("FILE")
+    .guard(|path| path.is_file(), "--config must name an existing file")
+    .fallback(std::path::PathBuf::from("asset/config.toml"));
   let command = parser();
-  construct!(Args { log_dir, command })
+  construct!(Args {
+    log_dir,
+    config,
+    command
+  })
 }
 
 /// Parses the executable's command-line arguments.
@@ -191,6 +203,18 @@ mod tests {
       let args = args_parser().to_options().run_inner(argv.as_slice()).unwrap();
       assert_eq!(args.log_dir, PathBuf::from("logs"), "{argv:?}");
     }
+  }
+
+  #[test]
+  fn config_defaults_to_asset_config_and_requires_an_existing_file() {
+    let args = args_parser().to_options().run_inner(&["--pipeline"]).unwrap();
+    assert_eq!(args.config, PathBuf::from("asset/config.toml"));
+    let args =
+      args_parser().to_options().run_inner(&["--pipeline", "--config", "Cargo.toml"]).unwrap();
+    assert_eq!(args.config, PathBuf::from("Cargo.toml"));
+    assert!(
+      args_parser().to_options().run_inner(&["--pipeline", "--config", "missing.toml"]).is_err()
+    );
   }
 
   #[test]

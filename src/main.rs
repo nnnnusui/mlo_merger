@@ -17,6 +17,7 @@ fn main() {
 
 fn run_cli() -> Result<(), Box<dyn std::error::Error>> {
   let args = parse_args();
+  mlo_merger::core::config::set_path(args.config);
   let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
   let terminal =
     log::tree_layer(std::io::stderr, std::io::stderr().is_terminal()).with_filter(filter);

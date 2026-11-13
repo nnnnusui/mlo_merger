@@ -168,7 +168,7 @@ pub(crate) fn with_config<T>(operation: impl FnOnce() -> T) -> io::Result<T> {
   if ACTIVE.with(Cell::get).is_some() {
     return Ok(operation());
   }
-  Ok(with_tolerances(MatchTolerances::load(Path::new("asset/config.toml"))?, operation))
+  Ok(with_tolerances(MatchTolerances::load(super::path())?, operation))
 }
 
 #[cfg(test)]

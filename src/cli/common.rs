@@ -1,4 +1,4 @@
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use bpaf::*;
 
@@ -25,14 +25,14 @@ pub struct CommonOptions {
   pub step_names: Vec<String>,
 }
 
-/// Resolves `--gamebuild` against `[gamebuild]` in `asset/config.toml`.
+/// Resolves `--gamebuild` against `[gamebuild]` in the config file.
 pub(crate) fn gamebuild(
   requested: Option<&str>
 ) -> Result<Option<GameBuild>, Box<dyn std::error::Error>> {
   let Some(requested) = requested else {
     return Ok(None);
   };
-  Ok(Some(GameBuilds::load(Path::new("asset/config.toml"))?.resolve(requested)?))
+  Ok(Some(GameBuilds::load(crate::core::config::path())?.resolve(requested)?))
 }
 
 /// Parses paths and execution controls shared by CLI commands.
@@ -55,7 +55,7 @@ pub fn parser(default_output: PathBuf) -> impl Parser<CommonOptions> {
     .argument::<PathBuf>("DIR")
     .fallback(PathBuf::from("asset/source-cache"));
   let gamebuild = long("gamebuild")
-    .help("Game build the vanilla cache targets: a build number or DLC name from [gamebuild] in asset/config.toml")
+    .help("Game build the vanilla cache targets: a build number or DLC name from [gamebuild] in the config file")
     .argument::<String>("BUILD")
     .optional();
   let force = short('f').long("force").help("Force regeneration of this operation").switch();

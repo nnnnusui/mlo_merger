@@ -108,8 +108,9 @@ server `GetGameBuildNumber()` returns `0`, so a client has to send the value.
   latest installed stage.
 - Pass the same value to every run. A run without it, or with another build, rebuilds the
   vanilla cache for that build.
-- A build that is not listed under `[gamebuild]` in `asset/config.toml` uses the closest
-  listed build below it and logs a warning; add it there when FiveM supports a new build.
+- A build that is not listed under `[gamebuild]` in `asset/config.toml` (or the file given
+  to `--config`) uses the closest listed build below it and logs a warning; add it there
+  when FiveM supports a new build.
 
 ```typescript
 // server/merger.ts

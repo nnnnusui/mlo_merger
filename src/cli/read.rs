@@ -4,11 +4,18 @@ use bpaf::*;
 
 use crate::core::read::{Read, ReadTarget};
 
+/// A parsed `--read`, whose `--gamebuild` is resolved when it runs.
+#[derive(Debug, Clone)]
+pub struct ReadCommand {
+  /// The read, without its game build.
+  pub read: Read,
+  /// `--gamebuild` as given.
+  pub gamebuild: Option<String>,
+}
+
 /// Parses `--read [--resource NAME [--version SHA256] | --vanilla | --all] [--gamebuild BUILD]
 /// [FILE...]`.
-///
-/// `--gamebuild` is resolved against `[gamebuild]` in `asset/config.toml` as it is parsed.
-pub fn parser() -> impl Parser<Read> {
+pub fn parser() -> impl Parser<ReadCommand> {
   let command = long("read")
     .help("Write stream file models as JSON under read-cache, skipping current ones")
     .req_flag(());
@@ -20,9 +27,8 @@ pub fn parser() -> impl Parser<Read> {
   let all = long("all").help("Read every resource and vanilla").req_flag(ReadTarget::All);
   let target = construct!([resource, vanilla, all]).fallback(ReadTarget::Everywhere);
   let gamebuild = long("gamebuild")
-    .help("Read vanilla as of this game build: a build number or DLC name from [gamebuild] in asset/config.toml (default: the vanilla cache's)")
+    .help("Read vanilla as of this game build: a build number or DLC name from [gamebuild] in the config file (default: the vanilla cache's)")
     .argument::<String>("BUILD")
-    .parse(|requested| super::common::gamebuild(Some(&requested)).map(Option::unwrap))
     .optional();
   let files = positional::<String>("FILE").many();
   let source_dir = long("source")
@@ -77,24 +83,31 @@ pub fn parser() -> impl Parser<Read> {
       force,
       version,
       files,
-    )| Read {
-      target,
-      files,
-      source_dir,
-      source_cache_dir,
-      vanilla_dir,
-      vanilla_cache_dir,
+    )| ReadCommand {
+      read: Read {
+        target,
+        files,
+        source_dir,
+        source_cache_dir,
+        vanilla_dir,
+        vanilla_cache_dir,
+        gamebuild: None,
+        output_dir,
+        force,
+        version,
+      },
       gamebuild,
-      output_dir,
-      force,
-      version,
     },
   )
 }
 
 /// Writes the JSON and prints what was read as one line of JSON.
-pub fn run(command: Read) -> Result<String, Box<dyn std::error::Error>> {
-  Ok(format!("{}\n", serde_json::to_string(&command.run()?)?))
+pub fn run(command: ReadCommand) -> Result<String, Box<dyn std::error::Error>> {
+  let read = Read {
+    gamebuild: super::common::gamebuild(command.gamebuild.as_deref())?,
+    ..command.read
+  };
+  Ok(format!("{}\n", serde_json::to_string(&read.run()?)?))
 }
 
 #[cfg(test)]
@@ -102,7 +115,7 @@ mod tests {
   use super::*;
 
   fn parse(args: &[&str]) -> Read {
-    parser().to_options().run_inner(args).unwrap()
+    parser().to_options().run_inner(args).unwrap().read
   }
 
   #[test]
@@ -150,11 +163,19 @@ mod tests {
   }
 
   #[test]
-  fn gamebuild_is_resolved_against_the_shipped_config() {
-    let read = parse(&["--read", "--vanilla", "--gamebuild", "xm18", "--vanilla-cache", "c"]);
-    assert_eq!(read.gamebuild.unwrap().build, 1604);
-    assert_eq!(read.vanilla_cache_dir, PathBuf::from("c"));
-    assert_eq!(parse(&["--read", "a.ymap", "--gamebuild", "2802"]).gamebuild.unwrap().build, 2802);
-    assert!(parser().to_options().run_inner(&["--read", "--gamebuild", "nothing"]).is_err());
+  fn gamebuild_is_kept_as_given() {
+    let command = parser()
+      .to_options()
+      .run_inner(&["--read", "--vanilla", "--gamebuild", "xm18", "--vanilla-cache", "c"])
+      .unwrap();
+    assert_eq!(command.gamebuild.as_deref(), Some("xm18"));
+    assert_eq!(command.read.vanilla_cache_dir, PathBuf::from("c"));
+    assert!(parse(&["--read", "a.ymap"]).gamebuild.is_none());
+  }
+
+  #[test]
+  fn an_unknown_gamebuild_fails_the_run() {
+    let command = parser().to_options().run_inner(&["--read", "--gamebuild", "nothing"]).unwrap();
+    assert!(run(command).unwrap_err().to_string().contains("Unknown gamebuild: nothing"));
   }
 }
