@@ -65,7 +65,7 @@ Start the executable from server-side code with `spawn` (spawnProcess).
   line of JSON.
 - stderr carries progress logs and errors. The same log is written to
   `asset/log/mlo_merger_{timestamp}.log`, which is only created when the run logs
-  something.
+  something. `--log-dir` sets its directory.
 - A failed command exits with code `1`; its last stderr line is the error.
 - Commands never prompt. Pipeline commands also accept `-y`.
 

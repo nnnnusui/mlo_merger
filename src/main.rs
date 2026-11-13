@@ -1,5 +1,5 @@
 use mlo_merger::cli::command::{parse_args, run};
-use std::{io::IsTerminal, path::Path};
+use std::io::IsTerminal;
 use tracing_subscriber::{EnvFilter, Layer, layer::SubscriberExt, util::SubscriberInitExt};
 
 mod gui;
@@ -16,14 +16,15 @@ fn main() {
 }
 
 fn run_cli() -> Result<(), Box<dyn std::error::Error>> {
+  let args = parse_args();
   let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
   let terminal =
     log::tree_layer(std::io::stderr, std::io::stderr().is_terminal()).with_filter(filter);
-  let (file, guard) = log::file_writer(log::log_file_path(Path::new("asset/log")));
+  let (file, guard) = log::file_writer(log::log_file_path(&args.log_dir));
   let file = log::tree_layer(file, false).with_filter(EnvFilter::new("info,mlo_merger=debug"));
   tracing_subscriber::registry().with(terminal).with(file).try_init()?;
 
-  let result = run(parse_args());
+  let result = run(args.command);
   // Flush the background log writer; `process::exit` skips destructors.
   drop(guard);
   result

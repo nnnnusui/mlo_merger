@@ -85,9 +85,27 @@ fn parser() -> impl Parser<Command> {
   ])
 }
 
-/// Parses command-line arguments into one operation.
-pub fn parse_args() -> Command {
-  parser().to_options().run()
+/// The executable's command line: one operation and where the run's log file goes.
+#[derive(Debug, Clone)]
+pub struct Args {
+  /// Directory the run's log file is written to.
+  pub log_dir: std::path::PathBuf,
+  /// The operation to run.
+  pub command: Command,
+}
+
+fn args_parser() -> impl Parser<Args> {
+  let log_dir = long("log-dir")
+    .help("Directory the run's log file is written to (default: asset/log)")
+    .argument::<std::path::PathBuf>("DIR")
+    .fallback(std::path::PathBuf::from("asset/log"));
+  let command = parser();
+  construct!(Args { log_dir, command })
+}
+
+/// Parses the executable's command-line arguments.
+pub fn parse_args() -> Args {
+  args_parser().to_options().run()
 }
 
 /// Parses `args`, which leave out the executable name, as the command line would.
@@ -163,6 +181,17 @@ pub fn run(command: Command) -> Result<(), Box<dyn std::error::Error>> {
 mod tests {
   use super::*;
   use std::path::PathBuf;
+
+  #[test]
+  fn log_dir_defaults_to_asset_log_and_accepts_a_path() {
+    let args = args_parser().to_options().run_inner(&["--pipeline"]).unwrap();
+    assert_eq!(args.log_dir, PathBuf::from("asset/log"));
+    assert!(matches!(args.command, Command::Pipeline(_)));
+    for argv in [["--log-dir", "logs", "--pipeline"], ["--pipeline", "--log-dir", "logs"]] {
+      let args = args_parser().to_options().run_inner(argv.as_slice()).unwrap();
+      assert_eq!(args.log_dir, PathBuf::from("logs"), "{argv:?}");
+    }
+  }
 
   #[test]
   fn restore_source_cache_parses_defaults_and_custom_paths() {
