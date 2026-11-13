@@ -1,7 +1,7 @@
-//! The process the library runs in: its working directory and identifier.
+//! The process the library runs in: its working directory, identifier and executable.
 //!
 //! The browser page has no process. There the working directory is a virtual one in the page's
-//! filesystem, `/` at first, and the identifier is a constant.
+//! filesystem, `/` at first, the identifier is a constant, and there is no executable.
 
 #[cfg(not(target_arch = "wasm32"))]
 use std::{
@@ -27,8 +27,15 @@ pub fn id() -> u32 {
   std::process::id()
 }
 
+/// The directory holding the running executable, with symbolic links resolved.
+#[cfg(not(target_arch = "wasm32"))]
+pub fn executable_dir() -> Option<PathBuf> {
+  let executable = std::env::current_exe().ok()?.canonicalize().ok()?;
+  executable.parent().map(Path::to_path_buf)
+}
+
 #[cfg(target_arch = "wasm32")]
-pub use web::{current_dir, id, set_current_dir};
+pub use web::{current_dir, executable_dir, id, set_current_dir};
 
 #[cfg(target_arch = "wasm32")]
 mod web {
@@ -62,5 +69,10 @@ mod web {
   /// A constant: the page runs a single process.
   pub fn id() -> u32 {
     1
+  }
+
+  /// None: the page has no executable.
+  pub fn executable_dir() -> Option<PathBuf> {
+    None
   }
 }

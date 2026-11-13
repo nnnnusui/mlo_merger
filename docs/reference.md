@@ -343,8 +343,9 @@ supports a new one.
 ## Matching Configuration
 
 Merge and diff-cache operations read [asset/config.toml](../asset/config.toml) once per
-operation. `--config` names another file; it applies to every command, `--gamebuild`
-included.
+operation, or `mlo_merger.toml` next to the executable when `asset/config.toml` is missing.
+Release archives ship the config as that `mlo_merger.toml`. `--config` names another file; it
+applies to every command, `--gamebuild` included.
 
 The tolerances keep rounding from passing for a change. Tools round values differently when
 they save a file: CodeWalker and OpenIV, for example, write the same position with slightly

@@ -54,10 +54,7 @@ pub fn run() -> Result<(), Box<dyn Error>> {
 ///
 /// Falls back to the working directory when the executable path is unavailable.
 fn base_dir() -> PathBuf {
-  std::env::current_exe()
-    .ok()
-    .and_then(|exe| exe.canonicalize().ok())
-    .and_then(|exe| exe.parent().map(PathBuf::from))
+  mlo_merger::platform::process::executable_dir()
     .or_else(|| std::env::current_dir().ok())
     .unwrap_or_else(|| PathBuf::from("."))
 }

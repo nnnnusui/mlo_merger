@@ -1,3 +1,4 @@
+use crate::platform::{fs, process};
 use bpaf::*;
 use std::{
   ffi::{OsStr, OsString},
@@ -124,6 +125,22 @@ fn asset_dir<'a>(args: impl IntoIterator<Item = &'a OsStr>) -> PathBuf {
   PathBuf::from("asset")
 }
 
+/// The name of the config file next to the executable.
+pub const EXECUTABLE_CONFIG: &str = "mlo_merger.toml";
+
+/// `config.toml` in `asset` when it is there, otherwise [`EXECUTABLE_CONFIG`] next to the
+/// executable when that is there, otherwise `config.toml` in `asset`.
+fn default_config(asset: &Path) -> PathBuf {
+  let in_asset = asset.join("config.toml");
+  if fs::is_file(&in_asset) {
+    return in_asset;
+  }
+  process::executable_dir()
+    .map(|directory| directory.join(EXECUTABLE_CONFIG))
+    .filter(|path| fs::is_file(path))
+    .unwrap_or(in_asset)
+}
+
 fn parser(asset: &Path) -> impl Parser<Args> + use<> {
   let asset_option = long("asset")
     .help("Directory the asset/ defaults of every path are under (default: asset)")
@@ -134,10 +151,10 @@ fn parser(asset: &Path) -> impl Parser<Args> + use<> {
     .argument::<PathBuf>("DIR")
     .fallback(asset.join("log"));
   let config = long("config")
-    .help("Config file for tolerances and game builds (default: asset/config.toml)")
+    .help("Config file for tolerances and game builds (default: asset/config.toml, or mlo_merger.toml next to the executable without it)")
     .argument::<PathBuf>("FILE")
-    .guard(|path| path.is_file(), "--config must name an existing file")
-    .fallback(asset.join("config.toml"));
+    .guard(|path| fs::is_file(path), "--config must name an existing file")
+    .fallback(default_config(asset));
   let command = commands(asset);
   construct!(Args {
     asset(asset_option),
@@ -287,6 +304,18 @@ mod tests {
     assert_eq!(merge.common.output, PathBuf::from("other/merged"));
     let args = parse_args_from(&["--read", "--", "--asset"]).unwrap();
     assert_eq!(args.asset, PathBuf::from("asset"));
+  }
+
+  #[test]
+  fn default_config_prefers_the_asset_config() {
+    let root = std::env::temp_dir().join(format!("default_config_{}", std::process::id()));
+    let _ = fs::remove_dir_all(&root);
+    fs::create_dir_all(&root).unwrap();
+    // The test executable's directory holds no mlo_merger.toml.
+    assert_eq!(default_config(&root), root.join("config.toml"));
+    fs::write(root.join("config.toml"), "").unwrap();
+    assert_eq!(default_config(&root), root.join("config.toml"));
+    fs::remove_dir_all(root).unwrap();
   }
 
   #[test]

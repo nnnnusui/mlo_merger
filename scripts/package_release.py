@@ -4,8 +4,9 @@
   package_release.py check TAG
       fails unless TAG is v followed by Cargo.toml's version
   package_release.py platform TARGET TAG
-      packages target/TARGET/release's executable, the documents, notices/ and
-      asset/gen_mlo_merger.ts as dist/mlo_merger-TARGET.{zip,tar.gz}
+      packages target/TARGET/release's executable, asset/config.toml as mlo_merger.toml,
+      the documents, notices/ and asset/gen_mlo_merger.ts as
+      dist/mlo_merger-TARGET.{zip,tar.gz}
   package_release.py all
       combines dist/'s platform archives and the browser build in web-build/ into
       dist/mlo_merger-all-TAG.zip, whose top directory is mlo_merger-all
@@ -30,11 +31,13 @@ TARGETS = ROOT / ".github" / "release-targets.json"
 
 # Files every platform archive ships next to the executable.
 DOCUMENTS = (
-    "Readme.md", "LICENSE.md", "asset/config.toml",
+    "Readme.md", "LICENSE.md",
     "docs/ARCHITECTURE.md", "docs/TODO.md", "docs/usage.md",
     "docs/reference.md", "docs/development.md", "docs/web.md",
-    ".cargo/config.toml", "asset/gen_mlo_merger.ts",
+    "asset/gen_mlo_merger.ts",
 )
+# The config the executable reads when asset/config.toml is missing, next to it.
+CONFIG = ("asset/config.toml", "mlo_merger.toml")
 NOTICES = ("third_party_notices.json", "THIRD_PARTY_NOTICES.md")
 
 
@@ -79,6 +82,8 @@ def platform(target, tag):
         destination = package / filename
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(ROOT / filename, destination)
+    source, name = CONFIG
+    shutil.copy2(ROOT / source, package / name)
     for filename in NOTICES:
         shutil.copy2(ROOT / "notices" / filename, package)
     dist = ROOT / "dist"
