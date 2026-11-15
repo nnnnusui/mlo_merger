@@ -336,3 +336,15 @@ lossless handling of large JavaScript numbers.
 
 Usage: [Readme](../Readme.md), [command reference](reference.md).
 Remaining work: [TODO.md](TODO.md).
+
+## Clothing Collection
+
+Clothing collection is an independent workflow (`--generate-vanilla-clothing`),
+owned by `clothing/vanilla`, with its own `vanilla-clothing` archive. It shares
+vanilla's RPF traversal, DLC order and versioned publication, selecting raw
+`CPedVariationInfo` YMTs for every Ped by root type. Same-name overlays and
+unchanged-file reuse follow vanilla generation.
+
+The clothing archive lists every stage in `cache_info.json`, creates stage and
+`ymt/` directories only for additions or replacements, and names the final stage
+with an empty `latest_version-{version_id}` marker at its root.

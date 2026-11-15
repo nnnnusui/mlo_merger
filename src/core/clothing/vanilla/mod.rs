@@ -1,0 +1,93 @@
+//! Versioned raw Ped variation YMTs from base game, title updates and DLC archives.
+
+use std::{io, path::PathBuf};
+
+use crate::core::{
+  format::gamefile::{meta::MetaResource, resource::Resource, xml_tree::parse_xml},
+  vanilla::{BuildVanillaArchive, FileSelection},
+};
+
+#[cfg(test)]
+mod tests;
+
+pub(crate) const FILES: FileSelection = FileSelection {
+  extensions: &["ymt"],
+  accepts: is_ped_variation,
+};
+
+/// Collects all Ped clothing and appearance variation definitions, including NPCs.
+#[derive(Debug, Clone)]
+pub struct GenerateVanillaClothing {
+  /// Installed GTA V Legacy directory.
+  pub game_dir: PathBuf,
+  /// Output archive, normally `asset/vanilla-clothing`.
+  pub output_dir: PathBuf,
+  /// CodeWalker's `magic.dat`, used with GTA5.exe to decrypt the archives.
+  pub magic: PathBuf,
+}
+
+impl GenerateVanillaClothing {
+  /// Extracts raw `CPedVariationInfo` YMTs in vanilla stage order.
+  ///
+  /// Same-name overlays, unchanged-file reuse and output replacement follow vanilla
+  /// generation. This collects definitions, not drawable or texture assets.
+  ///
+  /// ```no_run
+  /// mlo_merger::core::clothing::vanilla::GenerateVanillaClothing {
+  ///   game_dir: "/mnt/gtav".into(), output_dir: "asset/vanilla-clothing".into(),
+  ///   magic: "magic.dat".into(),
+  /// }.run()?;
+  /// # Ok::<(), Box<dyn std::error::Error>>(())
+  /// ```
+  pub fn run(&self) -> Result<(), Box<dyn std::error::Error>> {
+    BuildVanillaArchive {
+      game_dir: self.game_dir.clone(),
+      output_dir: self.output_dir.clone(),
+      magic: self.magic.clone(),
+      files: FILES,
+    }
+    .run()
+  }
+}
+
+/// Classifies by root type, not Ped filenames or archive paths, which differ across DLCs.
+/// RBF needs only its root descriptor here; the collected payload is kept raw.
+fn is_ped_variation(bytes: &[u8]) -> io::Result<bool> {
+  const ROOT: &str = "CPedVariationInfo";
+  const HASH: u32 = crate::core::format::gamefile::meta::jenk_hash(ROOT);
+  match bytes.get(..4) {
+    Some(b"RSC7") | Some(b"PSIN") => match Resource::decode(bytes)? {
+      Resource::Rsc7(resource) => {
+        let meta = MetaResource::parse(&resource)?;
+        let index = meta
+          .root_block_index
+          .checked_sub(1)
+          .and_then(|index| usize::try_from(index).ok())
+          .ok_or_else(|| invalid("YMT META root block is invalid"))?;
+        let root =
+          meta.data_blocks.get(index).ok_or_else(|| invalid("YMT META root block is missing"))?;
+        Ok(root.structure_name_hash == HASH)
+      }
+      Resource::Pso(resource) => Ok(resource.root_type_hash()? == HASH),
+    },
+    Some(b"RBF0") => {
+      if bytes.get(4..6) != Some(&[0, 0]) {
+        return Err(invalid("YMT RBF root descriptor is invalid"));
+      }
+      let length = bytes.get(6..8).ok_or_else(|| invalid("YMT RBF root is truncated"))?;
+      let length = usize::from(u16::from_le_bytes([length[0], length[1]]));
+      let name =
+        bytes.get(8..8 + length).ok_or_else(|| invalid("YMT RBF root name is truncated"))?;
+      Ok(name == ROOT.as_bytes())
+    }
+    _ => {
+      let xml = std::str::from_utf8(bytes)
+        .map_err(|_| invalid("Cannot classify unsupported binary YMT format"))?;
+      Ok(parse_xml(xml.trim_start_matches('\u{feff}'))?.name == ROOT)
+    }
+  }
+}
+
+fn invalid(message: &str) -> io::Error {
+  io::Error::new(io::ErrorKind::InvalidData, message)
+}

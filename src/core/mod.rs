@@ -1,4 +1,5 @@
 pub mod check;
+pub mod clothing;
 #[cfg(feature = "codewalker")]
 pub mod codewalker;
 pub mod config;

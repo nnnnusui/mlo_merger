@@ -184,6 +184,7 @@ fn cache_manifest_requires_schema_one_and_root_metadata() {
 
 #[test]
 fn stages_store_only_changed_raw_files_and_resolve_prior_versions() {
+  let extensions = FileSelection::MAPS.extensions;
   let root = std::env::temp_dir().join(format!("vanilla_cache_test_{}", std::process::id()));
   fs::create_dir_all(&root).unwrap();
   let _cleanup = Staging(root.clone());
@@ -207,11 +208,11 @@ fn stages_store_only_changed_raw_files_and_resolve_prior_versions() {
       root.clone(),
     )
   };
-  stage(&mut manifest, &mut current, &root, "base", || {
+  stage(&mut manifest, &mut current, &root, "base", extensions, || {
     Ok((vec![], vec![file("a.ymap", "111", "first"), file("b.ymap", "111", "first")]))
   })
   .unwrap();
-  stage(&mut manifest, &mut current, &root, "dlc", || {
+  stage(&mut manifest, &mut current, &root, "dlc", extensions, || {
     Ok((
       vec![],
       vec![
@@ -222,7 +223,7 @@ fn stages_store_only_changed_raw_files_and_resolve_prior_versions() {
     ))
   })
   .unwrap();
-  stage(&mut manifest, &mut current, &root, "empty", || Ok((vec![], vec![]))).unwrap();
+  stage(&mut manifest, &mut current, &root, "empty", extensions, || Ok((vec![], vec![]))).unwrap();
   assert_eq!(manifest.versions[1].changes.len(), 2);
   assert_eq!(manifest.versions[1].changes["a.ymap"].previous_sha256.as_deref(), Some("111"));
   assert_eq!(manifest.versions[1].changes["c.ymap"].previous_sha256, None);
@@ -250,14 +251,15 @@ fn stages_store_only_changed_raw_files_and_resolve_prior_versions() {
     assert!(!root.join(&version.id).join("ybn").exists());
     assert!(!root.join(&version.id).join("native").exists());
   }
-  stage(&mut manifest, &mut current, &root, "next", || {
+  stage(&mut manifest, &mut current, &root, "next", extensions, || {
     Ok((vec![], vec![file("a.ymap", "333", "third")]))
   })
   .unwrap();
   assert_eq!(manifest.versions[3].changes["a.ymap"].previous_sha256.as_deref(), Some("222"));
   assert_eq!(fs::read(root.join("0003-next/ymap/a.ymap")).unwrap(), b"third map version");
-  let failed =
-    stage(&mut manifest, &mut current, &root, "failed", || Err("test extraction failure".into()));
+  let failed = stage(&mut manifest, &mut current, &root, "failed", extensions, || {
+    Err("test extraction failure".into())
+  });
   assert!(failed.is_err());
   assert!(!root.join("0004-failed/create_cache.log").exists());
 }
@@ -267,6 +269,7 @@ fn stages_cache_raw_ybn_replacements_and_ymap_files() {
   use crate::core::format::ybn::xml::xml_to_ybn;
   use sha2::{Digest, Sha256};
 
+  let extensions = FileSelection::MAPS.extensions;
   let root = std::env::temp_dir().join(format!("gtav_ybn_stages_{}", std::process::id()));
   fs::create_dir(&root).unwrap();
   let _cleanup = Staging(root.clone());
@@ -297,15 +300,15 @@ fn stages_cache_raw_ybn_replacements_and_ymap_files() {
     versions: vec![],
   };
   let mut current = BTreeMap::new();
-  stage(&mut manifest, &mut current, &root, "base", || {
+  stage(&mut manifest, &mut current, &root, "base", extensions, || {
     Ok((vec![], vec![file("same.ybn", "before.ybn"), file("same.ymap", "fake.ymap")]))
   })
   .unwrap();
-  stage(&mut manifest, &mut current, &root, "patch", || {
+  stage(&mut manifest, &mut current, &root, "patch", extensions, || {
     Ok((vec![], vec![file("same.ybn", "after.ybn"), file("new.ybn", "after.ybn")]))
   })
   .unwrap();
-  stage(&mut manifest, &mut current, &root, "unchanged", || {
+  stage(&mut manifest, &mut current, &root, "unchanged", extensions, || {
     Ok((vec![], vec![file("same.ybn", "after.ybn")]))
   })
   .unwrap();
@@ -449,18 +452,19 @@ fn publication_keeps_empty_versions_in_metadata_without_stage_directories() {
     versions: vec![],
   };
   let mut current = BTreeMap::new();
-  stage(&mut manifest, &mut current, &build, "base", || Ok((vec![], vec![]))).unwrap();
+  let extensions = FileSelection::MAPS.extensions;
+  stage(&mut manifest, &mut current, &build, "base", extensions, || Ok((vec![], vec![]))).unwrap();
   let file = ExtractedFile {
     name: "map.ymap".into(),
     source: "fixture.rpf/map.ymap".into(),
     stored: "map.ymap".into(),
     sha256: hex::encode(Sha256::digest(b"raw map")),
   };
-  stage(&mut manifest, &mut current, &build, "update", || {
+  stage(&mut manifest, &mut current, &build, "update", extensions, || {
     Ok((vec!["fixture.rpf".into()], vec![(file.clone(), root.clone())]))
   })
   .unwrap();
-  stage(&mut manifest, &mut current, &build, "unchanged", || {
+  stage(&mut manifest, &mut current, &build, "unchanged", extensions, || {
     Ok((vec!["fixture.rpf".into()], vec![(file, root.clone())]))
   })
   .unwrap();

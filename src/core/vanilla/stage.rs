@@ -11,11 +11,12 @@ use super::{
   manifest::{CacheVersion, CachedFile, FileChange, VanillaCacheManifest},
 };
 
-pub(super) fn stage(
+pub(crate) fn stage(
   manifest: &mut VanillaCacheManifest,
   current: &mut BTreeMap<String, CachedFile>,
   output: &Path,
   label: &str,
+  extensions: &[&str],
   files: impl FnOnce() -> Result<(Vec<String>, Vec<(ExtractedFile, PathBuf)>)>,
 ) -> Result<()> {
   let id = format!("{:04}-{label}", manifest.versions.len());
@@ -28,8 +29,10 @@ pub(super) fn stage(
     tracing::info!("Processing archives: {}", archives.join(", "));
     let mut winners = BTreeMap::new();
     for (file, directory) in files {
-      if file.name.ends_with(".ymap") || file.name.ends_with(".ybn") {
-        if file.name.contains(['/', '\\']) || matches!(file.name.as_str(), ".ymap" | ".ybn") {
+      if let Some((stem, extension)) = file.name.rsplit_once('.')
+        && extensions.contains(&extension)
+      {
+        if file.name.contains(['/', '\\']) || stem.is_empty() {
           return Err(format!("Invalid native basename: {}", file.name).into());
         }
         if let Some((previous, _)) = winners.get(&file.name) {
@@ -56,7 +59,10 @@ pub(super) fn stage(
         continue;
       }
       let input = directory.join(&file.stored);
-      let family = if name.ends_with(".ybn") { "ybn" } else { "ymap" };
+      let family = Path::new(&name)
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .ok_or_else(|| format!("Invalid native basename: {name}"))?;
       let object = format!("{id}/{family}/{name}");
       let destination = output.join(&object);
       if let Some(previous) = previous {

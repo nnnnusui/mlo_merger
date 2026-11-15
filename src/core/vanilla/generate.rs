@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 use super::{
   Result,
   archives::{
-    DlcList, base_archives, dlc_archive, dlc_subpack, extract, game_path, patch_dlc,
+    DlcList, FileSelection, base_archives, dlc_archive, dlc_subpack, extract, game_path, patch_dlc,
     platform_archives, sub_pack_count,
   },
   hash_index::write_hash_index,
@@ -28,6 +28,8 @@ pub struct BuildVanillaArchive {
   pub output_dir: PathBuf,
   /// CodeWalker's `magic.dat`, decoded with the key in GTA5.exe.
   pub magic: PathBuf,
+  /// Raw file families and content predicate for this archive.
+  pub files: FileSelection,
 }
 
 impl BuildVanillaArchive {
@@ -64,6 +66,7 @@ impl BuildVanillaArchive {
     build: &Path,
     output_dir: &Path,
   ) -> Result<()> {
+    let extensions = self.files.extensions;
     let mut manifest = VanillaCacheManifest {
       format_version: 1,
       game_dir: game_dir.into(),
@@ -72,11 +75,12 @@ impl BuildVanillaArchive {
     let mut current = BTreeMap::new();
     let mut rpf_names = BTreeSet::new();
     let base_dir = scratch.join("base");
-    stage(&mut manifest, &mut current, build, "base", || {
+    stage(&mut manifest, &mut current, build, "base", extensions, || {
       let mut files = Vec::new();
       for relative in &roots {
         let directory = base_dir.join(relative);
-        let extracted = extract(keys, game_dir, relative, &directory, None, &mut rpf_names)?;
+        let extracted =
+          extract(keys, game_dir, relative, &directory, None, &mut rpf_names, self.files)?;
         files.extend(
           extracted
             .into_iter()
@@ -91,8 +95,16 @@ impl BuildVanillaArchive {
     let update_dir = scratch.join("update");
     let mut update = Vec::new();
     let mut dlc_items = Vec::new();
-    stage(&mut manifest, &mut current, build, "update", || {
-      update = extract(keys, game_dir, "update/update.rpf", &update_dir, None, &mut rpf_names)?;
+    stage(&mut manifest, &mut current, build, "update", extensions, || {
+      update = extract(
+        keys,
+        game_dir,
+        "update/update.rpf",
+        &update_dir,
+        None,
+        &mut rpf_names,
+        self.files,
+      )?;
       let list = update
         .iter()
         .find(|file| file.source == "update/update.rpf/common/data/dlclist.xml")
@@ -129,7 +141,7 @@ impl BuildVanillaArchive {
     let mut platform_index = None;
     for (item, relative, label) in dlc_stages {
       let directory = scratch.join("dlc");
-      stage(&mut manifest, &mut current, build, &label, || {
+      stage(&mut manifest, &mut current, build, &label, extensions, || {
         let (physical, subtree) =
           if relative.starts_with("x64/") && game_path(game_dir, Path::new(&relative)).is_err() {
             if platform_index.is_none() {
@@ -144,8 +156,15 @@ impl BuildVanillaArchive {
           } else {
             (relative.clone(), None)
           };
-        let extracted =
-          extract(keys, game_dir, &physical, &directory, subtree.as_deref(), &mut rpf_names)?;
+        let extracted = extract(
+          keys,
+          game_dir,
+          &physical,
+          &directory,
+          subtree.as_deref(),
+          &mut rpf_names,
+          self.files,
+        )?;
         // Subpacks are mounted with the pack, after its dlc.rpf, as CodeWalker does.
         let sub_packs = if subtree.is_none() { sub_pack_count(&extracted, &directory)? } else { 0 };
         let mut files: Vec<_> =
@@ -158,7 +177,8 @@ impl BuildVanillaArchive {
             continue;
           }
           let sub_directory = directory.join(format!("dlc{index}"));
-          let extracted = extract(keys, game_dir, &sub_pack, &sub_directory, None, &mut rpf_names)?;
+          let extracted =
+            extract(keys, game_dir, &sub_pack, &sub_directory, None, &mut rpf_names, self.files)?;
           files.extend(extracted.into_iter().map(|file| (file, sub_directory.clone())));
           sub_pack_archives.push(sub_pack);
         }

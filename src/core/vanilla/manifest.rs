@@ -41,7 +41,7 @@ pub struct CacheVersion {
   pub parent: Option<String>,
   /// Archives contributing to this stage, in overlay order.
   pub archives: Vec<String>,
-  /// Case-insensitive YMAP/YBN filenames added or replaced at this stage.
+  /// Lowercase filenames of the selected extensions added or replaced at this stage.
   pub changes: BTreeMap<String, FileChange>,
   /// Number of filenames whose content matched the preceding cumulative stage.
   #[serde(default)]

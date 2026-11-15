@@ -13,9 +13,16 @@ mod publication;
 mod stage;
 mod versions;
 
+pub(crate) use archives::FileSelection;
+#[cfg(test)]
+pub(crate) use archives::{extract, sub_pack_count};
 pub(crate) use check::check;
 pub(crate) use generate::BuildVanillaArchive;
 pub use manifest::{CacheVersion, CachedFile, FileChange, VanillaCacheManifest};
+#[cfg(test)]
+pub(crate) use publication::Staging;
+#[cfg(test)]
+pub(crate) use stage::stage;
 pub use versions::{ListVanillaVersions, VanillaVersionChange, VanillaVersionEntry};
 
 pub(crate) use io::{read_ymap, write_json};
@@ -87,6 +94,7 @@ impl GenerateVanilla {
       game_dir: self.game_dir.clone(),
       output_dir: self.output_dir.clone(),
       magic: self.magic.clone(),
+      files: FileSelection::MAPS,
     }
     .run()
   }

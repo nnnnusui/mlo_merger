@@ -580,3 +580,37 @@ are arrays. File sizes and timestamps are JSON numbers, represented as TypeScrip
   rebuilding cannot grow arrays or allocated strings; RBF YMT is unsupported.
 - Matching XML or stable rebuilds does not establish in-game load safety. Validate
   generated resources in the target game environment.
+
+## Vanilla Clothing
+
+### Collecting Definitions
+
+`--generate-vanilla-clothing` collects clothing and appearance variation YMTs for
+all Peds, including protagonists, NPCs and online freemode Peds, from the base game,
+title updates and ordered DLCs, including subpacks and DLC patches. It is independent
+of the map merge pipeline and defaults to `asset/vanilla-clothing`.
+
+```bash
+mlo_merger --generate-vanilla-clothing -i /mnt/gtav --magic magic.dat
+```
+
+YMTs are selected by their `CPedVariationInfo` root type in RSC7 META, PSO, RBF
+or XML, not their filename or directory. Drawable and texture assets and other
+YMT types are outside this collection. Classification errors stop extraction with
+the source path in the error.
+
+### Archive Layout
+
+Files are stored in their raw format as `{version}/ymt/{filename}`.
+
+The archive follows vanilla's versioned layout: metadata records additions,
+replacements, hashes and original RPF paths, while unchanged files reuse earlier
+stages. Within a stage, the last processed same-name definition wins; differing
+contents produce a warning. `-o` changes the output directory, which explicit
+generation replaces.
+
+The clothing archive retains every version in `cache_info.json`. A stage with no
+additions or replacements has no directory; `ymt/` is created only for files
+written at that stage.
+An empty `latest_version-{version_id}` file at the root identifies the final
+listed stage, including one with no file changes. Regeneration replaces the marker.

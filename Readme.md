@@ -90,6 +90,8 @@ Each stream file type is supported at one of three levels:
 | [Write YMAP models as JSON](docs/reference.md#read-stream-file-models) | `--read` |
 | [Convert to and from XML](docs/reference.md#convert-files) | `--to-xml`, `--from-xml` |
 | [Check the stores for inconsistencies](docs/reference.md#check-the-stores) | `--check` |
+|||
+| [Collect vanilla and DLC clothing definitions](docs/reference.md#vanilla-clothing) | `--generate-vanilla-clothing` |
 
 Run `mlo_merger --help` for the operations, and `mlo_merger --pipeline --help` (or any
 other operation) for its options.

@@ -20,16 +20,21 @@ pub struct PsoStruct<'a> {
 }
 
 impl PsoResource {
+  /// The embedded root type hash, without decoding its fields or resolving names.
+  pub(crate) fn root_type_hash(&self) -> io::Result<u32> {
+    self
+      .blocks
+      .get(self.root.checked_sub(1).ok_or_else(|| invalid("PSO has no root block"))?)
+      .map(|block| block.name)
+      .ok_or_else(|| invalid("PSO root block is out of range"))
+  }
+
   /// Returns the root structure, resolving hashes through `names` (see [`Self::names`]).
   pub fn root_struct<'a>(
     &'a self,
     names: &'a HashNames<'a>,
   ) -> io::Result<PsoStruct<'a>> {
-    let kind = self
-      .blocks
-      .get(self.root.checked_sub(1).ok_or_else(|| invalid("PSO has no root block"))?)
-      .ok_or_else(|| invalid("PSO root block is out of range"))?
-      .name;
+    let kind = self.root_type_hash()?;
     PsoStruct::new(self, names, self.root, 0, kind, 0)
   }
 }

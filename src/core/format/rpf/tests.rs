@@ -3,7 +3,7 @@ use std::io::{Read, Write};
 use super::*;
 
 /// Builds an OPEN (unencrypted table of contents) archive whose root holds `entries`.
-fn fixture(entries: &[(&str, &[u8], bool)]) -> Vec<u8> {
+pub(crate) fn fixture(entries: &[(&str, &[u8], bool)]) -> Vec<u8> {
   let mut names = vec![0];
   let mut offsets = vec![];
   for (name, _, _) in entries {

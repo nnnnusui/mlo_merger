@@ -1,4 +1,5 @@
 pub mod check;
+pub mod clothing;
 pub mod command;
 pub mod common;
 pub mod deploy;

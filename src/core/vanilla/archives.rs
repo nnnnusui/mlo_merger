@@ -10,12 +10,26 @@ use std::path::{Path, PathBuf};
 use super::Result;
 use crate::core::format::rpf::{RpfArchive, RpfFile, RpfKeys};
 
+/// The raw file families to scan and the content predicate applied before storing them.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct FileSelection {
+  pub(crate) extensions: &'static [&'static str],
+  pub(crate) accepts: fn(&[u8]) -> std::io::Result<bool>,
+}
+
+impl FileSelection {
+  pub(crate) const MAPS: Self = Self {
+    extensions: &["ymap", "ybn"],
+    accepts: |_| Ok(true),
+  };
+}
+
 #[derive(Debug, Clone)]
-pub(super) struct ExtractedFile {
-  pub(super) name: String,
-  pub(super) source: String,
-  pub(super) stored: String,
-  pub(super) sha256: String,
+pub(crate) struct ExtractedFile {
+  pub(crate) name: String,
+  pub(crate) source: String,
+  pub(crate) stored: String,
+  pub(crate) sha256: String,
 }
 
 #[derive(Deserialize)]
@@ -47,7 +61,7 @@ struct ValueAttribute {
 /// taken from has, as its `setup2.xml` declares; `directory` holds the extracted files. Packs
 /// such as `mpheist4` keep most of their maps in subpacks, which the game, and CodeWalker,
 /// mount with the pack.
-pub(super) fn sub_pack_count(
+pub(crate) fn sub_pack_count(
   extracted: &[ExtractedFile],
   directory: &Path,
 ) -> Result<u32> {
@@ -119,18 +133,19 @@ pub(crate) fn game_path(
   Ok(path)
 }
 
-/// Extracts YMAPs, YBNs, dlclist.xml and a root setup2.xml recursively into `output`, preserving
+/// Extracts selected extensions, dlclist.xml and a root setup2.xml recursively into `output`, preserving
 /// archive provenance, and collects every entry's name stem into `rpf_names`.
 ///
 /// `subtree` limits extraction to one nested archive's full virtual path. Files are
 /// numbered in table-of-contents order, each archive's own files before its children's.
-pub(super) fn extract(
+pub(crate) fn extract(
   keys: &RpfKeys,
   game_dir: &Path,
   relative: &str,
   output: &Path,
   subtree: Option<&str>,
   rpf_names: &mut BTreeSet<String>,
+  selection: FileSelection,
 ) -> Result<Vec<ExtractedFile>> {
   tracing::info!("Scanning {relative}");
   let path = game_path(game_dir, Path::new(relative))?;
@@ -148,10 +163,11 @@ pub(super) fn extract(
         rpf_names.insert(name.to_owned());
         rpf_names.insert(name.to_lowercase());
       }
-      if file.path.ends_with(".ymap")
-        || file.path.ends_with(".ybn")
-        || file.path.ends_with("/common/data/dlclist.xml")
-        || (file.path.matches('/').count() == 1 && file.path.ends_with("/setup2.xml"))
+      if file
+        .path
+        .rsplit_once('.')
+        .is_some_and(|(_, extension)| selection.extensions.contains(&extension))
+        || traversal_metadata(&file.path)
       {
         selected.push((archive, file));
       }
@@ -164,11 +180,16 @@ pub(super) fn extract(
     .enumerate()
     .map_init(
       || File::open(&path),
-      |file, (index, (archive, entry))| -> std::result::Result<ExtractedFile, String> {
+      |file, (index, (archive, entry))| -> std::result::Result<Option<ExtractedFile>, String> {
         let file = file.as_mut().map_err(|error| format!("{}: {error}", path.display()))?;
         let data = archive
           .extract(file, entry, keys)
           .map_err(|error| format!("Could not extract {}: {error}", entry.path))?;
+        if !traversal_metadata(&entry.path)
+          && !(selection.accepts)(&data).map_err(|error| format!("{}: {error}", entry.path))?
+        {
+          return Ok(None);
+        }
         let name = entry.name_lower();
         let extension = Path::new(&name)
           .extension()
@@ -176,16 +197,22 @@ pub(super) fn extract(
         let stored = format!("{index:08}{extension}");
         fs::write(output.join(&stored), &data).map_err(|error| format!("{stored}: {error}"))?;
         let (_, inner) = entry.path.split_once('/').ok_or("Invalid extracted RPF entry path")?;
-        Ok(ExtractedFile {
+        Ok(Some(ExtractedFile {
           name,
           source: format!("{relative}/{inner}"),
           stored,
           sha256: hex::encode(Sha256::digest(&data)),
-        })
+        }))
       },
     )
-    .collect::<std::result::Result<_, _>>()
+    .collect::<std::result::Result<Vec<_>, _>>()
+    .map(|files| files.into_iter().flatten().collect())
     .map_err(Into::into)
+}
+
+fn traversal_metadata(path: &str) -> bool {
+  path.ends_with("/common/data/dlclist.xml")
+    || (path.matches('/').count() == 1 && path.ends_with("/setup2.xml"))
 }
 
 pub(super) fn patch_dlc(source: &str) -> Option<&str> {
