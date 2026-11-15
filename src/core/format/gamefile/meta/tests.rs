@@ -72,3 +72,64 @@ fn rebuilds_embedded_meta_tables_in_rsc7() {
     }
   }
 }
+
+/// Ped variation YMTs carry 16-bit enums with named values and flags whose enums the file
+/// does not embed; both round-trip through XML.
+#[test]
+fn xml_rebuild_reads_named_short_enums_and_empty_unavailable_flags() {
+  use super::xml::meta_from_xml;
+  use super::{
+    MetaEnumEntry, MetaEnumInfo, MetaSchemaCatalog, MetaStructureEntry, MetaStructureInfo,
+  };
+  use crate::core::format::gamefile::meta::jenk_hash;
+
+  let entry =
+    |name: &str, data_type: u8, data_offset: u32, reference_key: u32| MetaStructureEntry {
+      name_hash: jenk_hash(name),
+      data_offset,
+      data_type,
+      unknown: 0,
+      reference_type_index: 0,
+      reference_key,
+    };
+  let mut catalog = MetaSchemaCatalog::default();
+  catalog.structures.insert(
+    jenk_hash("CTestInfo"),
+    MetaStructureInfo {
+      name_hash: jenk_hash("CTestInfo"),
+      structure_key: 1,
+      unknown_8: 0,
+      unknown_12: 0,
+      unknown_28: 0,
+      structure_size: 8,
+      entries: vec![
+        entry("kind", 0x64, 0, jenk_hash("ETestKind")),
+        // The flags enum is not embedded, as for ped-variation inclusions/exclusions.
+        entry("inclusions", 0x63, 4, 0),
+      ],
+    },
+  );
+  catalog.enums.insert(
+    jenk_hash("ETestKind"),
+    MetaEnumInfo {
+      name_hash: jenk_hash("ETestKind"),
+      enum_key: 1,
+      unknown_20: 0,
+      entries: vec![MetaEnumEntry {
+        name_hash: 0x451A_F524,
+        value: 3,
+      }],
+    },
+  );
+  let meta =
+    meta_from_xml("<CTestInfo><kind>hash_451AF524</kind><inclusions /></CTestInfo>", &catalog)
+      .unwrap();
+  let root = &meta.data_blocks[meta.root_block_index as usize - 1];
+  assert_eq!(i16::from_le_bytes(root.data[0..2].try_into().unwrap()), 3);
+  assert_eq!(i32::from_le_bytes(root.data[4..8].try_into().unwrap()), 0);
+  // A named value of a missing flags enum still fails rather than dropping flags.
+  let error =
+    meta_from_xml("<CTestInfo><kind>0</kind><inclusions>FLAG_A</inclusions></CTestInfo>", &catalog)
+      .unwrap_err();
+  assert!(error.to_string().contains("enum 00000000"), "{error}");
+}

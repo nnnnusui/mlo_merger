@@ -88,7 +88,7 @@ fn build_structure(
       0x01 => data[offset] = u8::from(parse_bool(child)?),
       0x10 => copy_at(&mut data, offset, &(parse_i32(child)? as i8).to_le_bytes())?,
       0x11 | 0x60 => data[offset] = parse_i32(child)? as u8,
-      0x12 | 0x64 => copy_at(&mut data, offset, &(parse_i32(child)? as i16).to_le_bytes())?,
+      0x12 => copy_at(&mut data, offset, &(parse_i32(child)? as i16).to_le_bytes())?,
       0x13 => copy_at(&mut data, offset, &(parse_i32(child)? as u16).to_le_bytes())?,
       0x14 => copy_at(&mut data, offset, &parse_i32(child)?.to_le_bytes())?,
       0x15 => copy_at(&mut data, offset, &parse_u32(child)?.to_le_bytes())?,
@@ -339,12 +339,18 @@ fn parse_enum(
   if let Ok(number) = value.parse::<i32>() {
     return Ok(number);
   }
-  let enum_info = enums
-    .get(&enum_hash)
-    .ok_or_else(|| invalid_data(&format!("META enum {enum_hash:08X} is unavailable")))?;
   if matches!(data_type, 0x63 | 0x65) {
+    let tokens: Vec<_> =
+      value.split(',').map(str::trim).filter(|token| !token.is_empty()).collect();
+    // Decoding writes the flags of an unavailable enum as empty text; read back as no flags.
+    if tokens.is_empty() {
+      return Ok(0);
+    }
+    let enum_info = enums
+      .get(&enum_hash)
+      .ok_or_else(|| invalid_data(&format!("META enum {enum_hash:08X} is unavailable")))?;
     let mut flags = 0i32;
-    for token in value.split(',').map(str::trim).filter(|token| !token.is_empty()) {
+    for token in tokens {
       let hash = parse_name_hash(token)?;
       let item = enum_info
         .entries
@@ -357,6 +363,9 @@ fn parse_enum(
     }
     Ok(flags)
   } else {
+    let enum_info = enums
+      .get(&enum_hash)
+      .ok_or_else(|| invalid_data(&format!("META enum {enum_hash:08X} is unavailable")))?;
     let hash = parse_name_hash(&value)?;
     enum_info
       .entries
