@@ -56,7 +56,7 @@ Start the executable from server-side code with `spawn` (spawnProcess).
 
 - Always pass an operation flag, followed by its options. Without arguments the executable
   opens the vanilla generator GUI; run the pipeline as `mlo_merger --pipeline`. `--asset`,
-  `--config` and `--log-dir` go before or after the operation and its options.
+  `--config`, `--log-dir` and `--no-log-file` go before or after the operation and its options.
 - Set the working directory to the directory containing `asset/`. Every path
   below, and every command default, is relative to it. `--asset DIR` puts every default
   under `DIR` instead of `asset/`; an option given for one path still overrides its
@@ -68,7 +68,7 @@ Start the executable from server-side code with `spawn` (spawnProcess).
   line of JSON.
 - stderr carries progress logs, warnings and errors; detailed merge and YMAP comparison logs
   are written only to `asset/log/mlo_merger_{timestamp}.log`. The log file is only created
-  when the run logs something. `--log-dir` sets its directory.
+  when the run logs something. `--log-dir` sets its directory; `--no-log-file` disables it.
 - A failed command exits with code `1`; its last stderr line is the error.
 - Commands never prompt. Pipeline commands also accept `-y`.
 

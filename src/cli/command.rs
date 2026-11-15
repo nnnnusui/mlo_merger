@@ -105,6 +105,8 @@ pub struct Args {
   pub asset: PathBuf,
   /// Directory the run's log file is written to.
   pub log_dir: PathBuf,
+  /// Whether to disable writing a log file.
+  pub no_log_file: bool,
   /// Config file for tolerances and game builds.
   pub config: PathBuf,
   /// The operation to run.
@@ -155,6 +157,7 @@ fn parser(asset: &Path) -> impl Parser<Args> + use<> {
     .help("Directory the run's log file is written to (default: asset/log)")
     .argument::<PathBuf>("DIR")
     .fallback(asset.join("log"));
+  let no_log_file = long("no-log-file").help("Do not write a log file").switch();
   let config = long("config")
     .help("Config file for tolerances and game builds (default: asset/config.toml, or mlo_merger.toml next to the executable without it)")
     .argument::<PathBuf>("FILE")
@@ -164,6 +167,7 @@ fn parser(asset: &Path) -> impl Parser<Args> + use<> {
   construct!(Args {
     asset(asset_option),
     log_dir,
+    no_log_file,
     config,
     command
   })
@@ -264,10 +268,19 @@ mod tests {
   fn log_dir_defaults_to_asset_log_and_accepts_a_path() {
     let args = args_parser().to_options().run_inner(&["--pipeline"]).unwrap();
     assert_eq!(args.log_dir, PathBuf::from("asset/log"));
+    assert!(!args.no_log_file);
     assert!(matches!(args.command, Command::Pipeline(_)));
     for argv in [["--log-dir", "logs", "--pipeline"], ["--pipeline", "--log-dir", "logs"]] {
       let args = args_parser().to_options().run_inner(argv.as_slice()).unwrap();
       assert_eq!(args.log_dir, PathBuf::from("logs"), "{argv:?}");
+    }
+  }
+
+  #[test]
+  fn no_log_file_option_is_available_before_or_after_operation() {
+    for argv in [&["--no-log-file", "--pipeline"][..], &["--pipeline", "--no-log-file"][..]] {
+      let args = args_parser().to_options().run_inner(argv).unwrap();
+      assert!(args.no_log_file, "{argv:?}");
     }
   }
 

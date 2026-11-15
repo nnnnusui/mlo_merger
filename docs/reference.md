@@ -32,8 +32,9 @@ else on stderr.
 | Deployment | `asset/merged_mlo` | `-o` |
 
 Every command takes `--asset DIR`, which puts each default under `DIR` instead of `asset/`,
-including the config file (`--config`) and the log directory (`--log-dir`). A path given by
-its own option is used as given: `--asset other --source-cache cache` reads
+including the config file (`--config`) and the log directory (`--log-dir`). Use
+`--no-log-file` to disable the run's log file. A path given by its own option is used as
+given: `--asset other --source-cache cache` reads
 `other/vanilla-cache` and `cache`.
 
 Overlapping artifact directories are rejected. The source root can contain them: for
