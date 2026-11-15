@@ -18,7 +18,7 @@ pub struct GenerateVanillaClothing {
   pub common: CommonOptions,
 }
 
-/// Parses `--generate-vanilla-clothing` arguments.
+/// Parses `--clothing --generate-vanilla` arguments.
 pub fn parser(asset: &Path) -> impl Parser<GenerateVanillaClothing> + use<> {
   let game_dir = short('i').long("input").argument::<PathBuf>("GAME_DIR");
   let magic = magic_parser();
@@ -31,7 +31,7 @@ pub fn parser(asset: &Path) -> impl Parser<GenerateVanillaClothing> + use<> {
     })
     .to_options()
     .descr("Collect vanilla and DLC clothing and appearance variation YMTs for all Peds")
-    .command("--generate-vanilla-clothing")
+    .command("--generate-vanilla")
 }
 
 /// Collects the raw clothing archive through the core workflow.

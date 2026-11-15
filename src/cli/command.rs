@@ -7,10 +7,7 @@ use std::{
 
 use super::{
   check,
-  clothing::generate_vanilla::{self as generate_vanilla_clothing, GenerateVanillaClothing},
-  clothing::generate_vanilla_cache::{
-    self as generate_vanilla_clothing_cache, GenerateVanillaClothingCache,
-  },
+  clothing::{self, Clothing},
   deploy::{self, Deploy},
   find::{self, Find},
   from_xml::{self, FromXml},
@@ -33,10 +30,8 @@ pub enum Command {
   Pipeline(Pipeline),
   /// Extract raw, versioned vanilla stream files.
   GenerateVanilla(GenerateVanilla),
-  /// Collect raw clothing and appearance definitions for every vanilla and DLC Ped.
-  GenerateVanillaClothing(GenerateVanillaClothing),
-  /// Count clothing definitions per vanilla stage.
-  GenerateVanillaClothingCache(GenerateVanillaClothingCache),
+  /// Collect and count vanilla and DLC clothing data (`--clothing`).
+  Clothing(Clothing),
   /// Build derived vanilla indexes and latest files.
   GenerateVanillaCache(GenerateVanillaCache),
   /// Build source resource conflict data.
@@ -66,10 +61,7 @@ pub enum Command {
 
 fn commands(asset: &Path) -> impl Parser<Command> + use<> {
   let generate_vanilla = generate_vanilla::parser(asset).map(Command::GenerateVanilla);
-  let generate_vanilla_clothing =
-    generate_vanilla_clothing::parser(asset).map(Command::GenerateVanillaClothing);
-  let generate_vanilla_clothing_cache =
-    generate_vanilla_clothing_cache::parser(asset).map(Command::GenerateVanillaClothingCache);
+  let clothing = clothing::parser(asset).map(Command::Clothing);
   let generate_vanilla_cache =
     generate_vanilla_cache::parser(asset).map(Command::GenerateVanillaCache);
   let generate_source_cache =
@@ -88,8 +80,7 @@ fn commands(asset: &Path) -> impl Parser<Command> + use<> {
   let pipeline = pipeline::parser(asset).map(Command::Pipeline);
   construct!([
     generate_vanilla,
-    generate_vanilla_clothing,
-    generate_vanilla_clothing_cache,
+    clothing,
     generate_vanilla_cache,
     generate_source_cache,
     generate_overwrite_cache,
@@ -231,10 +222,7 @@ pub fn stdout(args: Args) -> Output {
   match args.command {
     Command::Pipeline(command) => pipeline::run(command).into(),
     Command::GenerateVanilla(command) => generate_vanilla::run(command).into(),
-    Command::GenerateVanillaClothing(command) => generate_vanilla_clothing::run(command).into(),
-    Command::GenerateVanillaClothingCache(command) => {
-      generate_vanilla_clothing_cache::run(command).into()
-    }
+    Command::Clothing(command) => clothing::run(command).into(),
     Command::GenerateVanillaCache(command) => generate_vanilla_cache::run(command).into(),
     Command::GenerateSourceCache(command) => generate_source_cache::run(command).into(),
     Command::GenerateOverwriteCache(command) => generate_overwrite_cache::run(command).into(),
@@ -563,9 +551,9 @@ mod tests {
   }
 
   #[test]
-  fn clothing_generation_has_its_own_output_and_accepts_paths() {
-    let Command::GenerateVanillaClothing(command) =
-      parser().to_options().run_inner(&["--generate-vanilla-clothing", "-i", "game"]).unwrap()
+  fn clothing_operations_nest_under_the_clothing_command() {
+    let Command::Clothing(Clothing::GenerateVanilla(command)) =
+      parser().to_options().run_inner(&["--clothing", "--generate-vanilla", "-i", "game"]).unwrap()
     else {
       panic!("Expected clothing generation command")
     };
@@ -574,45 +562,39 @@ mod tests {
     let args = parse_args_from(&[
       "--asset",
       "other",
-      "--generate-vanilla-clothing",
+      "--clothing",
+      "--generate-vanilla",
       "-i",
       "game",
       "--magic",
       "keys/magic.dat",
     ])
     .unwrap();
-    let Command::GenerateVanillaClothing(command) = args.command else {
+    let Command::Clothing(Clothing::GenerateVanilla(command)) = args.command else {
       panic!("Expected clothing generation command")
     };
     assert_eq!(command.common.output, PathBuf::from("other/vanilla-clothing"));
     assert_eq!(command.game_dir, PathBuf::from("game"));
     assert_eq!(command.magic, PathBuf::from("keys/magic.dat"));
-    let Command::GenerateVanillaClothing(command) = parser()
+    let Command::Clothing(Clothing::GenerateVanilla(command)) = parser()
       .to_options()
-      .run_inner(&["--generate-vanilla-clothing", "-i", "game", "-o", "clothes"])
+      .run_inner(&["--clothing", "--generate-vanilla", "-i", "game", "-o", "clothes"])
       .unwrap()
     else {
       panic!("Expected clothing generation command")
     };
     assert_eq!(command.common.output, PathBuf::from("clothes"));
-    let Command::GenerateVanillaClothingCache(command) =
-      parser().to_options().run_inner(&["--generate-vanilla-clothing-cache"]).unwrap()
+    let Command::Clothing(Clothing::GenerateVanillaCache(command)) =
+      parser().to_options().run_inner(&["--clothing", "--generate-vanilla-cache"]).unwrap()
     else {
       panic!("Expected clothing cache command")
     };
     assert_eq!(command.clothing_dir, PathBuf::from("asset/vanilla-clothing"));
     assert_eq!(command.output, PathBuf::from("asset/vanilla-clothing-cache"));
     assert!(!command.force);
-    let Command::GenerateVanillaClothingCache(command) = parser()
+    let Command::Clothing(Clothing::GenerateVanillaCache(command)) = parser()
       .to_options()
-      .run_inner(&[
-        "--generate-vanilla-clothing-cache",
-        "--clothing",
-        "archive",
-        "-o",
-        "counts",
-        "-f",
-      ])
+      .run_inner(&["--clothing", "--generate-vanilla-cache", "-i", "archive", "-o", "counts", "-f"])
       .unwrap()
     else {
       panic!("Expected clothing cache command")
@@ -620,6 +602,14 @@ mod tests {
     assert_eq!(command.clothing_dir, PathBuf::from("archive"));
     assert_eq!(command.output, PathBuf::from("counts"));
     assert!(command.force);
+    // The former top-level spellings are no longer commands.
+    for args in [
+      vec!["--generate-vanilla-clothing", "-i", "game"],
+      vec!["--generate-vanilla-clothing-cache"],
+      vec!["--clothing"],
+    ] {
+      assert!(parser().to_options().run_inner(args.as_slice()).is_err(), "{args:?}");
+    }
   }
 
   #[test]

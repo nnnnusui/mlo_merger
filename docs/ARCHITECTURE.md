@@ -339,7 +339,7 @@ Remaining work: [TODO.md](TODO.md).
 
 ## Clothing Collection
 
-Clothing collection is an independent workflow (`--generate-vanilla-clothing`),
+Clothing collection is an independent workflow (`--clothing --generate-vanilla`),
 owned by `clothing/vanilla`, with its own `vanilla-clothing` archive. It shares
 vanilla's RPF traversal, DLC order and versioned publication, selecting raw
 `CPedVariationInfo` YMTs for every Ped by root type. Same-name overlays and
@@ -349,7 +349,7 @@ The clothing archive lists every stage in `cache_info.json`, creates stage and
 `ymt/` directories only for additions or replacements, and names the final stage
 with an empty `latest_version-{version_id}` marker at its root.
 
-A derived counts cache (`--generate-vanilla-clothing-cache`, owned by
+A derived counts cache (`--clothing --generate-vanilla-cache`, owned by
 `clothing/cache`) reads each stage's changed YMTs through the shared structure
 readers, whichever container holds them, and records drawables and textures per
 component slot and props per anchor, with per-stage summaries. It is tied to the

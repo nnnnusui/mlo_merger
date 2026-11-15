@@ -40,4 +40,4 @@ Source-cache diff documents currently cover YMAPs against the latest vanilla onl
 
 ## Clothing Collection (`asset/vanilla-clothing`)
 
-- [x] Collect raw clothing and appearance variation YMTs for all vanilla and DLC Peds with `--generate-vanilla-clothing`, using a versioned archive layout.
+- [x] Collect raw clothing and appearance variation YMTs for all vanilla and DLC Peds with `--clothing --generate-vanilla`, using a versioned archive layout.

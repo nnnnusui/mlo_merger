@@ -13,9 +13,10 @@ pub struct GenerateVanillaClothingCache {
   pub force: bool,
 }
 
-/// Parses `--generate-vanilla-clothing-cache` arguments.
+/// Parses `--clothing --generate-vanilla-cache` arguments.
 pub fn parser(asset: &Path) -> impl Parser<GenerateVanillaClothingCache> + use<> {
-  let clothing_dir = long("clothing")
+  let clothing_dir = short('i')
+    .long("input")
     .help("Clothing archive directory (default: asset/vanilla-clothing)")
     .argument::<PathBuf>("DIR")
     .fallback(asset.join("vanilla-clothing"));
@@ -33,7 +34,7 @@ pub fn parser(asset: &Path) -> impl Parser<GenerateVanillaClothingCache> + use<>
     })
     .to_options()
     .descr("Count clothing definitions per vanilla stage from the clothing archive")
-    .command("--generate-vanilla-clothing-cache")
+    .command("--generate-vanilla-cache")
 }
 
 /// Counts the clothing archive through the core workflow.

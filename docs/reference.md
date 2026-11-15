@@ -585,13 +585,13 @@ are arrays. File sizes and timestamps are JSON numbers, represented as TypeScrip
 
 ### Collecting Definitions
 
-`--generate-vanilla-clothing` collects clothing and appearance variation YMTs for
+`--clothing --generate-vanilla` collects clothing and appearance variation YMTs for
 all Peds, including protagonists, NPCs and online freemode Peds, from the base game,
 title updates and ordered DLCs, including subpacks and DLC patches. It is independent
 of the map merge pipeline and defaults to `asset/vanilla-clothing`.
 
 ```bash
-mlo_merger --generate-vanilla-clothing -i /mnt/gtav --magic magic.dat
+mlo_merger --clothing --generate-vanilla -i /mnt/gtav --magic magic.dat
 ```
 
 YMTs are selected by their `CPedVariationInfo` root type in RSC7 META, PSO, RBF
@@ -617,11 +617,11 @@ listed stage, including one with no file changes. Regeneration replaces the mark
 
 ### Derived Counts
 
-`--generate-vanilla-clothing-cache` counts each stage's clothing definitions into
-`asset/vanilla-clothing-cache` (`--clothing` selects the archive, `-o` the output).
+`--clothing --generate-vanilla-cache` counts each stage's clothing definitions into
+`asset/vanilla-clothing-cache` (`-i` selects the archive, `-o` the output).
 
 ```bash
-mlo_merger --generate-vanilla-clothing-cache
+mlo_merger --clothing --generate-vanilla-cache
 ```
 
 Each changed YMT is counted whole: drawables and textures per component slot
