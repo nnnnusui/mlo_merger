@@ -67,7 +67,7 @@ pub(super) fn refresh_source_timestamps(
   }
   use std::io::Write;
   let mut writer = std::io::BufWriter::new(fs::File::create(metadata_path)?);
-  serde_json::to_writer_pretty(&mut writer, &metadata)?;
+  serde_json::to_writer(&mut writer, &metadata)?;
   writer.flush()?;
   Ok(())
 }

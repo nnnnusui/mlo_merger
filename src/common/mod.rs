@@ -36,8 +36,10 @@ mod tests {
     let source = root.join("input.json");
     let read =
       |path: &PathBuf| serde_json::from_slice::<serde_json::Value>(&fs::read(path).unwrap());
-    let value = serde_json::json!({"resource": "maps", "files": ["map.ymap"]});
+    let value = serde_json::json!({"resource": "maps\nwith spaces", "files": ["map.ymap"]});
     json::write_json(&source, &value).unwrap();
+    let bytes = fs::read(&source).unwrap();
+    assert_eq!(bytes, br#"{"files":["map.ymap"],"resource":"maps\nwith spaces"}"#);
     assert_eq!(read(&source).unwrap(), value);
     let before = fingerprint::Fingerprint::read(&source, None, false).unwrap();
     assert_eq!(fingerprint::Fingerprint::read(&source, Some(&before), false).unwrap(), before);

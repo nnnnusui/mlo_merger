@@ -94,7 +94,7 @@ pub(super) fn write_json(
   value: &impl Serialize,
 ) -> Result<()> {
   let mut writer = BufWriter::new(fs::File::create(path)?);
-  serde_json::to_writer_pretty(&mut writer, value)?;
+  serde_json::to_writer(&mut writer, value)?;
   writer.flush()?;
   Ok(())
 }

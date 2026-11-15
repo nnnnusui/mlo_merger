@@ -94,11 +94,11 @@ impl ListVanillaVersions {
     Ok(result)
   }
 
-  /// Writes the ordered change list as a JSON array on stdout without changing the cache.
+  /// Writes the ordered change list as a compact JSON array on one stdout line without changing the cache.
   pub fn run(&self) -> Result<()> {
     let versions = self.versions()?;
     let mut output = std::io::stdout().lock();
-    serde_json::to_writer_pretty(&mut output, &versions)?;
+    serde_json::to_writer(&mut output, &versions)?;
     writeln!(output)?;
     output.flush()?;
     Ok(())

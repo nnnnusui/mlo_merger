@@ -29,7 +29,8 @@ as the source root. Source discovery skips deployments, identified by
 `deploy_cache_info.json`.
 
 Each stage retains its own freshness and prerequisite checks and writes the JSON
-records the next stage needs. A single stage runs through its own operation
+records the next stage needs. Generated JSON is compact and single-line; use `jq .`
+to format it for inspection. A single stage runs through its own operation
 (`--generate-vanilla`, `--generate-vanilla-cache`, `--generate-source-cache`,
 `--generate-overwrite-cache`, `--merge`, `--deploy`), which brings its prerequisites up to date first.
 Pipeline force applies to derived stages, not existing raw vanilla. The game build

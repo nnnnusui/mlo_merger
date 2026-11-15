@@ -235,7 +235,7 @@ pub(crate) fn update_store_index(
   let index = index_store(store, input, store.candidates(directory)?)?;
   let partial = directory.join(format!("{INDEX_FILE}.partial"));
   let mut writer = BufWriter::new(fs::File::create(&partial)?);
-  serde_json::to_writer_pretty(&mut writer, &index)?;
+  serde_json::to_writer(&mut writer, &index)?;
   writer.flush()?;
   drop(writer);
   fs::rename(&partial, &output)?;

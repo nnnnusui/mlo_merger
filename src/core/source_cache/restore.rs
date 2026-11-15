@@ -187,7 +187,7 @@ fn write_replacing(
 ) -> Result<()> {
   let partial = path.with_extension("json.partial");
   let mut writer = BufWriter::new(fs::File::create(&partial)?);
-  serde_json::to_writer_pretty(&mut writer, value)?;
+  serde_json::to_writer(&mut writer, value)?;
   writer.flush()?;
   drop(writer);
   fs::rename(&partial, path)?;
