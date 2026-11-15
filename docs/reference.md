@@ -614,3 +614,24 @@ additions or replacements has no directory; `ymt/` is created only for files
 written at that stage.
 An empty `latest_version-{version_id}` file at the root identifies the final
 listed stage, including one with no file changes. Regeneration replaces the marker.
+
+### Derived Counts
+
+`--generate-vanilla-clothing-cache` counts each stage's clothing definitions into
+`asset/vanilla-clothing-cache` (`--clothing` selects the archive, `-o` the output).
+
+```bash
+mlo_merger --generate-vanilla-clothing-cache
+```
+
+Each changed YMT is counted whole: drawables and textures per component slot
+(`HEAD`, `UPPR`, …, named through `availComp`), and props per anchor
+(`ANCHOR_HEAD`, …). Freemode Peds get one YMT per DLC, so a stage's counts are
+that DLC's clothing; a replaced file's counts are cumulative at that stage.
+
+- `summary.json`: one row per stage with file and count totals, including stages
+  without changes.
+- `counts/{version}.json`: per-file component and prop counts with file and stage
+  totals, only for stages with changed files.
+- `cache_info.json`: the archive manifest digest the counts were taken from. A
+  matching cache is reused; `-f` and archive changes rebuild it.

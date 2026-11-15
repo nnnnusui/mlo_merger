@@ -348,3 +348,9 @@ unchanged-file reuse follow vanilla generation.
 The clothing archive lists every stage in `cache_info.json`, creates stage and
 `ymt/` directories only for additions or replacements, and names the final stage
 with an empty `latest_version-{version_id}` marker at its root.
+
+A derived counts cache (`--generate-vanilla-clothing-cache`, owned by
+`clothing/cache`) reads each stage's changed YMTs through the shared structure
+readers, whichever container holds them, and records drawables and textures per
+component slot and props per anchor, with per-stage summaries. It is tied to the
+archive manifest's digest and rebuilt when that changes or on force.

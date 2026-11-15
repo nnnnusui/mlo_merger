@@ -226,12 +226,13 @@ impl PsoResource {
     }
     let item =
       schema.fields.get(index).ok_or_else(|| invalid("PSO array element schema missing"))?;
+    // Subtype 4 is inline like 1, unless its elements are pointers (element subtype 3).
     let (target, position, count) = match field.subtype {
-      0 | 4 => {
+      0 | 4 if field.subtype == 0 || item.subtype == 3 => {
         let (target, position) = self.pointer(address)?;
         (target, position, u16_at(&self.data, address + 8)? as usize)
       }
-      1 | 2 | 129 => (block, offset + field.offset, (field.reference >> 16) as usize),
+      1 | 2 | 4 | 129 => (block, offset + field.offset, (field.reference >> 16) as usize),
       _ => return Err(invalid("unsupported PSO array subtype")),
     };
     Ok((item, target, position, count))

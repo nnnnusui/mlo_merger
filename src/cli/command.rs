@@ -8,6 +8,9 @@ use std::{
 use super::{
   check,
   clothing::generate_vanilla::{self as generate_vanilla_clothing, GenerateVanillaClothing},
+  clothing::generate_vanilla_cache::{
+    self as generate_vanilla_clothing_cache, GenerateVanillaClothingCache,
+  },
   deploy::{self, Deploy},
   find::{self, Find},
   from_xml::{self, FromXml},
@@ -32,6 +35,8 @@ pub enum Command {
   GenerateVanilla(GenerateVanilla),
   /// Collect raw clothing and appearance definitions for every vanilla and DLC Ped.
   GenerateVanillaClothing(GenerateVanillaClothing),
+  /// Count clothing definitions per vanilla stage.
+  GenerateVanillaClothingCache(GenerateVanillaClothingCache),
   /// Build derived vanilla indexes and latest files.
   GenerateVanillaCache(GenerateVanillaCache),
   /// Build source resource conflict data.
@@ -63,6 +68,8 @@ fn commands(asset: &Path) -> impl Parser<Command> + use<> {
   let generate_vanilla = generate_vanilla::parser(asset).map(Command::GenerateVanilla);
   let generate_vanilla_clothing =
     generate_vanilla_clothing::parser(asset).map(Command::GenerateVanillaClothing);
+  let generate_vanilla_clothing_cache =
+    generate_vanilla_clothing_cache::parser(asset).map(Command::GenerateVanillaClothingCache);
   let generate_vanilla_cache =
     generate_vanilla_cache::parser(asset).map(Command::GenerateVanillaCache);
   let generate_source_cache =
@@ -82,6 +89,7 @@ fn commands(asset: &Path) -> impl Parser<Command> + use<> {
   construct!([
     generate_vanilla,
     generate_vanilla_clothing,
+    generate_vanilla_clothing_cache,
     generate_vanilla_cache,
     generate_source_cache,
     generate_overwrite_cache,
@@ -224,6 +232,9 @@ pub fn stdout(args: Args) -> Output {
     Command::Pipeline(command) => pipeline::run(command).into(),
     Command::GenerateVanilla(command) => generate_vanilla::run(command).into(),
     Command::GenerateVanillaClothing(command) => generate_vanilla_clothing::run(command).into(),
+    Command::GenerateVanillaClothingCache(command) => {
+      generate_vanilla_clothing_cache::run(command).into()
+    }
     Command::GenerateVanillaCache(command) => generate_vanilla_cache::run(command).into(),
     Command::GenerateSourceCache(command) => generate_source_cache::run(command).into(),
     Command::GenerateOverwriteCache(command) => generate_overwrite_cache::run(command).into(),
@@ -584,6 +595,31 @@ mod tests {
       panic!("Expected clothing generation command")
     };
     assert_eq!(command.common.output, PathBuf::from("clothes"));
+    let Command::GenerateVanillaClothingCache(command) =
+      parser().to_options().run_inner(&["--generate-vanilla-clothing-cache"]).unwrap()
+    else {
+      panic!("Expected clothing cache command")
+    };
+    assert_eq!(command.clothing_dir, PathBuf::from("asset/vanilla-clothing"));
+    assert_eq!(command.output, PathBuf::from("asset/vanilla-clothing-cache"));
+    assert!(!command.force);
+    let Command::GenerateVanillaClothingCache(command) = parser()
+      .to_options()
+      .run_inner(&[
+        "--generate-vanilla-clothing-cache",
+        "--clothing",
+        "archive",
+        "-o",
+        "counts",
+        "-f",
+      ])
+      .unwrap()
+    else {
+      panic!("Expected clothing cache command")
+    };
+    assert_eq!(command.clothing_dir, PathBuf::from("archive"));
+    assert_eq!(command.output, PathBuf::from("counts"));
+    assert!(command.force);
   }
 
   #[test]
