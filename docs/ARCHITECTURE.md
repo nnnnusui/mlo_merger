@@ -287,6 +287,13 @@ table in configuration, which names the DLCs each FiveM build first includes. It
 recreated from the raw archive without re-extracting the game. An existing raw archive is
 not checked against changes to the installed game.
 
+The raw vanilla archive lists every stage in `cache_info.json`, including stages without
+file changes. Stage directories and extension subdirectories are created only when
+they contain extracted additions or replacements; populated stages also hold
+`version_info.json`.
+The archive's root has one empty `latest_version-{version_id}` marker naming the
+final listed stage, even when it has no file changes.
+
 Generation of the following YMAP version diffs is currently disabled, together with
 vanilla version inference (see [Limitations](reference.md#limitations)). When enabled, the derived cache also
 writes, for each YMAP a version after its first changes, its

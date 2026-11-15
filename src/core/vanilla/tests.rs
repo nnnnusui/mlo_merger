@@ -240,9 +240,14 @@ fn stages_store_only_changed_raw_files_and_resolve_prior_versions() {
   assert_eq!(fs::read(root.join("0001-dlc/ymap/a.ymap")).unwrap(), b"second map version");
   assert_eq!(fs::read(root.join("0001-dlc/ymap/c.ymap")).unwrap(), b"second map version");
   for version in &manifest.versions {
-    assert!(root.join(&version.id).join("version_info.json").is_file());
+    assert_eq!(root.join(&version.id).exists(), !version.changes.is_empty());
+    assert_eq!(
+      root.join(&version.id).join("version_info.json").is_file(),
+      !version.changes.is_empty()
+    );
     assert!(!root.join(&version.id).join("create_cache.log").exists());
-    assert!(root.join(&version.id).join("ymap").is_dir());
+    assert_eq!(root.join(&version.id).join("ymap").is_dir(), !version.changes.is_empty());
+    assert!(!root.join(&version.id).join("ybn").exists());
     assert!(!root.join(&version.id).join("native").exists());
   }
   stage(&mut manifest, &mut current, &root, "next", || {
@@ -313,10 +318,11 @@ fn stages_cache_raw_ybn_replacements_and_ymap_files() {
   assert_eq!(manifest.versions[2].unchanged, 1);
   assert_eq!(manifest.resolve_version("0002-unchanged").unwrap().len(), 3);
   for version in &manifest.versions {
-    assert!(root.join(&version.id).join("ybn").is_dir());
+    assert_eq!(root.join(&version.id).exists(), !version.changes.is_empty());
+    assert_eq!(root.join(&version.id).join("ybn").is_dir(), !version.changes.is_empty());
     assert!(!root.join(&version.id).join("native").exists());
-    write_json(&root.join(&version.id).join("version_info.json"), version).unwrap();
   }
+  assert!(!root.join("0001-patch/ymap").exists());
   write_json(&root.join("cache_info.json"), &manifest).unwrap();
   let listed = ListVanillaVersions {
     file_name: "SAME.YBN".into(),
@@ -383,7 +389,17 @@ fn publication_restores_existing_versions_if_root_metadata_cannot_be_replaced() 
     id: "0000-base".into(),
     parent: None,
     archives: vec![],
-    changes: BTreeMap::new(),
+    changes: BTreeMap::from([(
+      "map.ymap".into(),
+      FileChange {
+        previous_sha256: None,
+        file: CachedFile {
+          sha256: hex::encode(Sha256::digest(b"new")),
+          object: "0000-base/ymap/map.ymap".into(),
+          source: "fixture.rpf/map.ymap".into(),
+        },
+      },
+    )]),
     unchanged: 0,
   };
   let manifest = VanillaCacheManifest {
@@ -416,6 +432,81 @@ fn publication_restores_existing_versions_if_root_metadata_cannot_be_replaced() 
   assert!(!output.join("rpf_names.json").exists());
   assert_eq!(fs::read(output.join("hash_names.json")).unwrap(), b"new index");
   assert!(output.join("cache_info.json").is_file());
+}
+
+#[test]
+fn publication_keeps_empty_versions_in_metadata_without_stage_directories() {
+  let root = std::env::temp_dir().join(format!("vanilla_empty_stages_{}", std::process::id()));
+  let _cleanup = Staging(root.clone());
+  let build = root.join("build");
+  let output = root.join("output");
+  fs::create_dir_all(&build).unwrap();
+  fs::create_dir_all(output.join("0000-base")).unwrap();
+  fs::write(root.join("map.ymap"), b"raw map").unwrap();
+  let mut manifest = VanillaCacheManifest {
+    format_version: 1,
+    game_dir: root.join("game"),
+    versions: vec![],
+  };
+  let mut current = BTreeMap::new();
+  stage(&mut manifest, &mut current, &build, "base", || Ok((vec![], vec![]))).unwrap();
+  let file = ExtractedFile {
+    name: "map.ymap".into(),
+    source: "fixture.rpf/map.ymap".into(),
+    stored: "map.ymap".into(),
+    sha256: hex::encode(Sha256::digest(b"raw map")),
+  };
+  stage(&mut manifest, &mut current, &build, "update", || {
+    Ok((vec!["fixture.rpf".into()], vec![(file.clone(), root.clone())]))
+  })
+  .unwrap();
+  stage(&mut manifest, &mut current, &build, "unchanged", || {
+    Ok((vec!["fixture.rpf".into()], vec![(file, root.clone())]))
+  })
+  .unwrap();
+  write_json(&build.join("cache_info.json"), &manifest).unwrap();
+  write_json(&output.join("0000-base/version_info.json"), &manifest.versions[0]).unwrap();
+  fs::write(output.join("latest_version-0000-base"), []).unwrap();
+  let mut missing = manifest.clone();
+  missing.versions.push(CacheVersion {
+    id: "0003-missing".into(),
+    parent: Some("0002-unchanged".into()),
+    ..manifest.versions[1].clone()
+  });
+  assert!(publish_cache(&build, &output, &missing).is_err());
+  assert!(output.join("latest_version-0000-base").is_file());
+  assert!(!output.join("latest_version-0003-missing").exists());
+  assert!(output.join("0000-base/version_info.json").is_file());
+  assert!(!output.join("0001-update").exists());
+  assert!(build.join("0001-update/ymap/map.ymap").is_file());
+  publish_cache(&build, &output, &manifest).unwrap();
+  assert_eq!(fs::metadata(output.join("latest_version-0002-unchanged")).unwrap().len(), 0);
+  assert!(!output.join("latest_version-0000-base").exists());
+  assert!(!output.join("0000-base").exists());
+  assert!(!output.join("0002-unchanged").exists());
+  assert!(!output.join("0001-update/ybn").exists());
+  let published = load_manifest(&output).unwrap();
+  assert_eq!(
+    published.versions.iter().map(|version| version.id.as_str()).collect::<Vec<_>>(),
+    ["0000-base", "0001-update", "0002-unchanged"]
+  );
+  assert_eq!(published.versions[2].parent.as_deref(), Some("0001-update"));
+  assert_eq!(published.versions[2].unchanged, 1);
+  assert_eq!(published.resolve_version("0000-base").unwrap().len(), 0);
+  assert_eq!(
+    published.resolve_version("0002-unchanged").unwrap()["map.ymap"].object,
+    "0001-update/ymap/map.ymap"
+  );
+  let mut findings = crate::core::check::Findings::new("vanilla");
+  check::check(&output, true, &mut findings).unwrap();
+  assert!(findings.into_issues().is_empty());
+  fs::write(output.join("latest_version-0000-base"), []).unwrap();
+  let mut findings = crate::core::check::Findings::new("vanilla");
+  check::check(&output, true, &mut findings).unwrap();
+  let issues = findings.into_issues();
+  assert_eq!(issues.len(), 1);
+  assert_eq!(issues[0].path, "latest_version-0000-base");
+  assert_eq!(issues[0].kind, crate::core::check::CheckIssueKind::Unrecorded);
 }
 
 #[test]

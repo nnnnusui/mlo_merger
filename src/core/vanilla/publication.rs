@@ -9,7 +9,7 @@ use super::{
   manifest::{CacheVersion, VanillaCacheManifest},
 };
 
-pub(super) struct Staging(pub(super) PathBuf);
+pub(crate) struct Staging(pub(crate) PathBuf);
 
 impl Drop for Staging {
   fn drop(&mut self) {
@@ -79,6 +79,13 @@ fn validate_output_location(
 /// The archive's files besides its stages.
 const METADATA_FILES: [&str; 2] = ["hash_names.json", "cache_info.json"];
 
+const LATEST_VERSION_PREFIX: &str = "latest_version-";
+
+/// Names the marker for the final listed stage, whether or not it wrote files.
+pub(super) fn latest_version_marker(manifest: &VanillaCacheManifest) -> Option<String> {
+  manifest.versions.last().map(|version| format!("{LATEST_VERSION_PREFIX}{}", version.id))
+}
+
 /// Files earlier versions wrote to the archive, removed once a new one is published.
 const OBSOLETE_FILES: [&str; 1] = ["rpf_names.json"];
 
@@ -89,7 +96,22 @@ pub(super) fn publish_cache(
   output: &Path,
   manifest: &VanillaCacheManifest,
 ) -> Result<()> {
-  for name in METADATA_FILES {
+  let marker = latest_version_marker(manifest).ok_or("Vanilla archive has no stages")?;
+  fs::write(build.join(&marker), [])?;
+  let mut metadata_files = METADATA_FILES.map(String::from).to_vec();
+  metadata_files.push(marker.clone());
+  for entry in fs::read_dir(output)? {
+    let entry = entry?;
+    let name = entry.file_name().to_string_lossy().into_owned();
+    if name.starts_with(LATEST_VERSION_PREFIX)
+      && name != marker
+      && entry.file_type()?.is_file()
+      && entry.metadata()?.len() == 0
+    {
+      metadata_files.push(name);
+    }
+  }
+  for name in &metadata_files {
     let metadata_path = output.join(name);
     if fs::exists(&metadata_path).unwrap_or(false) && !fs::is_file(&metadata_path) {
       return Err(
@@ -122,11 +144,14 @@ pub(super) fn publish_cache(
         fs::rename(&destination, backup.join(&version.id))?;
       }
       published.push((version.id.clone(), existed));
-      fs::rename(build.join(&version.id), destination)?;
+      if !version.changes.is_empty() {
+        fs::rename(build.join(&version.id), destination)?;
+      }
     }
-    for name in METADATA_FILES {
+    for name in &metadata_files {
       let source = build.join(name);
-      if !fs::is_file(&source) {
+      let retired_marker = name.starts_with(LATEST_VERSION_PREFIX) && *name != marker;
+      if !retired_marker && !fs::is_file(&source) {
         continue;
       }
       let destination = output.join(name);
@@ -134,16 +159,18 @@ pub(super) fn publish_cache(
       if existed {
         fs::rename(&destination, backup.join(name))?;
       }
-      published_metadata.push((name, existed));
-      fs::rename(source, destination)?;
+      published_metadata.push((name.clone(), existed));
+      if !retired_marker {
+        fs::rename(source, destination)?;
+      }
     }
     Ok(())
   })();
   if result.is_err() {
     for (name, existed) in published_metadata.into_iter().rev() {
-      let destination = output.join(name);
+      let destination = output.join(&name);
       if fs::exists(&destination).unwrap_or(false) {
-        fs::rename(&destination, build.join(name))?;
+        fs::rename(&destination, build.join(&name))?;
       }
       if existed {
         fs::rename(backup.join(name), destination)?;

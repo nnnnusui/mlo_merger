@@ -20,9 +20,6 @@ pub(super) fn stage(
 ) -> Result<()> {
   let id = format!("{:04}-{label}", manifest.versions.len());
   let directory = output.join(&id);
-  fs::create_dir(&directory)?;
-  fs::create_dir(directory.join("ymap"))?;
-  fs::create_dir(directory.join("ybn"))?;
   let span = tracing::info_span!("vanilla_cache_stage", stage = %id);
   let _entered = span.enter();
   let result = (|| -> Result<()> {
@@ -67,6 +64,7 @@ pub(super) fn stage(
       } else {
         tracing::info!("Added {name}: {}", file.source);
       }
+      fs::create_dir_all(output.join(&id).join(family))?;
       fs::copy(&input, &destination)?;
       let cached = CachedFile {
         sha256: file.sha256,
@@ -94,7 +92,9 @@ pub(super) fn stage(
       changes,
       unchanged,
     };
-    write_json(&directory.join("version_info.json"), &version)?;
+    if !version.changes.is_empty() {
+      write_json(&directory.join("version_info.json"), &version)?;
+    }
     manifest.versions.push(version);
     Ok(())
   })();

@@ -22,6 +22,9 @@ pub(crate) fn check(
     }
   };
   let mut recorded = ARCHIVE_FILES.map(String::from).into_iter().collect::<BTreeSet<_>>();
+  if let Some(marker) = super::publication::latest_version_marker(&manifest) {
+    recorded.insert(marker);
+  }
   for version in &manifest.versions {
     recorded.insert(format!("{}/version_info.json", version.id));
     for change in version.changes.values() {

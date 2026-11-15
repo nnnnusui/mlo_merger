@@ -79,7 +79,7 @@ Each stream file type is supported at one of three levels:
 | Operation | Command |
 |---|---|
 | [Run every stage](docs/reference.md#pipeline) | `--pipeline` |
-| [Extract vanilla from the game](docs/reference.md#individual-operations) | `--generate-vanilla` |
+| [Extract vanilla from the game](docs/reference.md#vanilla-generation) | `--generate-vanilla` |
 | [Build the vanilla cache](docs/reference.md#game-builds) | `--generate-vanilla-cache` |
 | [Build the source cache](docs/reference.md#source-cache) | `--generate-source-cache` |
 | [Move cached files back](docs/reference.md#restoring-resources) | `--restore-source-cache` |

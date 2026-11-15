@@ -66,6 +66,22 @@ mlo_merger --restore-source-cache resourceName '[maps]/resource_b'
 Each operation brings its prerequisites up to date first; `-f` applies only to the
 operation itself.
 
+## Vanilla Generation
+
+`--generate-vanilla` extracts raw YMAP/YBN files from the installed game's base,
+title-update and DLC archives into a versioned archive. Explicit generation replaces
+the selected output directory.
+
+```bash
+mlo_merger --generate-vanilla -i /mnt/gtav -o asset/vanilla --magic magic.dat
+```
+
+The vanilla archive retains every version in `cache_info.json`. A stage with no
+additions or replacements has no directory, and extension subdirectories are
+created only for files written at that stage. An empty `latest_version-{version_id}`
+file at the root identifies the final listed stage, including one with no file
+changes. Regeneration replaces the marker.
+
 ## Source Cache
 
 **Source-cache generation moves vanilla-named YMAP/YBN files and every other YMAP out of
