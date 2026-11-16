@@ -177,14 +177,15 @@ fn pipeline_runs_on_the_web_sample() {
   // against the current one: it still reverts the planter, and no longer names the cone. That of
   // `smpl_block_rework` reverted the lamp's colour, which the current version changes otherwise,
   // so it is left to be written again, and not applied.
-  let update = |resource: &str, stream_path: &str| -> crate::core::overwrite_cache::SourceUpdate {
-    let directory =
-      workspace.asset(&format!("overwrite-cache/source_updates/{resource}/{stream_path}"));
-    let record = fs::read_dir(directory).unwrap().next().unwrap().unwrap().path();
-    serde_json::from_slice(&fs::read(record).unwrap()).unwrap()
-  };
+  let update =
+    |resource: &str, stream_path: &str| -> crate::app::map::overwrite_cache::SourceUpdate {
+      let directory =
+        workspace.asset(&format!("overwrite-cache/source_updates/{resource}/{stream_path}"));
+      let record = fs::read_dir(directory).unwrap().next().unwrap().unwrap().path();
+      serde_json::from_slice(&fs::read(record).unwrap()).unwrap()
+    };
   let tweaks = update("smpl_street_tweaks", "smpl_block_01.ymap");
-  assert_eq!(tweaks.outcome, crate::core::overwrite_cache::SourceUpdateOutcome::Rewritten);
+  assert_eq!(tweaks.outcome, crate::app::map::overwrite_cache::SourceUpdateOutcome::Rewritten);
   let rewritten: serde_json::Value = serde_json::from_slice(
     &fs::read(
       workspace.asset("overwrite/resources/smpl_street_tweaks/smpl_block_01.ymap.diff.json"),
@@ -203,7 +204,7 @@ fn pipeline_runs_on_the_web_sample() {
     serde_json::json!({"entities": [{"Added": {"target_index": planter}}]})
   );
   let rework = update("smpl_block_rework", "maps/smpl_block_01.ymap");
-  assert_eq!(rework.outcome, crate::core::overwrite_cache::SourceUpdateOutcome::Manual);
+  assert_eq!(rework.outcome, crate::app::map::overwrite_cache::SourceUpdateOutcome::Manual);
   assert_eq!(latest.warnings.ignored_overwrites.len(), 1);
   assert_eq!(latest.warnings.ignored_overwrites[0].resource.as_deref(), Some("smpl_block_rework"));
 
@@ -310,8 +311,8 @@ fn pipeline_runs_on_the_web_sample() {
   );
 
   // `--read` writes each vanilla file under the stage holding it as of the build.
-  let read = crate::core::read::Read {
-    target: crate::core::read::ReadTarget::All,
+  let read = crate::app::map::read::Read {
+    target: crate::app::map::read::ReadTarget::All,
     files: Vec::new(),
     source_dir: workspace.asset("source"),
     source_cache_dir: workspace.asset("source-cache"),
@@ -343,7 +344,7 @@ fn every_stream_file_covers_the_shared_position() {
       ([min.x, min.y, min.z].map(f64::from), [max.x, max.y, max.z].map(f64::from))
     } else if file.path.ends_with(".ybn") {
       let root = crate::core::format::ybn::read_ybn_bound_tree(&file.bytes).unwrap();
-      crate::core::find::ybn::world_bounds(&root).unwrap().unwrap()
+      crate::app::map::find::ybn::world_bounds(&root).unwrap().unwrap()
     } else {
       continue;
     };

@@ -48,7 +48,7 @@ pub(crate) fn exclusions_parser() -> impl Parser<Option<Vec<String>>> {
   long("exclude")
     .help("Comma-separated resource names or partial source-relative paths for this run")
     .argument::<String>("PATTERNS")
-    .parse(|value| crate::core::source_cache::exclusions::parse_exclusions(&value))
+    .parse(|value| crate::app::map::source_cache::exclusions::parse_exclusions(&value))
     .optional()
 }
 
@@ -63,7 +63,7 @@ pub(crate) fn update(
   exclusions: Option<Vec<String>>,
 ) -> Result<(), Box<dyn std::error::Error>> {
   super::generate_vanilla_cache::update(common)?;
-  crate::core::source_cache::BuildSourceCache {
+  crate::app::map::source_cache::BuildSourceCache {
     source_dir: source_dir.to_path_buf(),
     output_dir: common.source_cache.clone(),
     vanilla_dir: common.vanilla.clone(),
@@ -78,7 +78,7 @@ pub(crate) fn update(
 
 pub fn run(command: GenerateSourceCache) -> Result<String, Box<dyn std::error::Error>> {
   super::generate_vanilla_cache::update(&command.common)?;
-  let build = crate::core::source_cache::BuildSourceCache {
+  let build = crate::app::map::source_cache::BuildSourceCache {
     source_dir: command.source_dir,
     output_dir: command.common.output,
     vanilla_dir: command.common.vanilla,

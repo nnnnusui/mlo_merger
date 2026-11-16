@@ -48,7 +48,7 @@ fn options(asset: &Path) -> impl Parser<RestoreSourceCache> + use<> {
 
 /// Restores source files without generating caches, merging or deploying.
 pub fn run(command: RestoreSourceCache) -> Result<String, Box<dyn std::error::Error>> {
-  let restored = crate::core::source_cache::restore_source_cache(
+  let restored = crate::app::map::source_cache::restore_source_cache(
     &command.cache_dir,
     &command.source_dir,
     &command.resources,

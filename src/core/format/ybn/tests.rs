@@ -141,7 +141,7 @@ fn real_collision_rebuilds_have_relocated_fixup_tables() {
   let source = local_source("MLO_CS6_05_2_YBN");
   let second = local_source("MLO_CS6_05_2_SECOND_YBN");
   let vanilla = crate::platform::fs::read(
-    crate::core::vanilla_cache::test_support::asset_latest_file("cs6_05_2.ybn"),
+    crate::app::map::vanilla_cache::test_support::asset_latest_file("cs6_05_2.ybn"),
   )
   .unwrap();
   let merged = merge_ybn_deltas(&vanilla, &[&source, &second]).unwrap();
@@ -554,7 +554,7 @@ fn ybn_deletion_matches_box_volume_across_reference_vertex_changes() {
 #[ignore = "requires local sc1_18_0 vanilla and cached source YBNs named by MLO_SC1_18_0_REENCODED_YBN and MLO_SC1_18_0_DELETING_YBN"]
 fn sc1_18_0_deletion_wins_over_a_reencoded_collision() {
   let vanilla = crate::platform::fs::read(
-    crate::core::vanilla_cache::test_support::asset_latest_file("sc1_18_0.ybn"),
+    crate::app::map::vanilla_cache::test_support::asset_latest_file("sc1_18_0.ybn"),
   )
   .unwrap();
   // One source re-encodes the collision; the other deletes polygons from it.
@@ -602,7 +602,7 @@ fn sc1_18_0_deletion_wins_over_a_reencoded_collision() {
 fn configured_ybn_tolerance_removes_reported_mirrorpark_box() {
   use crate::core::config::matching::{MatchTolerances, with_tolerances};
   let vanilla = crate::platform::fs::read(
-    crate::core::vanilla_cache::test_support::asset_latest_file("id2_21_c_0.ybn"),
+    crate::app::map::vanilla_cache::test_support::asset_latest_file("id2_21_c_0.ybn"),
   )
   .unwrap();
   // Two cached source copies of id2_21_c_0.ybn: one keeping the reported box and one removing

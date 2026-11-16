@@ -61,13 +61,13 @@ pub(super) fn earlier_versions() -> &'static [(String, Vec<u8>)] {
         serde_json::json!({"entities": [{"Modified": {"base_index": lamp}}]})
       };
       let sha = sha256(&bytes);
-      let history = crate::core::source_cache::history::version_path(resource, stream_path, &sha);
-      let diff = crate::core::source_cache::history::diff_path(resource, stream_path, &sha);
+      let history = crate::app::map::source_cache::history::version_path(resource, stream_path, &sha);
+      let diff = crate::app::map::source_cache::history::diff_path(resource, stream_path, &sha);
       let fingerprint = |file: &str| {
         serde_json::json!({"sha256": document[file]["sha256"], "size": document[file]["size"]})
       };
       let overwrite = serde_json::json!({
-        "schema_version": crate::core::overwrite::StreamFileOverwrite::SCHEMA_VERSION,
+        "schema_version": crate::app::map::overwrite::StreamFileOverwrite::SCHEMA_VERSION,
         "target": fingerprint("target"),
         "base": fingerprint("base"),
         "skip": skip,

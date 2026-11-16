@@ -1,0 +1,501 @@
+//! Bounds indexes of the vanilla, source and merged stream files, one in each store.
+//!
+//! Each store writes its own `stream_file_rtree.json` when it is built: the vanilla cache, the
+//! source cache and the merge output. An index records the fingerprint of the metadata its
+//! files were listed from and is rebuilt only when that metadata changed, so a step that reuses
+//! its store also restores a missing or outdated index.
+
+use super::{
+  Result,
+  file_from_position::{self, Candidate, stream_name},
+};
+use crate::common::fingerprint::Fingerprint;
+use crate::platform::fs;
+#[cfg(not(test))]
+use crate::platform::progress::ProgressDrawTarget;
+use crate::platform::progress::{ProgressBar, ProgressStyle};
+use rayon::prelude::*;
+use serde::{Deserialize, Serialize};
+#[cfg(not(test))]
+use std::io::IsTerminal;
+use std::{
+  io::{BufWriter, Write},
+  path::{Path, PathBuf},
+  time::Duration,
+};
+
+/// Bump when the indexed files, their bounds or the index layout change.
+const SCHEMA_VERSION: u32 = 4;
+
+/// File name of the index in each store directory.
+pub(crate) const INDEX_FILE: &str = "stream_file_rtree.json";
+
+#[derive(Serialize, Deserialize)]
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
+struct RTreeIndex {
+  #[serde(rename = "schemaVersion")]
+  schema_version: u32,
+  /// `vanilla`, `source` or `merged`.
+  store: String,
+  timestamp: String,
+  /// The metadata the files were listed from; the index is rebuilt when it changes.
+  input: RTreeInput,
+  #[serde(rename = "fileCount")]
+  file_count: usize,
+  ymap: Vec<RTreeItem>,
+  ybn: Vec<RTreeItem>,
+}
+
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
+struct RTreeInput {
+  path: String,
+  sha256: String,
+  size: u64,
+  #[serde(rename = "modifiedSeconds")]
+  modified_seconds: u64,
+  #[serde(rename = "modifiedNanos")]
+  modified_nanos: u32,
+}
+
+/// The fields of an index read to decide whether it is current, without its items.
+#[derive(Deserialize)]
+struct Header {
+  #[serde(rename = "schemaVersion")]
+  schema_version: u32,
+  input: RTreeInput,
+}
+
+#[derive(Serialize, Deserialize)]
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
+struct RTreeItem {
+  #[serde(rename = "minX")]
+  min_x: f64,
+  #[serde(rename = "minY")]
+  min_y: f64,
+  #[serde(rename = "minZ")]
+  min_z: f64,
+  #[serde(rename = "maxX")]
+  max_x: f64,
+  #[serde(rename = "maxY")]
+  max_y: f64,
+  #[serde(rename = "maxZ")]
+  max_z: f64,
+  name: String,
+  /// The file relative to its store: the indexed store's directory, the vanilla archive for a
+  /// latest vanilla file, or the source root for a source file that was not moved into the
+  /// source cache.
+  path: String,
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  #[cfg_attr(feature = "typescript", specta(optional))]
+  resource: Option<String>,
+  #[serde(rename = "originalPath", default, skip_serializing_if = "Option::is_none")]
+  #[cfg_attr(feature = "typescript", specta(optional))]
+  original_path: Option<String>,
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  #[cfg_attr(feature = "typescript", specta(optional))]
+  version: Option<String>,
+}
+
+/// A store of stream files with its own index.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Store<'a> {
+  /// The derived vanilla cache's latest files.
+  Vanilla,
+  /// The source cache's inventoried files, where they are now: in the cache, or in their
+  /// resources below `source_dir`.
+  Source {
+    source_dir: &'a Path,
+  },
+  /// The merge output's merged files.
+  Merged,
+}
+
+impl Store<'_> {
+  pub(crate) fn name(self) -> &'static str {
+    match self {
+      Self::Vanilla => "vanilla",
+      Self::Source {
+        ..
+      } => "source",
+      Self::Merged => "merged",
+    }
+  }
+
+  /// The metadata of the store at `directory`, owned by the module that writes it.
+  fn cache_info_path(
+    self,
+    directory: &Path,
+  ) -> PathBuf {
+    match self {
+      Self::Vanilla => crate::app::map::vanilla_cache::cache_info_path(directory),
+      Self::Source {
+        ..
+      } => crate::app::map::source_cache::cache_info_path(directory),
+      Self::Merged => crate::app::map::merge::cache_info_path(directory),
+    }
+  }
+
+  /// The YMAP and YBN files of the store at `directory`, as its metadata lists them, each with
+  /// its path relative to the store holding it.
+  fn candidates(
+    self,
+    directory: &Path,
+  ) -> Result<Vec<(Candidate, String)>> {
+    let relative = |path: &Path| {
+      path.strip_prefix(directory).unwrap_or(path).to_string_lossy().replace('\\', "/")
+    };
+    let candidate = |name: &str, path: PathBuf, stage| {
+      let (_, extension) = stream_name(Path::new(name))?;
+      Some(Candidate {
+        name: name.to_ascii_lowercase(),
+        extension,
+        path,
+        stage,
+        resource: None,
+        original_path: None,
+        version: None,
+        strict: false,
+      })
+    };
+    let mut candidates = Vec::new();
+    match self {
+      Self::Vanilla => {
+        // Named by their path in the vanilla archive, the store holding them.
+        for file in crate::app::map::vanilla_cache::latest_files(directory)? {
+          if let Some(mut found) = candidate(&file.name, file.path, "vanilla-cache") {
+            found.version = Some(file.version);
+            candidates.push((found, file.object));
+          }
+        }
+      }
+      Self::Source {
+        source_dir,
+      } => {
+        for file in crate::app::map::source_cache::inventoried_files(directory, source_dir)? {
+          let stage = if file.moved { "source-cache" } else { "source" };
+          if let Some(mut found) = candidate(&file.file_name, file.path, stage) {
+            found.resource = Some(file.resource);
+            found.original_path = file.moved.then_some(file.source_path);
+            candidates.push((found, file.stored_path));
+          }
+        }
+      }
+      Self::Merged => {
+        for file in crate::app::map::merge::merged_files(directory)? {
+          let stored = relative(&file.path);
+          candidates
+            .extend(candidate(&file.name, file.path, "merged").map(|found| (found, stored)));
+        }
+      }
+    }
+    candidates.sort_by(|left, right| left.1.cmp(&right.1));
+    Ok(candidates)
+  }
+}
+
+/// Writes the index of the store at `directory` to its `stream_file_rtree.json`, unless the
+/// index already describes the store's current metadata; returns whether it was written.
+///
+/// Files whose bounds cannot be read are left out with a warning, so a store that was built
+/// still gets an index. A store without metadata has no index to write.
+pub(crate) fn update_store_index(
+  store: Store,
+  directory: &Path,
+) -> Result<bool> {
+  let info = store.cache_info_path(directory);
+  if !fs::is_file(&info) {
+    return Ok(false);
+  }
+  let output = directory.join(INDEX_FILE);
+  // The metadata is named relative to the store, so the index stays current wherever it is.
+  let input_path =
+    info.strip_prefix(directory).unwrap_or(&info).to_string_lossy().replace('\\', "/");
+  let previous = read_header(&output).filter(|header| header.input.path == input_path);
+  let fingerprint = Fingerprint::read(
+    &info,
+    previous.as_ref().map(|header| fingerprint_of(&header.input)).as_ref(),
+    false,
+  )?;
+  let current = previous.is_some_and(|header| {
+    header.schema_version == SCHEMA_VERSION
+      && header.input.sha256 == fingerprint.sha256
+      && header.input.size == fingerprint.size
+  });
+  if current {
+    return Ok(false);
+  }
+  let input = RTreeInput {
+    path: input_path,
+    sha256: fingerprint.sha256,
+    size: fingerprint.size,
+    modified_seconds: fingerprint.modified_seconds,
+    modified_nanos: fingerprint.modified_nanos,
+  };
+  let index = index_store(store, input, store.candidates(directory)?)?;
+  let partial = directory.join(format!("{INDEX_FILE}.partial"));
+  let mut writer = BufWriter::new(fs::File::create(&partial)?);
+  serde_json::to_writer(&mut writer, &index)?;
+  writer.flush()?;
+  drop(writer);
+  fs::rename(&partial, &output)?;
+  tracing::info!("Wrote the {} stream-file R-tree index to {}", store.name(), output.display());
+  Ok(true)
+}
+
+fn read_header(path: &Path) -> Option<Header> {
+  crate::common::json::read_json(path).ok()
+}
+
+fn fingerprint_of(input: &RTreeInput) -> Fingerprint {
+  Fingerprint {
+    sha256: input.sha256.clone(),
+    size: input.size,
+    modified_seconds: input.modified_seconds,
+    modified_nanos: input.modified_nanos,
+  }
+}
+
+/// Reads the bounds of each candidate of `store`.
+fn index_store(
+  store: Store,
+  input: RTreeInput,
+  candidates: Vec<(Candidate, String)>,
+) -> Result<RTreeIndex> {
+  #[cfg(not(test))]
+  let log_progress = !std::io::stderr().is_terminal();
+  #[cfg(test)]
+  let log_progress = false;
+  #[cfg(test)]
+  let progress = ProgressBar::hidden();
+  #[cfg(not(test))]
+  let progress = ProgressBar::with_draw_target(Some(0), ProgressDrawTarget::stderr());
+  let total = candidates.len();
+  progress.set_length(total as u64);
+  progress.set_style(
+    ProgressStyle::with_template(
+      "{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} {msg}",
+    )?
+    .progress_chars("##-"),
+  );
+  progress.enable_steady_tick(Duration::from_millis(100));
+  let name = store.name();
+  if log_progress {
+    tracing::info!("Indexing the bounds of {total} {name} stream files");
+  }
+  // Each file's bounds are read independently; results keep the candidates' order.
+  let results = candidates
+    .par_iter()
+    .map(|(candidate, stored)| {
+      let result = index_item(candidate, stored).map_err(|error| error.to_string());
+      progress.inc(1);
+      if log_progress && progress.position().is_multiple_of(1000) {
+        tracing::info!("Indexed {}/{total} {name} stream files", progress.position());
+      }
+      result
+    })
+    .collect::<Vec<_>>();
+  progress.finish_and_clear();
+  let mut ymap = Vec::new();
+  let mut ybn = Vec::new();
+  let mut skipped = 0usize;
+  for ((candidate, _), result) in candidates.iter().zip(results) {
+    let items = if candidate.extension == "ymap" { &mut ymap } else { &mut ybn };
+    match result {
+      Ok(Some(item)) => items.push(item),
+      Ok(None) => skipped += 1,
+      Err(error) => {
+        skipped += 1;
+        tracing::warn!("Left {} out of the {name} index: {error}", candidate.path.display());
+      }
+    }
+  }
+  tracing::info!(
+    "Indexed the bounds of {} {name} stream files ({} YMAP, {} YBN), left out {skipped}",
+    ymap.len() + ybn.len(),
+    ymap.len(),
+    ybn.len()
+  );
+  Ok(RTreeIndex {
+    schema_version: SCHEMA_VERSION,
+    store: name.into(),
+    timestamp: chrono::Utc::now().to_rfc3339(),
+    input,
+    file_count: ymap.len() + ybn.len(),
+    ymap,
+    ybn,
+  })
+}
+
+fn index_item(
+  candidate: &Candidate,
+  stored: &str,
+) -> Result<Option<RTreeItem>> {
+  let Some(bounds) = file_from_position::spatial_bounds(candidate)? else {
+    return Ok(None);
+  };
+  Ok(Some(RTreeItem {
+    min_x: bounds.minimum[0],
+    min_y: bounds.minimum[1],
+    min_z: bounds.minimum[2],
+    max_x: bounds.maximum[0],
+    max_y: bounds.maximum[1],
+    max_z: bounds.maximum[2],
+    name: candidate.name.clone(),
+    path: stored.to_string(),
+    resource: candidate.resource.clone(),
+    original_path: candidate.original_path.clone(),
+    version: candidate.version.clone(),
+  }))
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+  use serde_json::json;
+
+  fn write(
+    path: &Path,
+    bytes: &[u8],
+  ) {
+    fs::create_dir_all(path.parent().unwrap()).unwrap();
+    fs::write(path, bytes).unwrap();
+  }
+
+  fn read(path: &Path) -> serde_json::Value {
+    serde_json::from_slice(&fs::read(path).unwrap()).unwrap()
+  }
+
+  #[test]
+  fn each_store_is_indexed_again_only_when_its_metadata_changes() {
+    let root = std::env::temp_dir().join(format!("rtree_stores_{}", std::process::id()));
+    let _ = fs::remove_dir_all(&root);
+    let sample = |name: &str| {
+      fs::read(Path::new(env!("CARGO_MANIFEST_DIR")).join("docs/sample").join(name)).unwrap()
+    };
+    let ymap = sample("sample.ymap");
+    let ybn = crate::core::format::ybn::write_ybn(
+      &crate::core::format::ybn::xml::read_xml(include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/docs/sample/ybn_conflicts/geometry_bvh.ybn.xml"
+      )))
+      .unwrap(),
+    )
+    .unwrap();
+    let vanilla = root.join("vanilla-cache");
+    // Latest files are named by their path in the vanilla archive.
+    write(&root.join("vanilla/0001-update/ymap/map.ymap"), &ymap);
+    write(&root.join("vanilla/0001-update/ybn/collision.ybn"), &ybn);
+    crate::app::map::vanilla_cache::test_support::write_cache_info(
+      &vanilla,
+      "../vanilla",
+      "0001-update",
+      &[
+        ("map.ymap", "0001-update/ymap/map.ymap"),
+        ("collision.ybn", "0001-update/ybn/collision.ybn"),
+      ],
+    );
+    let source_dir = root.join("source");
+    let source = source_dir.join("[maps]/resource");
+    let source_cache = root.join("source-cache");
+    write(&source.join("stream/custom.ymap"), &ymap);
+    write(&source_cache.join("resources/resource/map.ymap"), &ymap);
+    let source_file = |path: &str, name: &str, cached: Option<&str>| {
+      json!({
+        "path": path, "file_name": name, "sha256": "", "size": 0, "modified_seconds": 0,
+        "modified_nanos": 0, "vanilla": null, "ymap_parent_hash": null, "metadata_error": null,
+        "cached_path": cached
+      })
+    };
+    let source_info = |generated_at: &str| {
+      serde_json::to_vec(&json!({
+        "format_version": 3, "source_dir": root.join("source"), "vanilla_dir": "",
+        "vanilla_cache_dir": "", "vanilla_manifest_sha256": "", "vanilla_cache_revision": "",
+        "latest_vanilla_version": "", "generated_at": generated_at, "source_inputs": {},
+        "resource_checks": {},
+        "resources": {"[maps]/resource": {"source": source, "files_by_format": {".ymap": [
+          source_file("stream/custom.ymap", "custom.ymap", None),
+          source_file("stream/map.ymap", "map.ymap", Some("resources/resource/map.ymap")),
+        ]}}},
+        "scanned_stream_file_count": 2, "conflict_count": 0,
+        "ymap_load_plan": {"changed_source_parents": [], "additional_source_children": []},
+        "outputs": []
+      }))
+      .unwrap()
+    };
+    write(&source_cache.join("cache_info.json"), &source_info("first"));
+    let merged = root.join("merged");
+    write(&merged.join("ymap/map.ymap"), &ymap);
+    let record = |output: Option<&str>| {
+      json!({
+        "merge_sources": [], "vanilla": null, "dependencies": [], "dependency_fingerprint": "",
+        "merged_at": "now",
+        "output": output.map(|path| json!({"path": path, "fingerprint": {
+          "sha256": "", "size": 0, "modified_seconds": 0, "modified_nanos": 0
+        }}))
+      })
+    };
+    write(
+      &merged.join("cache_info.json"),
+      &serde_json::to_vec(&json!({
+        "format_version": 1, "algorithm_versions": {}, "generated_at": "now",
+        "files": {"map.ymap": record(Some("ymap/map.ymap")), "other.ymap": record(None)}
+      }))
+      .unwrap(),
+    );
+    let stores = [
+      (Store::Vanilla, &vanilla),
+      (
+        Store::Source {
+          source_dir: &source_dir,
+        },
+        &source_cache,
+      ),
+      (Store::Merged, &merged),
+    ];
+    let update = || {
+      stores
+        .iter()
+        .map(|(store, directory)| (store.name(), update_store_index(*store, directory).unwrap()))
+        .collect::<Vec<_>>()
+    };
+
+    assert_eq!(update(), [("vanilla", true), ("source", true), ("merged", true)]);
+    let index = |directory: &Path| read(&directory.join(INDEX_FILE));
+    let vanilla_index = index(&vanilla);
+    assert_eq!(vanilla_index["schemaVersion"], SCHEMA_VERSION);
+    assert_eq!(vanilla_index["store"], "vanilla");
+    assert_eq!(vanilla_index["ymap"][0]["name"], "map.ymap");
+    assert_eq!(vanilla_index["ymap"][0]["version"], "0001-update");
+    assert_eq!(vanilla_index["ybn"][0]["name"], "collision.ybn");
+    let source_index = index(&source_cache);
+    let items = source_index["ymap"].as_array().unwrap();
+    assert_eq!(items.len(), 2);
+    assert!(items.iter().all(|item| item["resource"] == "[maps]/resource"));
+    let moved = items.iter().find(|item| item["name"] == "map.ymap").unwrap();
+    // Paths are relative to the store holding each file.
+    assert_eq!(moved["path"], "resources/resource/map.ymap");
+    assert_eq!(moved["originalPath"], "[maps]/resource/stream/map.ymap");
+    let live = items.iter().find(|item| item["name"] == "custom.ymap").unwrap();
+    assert_eq!(live["path"], "[maps]/resource/stream/custom.ymap");
+    assert!(live.get("originalPath").is_none());
+    assert_eq!(source_index["input"]["path"], "cache_info.json");
+    assert_eq!(index(&vanilla)["ymap"][0]["path"], "0001-update/ymap/map.ymap");
+    let merged_index = index(&merged);
+    assert_eq!(merged_index["fileCount"], 1);
+    assert_eq!(merged_index["ymap"][0]["path"], "ymap/map.ymap");
+
+    // Only a store whose metadata changed, or whose index is missing, is indexed again.
+    assert_eq!(update(), [("vanilla", false), ("source", false), ("merged", false)]);
+    write(&source_cache.join("cache_info.json"), &source_info("second"));
+    fs::remove_file(merged.join(INDEX_FILE)).unwrap();
+    assert_eq!(update(), [("vanilla", false), ("source", true), ("merged", true)]);
+
+    // A store without metadata has no index to write.
+    fs::remove_file(merged.join("cache_info.json")).unwrap();
+    fs::remove_file(merged.join(INDEX_FILE)).unwrap();
+    assert!(!update_store_index(Store::Merged, &merged).unwrap());
+    assert!(!merged.join(INDEX_FILE).exists());
+    fs::remove_dir_all(root).unwrap();
+  }
+}

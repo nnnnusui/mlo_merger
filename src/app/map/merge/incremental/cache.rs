@@ -1,0 +1,352 @@
+use super::*;
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
+#[cfg_attr(feature = "typescript", specta(rename = "MergeFingerprint"))]
+pub(in crate::app::map::merge) struct Fingerprint {
+  pub sha256: String,
+  pub size: u64,
+  pub modified_seconds: u64,
+  pub modified_nanos: u32,
+}
+
+impl Fingerprint {
+  pub(in crate::app::map::merge) fn read(
+    path: &Path,
+    previous: Option<&Self>,
+    force: bool,
+  ) -> Result<Self> {
+    let metadata = fs::metadata(path)?;
+    let modified = metadata.modified()?.duration_since(std::time::UNIX_EPOCH)?;
+    if !force
+      && let Some(previous) = previous
+      && previous.size == metadata.len()
+      && previous.modified_seconds == modified.as_secs()
+      && previous.modified_nanos == modified.subsec_nanos()
+    {
+      return Ok(previous.clone());
+    }
+    let mut reader = BufReader::new(fs::File::open(path)?);
+    let mut digest = Sha256::new();
+    let mut buffer = [0; 65536];
+    loop {
+      let count = reader.read(&mut buffer)?;
+      if count == 0 {
+        break;
+      }
+      digest.update(&buffer[..count]);
+    }
+    Ok(Self {
+      sha256: hex::encode(digest.finalize()),
+      size: metadata.len(),
+      modified_seconds: modified.as_secs(),
+      modified_nanos: modified.subsec_nanos(),
+    })
+  }
+
+  pub(in crate::app::map::merge) fn same_content(
+    &self,
+    other: &Self,
+  ) -> bool {
+    self.sha256 == other.sha256 && self.size == other.size
+  }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
+pub(in crate::app::map::merge) struct InputFile {
+  /// The file relative to its store: the vanilla cache for a vanilla file; for a source, the
+  /// source cache when it was moved there, otherwise the source root, where it is
+  /// [`Self::original_path`].
+  pub path: PathBuf,
+  pub resource: Option<String>,
+  /// A source's path relative to the source root.
+  pub original_path: Option<PathBuf>,
+  pub fingerprint: Fingerprint,
+  /// Digest of the overwrite applied to this source's diff.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  #[cfg_attr(feature = "typescript", specta(optional))]
+  pub overwrite: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
+pub(in crate::app::map::merge) struct OutputFile {
+  pub path: String,
+  pub fingerprint: Fingerprint,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
+pub(in crate::app::map::merge) struct FileRecord {
+  pub merge_sources: Vec<InputFile>,
+  pub vanilla: Option<InputFile>,
+  pub dependencies: BTreeSet<String>,
+  /// Whether other resources ship this added stream file too, so it is written to replace theirs.
+  #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+  #[cfg_attr(feature = "typescript", specta(optional))]
+  pub replaces_other_resources: bool,
+  pub dependency_fingerprint: String,
+  pub output: Option<OutputFile>,
+  pub merged_at: String,
+  #[serde(default)]
+  pub duplicates: Vec<EntityDuplicate>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
+pub(in crate::app::map::merge) struct MergeMetadata {
+  pub format_version: u32,
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub algorithm_version: Option<u32>,
+  #[serde(default)]
+  pub algorithm_versions: BTreeMap<String, u32>,
+  pub generated_at: String,
+  pub files: BTreeMap<String, FileRecord>,
+}
+
+impl MergeMetadata {
+  pub(in crate::app::map::merge) fn load(output: &Path) -> Result<Option<Self>> {
+    let path = crate::app::map::merge::cache_info_path(output);
+    if !fs::is_file(&path) {
+      return Ok(None);
+    }
+    let metadata: Self = crate::common::json::read_json(path)?;
+    Ok((metadata.format_version == 1).then_some(metadata))
+  }
+
+  pub(super) fn version_matches(
+    &self,
+    extension: &str,
+  ) -> Result<bool> {
+    let recorded = if self.algorithm_versions.is_empty() {
+      self.algorithm_version
+    } else {
+      self.algorithm_versions.get(extension).copied()
+    };
+    Ok(recorded == Some(algorithm_version(extension)?))
+  }
+}
+
+pub(in crate::app::map::merge) fn reusable(
+  record: &FileRecord,
+  signature: &str,
+  output: &Path,
+  force: bool,
+) -> Result<bool> {
+  if force || record.dependency_fingerprint != signature {
+    return Ok(false);
+  }
+  let Some(file) = &record.output else {
+    return Ok(true);
+  };
+  let path = output_path(output, &file.path)?;
+  if !fs::is_file(&path) {
+    return Ok(false);
+  }
+  Ok(Fingerprint::read(&path, Some(&file.fingerprint), false)?.same_content(&file.fingerprint))
+}
+pub(super) fn signature(
+  extension: &str,
+  files: &BTreeMap<String, FileRecord>,
+) -> Result<String> {
+  let inputs = files
+    .iter()
+    .map(|(name, record)| {
+      let inputs = record
+        .merge_sources
+        .iter()
+        .chain(record.vanilla.iter())
+        .map(|input| {
+          let mut value = serde_json::json!({
+            "path": input.path, "resource": input.resource, "original_path": input.original_path,
+            "sha256": input.fingerprint.sha256, "size": input.fingerprint.size,
+          });
+          if let Some(overwrite) = &input.overwrite {
+            value["overwrite"] = overwrite.as_str().into();
+          }
+          value
+        })
+        .collect::<Vec<_>>();
+      let mut value = serde_json::json!({"dependencies": record.dependencies, "inputs": inputs});
+      if record.replaces_other_resources {
+        value["replaces_other_resources"] = true.into();
+      }
+      (name, value)
+    })
+    .collect::<BTreeMap<_, _>>();
+  Ok(hex::encode(Sha256::digest(serde_json::to_vec(&(
+    algorithm_version(extension)?,
+    crate::core::config::matching::current(),
+    inputs,
+  ))?)))
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn algorithm_versions_invalidate_only_the_changed_file_type() {
+    let output =
+      std::env::temp_dir().join(format!("merge_cache_algorithm_version_{}", std::process::id()));
+    let _ = fs::remove_dir_all(&output);
+    fs::create_dir_all(&output).unwrap();
+    fs::write(
+      output.join("cache_info.json"),
+      serde_json::to_vec(&serde_json::json!({
+        "format_version": 1,
+        "algorithm_versions": {"ymap": YMAP_ALGORITHM_VERSION, "ybn": YBN_ALGORITHM_VERSION - 1},
+        "generated_at": "2026-10-08T00:00:00Z",
+        "files": {}
+      }))
+      .unwrap(),
+    )
+    .unwrap();
+
+    let metadata = MergeMetadata::load(&output).unwrap().unwrap();
+    assert!(metadata.version_matches("ymap").unwrap());
+    assert!(!metadata.version_matches("ybn").unwrap());
+    let mut metadata = metadata;
+    metadata.algorithm_versions = BTreeMap::from([
+      ("ymap".into(), YMAP_ALGORITHM_VERSION - 1),
+      ("ybn".into(), YBN_ALGORITHM_VERSION),
+    ]);
+    assert!(!metadata.version_matches("ymap").unwrap());
+    assert!(metadata.version_matches("ybn").unwrap());
+    metadata.algorithm_versions.clear();
+    metadata.algorithm_version = Some(YMAP_ALGORITHM_VERSION);
+    assert!(metadata.version_matches("ymap").unwrap());
+    assert_eq!(
+      metadata.version_matches("ybn").unwrap(),
+      YMAP_ALGORITHM_VERSION == YBN_ALGORITHM_VERSION
+    );
+    metadata.algorithm_versions.insert("ymap".into(), YMAP_ALGORITHM_VERSION);
+    metadata.algorithm_version = Some(YBN_ALGORITHM_VERSION);
+    assert!(!metadata.version_matches("ybn").unwrap());
+    assert!(metadata.version_matches("unsupported").is_err());
+
+    fs::write(
+      output.join("cache_info.json"),
+      serde_json::to_vec(&serde_json::json!({
+        "format_version": 1,
+        "algorithm_version": YMAP_ALGORITHM_VERSION,
+        "generated_at": "legacy",
+        "files": {}
+      }))
+      .unwrap(),
+    )
+    .unwrap();
+    let legacy = MergeMetadata::load(&output).unwrap().unwrap();
+    assert!(legacy.version_matches("ymap").unwrap());
+    assert_eq!(
+      legacy.version_matches("ybn").unwrap(),
+      YMAP_ALGORITHM_VERSION == YBN_ALGORITHM_VERSION
+    );
+
+    fs::remove_dir_all(output).unwrap();
+  }
+
+  #[test]
+  fn signatures_use_only_the_file_types_algorithm_version() {
+    let files = BTreeMap::new();
+    let inputs = BTreeMap::<String, serde_json::Value>::new();
+    for (extension, version) in [("ymap", YMAP_ALGORITHM_VERSION), ("ybn", YBN_ALGORITHM_VERSION)] {
+      let expected = hex::encode(Sha256::digest(
+        serde_json::to_vec(&(version, crate::core::config::matching::current(), &inputs)).unwrap(),
+      ));
+      assert_eq!(signature(extension, &files).unwrap(), expected);
+    }
+    assert!(signature("unsupported", &files).is_err());
+  }
+
+  #[test]
+  fn configured_tolerances_invalidate_cached_merge_results() {
+    use crate::core::config::matching::{MatchTolerances, with_tolerances};
+    let files = BTreeMap::new();
+    let defaults = MatchTolerances::default();
+    let original = with_tolerances(defaults, || signature("ymap", &files).unwrap());
+    for configured in [
+      MatchTolerances {
+        ybn_position: 0.025,
+        ..defaults
+      },
+      MatchTolerances {
+        ymap: 0.002,
+        ..defaults
+      },
+      MatchTolerances {
+        ymap_occlude_model_position: 0.02,
+        ..defaults
+      },
+      MatchTolerances {
+        ymap_box_occluder_position: 2,
+        ..defaults
+      },
+    ] {
+      with_tolerances(configured, || {
+        let changed = signature("ymap", &files).unwrap();
+        assert_ne!(original, changed);
+        let record = FileRecord {
+          merge_sources: Vec::new(),
+          vanilla: None,
+          dependencies: BTreeSet::new(),
+          replaces_other_resources: false,
+          dependency_fingerprint: original.clone(),
+          output: None,
+          merged_at: "before".into(),
+          duplicates: Vec::new(),
+        };
+        assert!(!reusable(&record, &changed, Path::new("unused"), false).unwrap());
+      });
+    }
+    assert_eq!(with_tolerances(defaults, || signature("ymap", &files).unwrap()), original);
+  }
+
+  #[test]
+  fn merge_cache_checks_content_outputs_and_noop_results() {
+    let root = std::env::temp_dir().join(format!("merge_cache_check_{}", std::process::id()));
+    let _ = fs::remove_dir_all(&root);
+    fs::create_dir_all(root.join("ybn")).unwrap();
+    let path = root.join("ybn/map.ybn");
+    fs::write(&path, b"merged").unwrap();
+    let fingerprint = Fingerprint::read(&path, None, false).unwrap();
+    let mut record = FileRecord {
+      merge_sources: vec![],
+      vanilla: None,
+      dependencies: BTreeSet::new(),
+      replaces_other_resources: false,
+      dependency_fingerprint: "signature".into(),
+      output: Some(OutputFile {
+        path: "ybn/map.ybn".into(),
+        fingerprint: fingerprint.clone(),
+      }),
+      merged_at: "original".into(),
+      duplicates: Vec::new(),
+    };
+    assert!(reusable(&record, "signature", &root, false).unwrap());
+    assert!(!reusable(&record, "changed", &root, false).unwrap());
+    assert!(!reusable(&record, "signature", &root, true).unwrap());
+    fs::File::options()
+      .write(true)
+      .open(&path)
+      .unwrap()
+      .set_times(
+        fs::FileTimes::new()
+          .set_modified(std::time::UNIX_EPOCH + std::time::Duration::from_secs(10)),
+      )
+      .unwrap();
+    assert!(
+      Fingerprint::read(&path, Some(&fingerprint), false).unwrap().same_content(&fingerprint)
+    );
+    assert!(reusable(&record, "signature", &root, false).unwrap());
+    fs::write(&path, b"broken content").unwrap();
+    assert!(!reusable(&record, "signature", &root, false).unwrap());
+    fs::remove_file(&path).unwrap();
+    assert!(!reusable(&record, "signature", &root, false).unwrap());
+    record.output = None;
+    assert!(reusable(&record, "signature", &root, false).unwrap());
+    assert!(output_path(&root, "../outside").is_err());
+    fs::remove_dir_all(root).unwrap();
+  }
+}

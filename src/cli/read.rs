@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 
 use bpaf::*;
 
-use crate::core::read::{Read, ReadTarget};
+use crate::app::map::read::{Read, ReadTarget};
 
 /// A parsed `--read`, whose `--gamebuild` is resolved when it runs.
 #[derive(Debug, Clone)]

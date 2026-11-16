@@ -6,7 +6,6 @@
 mod apply;
 mod box_occluders;
 mod car_generators;
-mod context;
 mod distant_lod_lights;
 mod document;
 mod entities;

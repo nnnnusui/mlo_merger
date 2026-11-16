@@ -9,15 +9,13 @@ use crate::core::format::ymap::compare::{YmapComparisonDiff, YmapComparisonFile}
 
 use serde_json::json;
 
+use crate::app::map::compare::{StreamFileRef, YmapComparisonContext};
 use crate::core::format::{
   gamefile::{
     meta::{MetaResource, MetaSchemaCatalog},
     rsc7::Rsc7Resource,
   },
-  ymap::{
-    binary::{write_ymap, ymap_to_model},
-    compare::{StreamFileRef, YmapComparisonContext},
-  },
+  ymap::binary::{write_ymap, ymap_to_model},
 };
 
 #[test]
@@ -25,7 +23,7 @@ use crate::core::format::{
 fn get_diff_fingerprints_both_files_and_derives_their_differences() {
   let name = "ap1_01_a.ymap";
   let vanilla_bytes =
-    fs::read(crate::core::vanilla_cache::test_support::asset_latest_file(name)).unwrap();
+    fs::read(crate::app::map::vanilla_cache::test_support::asset_latest_file(name)).unwrap();
   let mut catalog = MetaSchemaCatalog::default();
   catalog
     .add_resource(&MetaResource::parse(&Rsc7Resource::decode(&vanilla_bytes).unwrap()).unwrap());
@@ -44,7 +42,7 @@ fn get_diff_fingerprints_both_files_and_derives_their_differences() {
   let object = format!("v1/ymap/{name}");
   fs::create_dir_all(root.join("vanilla/v1/ymap")).unwrap();
   fs::write(root.join("vanilla").join(&object), &vanilla_bytes).unwrap();
-  crate::core::vanilla_cache::test_support::write_cache_info(
+  crate::app::map::vanilla_cache::test_support::write_cache_info(
     &vanilla_cache,
     "../vanilla",
     "v1",

@@ -66,7 +66,7 @@ pub fn run(command: Merge) -> Result<String, Box<dyn std::error::Error>> {
     &command.overwrite_dir,
     &command.overwrite_cache_dir,
   )?;
-  crate::core::merge::Merge {
+  crate::app::map::merge::Merge {
     source_dir: command.source_dir,
     vanilla_cache_dir: command.common.vanilla_cache,
     source_cache_dir: command.common.source_cache,

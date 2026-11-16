@@ -1,4 +1,4 @@
-use crate::core::find::{EntityQuery, InputStores};
+use crate::app::map::find::{EntityQuery, InputStores};
 use bpaf::*;
 use std::path::{Path, PathBuf};
 
@@ -175,7 +175,7 @@ fn search_parser(asset: &Path) -> impl Parser<Find> + use<> {
 
 /// Writes only the search result XML to standard output.
 pub fn run(command: Find) -> Result<String, Box<dyn std::error::Error>> {
-  let xml = crate::core::find::FindEntity {
+  let xml = crate::app::map::find::FindEntity {
     query: command.query,
     merged_dir: command.merged_dir,
     stores: command.stores,

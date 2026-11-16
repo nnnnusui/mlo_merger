@@ -250,7 +250,7 @@ mod tests {
   fn the_table_holds_the_latest_vanilla_schemas() {
     let mut catalog = MetaSchemaCatalog::default();
     let mut conflicts = Vec::new();
-    for path in crate::core::vanilla_cache::test_support::asset_latest_files("ymap") {
+    for path in crate::app::map::vanilla_cache::test_support::asset_latest_files("ymap") {
       let Ok(Resource::Rsc7(resource)) = Resource::decode(&fs::read(&path).unwrap()) else {
         continue;
       };

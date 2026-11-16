@@ -34,7 +34,7 @@ fn options(asset: &Path) -> impl Parser<Deploy> + use<> {
 
 /// Deploys only files whose contents need copying.
 pub fn run(command: Deploy) -> Result<String, Box<dyn std::error::Error>> {
-  let summary = crate::core::deploy::Deploy {
+  let summary = crate::app::map::deploy::Deploy {
     merged_dir: command.merged_dir,
     source_cache_dir: command.common.source_cache,
     output_dir: command.common.output,

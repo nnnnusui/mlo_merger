@@ -47,7 +47,7 @@ pub fn run(command: GetDiff) -> Result<String, Box<dyn std::error::Error>> {
   if command.after.is_some() {
     return Ok(run_mock(command));
   }
-  let output = crate::core::get_diff::generate_ymap_diff(
+  let output = crate::app::map::get_diff::generate_ymap_diff(
     &command.before,
     &command.common.vanilla_cache,
     &command.common.output,

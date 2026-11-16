@@ -76,29 +76,29 @@ manifest deserialization and the YMAP/YBN/YMT output paths.
   entry points; keep argument parsing and terminal concerns in `cli`.
 - [x] Keep the new app entry points dependent on `core`, without a reverse
   dependency.
-- [ ] Route the remaining CLI workflows through app modules as their owners move
+- [x] Route the remaining CLI workflows through app modules as their owners move
   in Phase 3.
 
 **Validation:** run CLI parsing tests and both feature-generation test groups;
 confirm command names, arguments and defaults are unchanged.
 
-Phase 2 generation entry points are in place. The map pipeline now lives in
-`app/map`; it temporarily uses the core vanilla-generation helper while the
-remaining core workflows move. Deprecated core generation wrappers remain
-temporarily for Rust API compatibility pending the decision in Phase 4.
+Phase 2 generation entry points are in place. Map workflows now live in
+`app/map`; the shared vanilla archive implementation remains in `core/vanilla`.
+Clothing generation uses the core YMT classifier and retains its deprecated
+core compatibility entry point pending the Phase 4 API decision.
 
 ### 3. Move Feature-Owned Workflows
 
 - [x] Move map pipeline orchestration to `app/map`.
 - [x] Move map-wide store-check orchestration to `app/map`; keep the generic
   finding types and recorder in `core/check`.
-- [ ] Move map-specific `vanilla_cache`, `source_cache`, `overwrite`,
+- [x] Move map-specific `vanilla_cache`, `source_cache`, `overwrite`,
   `overwrite_cache`, `merge` and `deploy` modules under `app/map`.
 - [x] Move the clothing counts cache under `app/clothing`.
 - [x] Move raw clothing generation orchestration to `app/clothing`; retain the
   core YMT classifier and deprecated compatibility API until compatibility is
   resolved in Phase 4.
-- [ ] Route the remaining map CLI workflows through `app/map`, keeping parsing
+- [x] Route the remaining map CLI workflows through `app/map`, keeping parsing
   and terminal concerns in `cli`.
 - [ ] Place future clothing source analysis and composition in `app/clothing`,
   reusing shared `core` services rather than importing `app/map`.
@@ -106,8 +106,12 @@ temporarily for Rust API compatibility pending the decision in Phase 4.
   `core`, `common` or `platform` according to their ownership.
 
 **Validation:** run the map pipeline, source-cache, overwrite, merge, deployment
-and clothing tests after each owner moves. Check that shared modules do not import
-either feature module.
+and clothing tests after each owner moves. Check that core runtime modules do
+not import either feature module.
+
+Map workflow modules and CLI dispatch now use `app/map`. Format-level YMAP diff
+models remain in `core/format`; the cache-backed comparison context belongs to
+`app/map`.
 
 ### 4. Remove Transitional Paths and Close the Migration
 

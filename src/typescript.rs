@@ -44,14 +44,14 @@ pub fn export_types(output: &Path) -> Result<(), Box<dyn std::error::Error>> {
   }
   fs::write(output, types)?;
   let mut file = fs::OpenOptions::new().append(true).open(output)?;
-  std::io::Write::write_all(&mut file, crate::core::overwrite::YMAP_DIFF_SKIP_TS.as_bytes())?;
+  std::io::Write::write_all(&mut file, crate::app::map::overwrite::YMAP_DIFF_SKIP_TS.as_bytes())?;
   Ok(())
 }
 
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::core::stream_conflicts::{StreamConflictReport, StreamFileConflict};
+  use crate::app::map::stream_conflicts::{StreamConflictReport, StreamFileConflict};
   use std::collections::BTreeMap;
 
   #[test]

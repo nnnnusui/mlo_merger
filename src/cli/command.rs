@@ -381,7 +381,7 @@ mod tests {
     };
     assert_eq!(
       command.query,
-      crate::core::find::EntityQuery::FileFromPosition {
+      crate::app::map::find::EntityQuery::FileFromPosition {
         position: [-3.5, 4.2, -2.0]
       }
     );
@@ -407,7 +407,7 @@ mod tests {
     };
     assert_eq!(
       command.query,
-      crate::core::find::EntityQuery::OccludePosition {
+      crate::app::map::find::EntityQuery::OccludePosition {
         position: [1.0, 2.0, 3.0],
         radius: 1.5
       }
@@ -812,7 +812,7 @@ mod tests {
     else {
       panic!("Expected find command")
     };
-    assert_eq!(command.query, crate::core::find::EntityQuery::Guid(2443198849));
+    assert_eq!(command.query, crate::app::map::find::EntityQuery::Guid(2443198849));
     assert_eq!(command.filter.as_deref(), Some("lr_cs4_10_strm_0.ymap"));
     assert!(command.diff_all);
     assert_eq!(command.merged_dir, PathBuf::from("asset/merged"));
@@ -871,7 +871,7 @@ mod tests {
     };
     assert_eq!(
       command.query,
-      crate::core::find::EntityQuery::Position {
+      crate::app::map::find::EntityQuery::Position {
         position: [3.5, 4.2, 0.0],
         radius: 1.0
       }
@@ -884,7 +884,7 @@ mod tests {
     };
     assert_eq!(
       command.query,
-      crate::core::find::EntityQuery::Position {
+      crate::app::map::find::EntityQuery::Position {
         position: [-3.5, 4.2, -2.0],
         radius: 1.0
       }
@@ -923,7 +923,7 @@ mod tests {
     };
     assert_eq!(
       command.query,
-      crate::core::find::EntityQuery::YbnPosition {
+      crate::app::map::find::EntityQuery::YbnPosition {
         position: [1211.126, -507.5948, 67.54723],
         radius: 1.0,
         kind: Some("box".into()),
@@ -942,7 +942,7 @@ mod tests {
     };
     assert_eq!(
       defaults.query,
-      crate::core::find::EntityQuery::YbnPosition {
+      crate::app::map::find::EntityQuery::YbnPosition {
         position: [-1.0, 2.0, -3.0],
         radius: 1.0,
         kind: None,

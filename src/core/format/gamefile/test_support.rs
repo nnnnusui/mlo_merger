@@ -26,7 +26,7 @@ pub(crate) fn sample_ymap_catalog() -> &'static MetaSchemaCatalog {
     let base = Path::new(env!("CARGO_MANIFEST_DIR"));
     let mut catalog = MetaSchemaCatalog::default();
     // The latest vanilla YMAPs are in the vanilla archive the local vanilla cache names.
-    let latest = crate::core::vanilla_cache::latest_files(&base.join("asset/vanilla-cache"))
+    let latest = crate::app::map::vanilla_cache::latest_files(&base.join("asset/vanilla-cache"))
       .unwrap_or_default()
       .into_iter()
       .map(|file| file.path);

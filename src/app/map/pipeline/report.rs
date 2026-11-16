@@ -1,7 +1,7 @@
 //! What a pipeline run reports.
 
+use crate::app::map::{deploy::DeploySummary, overwrite_cache::OverwriteWarnings};
 use crate::common::changes::StoreChanges;
-use crate::core::{deploy::DeploySummary, overwrite_cache::OverwriteWarnings};
 use serde::Serialize;
 
 /// Store files changed by each cached stage of a run.

@@ -4,11 +4,11 @@ mod report;
 #[cfg(test)]
 mod tests;
 
-use crate::common::path::absolute_path;
-use crate::core::config::gamebuild::GameBuild;
-use crate::core::{
+use super::{
   deploy::Deploy, merge::Merge, source_cache::BuildSourceCache, vanilla_cache::BuildVanillaCache,
 };
+use crate::common::path::absolute_path;
+use crate::core::config::gamebuild::GameBuild;
 use crate::platform::fs;
 use crate::platform::process;
 use std::path::PathBuf;
@@ -101,7 +101,7 @@ impl Pipeline {
     .run()?;
 
     tracing::info!("Pipeline: generate-overwrite-cache");
-    crate::core::overwrite_cache::BuildOverwriteCache {
+    crate::app::map::overwrite_cache::BuildOverwriteCache {
       source_dir: self.source_dir.clone(),
       source_cache_dir: self.source_cache_dir.clone(),
       vanilla_cache_dir: self.vanilla_cache_dir.clone(),

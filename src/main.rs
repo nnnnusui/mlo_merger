@@ -38,7 +38,7 @@ fn run_cli() -> Result<(), Box<dyn std::error::Error>> {
 fn terminal_filter(filter: EnvFilter) -> Result<EnvFilter, Box<dyn std::error::Error>> {
   Ok(
     filter
-      .add_directive("mlo_merger::core::merge=warn".parse()?)
+      .add_directive("mlo_merger::app::map::merge=warn".parse()?)
       .add_directive("mlo_merger::core::format::ymap::compare=warn".parse()?),
   )
 }
@@ -59,15 +59,15 @@ mod tests {
         .with_filter(terminal_filter(tracing_subscriber::EnvFilter::new("info")).unwrap()),
     );
     tracing::subscriber::with_default(subscriber, || {
-      tracing::info!(target: "mlo_merger::core::merge::run::engine::plan", "merge detail");
-      tracing::warn!(target: "mlo_merger::core::merge::run::engine::plan", "merge warning");
+      tracing::info!(target: "mlo_merger::app::map::merge::run::engine::plan", "merge detail");
+      tracing::warn!(target: "mlo_merger::app::map::merge::run::engine::plan", "merge warning");
       tracing::info!(target: "mlo_merger::core::format::ymap::compare::merge", "comparison detail");
       tracing::info!(target: "mlo_merger::cli::merge", "progress");
     });
 
     assert_eq!(
       *targets.lock().unwrap(),
-      ["mlo_merger::core::merge::run::engine::plan", "mlo_merger::cli::merge"]
+      ["mlo_merger::app::map::merge::run::engine::plan", "mlo_merger::cli::merge"]
     );
   }
 

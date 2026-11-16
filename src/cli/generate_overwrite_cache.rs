@@ -55,7 +55,7 @@ pub(crate) fn update(
   output_dir: &Path,
 ) -> Result<bool, Box<dyn std::error::Error>> {
   super::generate_source_cache::update(common, source_dir, exclusions)?;
-  crate::core::overwrite_cache::BuildOverwriteCache {
+  crate::app::map::overwrite_cache::BuildOverwriteCache {
     source_dir: source_dir.to_path_buf(),
     source_cache_dir: common.source_cache.clone(),
     vanilla_cache_dir: common.vanilla_cache.clone(),

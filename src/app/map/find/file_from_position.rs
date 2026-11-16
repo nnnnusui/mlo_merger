@@ -1,0 +1,664 @@
+use super::{FindEntity, Input, MergeCache, Result, aabb_intersects_radius, search_inputs};
+use crate::core::format::{
+  ybn::read_ybn_bound_tree, ymap::binary::ymap_entities_extents, ymap::model::Ymap,
+};
+use crate::platform::fs;
+use crate::platform::fs::WalkDir;
+use crate::platform::process;
+#[cfg(not(test))]
+use crate::platform::progress::ProgressDrawTarget;
+use crate::platform::progress::{ProgressBar, ProgressStyle};
+use serde::Serialize;
+#[cfg(not(test))]
+use std::io::IsTerminal;
+use std::{
+  collections::HashMap,
+  path::{Path, PathBuf},
+  time::Duration,
+};
+
+#[derive(Serialize)]
+#[serde(rename = "FileFromPositionSearch")]
+struct SearchResult {
+  #[serde(rename = "@position")]
+  position: String,
+  #[serde(rename = "File")]
+  files: Vec<FileResult>,
+}
+
+#[derive(Serialize)]
+struct FileResult {
+  #[serde(rename = "@name")]
+  name: String,
+  #[serde(rename = "@type")]
+  kind: &'static str,
+  #[serde(rename = "@stage")]
+  stage: &'static str,
+  #[serde(rename = "@path")]
+  path: String,
+  #[serde(rename = "@resource", skip_serializing_if = "Option::is_none")]
+  resource: Option<String>,
+  #[serde(rename = "@originalPath", skip_serializing_if = "Option::is_none")]
+  original_path: Option<String>,
+  #[serde(rename = "@version", skip_serializing_if = "Option::is_none")]
+  version: Option<String>,
+}
+
+pub(super) struct Candidate {
+  pub(super) name: String,
+  pub(super) extension: &'static str,
+  pub(super) path: PathBuf,
+  pub(super) stage: &'static str,
+  pub(super) resource: Option<String>,
+  pub(super) original_path: Option<String>,
+  pub(super) version: Option<String>,
+  pub(super) strict: bool,
+}
+
+pub(super) fn run(
+  search: &FindEntity,
+  position: [f64; 3],
+) -> Result<String> {
+  #[cfg(not(test))]
+  let log_progress = !std::io::stderr().is_terminal();
+  #[cfg(test)]
+  let log_progress = false;
+  #[cfg(test)]
+  let progress = ProgressBar::hidden();
+  #[cfg(not(test))]
+  let progress = ProgressBar::with_draw_target(Some(0), ProgressDrawTarget::stderr());
+  progress.set_style(ProgressStyle::with_template("{spinner:.green} {msg}")?);
+  progress.enable_steady_tick(Duration::from_millis(100));
+  progress.set_message("Collecting file-from-position inputs");
+  if log_progress {
+    eprintln!("file-from-position: collecting search inputs");
+  }
+  let candidates = collect_candidates(search, &progress)?;
+  let total = candidates.len();
+  progress.set_length(total as u64);
+  if log_progress {
+    eprintln!("file-from-position: checking {total} files");
+  }
+  progress.set_style(
+    ProgressStyle::with_template(
+      "{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} {msg}",
+    )?
+    .progress_chars("##-"),
+  );
+  let mut files = Vec::new();
+  #[cfg(not(test))]
+  let mut skipped = 0usize;
+  for candidate in candidates {
+    progress.set_message(candidate.path.display().to_string());
+    match matching_file(&candidate, position) {
+      Ok(Some(file)) => files.push(file),
+      Ok(None) => {}
+      Err(error) if candidate.strict => return Err(error),
+      Err(error) => {
+        #[cfg(not(test))]
+        {
+          skipped += 1;
+        }
+        progress.println(format!("Warning: skipped {}: {error}", candidate.path.display()));
+      }
+    }
+    progress.inc(1);
+    if log_progress && progress.position().is_multiple_of(1000) {
+      eprintln!("file-from-position: checked {}/{} files", progress.position(), total);
+    }
+  }
+  #[cfg(not(test))]
+  let checked = progress.position();
+  progress.finish_and_clear();
+  #[cfg(not(test))]
+  eprintln!(
+    "file-from-position: checked {checked} files, found {}, skipped {skipped}",
+    files.len()
+  );
+  let result = SearchResult {
+    position: format!("{},{},{}", position[0], position[1], position[2]),
+    files,
+  };
+  let mut xml = String::new();
+  let mut serializer = quick_xml::se::Serializer::new(&mut xml);
+  serializer.indent(' ', 2);
+  result.serialize(serializer)?;
+  Ok(xml)
+}
+
+pub(super) fn collect_candidates(
+  search: &FindEntity,
+  progress: &ProgressBar,
+) -> Result<Vec<Candidate>> {
+  collect_candidates_from(
+    search,
+    progress,
+    &search.stores.source_dir,
+    &search.stores.source_cache_dir,
+    &search.stores.vanilla_cache_dir,
+  )
+}
+
+fn collect_candidates_from(
+  search: &FindEntity,
+  progress: &ProgressBar,
+  source_dir: &Path,
+  source_cache_dir: &Path,
+  vanilla_cache_dir: &Path,
+) -> Result<Vec<Candidate>> {
+  let filter = super::filename_filter(search.filter.as_deref())?;
+  let mut candidates = Vec::new();
+  let mut paths = SeenPaths::new();
+  for extension in ["ymap", "ybn"] {
+    if search.diff_all && !fs::is_dir(&search.merged_dir) {
+      progress
+        .println(format!("Warning: merged directory is missing: {}", search.merged_dir.display()));
+      continue;
+    }
+    let missing_provenance =
+      search.diff_all && !fs::is_file(crate::app::map::merge::cache_info_path(&search.merged_dir));
+    let merged_only;
+    let search_config = if missing_provenance {
+      merged_only = FindEntity {
+        diff_all: false,
+        ..search.clone()
+      };
+      &merged_only
+    } else {
+      search
+    };
+    if missing_provenance {
+      progress.println("Warning: merge provenance is missing; scanning available stores only");
+    }
+    let (merged_paths, cache, names) = search_inputs(search_config, extension)?;
+    for name in names {
+      if let Some(path) = merged_paths.get(&name) {
+        push_candidate(
+          &mut candidates,
+          &mut paths,
+          Candidate {
+            name: name.clone(),
+            extension,
+            path: path.clone(),
+            stage: "merged",
+            resource: None,
+            original_path: None,
+            version: None,
+            strict: true,
+          },
+        );
+      }
+      if let Some(cache) = &cache {
+        append_cached_candidates(&mut candidates, &mut paths, &name, extension, cache)?;
+      }
+    }
+  }
+  if search.diff_all {
+    collect_source_candidates(&mut candidates, &mut paths, source_dir, filter.as_ref(), progress)?;
+    collect_source_cache_candidates(
+      &mut candidates,
+      &mut paths,
+      source_dir,
+      source_cache_dir,
+      filter.as_ref(),
+      progress,
+    )?;
+    collect_vanilla_candidates(
+      &mut candidates,
+      &mut paths,
+      vanilla_cache_dir,
+      filter.as_ref(),
+      progress,
+    )?;
+  }
+  Ok(candidates)
+}
+
+fn append_cached_candidates(
+  candidates: &mut Vec<Candidate>,
+  paths: &mut SeenPaths,
+  name: &str,
+  extension: &'static str,
+  cache: &MergeCache,
+) -> Result<()> {
+  let record =
+    cache.files.get(name).ok_or_else(|| format!("No pre-merge provenance recorded for {name}"))?;
+  if let Some(input) = &record.vanilla {
+    push_candidate(candidates, paths, provenance_candidate(name, extension, input, "vanilla"));
+  }
+  // Changes carried over to a newer generation are merged from diff documents, not stream files.
+  for input in record
+    .merge_sources
+    .iter()
+    .filter(|input| !input.path.to_string_lossy().ends_with(".diff.json"))
+  {
+    push_candidate(candidates, paths, provenance_candidate(name, extension, input, "source"));
+  }
+  Ok(())
+}
+
+fn provenance_candidate(
+  name: &str,
+  extension: &'static str,
+  input: &Input,
+  stage: &'static str,
+) -> Candidate {
+  Candidate {
+    name: name.to_string(),
+    extension,
+    path: input.path.clone(),
+    stage,
+    resource: input.resource.clone(),
+    original_path: input
+      .original_path
+      .as_ref()
+      .map(|path| path.to_string_lossy().replace('\\', "/")),
+    version: None,
+    strict: true,
+  }
+}
+
+fn collect_source_candidates(
+  candidates: &mut Vec<Candidate>,
+  paths: &mut SeenPaths,
+  source_dir: &Path,
+  filter: Option<&globset::GlobMatcher>,
+  progress: &ProgressBar,
+) -> Result<()> {
+  if !fs::is_dir(source_dir) {
+    progress.println(format!("Warning: source directory is missing: {}", source_dir.display()));
+    return Ok(());
+  }
+  for entry in WalkDir::new(source_dir).follow_links(false) {
+    let entry = match entry {
+      Ok(entry) => entry,
+      Err(error) => {
+        progress.println(format!("Warning: {error}"));
+        continue;
+      }
+    };
+    if !entry.file_type().is_file() {
+      continue;
+    }
+    let path = entry.path();
+    let Some((name, extension)) = stream_name(path) else {
+      continue;
+    };
+    if !filter_matches(filter, &name) {
+      continue;
+    }
+    let resource = path
+      .ancestors()
+      .skip(1)
+      .find(|directory| {
+        fs::is_file(directory.join("fxmanifest.lua"))
+          || fs::is_file(directory.join("__resource.lua"))
+      })
+      .and_then(|directory| directory.strip_prefix(source_dir).ok())
+      .map(|relative| relative.to_string_lossy().replace('\\', "/"));
+    push_candidate(
+      candidates,
+      paths,
+      Candidate {
+        name,
+        extension,
+        path: path.to_path_buf(),
+        stage: "source",
+        resource,
+        original_path: None,
+        version: None,
+        strict: false,
+      },
+    );
+  }
+  Ok(())
+}
+
+fn collect_source_cache_candidates(
+  candidates: &mut Vec<Candidate>,
+  paths: &mut SeenPaths,
+  source_dir: &Path,
+  cache_root: &Path,
+  filter: Option<&globset::GlobMatcher>,
+  progress: &ProgressBar,
+) -> Result<()> {
+  if !fs::is_file(crate::app::map::source_cache::cache_info_path(cache_root)) {
+    return Ok(());
+  }
+  for file in crate::app::map::source_cache::inventoried_files(cache_root, source_dir)? {
+    let Some((_, extension)) = stream_name(Path::new(&file.file_name)) else {
+      continue;
+    };
+    if !file.moved || !filter_matches(filter, &file.file_name.to_ascii_lowercase()) {
+      continue;
+    }
+    // A file back in its resource is listed from the source.
+    if fs::is_file(source_dir.join(&file.source_path)) {
+      continue;
+    }
+    if !fs::is_file(&file.path) {
+      progress
+        .println(format!("Warning: source-cache artifact is missing: {}", file.path.display()));
+      continue;
+    }
+    push_candidate(
+      candidates,
+      paths,
+      Candidate {
+        name: file.file_name.to_ascii_lowercase(),
+        extension,
+        path: file.path,
+        stage: "source-cache",
+        resource: Some(file.resource),
+        original_path: Some(file.source_path),
+        version: None,
+        strict: false,
+      },
+    );
+  }
+  Ok(())
+}
+
+fn collect_vanilla_candidates(
+  candidates: &mut Vec<Candidate>,
+  paths: &mut SeenPaths,
+  cache_root: &Path,
+  filter: Option<&globset::GlobMatcher>,
+  progress: &ProgressBar,
+) -> Result<()> {
+  let manifest_path = cache_root.join("cache_info.json");
+  if !fs::is_file(&manifest_path) {
+    progress
+      .println(format!("Warning: vanilla-cache manifest is missing: {}", manifest_path.display()));
+    return Ok(());
+  }
+  for file in crate::app::map::vanilla_cache::latest_files(cache_root)? {
+    let name = file.name;
+    let Some((_, extension)) = stream_name(Path::new(&name)) else {
+      continue;
+    };
+    if !filter_matches(filter, &name.to_ascii_lowercase()) {
+      continue;
+    }
+    let path = file.path;
+    if !fs::is_file(&path) {
+      progress.println(format!("Warning: vanilla-cache artifact is missing: {}", path.display()));
+      continue;
+    }
+    push_candidate(
+      candidates,
+      paths,
+      Candidate {
+        name: name.to_ascii_lowercase(),
+        extension,
+        path,
+        stage: "vanilla-cache",
+        resource: None,
+        original_path: None,
+        version: Some(file.version),
+        strict: false,
+      },
+    );
+  }
+  Ok(())
+}
+
+/// The files already collected, by the file each path resolves to.
+///
+/// Merge provenance records absolute paths, and the vanilla cache names latest files through
+/// its path to the vanilla archive, while the stores are scanned relative to the working
+/// directory, so one file reaches the candidates by several spellings.
+struct SeenPaths {
+  /// The index of each resolved path's candidate.
+  resolved: HashMap<PathBuf, usize>,
+  working_dir: Option<PathBuf>,
+}
+
+impl SeenPaths {
+  fn new() -> Self {
+    Self {
+      resolved: HashMap::new(),
+      working_dir: process::current_dir().and_then(|directory| fs::canonicalize(&directory)).ok(),
+    }
+  }
+
+  fn resolve(
+    &self,
+    path: &Path,
+  ) -> PathBuf {
+    display_path(path, self.working_dir.as_deref())
+  }
+}
+
+/// The path `path` resolves to, relative to `working_dir` (canonical) when it is inside it;
+/// `path` itself, made relative the same way, when it cannot be resolved.
+pub(super) fn display_path(
+  path: &Path,
+  working_dir: Option<&Path>,
+) -> PathBuf {
+  let resolved = fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+  match working_dir.and_then(|directory| resolved.strip_prefix(directory).ok()) {
+    Some(relative) => relative.to_path_buf(),
+    None => resolved,
+  }
+}
+
+/// Adds `candidate` unless its file is already a candidate, whose missing details it then
+/// fills in, such as the vanilla version merge provenance does not record.
+fn push_candidate(
+  candidates: &mut Vec<Candidate>,
+  paths: &mut SeenPaths,
+  mut candidate: Candidate,
+) {
+  candidate.path = paths.resolve(&candidate.path);
+  if let Some(&index) = paths.resolved.get(&candidate.path) {
+    let existing = &mut candidates[index];
+    existing.resource = existing.resource.take().or(candidate.resource);
+    existing.original_path = existing.original_path.take().or(candidate.original_path);
+    existing.version = existing.version.take().or(candidate.version);
+    return;
+  }
+  paths.resolved.insert(candidate.path.clone(), candidates.len());
+  candidates.push(candidate);
+}
+
+pub(super) fn stream_name(path: &Path) -> Option<(String, &'static str)> {
+  let name = path.file_name()?.to_str()?.to_ascii_lowercase();
+  let extension = path.extension()?.to_str()?.to_ascii_lowercase();
+  let extension = match extension.as_str() {
+    "ymap" => "ymap",
+    "ybn" => "ybn",
+    _ => return None,
+  };
+  Some((name, extension))
+}
+
+fn filter_matches(
+  filter: Option<&globset::GlobMatcher>,
+  name: &str,
+) -> bool {
+  filter.is_none_or(|filter| filter.is_match(name))
+}
+
+fn matching_file(
+  candidate: &Candidate,
+  position: [f64; 3],
+) -> Result<Option<FileResult>> {
+  let Some(bounds) = spatial_bounds(candidate)? else {
+    return Ok(None);
+  };
+  let matched = aabb_intersects_radius(
+    position.map(|value| value as f32 as f64),
+    0.0,
+    bounds.minimum,
+    bounds.maximum,
+  )
+  .unwrap_or(false);
+  Ok(matched.then(|| FileResult {
+    name: candidate.name.clone(),
+    kind: candidate.extension,
+    stage: candidate.stage,
+    path: candidate.path.to_string_lossy().replace('\\', "/"),
+    resource: candidate.resource.clone(),
+    original_path: candidate.original_path.clone(),
+    version: candidate.version.clone(),
+  }))
+}
+
+pub(super) struct SpatialBounds {
+  pub(super) minimum: [f64; 3],
+  pub(super) maximum: [f64; 3],
+}
+
+/// The bounds of the candidate's file: a YMAP's stored entity extents, or the world bounds of
+/// every bound of a YBN.
+///
+/// Only what the bounds need is decoded: a YMAP's extents without its entities, a YBN's bound
+/// tree without its geometry. Damage elsewhere in the file is therefore not reported here.
+pub(super) fn spatial_bounds(candidate: &Candidate) -> Result<Option<SpatialBounds>> {
+  let failed = |error: std::io::Error| -> Box<dyn std::error::Error> {
+    format!("Cannot read {} resource {}: {error}", candidate.stage, candidate.path.display()).into()
+  };
+  let bytes = crate::platform::fs::read(&candidate.path).map_err(failed)?;
+  let bounds = match candidate.extension {
+    "ymap" => {
+      let (minimum, maximum) =
+        ymap_entities_extents(&bytes, &std::collections::HashMap::new()).map_err(failed)?;
+      Some((
+        [minimum.x, minimum.y, minimum.z].map(f64::from),
+        [maximum.x, maximum.y, maximum.z].map(f64::from),
+      ))
+    }
+    "ybn" => super::ybn::world_bounds(&read_ybn_bound_tree(&bytes).map_err(failed)?)?,
+    extension => return Err(format!("No bounds for .{extension} files").into()),
+  };
+  Ok(bounds.map(|(minimum, maximum)| SpatialBounds {
+    minimum,
+    maximum,
+  }))
+}
+
+/// Returns the YMAP's stored entity extents as `(minimum, maximum)`.
+pub(super) fn ymap_extents(model: &Ymap) -> ([f64; 3], [f64; 3]) {
+  let minimum = &model.entities_extents_min;
+  let maximum = &model.entities_extents_max;
+  (
+    [minimum.x, minimum.y, minimum.z].map(f64::from),
+    [maximum.x, maximum.y, maximum.z].map(f64::from),
+  )
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+  use crate::platform::fs;
+
+  #[test]
+  fn all_candidates_include_source_moved_source_and_latest_vanilla_files() {
+    let root = std::env::temp_dir().join(format!("find_all_candidates_{}", std::process::id()));
+    let _ = fs::remove_dir_all(&root);
+    let source = root.join("source");
+    let source_cache = root.join("source-cache");
+    let vanilla_cache = root.join("vanilla-cache");
+    let merged = root.join("merged");
+    fs::create_dir_all(source.join("resource/stream")).unwrap();
+    fs::create_dir_all(source_cache.join("resources/moved/stream")).unwrap();
+    fs::create_dir_all(root.join("vanilla/0029-mpapartment/ymap")).unwrap();
+    fs::create_dir_all(merged.join("ymap")).unwrap();
+    fs::create_dir_all(merged.join("ybn")).unwrap();
+    fs::write(source.join("resource/stream/live.ymap"), b"source").unwrap();
+    fs::write(merged.join("ymap/merged.ymap"), b"merged").unwrap();
+    fs::write(source_cache.join("resources/moved/stream/moved.ybn"), b"cached").unwrap();
+    fs::write(root.join("vanilla/0029-mpapartment/ymap/vanilla.ymap"), b"vanilla").unwrap();
+    crate::app::map::source_cache::write_test_inventory(
+      &source_cache,
+      &["resources/moved/stream/moved.ybn"],
+    );
+    crate::app::map::vanilla_cache::test_support::write_cache_info(
+      &vanilla_cache,
+      "../vanilla",
+      "0029-mpapartment",
+      &[("vanilla.ymap", "0029-mpapartment/ymap/vanilla.ymap")],
+    );
+
+    let progress = ProgressBar::hidden();
+    let search = FindEntity {
+      query: super::super::EntityQuery::FileFromPosition {
+        position: [0.0; 3],
+      },
+      merged_dir: merged,
+      stores: crate::app::map::find::InputStores::under(std::path::Path::new("asset")),
+      filter: None,
+      diff_all: true,
+    };
+    let candidates =
+      collect_candidates_from(&search, &progress, &source, &source_cache, &vanilla_cache).unwrap();
+
+    assert!(
+      candidates
+        .iter()
+        .any(|candidate| { candidate.name == "merged.ymap" && candidate.stage == "merged" })
+    );
+    assert!(
+      candidates
+        .iter()
+        .any(|candidate| { candidate.name == "live.ymap" && candidate.stage == "source" })
+    );
+    assert!(candidates.iter().any(|candidate| {
+      candidate.name == "moved.ybn"
+        && candidate.stage == "source-cache"
+        && candidate.resource.as_deref() == Some("moved")
+    }));
+    assert!(candidates.iter().any(|candidate| {
+      candidate.name == "vanilla.ymap"
+        && candidate.stage == "vanilla-cache"
+        && candidate.version.as_deref() == Some("0029-mpapartment")
+        && candidate.path.ends_with("vanilla/0029-mpapartment/ymap/vanilla.ymap")
+    }));
+
+    fs::remove_dir_all(root).unwrap();
+  }
+
+  #[test]
+  fn one_file_named_by_several_paths_is_one_candidate_with_every_detail() {
+    let relative = PathBuf::from(format!("target/find_seen_paths_{}", std::process::id()));
+    let _ = fs::remove_dir_all(&relative);
+    fs::create_dir_all(relative.join("objects")).unwrap();
+    fs::create_dir_all(relative.join("links")).unwrap();
+    let object = relative.join("objects/map.ymap");
+    fs::write(&object, b"vanilla").unwrap();
+    let candidate = |path: PathBuf, stage, version: Option<&str>| Candidate {
+      name: "map.ymap".into(),
+      extension: "ymap",
+      path,
+      stage,
+      resource: None,
+      original_path: None,
+      version: version.map(Into::into),
+      strict: false,
+    };
+    let mut paths = SeenPaths::new();
+    let mut candidates = Vec::new();
+    // Merge provenance names files absolutely, here through a link.
+    #[cfg(unix)]
+    let absolute = {
+      let link = relative.join("links/map.ymap");
+      std::os::unix::fs::symlink(object.canonicalize().unwrap(), &link).unwrap();
+      std::env::current_dir().unwrap().join(link)
+    };
+    #[cfg(not(unix))]
+    let absolute = std::env::current_dir().unwrap().join(&object);
+    push_candidate(&mut candidates, &mut paths, candidate(absolute, "vanilla", None));
+    push_candidate(
+      &mut candidates,
+      &mut paths,
+      candidate(object.clone(), "vanilla-cache", Some("v1")),
+    );
+
+    assert_eq!(candidates.len(), 1);
+    assert_eq!(candidates[0].path, object);
+    assert_eq!(candidates[0].stage, "vanilla");
+    assert_eq!(candidates[0].version.as_deref(), Some("v1"));
+    fs::remove_dir_all(relative).unwrap();
+  }
+}

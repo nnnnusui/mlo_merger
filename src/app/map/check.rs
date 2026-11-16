@@ -44,13 +44,13 @@ impl Check {
       crate::core::vanilla::check(&self.vanilla_dir, deep, findings)
     })?;
     check_store(&mut issues, "vanilla-cache", &self.vanilla_cache_dir, |findings| {
-      crate::core::vanilla_cache::check(&self.vanilla_cache_dir, deep, findings)
+      crate::app::map::vanilla_cache::check(&self.vanilla_cache_dir, deep, findings)
     })?;
     check_store(&mut issues, "source-cache", &self.source_cache_dir, |findings| {
-      crate::core::source_cache::check(&self.source_cache_dir, deep, findings)
+      crate::app::map::source_cache::check(&self.source_cache_dir, deep, findings)
     })?;
     check_store(&mut issues, "overwrite-cache", &self.overwrite_cache_dir, |findings| {
-      crate::core::overwrite_cache::check(
+      crate::app::map::overwrite_cache::check(
         &self.overwrite_cache_dir,
         &self.source_cache_dir,
         &self.vanilla_cache_dir,
@@ -59,10 +59,10 @@ impl Check {
       )
     })?;
     check_store(&mut issues, "merged", &self.merged_dir, |findings| {
-      crate::core::merge::check(&self.merged_dir, deep, findings)
+      crate::app::map::merge::check(&self.merged_dir, deep, findings)
     })?;
     check_store(&mut issues, "deployment", &self.output_dir, |findings| {
-      crate::core::deploy::check(&self.output_dir, deep, findings)
+      crate::app::map::deploy::check(&self.output_dir, deep, findings)
     })?;
     for issue in &issues {
       let detail = issue.detail.as_deref().map(|detail| format!(": {detail}")).unwrap_or_default();

@@ -28,7 +28,7 @@ fn options(asset: &Path) -> impl Parser<GenerateVanillaCache> + use<> {
 
 /// Builds the derived vanilla cache from versioned raw vanilla files; prints nothing.
 pub fn run(command: GenerateVanillaCache) -> Result<String, Box<dyn std::error::Error>> {
-  let result = crate::core::vanilla_cache::BuildVanillaCache {
+  let result = crate::app::map::vanilla_cache::BuildVanillaCache {
     vanilla_dir: command.common.vanilla,
     output_dir: command.common.output,
     gamebuild: common::gamebuild(command.common.gamebuild.as_deref())?,
@@ -42,7 +42,7 @@ pub fn run(command: GenerateVanillaCache) -> Result<String, Box<dyn std::error::
 /// Builds the vanilla cache for `--gamebuild` (the last stage when absent) when its inputs
 /// changed, as a prerequisite of later steps.
 pub(crate) fn update(common: &CommonOptions) -> Result<(), Box<dyn std::error::Error>> {
-  crate::core::vanilla_cache::BuildVanillaCache {
+  crate::app::map::vanilla_cache::BuildVanillaCache {
     vanilla_dir: common.vanilla.clone(),
     output_dir: common.vanilla_cache.clone(),
     gamebuild: common::gamebuild(common.gamebuild.as_deref())?,

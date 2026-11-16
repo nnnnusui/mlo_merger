@@ -1,6 +1,6 @@
 use super::*;
+use crate::app::map::overwrite::IgnoredOverwrite;
 use crate::common::changes::StoreChanges;
-use crate::core::overwrite::IgnoredOverwrite;
 use crate::core::vanilla::{
   CacheVersion, CachedFile, FileChange, VanillaCacheManifest, write_json,
 };
@@ -10,10 +10,10 @@ use std::collections::BTreeMap;
 
 #[test]
 fn report_adds_overwrite_warnings_to_the_changes() {
-  use crate::core::overwrite::IgnoredOverwriteReason;
+  use crate::app::map::overwrite::IgnoredOverwriteReason;
   let report = PipelineReport {
     changes: PipelineChanges::default(),
-    warnings: crate::core::overwrite_cache::OverwriteWarnings {
+    warnings: crate::app::map::overwrite_cache::OverwriteWarnings {
       ignored_overwrites: vec![IgnoredOverwrite {
         resource: Some("resource".into()),
         file: "maps/map.ymap".into(),

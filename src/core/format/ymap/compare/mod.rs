@@ -8,7 +8,6 @@
 //! lights, and how the diffs of several sources combine.
 
 pub mod added;
-mod context;
 mod diff;
 pub mod distant_lod_lights;
 pub mod entities;
@@ -21,7 +20,6 @@ mod merged_items;
 #[cfg(test)]
 mod test;
 
-pub use context::{StreamFileRef, YmapComparisonContext, YmapParentRef};
 pub use diff::{
   YmapComparisonDiff, YmapComparisonFile, YmapComparisonPartner, YmapPropagatedDiff,
   YmapPropagationOrigin, physics_dictionaries,

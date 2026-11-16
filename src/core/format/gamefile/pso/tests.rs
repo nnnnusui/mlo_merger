@@ -18,7 +18,7 @@ fn parses_four_vanilla_pso_ymaps() {
       crate::core::format::ymap::binary::ymap_to_model(&bytes, &HashMap::new()).unwrap();
     assert_eq!(crate::core::vanilla::read_ymap(&path).unwrap(), expected);
     assert_eq!(
-      crate::core::vanilla_cache::ymap_parent_hash(&path).unwrap(),
+      crate::app::map::vanilla_cache::ymap_parent_hash(&path).unwrap(),
       crate::core::format::ymap::reference_hash(&expected.parent),
     );
     // The XML export rebuilds the same file, and so the same model.

@@ -68,8 +68,8 @@ fn assert_readable(
 #[test]
 #[ignore = "reads every local vanilla-cache stream file"]
 fn reads_all_vanilla_cache_latest_stream_files() {
-  let mut paths = crate::core::vanilla_cache::test_support::asset_latest_files("ymap");
-  paths.extend(crate::core::vanilla_cache::test_support::asset_latest_files("ybn"));
+  let mut paths = crate::app::map::vanilla_cache::test_support::asset_latest_files("ymap");
+  paths.extend(crate::app::map::vanilla_cache::test_support::asset_latest_files("ybn"));
   assert_readable("the latest files of asset/vanilla-cache", &paths);
 }
 

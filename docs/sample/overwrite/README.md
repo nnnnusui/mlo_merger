@@ -30,5 +30,5 @@ the added entity by its index in the source (`{"Added": {"target_index": 1}}`).
 (the `sha256` and `size` of the diff document's `target` and `base`); an
 overwrite whose files have changed is not applied.
 
-These files are generated and checked by `core::overwrite::test::samples`; rerun it
+These files are generated and checked by `app::map::overwrite::test::samples`; rerun it
 with `MLO_WRITE_SAMPLES=1` after changing it.

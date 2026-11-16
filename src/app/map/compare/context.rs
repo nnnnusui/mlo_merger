@@ -1,0 +1,426 @@
+use crate::platform::fs;
+use std::{
+  collections::{BTreeSet, HashMap},
+  path::{Path, PathBuf},
+  sync::{Arc, Mutex},
+};
+
+use struct_diff::Diff;
+
+use super::{
+  YmapComparisonDiff, YmapComparisonFile, YmapComparisonPartner, YmapDiffContext,
+  lod_light_pairs::LightSide,
+};
+use crate::{
+  app::map::source_cache::{SourceYmapIndex, load_source_ymap_index, read_stream_bytes},
+  common::{Result, fingerprint::Fingerprint},
+  core::{
+    config::matching,
+    format::ymap::{binary::ymap_to_model, model::Ymap, reference_hash},
+  },
+};
+
+/// A declared parent YMAP.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize)]
+pub enum YmapParentRef {
+  /// Found in the child's resource or in vanilla.
+  Resolved(StreamFileRef),
+  /// The parent's reference hash, matching no YMAP in the child's resource or vanilla.
+  Unresolved(u32),
+}
+
+/// Identifies one YMAP stream file in the vanilla cache or a source resource.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize)]
+pub struct StreamFileRef {
+  /// Source resource name (e.g. `cfx-mlo-example`, its directory name), or `None` for vanilla.
+  pub resource_name: Option<String>,
+  /// Cumulative vanilla cache version the file belongs to.
+  pub vanilla_version: String,
+  /// File name including the `.ymap` extension.
+  pub file_name: String,
+}
+
+#[derive(serde::Deserialize)]
+struct VanillaCacheInfo {
+  latest_version: String,
+}
+
+/// Reads YMAPs from the vanilla and source caches on first use and keeps them for reuse.
+///
+/// Shared between threads: diffs of several files can be taken at once, and a YMAP two of them
+/// read is decoded at most once per thread that reaches it first.
+pub struct YmapComparisonContext {
+  /// The latest vanilla YMAPs keyed by lowercase file name, as files of the vanilla archive with
+  /// their paths in it.
+  pub(super) vanilla_files: HashMap<String, (PathBuf, String)>,
+  /// The stores source files are named relative to in diff documents, most specific first.
+  stores: [PathBuf; 2],
+  pub(super) vanilla_version: String,
+  pub(super) source_index: SourceYmapIndex,
+  /// Lowercase YMAP file names in the vanilla and source caches keyed by their reference hash.
+  file_names_by_hash: HashMap<u32, BTreeSet<String>>,
+  /// Names used to resolve hashes while decoding, e.g. vanilla `hash_names.json`.
+  hash_names: HashMap<u32, String>,
+  pub(super) cache_by_ref: Mutex<HashMap<StreamFileRef, Arc<Ymap>>>,
+}
+
+impl YmapComparisonContext {
+  /// Reads source YMAPs through the inventory of `source_cache_dir`, finding those that were not
+  /// moved into the cache in their resources below `source_dir`.
+  pub fn new(
+    source_dir: &Path,
+    source_cache_dir: &Path,
+    vanilla_cache_dir: &Path,
+    hash_names: HashMap<u32, String>,
+  ) -> Result<Self> {
+    let info: VanillaCacheInfo =
+      serde_json::from_slice(&fs::read(vanilla_cache_dir.join("cache_info.json"))?)?;
+    let source_index = load_source_ymap_index(source_cache_dir, source_dir)?;
+    let mut file_names_by_hash = HashMap::<u32, BTreeSet<String>>::new();
+    let vanilla_files = crate::app::map::vanilla_cache::latest_files(vanilla_cache_dir)?
+      .into_iter()
+      .filter(|file| file.name.to_ascii_lowercase().ends_with(".ymap"))
+      .map(|file| (file.name.to_ascii_lowercase(), (file.path, file.object)))
+      .collect::<HashMap<_, _>>();
+    let source_names = source_index.paths.keys().map(|(_, file_name)| file_name.clone());
+    for file_name in vanilla_files.keys().cloned().chain(source_names) {
+      if let Some(stem) = file_name.strip_suffix(".ymap") {
+        file_names_by_hash.entry(reference_hash(stem)).or_default().insert(file_name);
+      }
+    }
+    Ok(Self {
+      vanilla_files,
+      stores: [source_cache_dir.to_path_buf(), source_dir.to_path_buf()],
+      vanilla_version: info.latest_version,
+      source_index,
+      file_names_by_hash,
+      hash_names,
+      cache_by_ref: Mutex::new(HashMap::new()),
+    })
+  }
+
+  /// Returns the decoded YMAP for `file`, reading it on first access.
+  ///
+  /// The YMAP is shared with the cache, so callers can hold several at once.
+  pub fn get_cache(
+    &self,
+    file: &StreamFileRef,
+  ) -> Result<Arc<Ymap>> {
+    if let Some(ymap) = self.cache().get(file) {
+      return Ok(ymap.clone());
+    }
+    if self.is_added_baseline(file) {
+      return Ok(self.cache().entry(file.clone()).or_insert(Arc::new(Ymap::empty())).clone());
+    }
+    // Decoded without holding the lock, so other threads keep reading their own YMAPs.
+    let (path, _) =
+      resolve_stream_file(&self.vanilla_files, &self.vanilla_version, &self.source_index, file)?;
+    let ymap = Arc::new(ymap_to_model(&read_stream_bytes(&path)?, &self.hash_names)?);
+    Ok(self.cache().entry(file.clone()).or_insert(ymap).clone())
+  }
+
+  /// Whether `file` is the baseline of a YMAP resources add: names no resource, and no vanilla
+  /// YMAP has its name. It is [`Ymap::empty`].
+  fn is_added_baseline(
+    &self,
+    file: &StreamFileRef,
+  ) -> bool {
+    let name = file.file_name.to_ascii_lowercase();
+    file.resource_name.is_none()
+      && !self.vanilla_files.contains_key(&name)
+      && self.source_index.added.contains(&name)
+  }
+
+  /// The decoded YMAPs, keyed by the stream file they were read from.
+  pub(super) fn cache(&self) -> std::sync::MutexGuard<'_, HashMap<StreamFileRef, Arc<Ymap>>> {
+    // A thread that panicked while holding the lock left the map itself intact.
+    self.cache_by_ref.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+  }
+
+  /// The parent YMAP that `file` declares; see [`Self::parent_ref`].
+  #[cfg(test)]
+  pub(super) fn parent_of(
+    &self,
+    file: &StreamFileRef,
+  ) -> Result<Option<YmapParentRef>> {
+    let ymap = self.get_cache(file)?;
+    self.parent_ref(file, &ymap.parent)
+  }
+
+  /// Returns the differences of `file` from the vanilla YMAP of the same name.
+  ///
+  /// Tolerances come from the active matching config (`asset/config.toml`).
+  pub fn get_diff(
+    &self,
+    file: &StreamFileRef,
+  ) -> Result<YmapComparisonDiff> {
+    let baseline = StreamFileRef {
+      resource_name: None,
+      ..file.clone()
+    };
+    let vanilla = self.get_cache(&baseline)?;
+    let modded = self.get_cache(file)?;
+    let vanilla_parent = self.parent_map(&baseline, &vanilla)?;
+    let modded_parent = self.parent_map(file, &modded)?;
+    let ctx = YmapDiffContext::new(
+      matching::current(),
+      (&vanilla, vanilla_parent.as_ref().map(|parent| parent.entities.as_slice())),
+      (&modded, modded_parent.as_ref().map(|parent| parent.entities.as_slice())),
+    );
+    let mut diffs = vanilla.diff(&modded, &ctx).unwrap_or_default();
+    let partner = match self.partner_of(file, &vanilla)? {
+      Some((side, partner, partner_baseline)) => {
+        if partner.resource_name.is_some() {
+          let (partner_vanilla, partner_modded) =
+            (self.get_cache(&partner_baseline)?, self.get_cache(&partner)?);
+          let partner_removed =
+            side.other().removed_between(&partner_vanilla, &partner_modded, &ctx.tolerances);
+          let implied = side.imply_removals(&mut diffs, &partner_removed);
+          if implied > 0 {
+            tracing::info!(
+              "{}: {implied} lights removed only from {} are removed here too",
+              file.file_name,
+              partner.file_name
+            );
+          }
+        }
+        Some(YmapComparisonPartner {
+          target: self.comparison_file(&partner, None)?,
+          base: self.comparison_file(&partner_baseline, None)?,
+        })
+      }
+      None => None,
+    };
+    Ok(YmapComparisonDiff {
+      schema_version: YmapComparisonDiff::SCHEMA_VERSION,
+      tolerances: ctx.tolerances,
+      partner,
+      diffs,
+      target: self.comparison_file(file, None)?,
+      base: self.comparison_file(&baseline, None)?,
+    })
+  }
+
+  /// For `file`, one YMAP of a LOD light pair whose vanilla baseline is `vanilla`, its side and
+  /// the other YMAP of the pair: `file`'s resource's own when it has one, vanilla's otherwise,
+  /// and the vanilla baseline of that. `None` for other YMAPs, and for pairs whose vanilla YMAPs
+  /// do not hold as many lights of each side, which are left as they are.
+  fn partner_of(
+    &self,
+    file: &StreamFileRef,
+    vanilla: &Ymap,
+  ) -> Result<Option<(LightSide, StreamFileRef, StreamFileRef)>> {
+    let (Some(side), Some(name)) =
+      (LightSide::of(&file.file_name), LightSide::partner_name(&file.file_name))
+    else {
+      return Ok(None);
+    };
+    if !self.vanilla_files.contains_key(&name) {
+      return Ok(None);
+    }
+    let baseline = StreamFileRef {
+      resource_name: None,
+      vanilla_version: file.vanilla_version.clone(),
+      file_name: name.clone(),
+    };
+    let partner_vanilla = self.get_cache(&baseline)?;
+    if side.count(vanilla) != side.other().count(&partner_vanilla) {
+      return Ok(None);
+    }
+    let resource_name = file
+      .resource_name
+      .clone()
+      .filter(|resource| self.source_index.paths.contains_key(&(resource.clone(), name.clone())));
+    let partner = StreamFileRef {
+      resource_name,
+      ..baseline.clone()
+    };
+    Ok(Some((side, partner, baseline)))
+  }
+
+  /// The parent YMAP `ymap` (loaded from `file`) declares, resolved as [`Self::parent_ref`]
+  /// does: from `file`'s resource when it has one of that name, from vanilla otherwise; `None`
+  /// when it declares none or none is found.
+  fn parent_map(
+    &self,
+    file: &StreamFileRef,
+    ymap: &Ymap,
+  ) -> Result<Option<Arc<Ymap>>> {
+    match self.parent_ref(file, &ymap.parent)? {
+      Some(YmapParentRef::Resolved(parent)) => Ok(Some(self.get_cache(&parent)?)),
+      Some(YmapParentRef::Unresolved(_)) | None => Ok(None),
+    }
+  }
+
+  /// Whether a diff of `file` taken from `source` against `vanilla` still describes the files
+  /// that `file` and its vanilla baseline resolve to.
+  ///
+  /// Files whose size and modification time match are not hashed again.
+  pub fn is_diff_current(
+    &self,
+    file: &StreamFileRef,
+    source: &YmapComparisonFile,
+    vanilla: &YmapComparisonFile,
+    partner: Option<&YmapComparisonPartner>,
+  ) -> Result<bool> {
+    let baseline = StreamFileRef {
+      resource_name: None,
+      ..file.clone()
+    };
+    if !self.comparison_file(file, Some(source))?.same_content(source)
+      || !self.comparison_file(&baseline, Some(vanilla))?.same_content(vanilla)
+    {
+      return Ok(false);
+    }
+    if LightSide::of(&file.file_name).is_none() {
+      return Ok(partner.is_none());
+    }
+    // Which partner applies depends on the files, so it is found again; its YMAPs are decoded
+    // only for pairs, a few hundred small files at most.
+    let vanilla_ymap = self.get_cache(&baseline)?;
+    let current = self.partner_of(file, &vanilla_ymap)?;
+    Ok(match (current, partner) {
+      (None, None) => true,
+      (Some((_, current, current_baseline)), Some(partner)) => {
+        self.comparison_file(&current, Some(&partner.target))?.same_content(&partner.target)
+          && self
+            .comparison_file(&current_baseline, Some(&partner.base))?
+            .same_content(&partner.base)
+      }
+      _ => false,
+    })
+  }
+
+  /// Fingerprints the file that `file` resolves to, named relative to the store holding it,
+  /// reusing `previous` when its path, size and modification time still match.
+  fn comparison_file(
+    &self,
+    file: &StreamFileRef,
+    previous: Option<&YmapComparisonFile>,
+  ) -> Result<YmapComparisonFile> {
+    if self.is_added_baseline(file) {
+      return crate::app::map::source_cache::empty_baseline_file();
+    }
+    let (path, vanilla) =
+      resolve_stream_file(&self.vanilla_files, &self.vanilla_version, &self.source_index, file)?;
+    let stored = match vanilla {
+      Some(stored) => stored,
+      None => self
+        .stores
+        .iter()
+        .find_map(|store| path.strip_prefix(store).ok())
+        .unwrap_or(&path)
+        .to_string_lossy()
+        .replace('\\', "/"),
+    };
+    let previous =
+      previous.filter(|previous| previous.path == stored).map(|previous| Fingerprint {
+        sha256: previous.sha256.clone(),
+        size: previous.size,
+        modified_seconds: previous.modified_seconds,
+        modified_nanos: previous.modified_nanos,
+      });
+    let Fingerprint {
+      sha256,
+      size,
+      modified_seconds,
+      modified_nanos,
+    } = Fingerprint::read(&path, previous.as_ref(), false)?;
+    Ok(YmapComparisonFile {
+      path: stored,
+      sha256,
+      size,
+      modified_seconds,
+      modified_nanos,
+    })
+  }
+
+  /// Resolves a declared parent (a name or `hash_XXXXXXXX`) of `child` to a stream file.
+  ///
+  /// The parent is looked up in the child's resource first and then in vanilla, matching
+  /// [`resolve_stream_file`]; parents found only in other resources stay unresolved.
+  fn parent_ref(
+    &self,
+    child: &StreamFileRef,
+    parent: &str,
+  ) -> Result<Option<YmapParentRef>> {
+    let hash = reference_hash(parent);
+    if hash == 0 {
+      return Ok(None);
+    }
+    let in_resource = |file_name: &String| {
+      child.resource_name.as_ref().filter(|resource| {
+        self.source_index.paths.contains_key(&((*resource).clone(), file_name.clone()))
+      })
+    };
+    let candidates = self
+      .file_names_by_hash
+      .get(&hash)
+      .into_iter()
+      .flatten()
+      .filter(|file_name| {
+        in_resource(file_name).is_some() || self.vanilla_files.contains_key(*file_name)
+      })
+      .collect::<Vec<_>>();
+    match candidates.as_slice() {
+      [] => Ok(Some(YmapParentRef::Unresolved(hash))),
+      [file_name] => Ok(Some(YmapParentRef::Resolved(StreamFileRef {
+        resource_name: in_resource(file_name).cloned(),
+        vanilla_version: child.vanilla_version.clone(),
+        file_name: (*file_name).clone(),
+      }))),
+      names => Err(
+        format!("{} has parent {parent} matching several YMAPs: {names:?}", child.file_name).into(),
+      ),
+    }
+  }
+}
+
+/// Locates `file` in its source resource, falling back to vanilla when the resource has no
+/// YMAP of that name or `file` names no resource.
+///
+/// A vanilla YMAP is returned with its path in the vanilla archive, such as
+/// `0000-base/ymap/{file name}`, to record.
+fn resolve_stream_file(
+  vanilla_files: &HashMap<String, (PathBuf, String)>,
+  vanilla_version: &str,
+  source_index: &SourceYmapIndex,
+  file: &StreamFileRef,
+) -> Result<(PathBuf, Option<String>)> {
+  if let Some(resource) = &file.resource_name {
+    let key = (resource.clone(), file.file_name.to_ascii_lowercase());
+    match source_index.paths.get(&key).map(Vec::as_slice) {
+      Some([path]) => {
+        if file.vanilla_version != source_index.latest_vanilla_version {
+          return Err(
+            format!(
+              "{resource}/{} requests vanilla version {}, but the source cache was built against {}",
+              file.file_name, file.vanilla_version, source_index.latest_vanilla_version
+            )
+            .into(),
+          );
+        }
+        return Ok((path.clone(), None));
+      }
+      Some(paths) => {
+        return Err(
+          format!("{resource} has {} YMAPs named {}", paths.len(), file.file_name).into(),
+        );
+      }
+      None => {}
+    }
+  }
+  if file.vanilla_version != vanilla_version {
+    return Err(
+      format!(
+        "{} requests vanilla version {}, but the vanilla cache holds {vanilla_version}",
+        file.file_name, file.vanilla_version
+      )
+      .into(),
+    );
+  }
+  match vanilla_files.get(&file.file_name.to_ascii_lowercase()) {
+    Some((path, object)) if fs::is_file(path) => Ok((path.clone(), Some(object.clone()))),
+    _ => Err(format!("No source or vanilla YMAP named {}", file.file_name).into()),
+  }
+}

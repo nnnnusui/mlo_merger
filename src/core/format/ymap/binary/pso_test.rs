@@ -7,7 +7,8 @@ use crate::core::format::{
 };
 
 fn read(name: &str) -> Ymap {
-  let path = crate::core::vanilla_cache::test_support::asset_latest_file(&format!("{name}.ymap"));
+  let path =
+    crate::app::map::vanilla_cache::test_support::asset_latest_file(&format!("{name}.ymap"));
   let resource = PsoResource::parse(&crate::platform::fs::read(path).unwrap()).unwrap();
   super::pso_to_ymap(&resource, &HashMap::new()).unwrap()
 }
