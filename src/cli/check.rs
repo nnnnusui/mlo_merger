@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 
 use bpaf::*;
 
-use crate::core::check::Check;
+use crate::app::map::Check;
 
 /// Parses `--check`, which checks every store against its metadata without changing files.
 pub fn parser(asset: &Path) -> impl Parser<Check> + use<> {

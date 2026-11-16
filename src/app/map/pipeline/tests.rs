@@ -142,7 +142,7 @@ fn pipeline_routes_resources_through_merge_and_deploy_and_reuses_vanilla() {
   assert_eq!(second.deploy.skipped, 2);
   assert_eq!(second.changes, PipelineChanges::default());
   // Every store matches its metadata, until a file is added or removed behind its back.
-  let check = crate::core::check::Check {
+  let check = crate::app::map::Check {
     vanilla_dir: pipeline.vanilla_dir.clone(),
     vanilla_cache_dir: pipeline.vanilla_cache_dir.clone(),
     source_cache_dir: pipeline.source_cache_dir.clone(),

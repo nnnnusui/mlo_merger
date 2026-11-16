@@ -90,6 +90,8 @@ temporarily for Rust API compatibility pending the decision in Phase 4.
 ### 3. Move Feature-Owned Workflows
 
 - [x] Move map pipeline orchestration to `app/map`.
+- [x] Move map-wide store-check orchestration to `app/map`; keep the generic
+  finding types and recorder in `core/check`.
 - [ ] Move map-specific `vanilla_cache`, `source_cache`, `overwrite`,
   `overwrite_cache`, `merge` and `deploy` modules under `app/map`.
 - [x] Move the clothing counts cache under `app/clothing`.

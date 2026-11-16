@@ -52,7 +52,7 @@ pub enum Command {
   /// Search generated merge data and optionally its recorded inputs.
   Find(Find),
   /// Check every store against its metadata.
-  Check(crate::core::check::Check),
+  Check(crate::app::map::Check),
   /// Compare two stream files.
   GetDiff(GetDiff),
   /// Write stream file models as JSON.

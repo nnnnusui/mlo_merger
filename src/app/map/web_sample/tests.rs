@@ -210,7 +210,7 @@ fn pipeline_runs_on_the_web_sample() {
   // Every store is consistent with its metadata. An overwrite changed since, and an earlier
   // version gone from the history, show in the overwrite cache's check.
   let check = || {
-    crate::core::check::Check {
+    crate::app::map::Check {
       vanilla_dir: workspace.asset("vanilla"),
       vanilla_cache_dir: workspace.asset("vanilla-cache"),
       source_cache_dir: workspace.asset("source-cache"),

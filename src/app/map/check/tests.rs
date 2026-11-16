@@ -1,5 +1,8 @@
 use super::*;
-use crate::platform::fs;
+use crate::{
+  core::check::{CheckIssueKind, files_below},
+  platform::fs,
+};
 use std::collections::BTreeSet;
 
 /// An empty directory for one test.
