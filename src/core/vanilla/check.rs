@@ -1,7 +1,8 @@
 //! Consistency of the raw vanilla archive with its manifest.
 
-use super::{Result, manifest::load_manifest};
+use super::Result;
 use crate::core::check::{CheckIssueKind, Findings, files_below};
+use crate::core::game_archive::{latest_version_marker, load_manifest};
 use std::{collections::BTreeSet, path::Path};
 
 /// Files of the archive besides the stages' objects.
@@ -22,7 +23,7 @@ pub(crate) fn check(
     }
   };
   let mut recorded = ARCHIVE_FILES.map(String::from).into_iter().collect::<BTreeSet<_>>();
-  if let Some(marker) = super::publication::latest_version_marker(&manifest) {
+  if let Some(marker) = latest_version_marker(&manifest) {
     recorded.insert(marker);
   }
   for version in &manifest.versions {

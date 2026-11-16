@@ -7,6 +7,7 @@ pub mod conversion;
 pub mod deploy;
 pub mod find;
 pub mod format;
+pub mod game_archive;
 pub mod get_diff;
 pub mod merge;
 pub mod overwrite;

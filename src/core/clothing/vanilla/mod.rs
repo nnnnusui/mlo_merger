@@ -4,7 +4,8 @@ use std::{io, path::PathBuf};
 
 use crate::core::{
   format::gamefile::{meta::MetaResource, resource::Resource, xml_tree::parse_xml},
-  vanilla::{BuildVanillaArchive, FileClassification, FileSelection},
+  game_archive::{BuildGameArchive, FileClassification, FileSelection},
+  vanilla::write_hash_index,
 };
 
 #[cfg(test)]
@@ -40,13 +41,13 @@ impl GenerateVanillaClothing {
   /// # Ok::<(), Box<dyn std::error::Error>>(())
   /// ```
   pub fn run(&self) -> Result<(), Box<dyn std::error::Error>> {
-    BuildVanillaArchive {
+    BuildGameArchive {
       game_dir: self.game_dir.clone(),
       output_dir: self.output_dir.clone(),
       magic: self.magic.clone(),
       files: FILES,
     }
-    .run()
+    .run_with_metadata(&["hash_names.json"], &["rpf_names.json"], write_hash_index)
   }
 }
 

@@ -1,4 +1,4 @@
-//! Materializes one ordered vanilla cache stage.
+//! Materializes one ordered game-archive stage.
 
 use crate::platform::fs;
 use std::collections::BTreeMap;
@@ -7,9 +7,9 @@ use std::path::{Path, PathBuf};
 use super::{
   Result,
   archives::ExtractedFile,
-  io::write_json,
   manifest::{CacheVersion, CachedFile, FileChange, VanillaCacheManifest},
 };
+use crate::common::json::write_json;
 
 pub(crate) fn stage(
   manifest: &mut VanillaCacheManifest,

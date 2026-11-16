@@ -17,7 +17,7 @@ impl Drop for Staging {
   }
 }
 
-pub(super) fn reset_output_directory(
+pub(crate) fn reset_output_directory(
   output: &Path,
   game_dir: &Path,
 ) -> Result<PathBuf> {
@@ -76,29 +76,27 @@ fn validate_output_location(
   Ok(())
 }
 
-/// The archive's files besides its stages.
-const METADATA_FILES: [&str; 2] = ["hash_names.json", "cache_info.json"];
-
 const LATEST_VERSION_PREFIX: &str = "latest_version-";
 
 /// Names the marker for the final listed stage, whether or not it wrote files.
-pub(super) fn latest_version_marker(manifest: &VanillaCacheManifest) -> Option<String> {
+pub(crate) fn latest_version_marker(manifest: &VanillaCacheManifest) -> Option<String> {
   manifest.versions.last().map(|version| format!("{LATEST_VERSION_PREFIX}{}", version.id))
 }
 
-/// Files earlier versions wrote to the archive, removed once a new one is published.
-const OBSOLETE_FILES: [&str; 1] = ["rpf_names.json"];
-
 /// Reject unknown output directories and retain backups until root metadata
 /// is installed, restoring the previous cache if publication fails.
-pub(super) fn publish_cache(
+pub(crate) fn publish_cache(
   build: &Path,
   output: &Path,
   manifest: &VanillaCacheManifest,
+  extra_metadata_files: &[&str],
+  obsolete_files: &[&str],
 ) -> Result<()> {
   let marker = latest_version_marker(manifest).ok_or("Vanilla archive has no stages")?;
   fs::write(build.join(&marker), [])?;
-  let mut metadata_files = METADATA_FILES.map(String::from).to_vec();
+  let mut metadata_files: Vec<_> =
+    extra_metadata_files.iter().map(|name| (*name).to_owned()).collect();
+  metadata_files.push("cache_info.json".to_owned());
   metadata_files.push(marker.clone());
   for entry in fs::read_dir(output)? {
     let entry = entry?;
@@ -190,7 +188,7 @@ pub(super) fn publish_cache(
     tracing::warn!("Could not clean cache backup {}: {error}", backup.display());
   }
   if result.is_ok() {
-    for name in OBSOLETE_FILES {
+    for name in obsolete_files {
       let path = output.join(name);
       if fs::is_file(&path) {
         fs::remove_file(&path)?;

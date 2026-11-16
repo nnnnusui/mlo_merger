@@ -31,6 +31,9 @@ src/
 └── platform/            OS and process abstractions
 ```
 
+Phase 1 is complete: shared archive extraction and publication live in
+`core/game_archive`; application workflow moves remain planned.
+
 Dependencies flow from `cli` to `app` to `core`; `core` does not depend on
 application features. The phased migration plan and its progress are tracked in
 [docs/plan/202611160412_app_module_split.md](plan/202611160412_app_module_split.md).

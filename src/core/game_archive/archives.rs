@@ -46,15 +46,15 @@ pub(crate) struct ExtractedFile {
 }
 
 #[derive(Deserialize)]
-pub(super) struct DlcList {
+pub(crate) struct DlcList {
   #[serde(rename = "Paths")]
-  pub(super) paths: DlcPaths,
+  pub(crate) paths: DlcPaths,
 }
 
 #[derive(Deserialize)]
-pub(super) struct DlcPaths {
+pub(crate) struct DlcPaths {
   #[serde(rename = "Item", default)]
-  pub(super) items: Vec<String>,
+  pub(crate) items: Vec<String>,
 }
 
 /// A DLC pack's `setup2.xml`, at the root of its `dlc.rpf`.
@@ -95,7 +95,7 @@ fn is_dlc_setup(source: &str) -> bool {
 
 /// The game path of subpack `index` of the DLC pack whose `dlc.rpf` is at `relative`:
 /// `dlc{index}.rpf` beside it.
-pub(super) fn dlc_subpack(
+pub(crate) fn dlc_subpack(
   relative: &str,
   index: u32,
 ) -> String {
@@ -103,7 +103,7 @@ pub(super) fn dlc_subpack(
   format!("{directory}/dlc{index}.rpf")
 }
 
-pub(super) fn dlc_archive(item: &str) -> Result<PathBuf> {
+pub(crate) fn dlc_archive(item: &str) -> Result<PathBuf> {
   let normalized = item.trim().replace('\\', "/").to_ascii_lowercase();
   let (mount, path) = normalized.split_once(':').ok_or("DLC path has no mount prefix")?;
   let root = match mount {
@@ -234,11 +234,11 @@ fn traversal_metadata(path: &str) -> bool {
     || (path.matches('/').count() == 1 && path.ends_with("/setup2.xml"))
 }
 
-pub(super) fn patch_dlc(source: &str) -> Option<&str> {
+pub(crate) fn patch_dlc(source: &str) -> Option<&str> {
   source.split_once("/dlc_patch/")?.1.split('/').next()
 }
 
-pub(super) fn platform_virtual_path(source: &str) -> Option<String> {
+pub(crate) fn platform_virtual_path(source: &str) -> Option<String> {
   let (archive, path) = source.split_once('/')?;
   if archive.starts_with("x64") && archive.ends_with(".rpf") && path.starts_with("dlcpacks/") {
     Some(format!("x64/{path}"))
@@ -272,7 +272,7 @@ pub(super) fn platform_archives(
   Ok(archives)
 }
 
-pub(super) fn base_archives(game_dir: &Path) -> Result<Vec<String>> {
+pub(crate) fn base_archives(game_dir: &Path) -> Result<Vec<String>> {
   let mut archives = Vec::new();
   for entry in fs::read_dir(game_dir)? {
     let entry = entry?;

@@ -49,15 +49,19 @@ feature-specific parsing, caches and composition. Dependencies flow `cli -> app
 
 ### 1. Extract the Shared Game Archive Engine
 
-- [ ] Move generic RPF/DLC extraction and stage orchestration out of
+- [x] Move generic RPF/DLC extraction and stage orchestration out of
   `core/vanilla` into `core/game_archive`.
-- [ ] Move shared selection/classification, stage, manifest and publication
+- [x] Move shared selection/classification, stage, manifest and publication
   mechanisms with the engine; keep map-only hash/index behavior outside it.
-- [ ] Keep map and clothing entry points as adapters that pass their own file
+- [x] Keep map and clothing entry points as adapters that pass their own file
   selection policy.
-- [ ] Preserve the current archive paths, stage order, `cache_info.json` shape
+- [x] Preserve the current archive paths, stage order, `cache_info.json` shape
   apart from already-added classification attributes, and version markers.
-- [ ] Keep temporary re-exports only where needed to migrate callers incrementally.
+- [x] Keep temporary re-exports only where needed to migrate callers incrementally.
+
+Phase 1 is complete. Existing `core::vanilla` paths remain as compatibility
+re-exports while consumers move; feature adapters provide archive metadata before
+the shared publication step.
 
 **Validation:** run archive, vanilla, clothing and publication tests; verify old
 manifest deserialization and the YMAP/YBN/YMT output paths.

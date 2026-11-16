@@ -3,30 +3,21 @@
 use crate::platform::fs;
 use std::{error::Error, path::PathBuf};
 
-mod archives;
 mod check;
-mod generate;
 mod hash_index;
 mod io;
-mod manifest;
-mod publication;
-mod stage;
 mod versions;
 
-pub(crate) use archives::{FileClassification, FileSelection};
+pub(crate) use crate::core::game_archive::FileSelection;
+pub use crate::core::game_archive::{CacheVersion, CachedFile, FileChange, VanillaCacheManifest};
 #[cfg(test)]
-pub(crate) use archives::{extract, sub_pack_count};
+pub(crate) use crate::core::game_archive::{Staging, extract, stage, sub_pack_count};
 pub(crate) use check::check;
-pub(crate) use generate::BuildVanillaArchive;
-pub use manifest::{CacheVersion, CachedFile, FileChange, VanillaCacheManifest};
-#[cfg(test)]
-pub(crate) use publication::Staging;
-#[cfg(test)]
-pub(crate) use stage::stage;
 pub use versions::{ListVanillaVersions, VanillaVersionChange, VanillaVersionEntry};
 
+pub(crate) use crate::core::game_archive::{load_manifest, load_manifest_with_revision};
+pub(crate) use hash_index::write_hash_index;
 pub(crate) use io::{read_ymap, write_json};
-pub(crate) use manifest::{load_manifest, load_manifest_with_revision};
 
 #[cfg(test)]
 mod tests;
@@ -90,12 +81,16 @@ impl GenerateVanilla {
   }
 
   fn generate(&self) -> Result<()> {
-    BuildVanillaArchive {
+    crate::core::game_archive::BuildGameArchive {
       game_dir: self.game_dir.clone(),
       output_dir: self.output_dir.clone(),
       magic: self.magic.clone(),
       files: FileSelection::MAPS,
     }
-    .run()
+    .run_with_metadata(
+      &["hash_names.json"],
+      &["rpf_names.json"],
+      |build, manifest, rpf_names| hash_index::write_hash_index(build, manifest, rpf_names),
+    )
   }
 }

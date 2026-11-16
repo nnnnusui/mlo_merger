@@ -10,11 +10,12 @@ use rayon::prelude::*;
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 
-use super::{Result, manifest::VanillaCacheManifest, write_json};
+use super::{Result, write_json};
 use crate::core::format::gamefile::{
   meta::{MetaResource, jenk_hash},
   rsc7::Rsc7Resource,
 };
+use crate::core::game_archive::VanillaCacheManifest;
 
 const ARRAY_INFO_HASH: u32 = 0x100;
 #[cfg(test)]
@@ -34,7 +35,7 @@ struct ParsedYmapNames {
   archetypes: BTreeSet<u32>,
 }
 
-pub(super) fn write_hash_index(
+pub(crate) fn write_hash_index(
   vanilla_dir: &Path,
   manifest: &VanillaCacheManifest,
   rpf_names: &BTreeSet<String>,

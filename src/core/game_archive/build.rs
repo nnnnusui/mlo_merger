@@ -1,40 +1,44 @@
 //! Coordinates base archives, title updates and ordered DLC stages.
 
+use super::{
+  archives::{
+    DlcList, FileSelection, base_archives, dlc_archive, dlc_subpack, extract, game_path, patch_dlc,
+    platform_archives, sub_pack_count,
+  },
+  manifest::VanillaCacheManifest,
+  publication::{Staging, publish_cache, reset_output_directory},
+  stage::stage,
+};
+use crate::common::json::write_json;
+use crate::core::format::rpf::RpfKeys;
 use crate::platform::fs;
 use crate::platform::process;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
-use super::{
-  Result,
-  archives::{
-    DlcList, FileSelection, base_archives, dlc_archive, dlc_subpack, extract, game_path, patch_dlc,
-    platform_archives, sub_pack_count,
-  },
-  hash_index::write_hash_index,
-  io::write_json,
-  manifest::VanillaCacheManifest,
-  publication::{Staging, publish_cache, reset_output_directory},
-  stage::stage,
-};
-use crate::core::format::rpf::RpfKeys;
+type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
-/// Builds the versioned raw vanilla archive from installed game files.
+/// Builds the versioned raw archive from installed game files.
 #[derive(Debug, Clone)]
-pub struct BuildVanillaArchive {
+pub(crate) struct BuildGameArchive {
   /// Installed GTA V Legacy directory containing base RPFs and update/.
-  pub game_dir: PathBuf,
+  pub(crate) game_dir: PathBuf,
   /// Cache directory containing cache_info.json and version directories.
-  pub output_dir: PathBuf,
+  pub(crate) output_dir: PathBuf,
   /// CodeWalker's `magic.dat`, decoded with the key in GTA5.exe.
-  pub magic: PathBuf,
+  pub(crate) magic: PathBuf,
   /// Raw file families and content classifier for this archive.
-  pub files: FileSelection,
+  pub(crate) files: FileSelection,
 }
 
-impl BuildVanillaArchive {
+impl BuildGameArchive {
   /// Reads installed root RPFs and ordered DLCs, saving changed raw files by version.
-  pub fn run(&self) -> Result<()> {
+  pub(crate) fn run_with_metadata(
+    &self,
+    metadata_files: &[&str],
+    obsolete_files: &[&str],
+    write_metadata: impl FnOnce(&Path, &VanillaCacheManifest, &BTreeSet<String>) -> Result<()>,
+  ) -> Result<()> {
     let game_dir = fs::canonicalize(&self.game_dir)?;
     let roots = base_archives(&game_dir)?;
     game_path(&game_dir, Path::new("update/update.rpf"))?;
@@ -54,9 +58,20 @@ impl BuildVanillaArchive {
     let staging = Staging(staging_path);
     let build = staging.0.join("cache");
     fs::create_dir(&build)?;
-    self.build(&keys, &game_dir, roots, &staging.0, &build, &output_dir)
+    self.build(
+      &keys,
+      &game_dir,
+      roots,
+      &staging.0,
+      &build,
+      &output_dir,
+      metadata_files,
+      obsolete_files,
+      write_metadata,
+    )
   }
 
+  #[allow(clippy::too_many_arguments)]
   fn build(
     &self,
     keys: &RpfKeys,
@@ -65,6 +80,9 @@ impl BuildVanillaArchive {
     scratch: &Path,
     build: &Path,
     output_dir: &Path,
+    metadata_files: &[&str],
+    obsolete_files: &[&str],
+    write_metadata: impl FnOnce(&Path, &VanillaCacheManifest, &BTreeSet<String>) -> Result<()>,
   ) -> Result<()> {
     let extensions = self.files.extensions;
     let mut manifest = VanillaCacheManifest {
@@ -197,7 +215,15 @@ impl BuildVanillaArchive {
       })?;
       fs::remove_dir_all(directory)?;
     }
-    self.publish_cache(build, output_dir, &manifest, &rpf_names)
+    self.publish_cache(
+      build,
+      output_dir,
+      &manifest,
+      &rpf_names,
+      metadata_files,
+      obsolete_files,
+      write_metadata,
+    )
   }
 
   fn publish_cache(
@@ -206,11 +232,14 @@ impl BuildVanillaArchive {
     output_dir: &Path,
     manifest: &VanillaCacheManifest,
     rpf_names: &BTreeSet<String>,
+    metadata_files: &[&str],
+    obsolete_files: &[&str],
+    write_metadata: impl FnOnce(&Path, &VanillaCacheManifest, &BTreeSet<String>) -> Result<()>,
   ) -> Result<()> {
-    write_json(&build.join("cache_info.json"), &manifest)?;
-    write_hash_index(build, manifest, rpf_names)?;
+    write_json(&build.join("cache_info.json"), manifest)?;
+    write_metadata(build, manifest, rpf_names)?;
     tracing::info!("Publishing {} vanilla stages", manifest.versions.len());
-    publish_cache(build, output_dir, manifest)?;
+    publish_cache(build, output_dir, manifest, metadata_files, obsolete_files)?;
     tracing::info!("Saved {} vanilla stages to {}", manifest.versions.len(), output_dir.display());
     Ok(())
   }
