@@ -103,7 +103,7 @@ impl<'a> ParentMaps<'a> {
       .iter()
       .any(|entity| entity.parent_index >= 0 && !is_local_parent(entity, &own));
     let external = if needs_parent { self.parent_map(selected, &model.parent)? } else { None };
-    let external_indices = external.as_ref().map(|map| runtime_entity_indices(&map.entities));
+    let external_indices = external.as_ref().map(|(_, map)| runtime_entity_indices(&map.entities));
     let mut unresolved = 0;
     let result = model
       .entities
@@ -137,7 +137,7 @@ impl<'a> ParentMaps<'a> {
       tracing::warn!(
         "{}: {unresolved} entity LOD parent references could not be resolved (parent YMAP: {})",
         selected.input.display(),
-        model.parent
+        external.as_ref().map_or(model.parent.as_str(), |(name, _)| name.as_str())
       );
     }
     Ok(result)
@@ -147,7 +147,7 @@ impl<'a> ParentMaps<'a> {
     &self,
     selected: &Selected,
     name: &str,
-  ) -> std::result::Result<Option<Arc<Ymap>>, String> {
+  ) -> std::result::Result<Option<(String, Arc<Ymap>)>, String> {
     let hash = reference_hash(name);
     if hash == 0 {
       return Ok(None);
@@ -171,7 +171,7 @@ impl<'a> ParentMaps<'a> {
     };
     let loaded = self.loaded.lock().map_err(|error| error.to_string())?;
     if let Some(model) = loaded.get(path) {
-      return Ok(Some(model.clone()));
+      return Ok(Some(((*name).clone(), model.clone())));
     }
     drop(loaded);
     let bytes =
@@ -180,7 +180,7 @@ impl<'a> ParentMaps<'a> {
       .map_err(|error| format!("Cannot read {}: {error}", path.display()))?;
     let model = Arc::new(model);
     let mut loaded = self.loaded.lock().map_err(|error| error.to_string())?;
-    Ok(Some(loaded.entry(path.clone()).or_insert(model).clone()))
+    Ok(Some(((*name).clone(), loaded.entry(path.clone()).or_insert(model).clone())))
   }
 }
 
@@ -192,5 +192,72 @@ fn insert(
   let name = file_name.to_ascii_lowercase();
   if let Some(stem) = name.strip_suffix(".ymap") {
     candidates.entry(reference_hash(stem)).or_default().entry(name.clone()).or_default().push(path);
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+  use crate::app::map::read::ReadOrigin;
+
+  #[derive(Clone)]
+  struct LogWriter(Arc<Mutex<Vec<u8>>>);
+
+  impl std::io::Write for LogWriter {
+    fn write(
+      &mut self,
+      bytes: &[u8],
+    ) -> std::io::Result<usize> {
+      self.0.lock().unwrap().extend_from_slice(bytes);
+      Ok(bytes.len())
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+      Ok(())
+    }
+  }
+
+  #[test]
+  fn warnings_name_the_resolved_file_or_keep_the_unresolved_reference() {
+    let names = HashMap::new();
+    let path = PathBuf::from("parent.ymap");
+    let mut model =
+      crate::core::format::gamefile::test_support::sample_ymap("parent_refs/child.ymap");
+    model.parent = format!("hash_{:08X}", reference_hash("parent"));
+    model.entities.truncate(1);
+    model.entities[0].parent_index = 99;
+    model.entities[0].flags |= 8;
+    let mut parents = ParentMaps {
+      resources: HashMap::new(),
+      vanilla: Candidates::new(),
+      names: &names,
+      loaded: Mutex::new(HashMap::from([(path.clone(), Arc::new(Ymap::empty()))])),
+    };
+    insert(&mut parents.vanilla, "parent.ymap", path);
+    let selected = Selected {
+      origin: ReadOrigin::Vanilla {
+        version: "0000-base".into(),
+        file_name: "child.ymap".into(),
+      },
+      resource_id: None,
+      input: "child.ymap".into(),
+      stored: "child.ymap".into(),
+      output: "child.ymap.json".into(),
+    };
+    let log = Arc::new(Mutex::new(Vec::new()));
+    let writer = LogWriter(log.clone());
+    let subscriber = tracing_subscriber::fmt()
+      .without_time()
+      .with_ansi(false)
+      .with_writer(move || writer.clone())
+      .finish();
+    tracing::subscriber::with_default(subscriber, || {
+      assert!(parents.resolve(&selected, &model).unwrap()[0].parent.is_none());
+      parents.vanilla.clear();
+      assert!(parents.resolve(&selected, &model).unwrap()[0].parent.is_none());
+    });
+    let log = String::from_utf8(log.lock().unwrap().clone()).unwrap();
+    assert!(log.contains("(parent YMAP: parent.ymap)"));
+    assert!(log.contains(&format!("(parent YMAP: {})", model.parent)));
   }
 }
