@@ -1,9 +1,15 @@
-use std::path::{Path, PathBuf};
+use std::{
+  io,
+  path::{Path, PathBuf},
+};
 
 use crate::core::{
-  clothing::vanilla::classify_ymt,
-  game_archive::{BuildGameArchive, FileSelection},
-  vanilla::write_hash_index,
+  format::gamefile::{
+    meta::{MetaResource, jenk_hash},
+    resource::Resource,
+    xml_tree::parse_xml,
+  },
+  game_archive::{BuildGameArchive, FileClassification, FileSelection, write_hash_index},
 };
 
 #[cfg(test)]
@@ -55,4 +61,72 @@ pub(crate) fn generate_archive(
     files: FILES,
   }
   .run_with_metadata(&["hash_names.json"], &["rpf_names.json"], write_hash_index)
+}
+
+/// Classifies supported YMT roots rather than relying on DLC-specific filenames.
+/// RBF needs only its root descriptor here; the collected payload is kept raw.
+fn classify_ymt(bytes: &[u8]) -> io::Result<FileClassification> {
+  let kind = match bytes.get(..4) {
+    Some(b"RSC7") | Some(b"PSIN") => match Resource::decode(bytes)? {
+      Resource::Rsc7(resource) => {
+        let meta = MetaResource::parse(&resource)?;
+        let index = meta
+          .root_block_index
+          .checked_sub(1)
+          .and_then(|index| usize::try_from(index).ok())
+          .ok_or_else(|| invalid("YMT META root block is invalid"))?;
+        let root =
+          meta.data_blocks.get(index).ok_or_else(|| invalid("YMT META root block is missing"))?;
+        kind_from_hash(root.structure_name_hash)
+      }
+      Resource::Pso(resource) => kind_from_hash(resource.root_type_hash()?),
+    },
+    Some(b"RBF0") => {
+      if bytes.get(4..6) != Some(&[0, 0]) {
+        return Err(invalid("YMT RBF root descriptor is invalid"));
+      }
+      let length = bytes.get(6..8).ok_or_else(|| invalid("YMT RBF root is truncated"))?;
+      let length = usize::from(u16::from_le_bytes([length[0], length[1]]));
+      let name =
+        bytes.get(8..8 + length).ok_or_else(|| invalid("YMT RBF root name is truncated"))?;
+      kind_from_root_bytes(name)
+    }
+    _ => {
+      let xml = std::str::from_utf8(bytes)
+        .map_err(|_| invalid("Cannot classify unsupported binary YMT format"))?;
+      kind_from_root(&parse_xml(xml.trim_start_matches('\u{feff}'))?.name)
+    }
+  };
+  Ok(match kind {
+    Some(kind) => FileClassification::Included {
+      kind: Some(kind),
+    },
+    None => FileClassification::Excluded,
+  })
+}
+
+fn kind_from_hash(hash: u32) -> Option<&'static str> {
+  if hash == jenk_hash("CPedVariationInfo") {
+    Some("ped_variation")
+  } else if hash == jenk_hash("CCreatureMetaData") {
+    Some("creature_metadata")
+  } else {
+    None
+  }
+}
+
+fn kind_from_root(root: &str) -> Option<&'static str> {
+  kind_from_root_bytes(root.as_bytes())
+}
+
+fn kind_from_root_bytes(root: &[u8]) -> Option<&'static str> {
+  match root {
+    b"CPedVariationInfo" => Some("ped_variation"),
+    b"CCreatureMetaData" => Some("creature_metadata"),
+    _ => None,
+  }
+}
+
+fn invalid(message: &str) -> io::Error {
+  io::Error::new(io::ErrorKind::InvalidData, message)
 }

@@ -17,7 +17,7 @@ use crate::core::format::gamefile::{
   resource::Resource,
   struct_reader::{StructReader, field},
 };
-use crate::core::vanilla::load_manifest_with_revision;
+use crate::core::game_archive::load_manifest_with_revision;
 use crate::platform::{fs, process};
 
 #[cfg(test)]

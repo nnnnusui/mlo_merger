@@ -6,9 +6,9 @@ Group application workflows by product area under `app/map` and `app/clothing`,
 while keeping shared game archive, file-format, configuration and platform
 mechanisms outside those feature modules. Keep the CLI as a thin adapter.
 
-The current foundation already has a shared versioned archive builder under
-`core/vanilla`, with separate file-selection policies for map and clothing
-generation. The clothing selector records YMT kinds in stage metadata.
+The shared versioned archive builder lives under `core/game_archive`, with
+separate file-selection policies for map and clothing generation. The clothing
+selector records YMT kinds in stage metadata.
 
 ## Target Structure
 
@@ -59,9 +59,8 @@ feature-specific parsing, caches and composition. Dependencies flow `cli -> app
   apart from already-added classification attributes, and version markers.
 - [x] Keep temporary re-exports only where needed to migrate callers incrementally.
 
-Phase 1 is complete. Existing `core::vanilla` paths remain available while
-consumers move; feature adapters provide archive metadata before the shared
-publication step.
+Phase 1 is complete. Feature adapters provide archive metadata before the
+shared publication step; manifest handling belongs to `core/game_archive`.
 
 **Validation:** run archive, vanilla, clothing and publication tests; verify old
 manifest deserialization and the YMAP/YBN/YMT output paths.
@@ -82,10 +81,8 @@ manifest deserialization and the YMAP/YBN/YMT output paths.
 **Validation:** run CLI parsing tests and both feature-generation test groups;
 confirm command names, arguments and defaults are unchanged.
 
-Phase 2 generation entry points are in place. Map workflows now live in
-`app/map`; the shared vanilla archive implementation remains in `core/vanilla`.
-Clothing generation uses the core YMT classifier and retains its deprecated
-core compatibility entry point pending the Phase 4 API decision.
+Phase 2 generation entry points are in place. Map workflows live in `app/map`,
+and clothing generation and YMT classification live in `app/clothing`.
 
 ### 3. Move Feature-Owned Workflows
 
@@ -95,9 +92,8 @@ core compatibility entry point pending the Phase 4 API decision.
 - [x] Move map-specific `vanilla_cache`, `source_cache`, `overwrite`,
   `overwrite_cache`, `merge` and `deploy` modules under `app/map`.
 - [x] Move the clothing counts cache under `app/clothing`.
-- [x] Move raw clothing generation orchestration to `app/clothing`; retain the
-  core YMT classifier and deprecated compatibility API until compatibility is
-  resolved in Phase 4.
+- [x] Move raw clothing generation orchestration and YMT classification to
+  `app/clothing`.
 - [x] Route the remaining map CLI workflows through `app/map`, keeping parsing
   and terminal concerns in `cli`.
 - [ ] Place future clothing source analysis and composition in `app/clothing`,
@@ -109,21 +105,29 @@ core compatibility entry point pending the Phase 4 API decision.
 and clothing tests after each owner moves. Check that core runtime modules do
 not import either feature module.
 
-Map workflow modules and CLI dispatch now use `app/map`. Format-level YMAP diff
+Map workflow modules and CLI dispatch use `app/map`. Format-level YMAP diff
 models remain in `core/format`; the cache-backed comparison context belongs to
-`app/map`.
+`app/map`. Shared archive metadata and validation belong to `core/game_archive`.
 
 ### 4. Remove Transitional Paths and Close the Migration
 
-- [ ] Update remaining imports and remove internal compatibility re-exports.
-- [ ] Decide separately whether any public Rust paths need a compatibility facade
-  or a breaking API change; do not make `core` depend on `app` to preserve paths.
-- [ ] Update architecture and command documentation to describe the resulting
+- [x] Update imports and remove transitional `core::vanilla` and
+  `core::clothing` APIs; use `core::game_archive` for shared archive mechanisms
+  and `app/{map,clothing}` for feature workflows.
+- [x] Accept the module-path changes as a breaking Rust API change; do not add
+  compatibility facades from `core` to `app`.
+- [x] Update architecture and command documentation to describe the resulting
   structure and current behavior.
-- [ ] Check the full Rust test suite, formatting and Clippy.
+- [x] Check the full Rust test suite and formatting.
+- [ ] Resolve the existing strict-Clippy failure in
+  `core/game_archive/build.rs::publish_cache` (`too_many_arguments`); Clippy
+  passes when this pre-existing lint is allowed.
 
-**Validation:** `cargo fmt --check`, `cargo test`, and
-`cargo clippy --all-targets -- -D warnings`.
+**Validation:** `cargo fmt --check` and `cargo test` pass. Strict Clippy
+currently reports the existing `too_many_arguments` lint in
+`core/game_archive/build.rs::publish_cache`; the migration did not change that
+function. `cargo clippy --all-targets -- -D warnings -A clippy::too_many_arguments`
+passes.
 
 ## Progress Updates
 

@@ -1,9 +1,8 @@
 use super::*;
 use crate::app::map::overwrite::IgnoredOverwrite;
 use crate::common::changes::StoreChanges;
-use crate::core::vanilla::{
-  CacheVersion, CachedFile, FileChange, VanillaCacheManifest, write_json,
-};
+use crate::common::json::write_json;
+use crate::core::game_archive::{CacheVersion, CachedFile, FileChange, VanillaCacheManifest};
 use crate::platform::fs;
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;

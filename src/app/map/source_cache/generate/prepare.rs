@@ -11,7 +11,7 @@ use crate::app::map::source_cache::{
 };
 use crate::app::map::vanilla_cache::load_cache;
 use crate::common::{changes::StoreChanges, json::write_json, path::ensure_safe_path};
-use crate::core::vanilla::load_manifest_with_revision;
+use crate::core::game_archive::load_manifest_with_revision;
 use crate::platform::fs;
 use std::{
   collections::{BTreeMap, BTreeSet},

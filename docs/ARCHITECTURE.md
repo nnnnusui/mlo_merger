@@ -10,12 +10,12 @@ Native Rust handles game-file conversion, merging and RPF reading for vanilla
 generation. CodeWalker is used only by round-trip tests that compare conversion
 with it, behind the `codewalker` feature.
 
-## Code Format and Module Split
+## Code Format and Module Layout
 
 `rustfmt.toml` is the source of truth for Rust formatting; verify changes with
 `cargo fmt --check`.
 
-Target module layout:
+Current module layout:
 
 ```text
 src/
@@ -31,10 +31,10 @@ src/
 └── platform/            OS and process abstractions
 ```
 
-Shared archive extraction and publication live in `core/game_archive`. Map
-caches, overwrite handling, merge, deployment, inspection and store checks live
-in `app/map`; clothing collection and its counts cache live in `app/clothing`.
-Remaining workflow moves are tracked in the plan.
+Shared archive extraction, manifest handling, validation and publication live
+in `core/game_archive`. Map generation, caches, overwrite handling, merge,
+deployment, inspection and store checks live in `app/map`; clothing collection
+and its counts cache live in `app/clothing`.
 
 Production dependencies flow from `cli` to `app` to `core`; core runtime modules
 do not depend on application features. The phased migration plan and its

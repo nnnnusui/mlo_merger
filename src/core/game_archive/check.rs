@@ -1,4 +1,4 @@
-//! Consistency of the raw vanilla archive with its manifest.
+//! Consistency of a versioned game archive with its manifest.
 
 use super::Result;
 use crate::core::check::{CheckIssueKind, Findings, files_below};

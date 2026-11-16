@@ -5,7 +5,7 @@ fn restoring_some_resources_keeps_the_others_cached_until_the_next_generation() 
   use crate::app::map::source_cache::{
     load_merge_inputs, moved_source_paths, restore_source_cache,
   };
-  use crate::core::vanilla::{CachedFile, FileChange};
+  use crate::core::game_archive::{CachedFile, FileChange};
   use sha2::{Digest, Sha256};
 
   let root = std::env::temp_dir().join(format!("source_restore_some_{}", std::process::id()));

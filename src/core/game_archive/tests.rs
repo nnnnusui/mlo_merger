@@ -14,7 +14,7 @@ use super::{
   publication::{Staging, publish_cache, reset_output_directory},
   stage::stage,
 };
-use crate::core::vanilla::{ListVanillaVersions, VanillaVersionChange};
+use crate::app::map::vanilla_cache::{ListVanillaVersions, VanillaVersionChange};
 
 #[test]
 fn dlclist_keeps_order_and_normalizes_mounts() {
@@ -447,11 +447,11 @@ fn publication_keeps_empty_versions_in_metadata_without_stage_directories() {
     "0001-update/ymap/map.ymap"
   );
   let mut findings = crate::core::check::Findings::new("vanilla");
-  crate::core::vanilla::check(&output, true, &mut findings).unwrap();
+  crate::core::game_archive::check(&output, true, &mut findings).unwrap();
   assert!(findings.into_issues().is_empty());
   fs::write(output.join("latest_version-0000-base"), []).unwrap();
   let mut findings = crate::core::check::Findings::new("vanilla");
-  crate::core::vanilla::check(&output, true, &mut findings).unwrap();
+  crate::core::game_archive::check(&output, true, &mut findings).unwrap();
   let issues = findings.into_issues();
   assert_eq!(issues.len(), 1);
   assert_eq!(issues[0].path, "latest_version-0000-base");

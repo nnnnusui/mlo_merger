@@ -10,7 +10,8 @@ use rayon::prelude::*;
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 
-use super::{Result, write_json};
+use super::Result;
+use crate::common::json::write_json;
 use crate::core::format::gamefile::{
   meta::{MetaResource, jenk_hash},
   rsc7::Rsc7Resource,

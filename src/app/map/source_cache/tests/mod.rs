@@ -1,7 +1,8 @@
 use super::BuildSourceCache;
 use super::{types::*, ymap_plan};
 use crate::app::map::vanilla_cache::{DerivedVanillaFile, YmapRelationshipIndex};
-use crate::core::vanilla::{CacheVersion, VanillaCacheManifest, write_json};
+use crate::common::json::write_json;
+use crate::core::game_archive::{CacheVersion, VanillaCacheManifest};
 use crate::platform::fs;
 use std::collections::{BTreeMap, BTreeSet};
 

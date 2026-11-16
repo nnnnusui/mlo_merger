@@ -16,8 +16,8 @@ Resource overwrites (`overwrite/resources/{resourceName}/{stream_path}.diff.json
 
 ## Architecture
 
-- [ ] Give each data owner its own read and freshness-check APIs (`core::vanilla`, `app::map::vanilla_cache`, `app::map::source_cache`, …), so merge and other consumers stop walking those directories or reading their files directly.
-- [ ] Migrate map and clothing workflows into `app/{map,clothing}` in phases, extracting their shared RPF/DLC archive engine to `core/game_archive`; see the [module split plan](plan/202611160412_app_module_split.md).
+- [ ] Give each data owner its own read and freshness-check APIs (`core::game_archive`, `app::map::vanilla_cache`, `app::map::source_cache`, …), so merge and other consumers stop walking those directories or reading their files directly.
+- [x] Migrate map and clothing workflows into `app/{map,clothing}`, extracting their shared RPF/DLC archive engine to `core/game_archive`; see the [module split plan](plan/202611160412_app_module_split.md).
 
 ## Merge Policy
 

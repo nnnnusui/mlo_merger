@@ -7,10 +7,11 @@ use std::{
 use crate::platform::fs::WalkDir;
 use struct_diff::Diff;
 
+use crate::app::map::vanilla::read_ymap;
+use crate::common::json::write_json;
 use crate::core::{
   config::matching,
   format::ymap::{compare::YmapDiffContext, model::Ymap, reference_hash},
-  vanilla::{read_ymap, write_json},
 };
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;

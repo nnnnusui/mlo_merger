@@ -11,8 +11,9 @@ use std::{
   path::{Component, Path, PathBuf},
 };
 
+use crate::app::map::vanilla::read_ymap;
 use crate::common::changes::StoreChanges;
-pub use crate::core::vanilla::VanillaCacheManifest;
+pub use crate::core::game_archive::VanillaCacheManifest;
 use crate::core::{
   config::gamebuild::GameBuild,
   format::gamefile::{
@@ -20,7 +21,7 @@ use crate::core::{
     rsc7::Rsc7Resource,
   },
   format::ymap::reference_hash,
-  vanilla::{CachedFile, read_ymap},
+  game_archive::CachedFile,
 };
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -154,6 +155,9 @@ pub(crate) fn target_version(
 
 #[cfg(test)]
 mod tests;
+mod versions;
+
+pub use versions::{ListVanillaVersions, VanillaVersionChange, VanillaVersionEntry};
 
 /// The latest files of the local `asset/vanilla-cache`, for tests that need real vanilla files.
 #[cfg(test)]

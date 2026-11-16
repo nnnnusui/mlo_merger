@@ -2,6 +2,8 @@
 
 pub(crate) mod archives;
 mod build;
+mod check;
+mod hash_index;
 mod manifest;
 pub(crate) mod publication;
 pub(crate) mod stage;
@@ -12,6 +14,8 @@ pub(crate) use archives::{FileClassification, FileSelection};
 #[cfg(test)]
 pub(crate) use archives::{extract, sub_pack_count};
 pub(crate) use build::BuildGameArchive;
+pub(crate) use check::check;
+pub(crate) use hash_index::write_hash_index;
 pub use manifest::{CacheVersion, CachedFile, FileChange, VanillaCacheManifest};
 pub(crate) use manifest::{load_manifest, load_manifest_with_revision};
 #[cfg(test)]

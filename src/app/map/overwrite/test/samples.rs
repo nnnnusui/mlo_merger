@@ -96,7 +96,7 @@ fn generate_diffs(
   let object = "sample.ymap";
   fs::write(vanilla.join(object), &vanilla_bytes).unwrap();
   fs::copy(docs().join("hash_names.json"), vanilla.join("hash_names.json")).unwrap();
-  crate::core::vanilla::write_json(
+  crate::common::json::write_json(
     &vanilla.join("cache_info.json"),
     &json!({"format_version": 1, "game_dir": "", "versions": [{
       "id": "0000-base", "parent": null, "archives": [], "unchanged": 0,

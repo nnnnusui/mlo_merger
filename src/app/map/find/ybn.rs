@@ -674,7 +674,7 @@ mod tests {
     };
     let record = serde_json::json!({"vanilla": input(&vanilla, None), "merge_sources": [input(&source, Some("retains")), input(&missing, Some("removes"))]});
     let cache = serde_json::json!({"format_version": 1, "files": {"collision.ybn": record.clone(), "hei_collision.ybn": record}});
-    crate::core::vanilla::write_json(&merged.join("cache_info.json"), &cache).unwrap();
+    crate::common::json::write_json(&merged.join("cache_info.json"), &cache).unwrap();
     // Recorded vanilla inputs are named in the archive the vanilla cache names.
     let vanilla_cache = directory.join("vanilla-cache");
     crate::app::map::vanilla_cache::test_support::write_cache_info(&vanilla_cache, "..", "v1", &[]);

@@ -1,6 +1,7 @@
 use super::*;
+use crate::common::json::write_json as write_manifest;
 use crate::core::format::gamefile::struct_reader::{FieldName, Scalar};
-use crate::core::vanilla::{CacheVersion, VanillaCacheManifest, write_json as write_manifest};
+use crate::core::game_archive::{CacheVersion, VanillaCacheManifest};
 
 /// An in-memory structure tree standing in for META/PSO containers.
 #[derive(Default)]

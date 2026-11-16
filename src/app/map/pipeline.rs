@@ -76,7 +76,12 @@ impl Pipeline {
     self.validate_paths()?;
 
     tracing::info!("Pipeline: generate-vanilla");
-    crate::core::vanilla::generate_archive(&self.game_dir, &self.vanilla_dir, &self.magic, true)?;
+    crate::app::map::vanilla::generate_archive(
+      &self.game_dir,
+      &self.vanilla_dir,
+      &self.magic,
+      true,
+    )?;
 
     tracing::info!("Pipeline: generate-vanilla-cache");
     let vanilla_cache = BuildVanillaCache {

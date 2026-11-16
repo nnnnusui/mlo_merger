@@ -14,7 +14,8 @@ impl BuildVanillaCache {
 
   fn run_cache(&self) -> Result<VanillaCacheResult> {
     let vanilla_dir = fs::canonicalize(&self.vanilla_dir)?;
-    let (manifest, revision) = crate::core::vanilla::load_manifest_with_revision(&vanilla_dir)?;
+    let (manifest, revision) =
+      crate::core::game_archive::load_manifest_with_revision(&vanilla_dir)?;
     let through_index = resolve_through_version(&manifest, self.gamebuild.as_ref())?;
     let latest_version = manifest.versions[through_index].id.clone();
     let current = resolve_files(&manifest, through_index)?;

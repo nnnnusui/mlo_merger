@@ -177,7 +177,7 @@ fn find_searches_native_merged_and_recorded_before_entities_without_writes() {
   let record = serde_json::json!({"format_version": 1, "files": {
     "lr_cs4_10_strm_0.ymap": {"vanilla": input(&vanilla, None), "merge_sources": [input(&source, Some("resource"))]},
   }});
-  crate::core::vanilla::write_json(&merged.join("cache_info.json"), &record).unwrap();
+  crate::common::json::write_json(&merged.join("cache_info.json"), &record).unwrap();
   let query = FindEntityGuid {
     guid: 2443198849,
     merged_dir: merged.clone(),
@@ -242,7 +242,7 @@ fn find_searches_native_merged_and_recorded_before_entities_without_writes() {
       .unwrap()
       .insert(name.into(), record["files"]["lr_cs4_10_strm_0.ymap"].clone());
   }
-  crate::core::vanilla::write_json(&merged.join("cache_info.json"), &expanded).unwrap();
+  crate::common::json::write_json(&merged.join("cache_info.json"), &expanded).unwrap();
   let mut wildcard = query.clone();
   wildcard.filter = Some("*cs4_10_strm_0.ymap".into());
   assert_eq!(wildcard.run().unwrap().matches("<File ").count(), 3);

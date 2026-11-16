@@ -3,7 +3,7 @@ use super::*;
 #[test]
 #[ignore = "requires a successfully generated asset/vanilla-cache schema 2 or 3 cache"]
 fn gtav_generated_version_cache_has_complete_artifacts_without_log_files() {
-  use mlo_merger::core::vanilla_cache::VanillaCacheManifest;
+  use mlo_merger::core::game_archive::VanillaCacheManifest;
 
   fn read_json<T: serde::de::DeserializeOwned>(path: &Path) -> T {
     serde_json::from_reader(std::io::BufReader::new(std::fs::File::open(path).unwrap())).unwrap()

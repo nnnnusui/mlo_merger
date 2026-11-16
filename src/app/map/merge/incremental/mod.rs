@@ -8,12 +8,13 @@ use std::{
 use super::duplicates::{DuplicateReport, EntityDuplicate};
 use super::operation::Result;
 use super::{run::MergeYmap, ybn_conflicts::MergeYbnConflicts};
+use crate::common::json::write_json;
 use crate::{
   app::map::{
     overwrite::{Overwrites, StreamFileOverwrite, VanillaOverwrite},
     source_cache::{MergeInputs, MergeSourceFile},
   },
-  core::{format::ymap::reference_hash, vanilla::write_json},
+  core::format::ymap::reference_hash,
 };
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};

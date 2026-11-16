@@ -69,7 +69,7 @@ impl MergeYmap {
       ..
     } = run;
     self.write_outputs(planned)?;
-    crate::core::vanilla::write_json(
+    crate::common::json::write_json(
       &self.output_dir.join(".duplicates.json"),
       &DuplicateReport {
         format_version: 1,

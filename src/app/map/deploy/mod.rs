@@ -7,7 +7,7 @@ mod plan;
 #[cfg(test)]
 mod tests;
 
-use crate::core::vanilla::write_json;
+use crate::common::json::write_json;
 use crate::platform::fs;
 use crate::platform::process;
 use files::{copy_file, destination, prepare_output, remove_empty_stream_directories};

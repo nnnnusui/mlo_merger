@@ -16,7 +16,7 @@ fn parses_four_vanilla_pso_ymaps() {
     assert!(!xml.contains("<error"));
     let expected =
       crate::core::format::ymap::binary::ymap_to_model(&bytes, &HashMap::new()).unwrap();
-    assert_eq!(crate::core::vanilla::read_ymap(&path).unwrap(), expected);
+    assert_eq!(crate::app::map::vanilla::read_ymap(&path).unwrap(), expected);
     assert_eq!(
       crate::app::map::vanilla_cache::ymap_parent_hash(&path).unwrap(),
       crate::core::format::ymap::reference_hash(&expected.parent),

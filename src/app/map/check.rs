@@ -41,7 +41,7 @@ impl Check {
     let deep = self.deep;
     let mut issues = Vec::new();
     check_store(&mut issues, "vanilla", &self.vanilla_dir, |findings| {
-      crate::core::vanilla::check(&self.vanilla_dir, deep, findings)
+      crate::core::game_archive::check(&self.vanilla_dir, deep, findings)
     })?;
     check_store(&mut issues, "vanilla-cache", &self.vanilla_cache_dir, |findings| {
       crate::app::map::vanilla_cache::check(&self.vanilla_cache_dir, deep, findings)

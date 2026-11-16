@@ -13,6 +13,7 @@ use compare::{
   ybn_resource_quantums,
 };
 
+use mlo_merger::app::map::merge::{run::MergeYmap, ybn_conflicts::MergeYbnConflicts};
 use mlo_merger::core::codewalker::CodeWalker;
 use mlo_merger::core::format::gamefile::{
   meta::{MetaResource, MetaSchemaCatalog},
@@ -20,7 +21,6 @@ use mlo_merger::core::format::gamefile::{
 };
 use mlo_merger::core::format::stream_file::{FileType, StreamFile};
 use mlo_merger::core::format::ymap::{binary::ymap_to_model, model::ymap::Ymap};
-use mlo_merger::core::merge::{run::MergeYmap, ybn_conflicts::MergeYbnConflicts};
 
 #[path = "codewalker_roundtrip/archive.rs"]
 mod archive;

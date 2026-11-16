@@ -2,7 +2,7 @@ use super::*;
 
 #[test]
 fn moves_vanilla_files_retains_history_and_updates_only_selected_resources() {
-  use crate::core::vanilla::{CachedFile, FileChange};
+  use crate::core::game_archive::{CachedFile, FileChange};
   use sha2::{Digest, Sha256};
 
   let root = std::env::temp_dir().join(format!("source_moves_{}", std::process::id()));

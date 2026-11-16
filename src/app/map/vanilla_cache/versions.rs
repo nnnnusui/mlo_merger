@@ -6,7 +6,9 @@ use std::path::PathBuf;
 
 use serde::Serialize;
 
-use super::{Result, load_manifest};
+use crate::core::game_archive::load_manifest;
+
+type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
 /// Queries the versions in which a cached vanilla file was introduced or replaced.
 #[derive(Debug, Clone)]
@@ -47,7 +49,7 @@ impl ListVanillaVersions {
   /// Missing filenames produce an empty list; game files are never read.
   ///
   /// ```no_run
-  /// let query = mlo_merger::core::vanilla::ListVanillaVersions {
+  /// let query = mlo_merger::app::map::vanilla_cache::ListVanillaVersions {
   ///   file_name: "ch1_01.ymap".into(), vanilla_cache_dir: "asset/vanilla-cache".into(),
   /// };
   /// let versions = query.versions()?;
@@ -108,9 +110,8 @@ impl ListVanillaVersions {
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::core::vanilla::{
-    CacheVersion, CachedFile, FileChange, VanillaCacheManifest, write_json,
-  };
+  use crate::common::json::write_json;
+  use crate::core::game_archive::{CacheVersion, CachedFile, FileChange, VanillaCacheManifest};
   use crate::platform::fs;
   use std::collections::BTreeMap;
 

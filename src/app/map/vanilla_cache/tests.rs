@@ -1,5 +1,7 @@
 use super::*;
-use crate::core::vanilla::{CacheVersion, FileChange, read_ymap, write_json};
+use crate::app::map::vanilla::read_ymap;
+use crate::common::json::write_json;
+use crate::core::game_archive::{CacheVersion, FileChange, load_manifest_with_revision};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 
@@ -171,7 +173,7 @@ fn builds_latest_files_through_selected_stage_and_reuses_valid_output() {
     serde_json::from_reader(fs::File::open(output.join("ymap_relationships.json")).unwrap())
       .unwrap();
   assert_eq!(relationships.version, "0001-patch");
-  let (_, raw_revision) = crate::core::vanilla::load_manifest_with_revision(&vanilla).unwrap();
+  let (_, raw_revision) = load_manifest_with_revision(&vanilla).unwrap();
   let loaded = load_cache(&output, &raw_revision).unwrap();
   assert_eq!(loaded.latest_version, "0001-patch");
   assert_eq!(loaded.files["map.ybn"].version, "0001-patch");

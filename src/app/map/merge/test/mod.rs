@@ -1,7 +1,6 @@
 use super::*;
-use crate::core::vanilla::{
-  CacheVersion, CachedFile, FileChange, VanillaCacheManifest, write_json,
-};
+use crate::common::json::write_json;
+use crate::core::game_archive::{CacheVersion, CachedFile, FileChange, VanillaCacheManifest};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 

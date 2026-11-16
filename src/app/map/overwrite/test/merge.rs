@@ -1,15 +1,14 @@
 use super::*;
 use crate::app::map::merge::Merge;
 use crate::app::map::overwrite_cache::OverwriteWarnings;
+use crate::common::json::write_json;
 use crate::core::format::gamefile::meta::{MetaResource, MetaSchemaCatalog};
 use crate::core::format::gamefile::rsc7::Rsc7Resource;
 use crate::core::format::gamefile::test_support::sample_ymap;
 use crate::core::format::ymap::binary::{write_ymap, ymap_to_model};
 use crate::core::format::ymap::compare::YmapComparisonDiff;
 use crate::core::format::ymap::model::ymap::Ymap;
-use crate::core::vanilla::{
-  CacheVersion, CachedFile, FileChange, VanillaCacheManifest, write_json,
-};
+use crate::core::game_archive::{CacheVersion, CachedFile, FileChange, VanillaCacheManifest};
 
 /// The sample YMAP's bytes and a catalog able to encode it.
 fn sample_bytes() -> (Vec<u8>, MetaSchemaCatalog) {

@@ -14,7 +14,7 @@ use crate::common::{Result, fingerprint::Fingerprint};
 use crate::core::config::gamebuild::GameBuild;
 use crate::core::conversion::load_hash_names_or_empty;
 use crate::core::format::ymap::{binary::ymap_to_model, model::ymap::Ymap};
-use crate::core::vanilla::{VanillaCacheManifest, load_manifest};
+use crate::core::game_archive::{VanillaCacheManifest, load_manifest};
 use crate::platform::fs;
 use crate::platform::progress::{ProgressBar, ProgressStyle};
 use rayon::prelude::*;
