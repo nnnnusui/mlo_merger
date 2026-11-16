@@ -215,7 +215,7 @@ impl BuildGameArchive {
       })?;
       fs::remove_dir_all(directory)?;
     }
-    self.publish_cache(
+    Self::publish_cache(
       build,
       output_dir,
       &manifest,
@@ -227,7 +227,6 @@ impl BuildGameArchive {
   }
 
   fn publish_cache(
-    &self,
     build: &Path,
     output_dir: &Path,
     manifest: &VanillaCacheManifest,

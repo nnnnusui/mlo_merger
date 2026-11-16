@@ -37,9 +37,7 @@ deployment, inspection and store checks live in `app/map`; clothing collection
 and its counts cache live in `app/clothing`.
 
 Production dependencies flow from `cli` to `app` to `core`; core runtime modules
-do not depend on application features. The phased migration plan and its
-progress are tracked in
-[docs/plan/202611160412_app_module_split.md](plan/202611160412_app_module_split.md).
+do not depend on application features.
 
 ## Pipeline
 

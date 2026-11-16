@@ -96,10 +96,12 @@ and clothing generation and YMT classification live in `app/clothing`.
   `app/clothing`.
 - [x] Route the remaining map CLI workflows through `app/map`, keeping parsing
   and terminal concerns in `cli`.
-- [ ] Place future clothing source analysis and composition in `app/clothing`,
-  reusing shared `core` services rather than importing `app/map`.
-- [ ] Keep genuinely shared file formats, archive logic and low-level helpers in
+- [x] Keep genuinely shared file formats, archive logic and low-level helpers in
   `core`, `common` or `platform` according to their ownership.
+
+Future clothing source analysis and composition, when implemented, belong in
+`app/clothing` and should reuse shared `core` services rather than importing
+`app/map`.
 
 **Validation:** run the map pipeline, source-cache, overwrite, merge, deployment
 and clothing tests after each owner moves. Check that core runtime modules do
@@ -119,15 +121,11 @@ models remain in `core/format`; the cache-backed comparison context belongs to
 - [x] Update architecture and command documentation to describe the resulting
   structure and current behavior.
 - [x] Check the full Rust test suite and formatting.
-- [ ] Resolve the existing strict-Clippy failure in
-  `core/game_archive/build.rs::publish_cache` (`too_many_arguments`); Clippy
-  passes when this pre-existing lint is allowed.
+- [x] Resolve the strict-Clippy finding in
+  `core/game_archive/build.rs::publish_cache` without suppressing the lint.
 
-**Validation:** `cargo fmt --check` and `cargo test` pass. Strict Clippy
-currently reports the existing `too_many_arguments` lint in
-`core/game_archive/build.rs::publish_cache`; the migration did not change that
-function. `cargo clippy --all-targets -- -D warnings -A clippy::too_many_arguments`
-passes.
+**Validation:** `cargo fmt --check`, `cargo test`, and
+`cargo clippy --all-targets -- -D warnings` pass.
 
 ## Progress Updates
 
