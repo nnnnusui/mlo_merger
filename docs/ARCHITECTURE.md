@@ -10,6 +10,31 @@ Native Rust handles game-file conversion, merging and RPF reading for vanilla
 generation. CodeWalker is used only by round-trip tests that compare conversion
 with it, behind the `codewalker` feature.
 
+## Code Format and Module Split
+
+`rustfmt.toml` is the source of truth for Rust formatting; verify changes with
+`cargo fmt --check`.
+
+Target module layout:
+
+```text
+src/
+├── app/
+│   ├── map/             map/MLO workflows and composition
+│   └── clothing/        clothing workflows, including future composition
+├── core/
+│   ├── game_archive/    shared RPF/DLC extraction and versioned archive engine
+│   ├── format/          game-file formats and codecs
+│   └── ...              other reusable mechanisms
+├── cli/                 argument parsing and dispatch to app
+├── common/              cross-cutting helpers
+└── platform/            OS and process abstractions
+```
+
+Dependencies flow from `cli` to `app` to `core`; `core` does not depend on
+application features. The phased migration plan and its progress are tracked in
+[docs/plan/202611160412_app_module_split.md](plan/202611160412_app_module_split.md).
+
 ## Pipeline
 
 `--pipeline` runs vanilla extraction when no raw archive exists, then
