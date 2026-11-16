@@ -120,7 +120,7 @@ impl BuildClothingCache {
   /// Counts changed Ped variation YMTs and publishes the cache, reusing a current one.
   ///
   /// ```no_run
-  /// mlo_merger::core::clothing::cache::BuildClothingCache {
+  /// mlo_merger::app::clothing::BuildClothingCache {
   ///   clothing_dir: "asset/vanilla-clothing".into(),
   ///   output_dir: "asset/vanilla-clothing-cache".into(),
   ///   force: false,

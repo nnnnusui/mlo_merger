@@ -92,7 +92,10 @@ temporarily for Rust API compatibility pending the decision in Phase 4.
 - [x] Move map pipeline orchestration to `app/map`.
 - [ ] Move map-specific `vanilla_cache`, `source_cache`, `overwrite`,
   `overwrite_cache`, `merge` and `deploy` modules under `app/map`.
-- [ ] Move clothing extraction and counts under `app/clothing`.
+- [x] Move the clothing counts cache under `app/clothing`.
+- [x] Move raw clothing generation orchestration to `app/clothing`; retain the
+  core YMT classifier and deprecated compatibility API until compatibility is
+  resolved in Phase 4.
 - [ ] Route the remaining map CLI workflows through `app/map`, keeping parsing
   and terminal concerns in `cli`.
 - [ ] Place future clothing source analysis and composition in `app/clothing`,

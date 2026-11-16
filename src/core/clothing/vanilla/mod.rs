@@ -8,9 +8,6 @@ use crate::core::{
   vanilla::write_hash_index,
 };
 
-#[cfg(test)]
-mod tests;
-
 pub(crate) const FILES: FileSelection = FileSelection {
   extensions: &["ymt"],
   classify: classify_ymt,
@@ -52,7 +49,7 @@ pub(crate) fn generate_archive(
 
 /// Classifies supported YMT roots rather than relying on DLC-specific filenames.
 /// RBF needs only its root descriptor here; the collected payload is kept raw.
-fn classify_ymt(bytes: &[u8]) -> io::Result<FileClassification> {
+pub(crate) fn classify_ymt(bytes: &[u8]) -> io::Result<FileClassification> {
   let kind = match bytes.get(..4) {
     Some(b"RSC7") | Some(b"PSIN") => match Resource::decode(bytes)? {
       Resource::Rsc7(resource) => {

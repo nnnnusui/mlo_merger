@@ -37,9 +37,9 @@ pub fn parser(asset: &Path) -> impl Parser<GenerateVanillaClothingCache> + use<>
     .command("--generate-vanilla-cache")
 }
 
-/// Counts the clothing archive through the core workflow.
+/// Counts the clothing archive through the application workflow.
 pub fn run(command: GenerateVanillaClothingCache) -> Result<String, Box<dyn std::error::Error>> {
-  crate::core::clothing::cache::BuildClothingCache {
+  crate::app::clothing::BuildClothingCache {
     clothing_dir: command.clothing_dir,
     output_dir: command.output,
     force: command.force,

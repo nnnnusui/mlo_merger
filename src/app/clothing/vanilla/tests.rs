@@ -1,8 +1,9 @@
 use super::*;
 use crate::{
   core::{
-    format::gamefile::meta::{MetaDataBlock, jenk_hash},
+    format::gamefile::meta::{MetaDataBlock, MetaResource, jenk_hash},
     format::rpf::{RpfKeys, tests::fixture},
+    game_archive::FileClassification,
     vanilla::{Staging, VanillaCacheManifest, extract, stage, sub_pack_count},
   },
   platform::fs,
