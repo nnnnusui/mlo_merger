@@ -82,15 +82,16 @@ manifest deserialization and the YMAP/YBN/YMT output paths.
 **Validation:** run CLI parsing tests and both feature-generation test groups;
 confirm command names, arguments and defaults are unchanged.
 
-Phase 2 generation entry points are in place. The core pipeline temporarily uses
-the core vanilla-generation helper until the pipeline moves in Phase 3. Deprecated
-core generation wrappers remain temporarily for Rust API compatibility pending
-the decision in Phase 4; the core does not depend on app modules.
+Phase 2 generation entry points are in place. The map pipeline now lives in
+`app/map`; it temporarily uses the core vanilla-generation helper while the
+remaining core workflows move. Deprecated core generation wrappers remain
+temporarily for Rust API compatibility pending the decision in Phase 4.
 
 ### 3. Move Feature-Owned Workflows
 
+- [x] Move map pipeline orchestration to `app/map`.
 - [ ] Move map-specific `vanilla_cache`, `source_cache`, `overwrite`,
-  `overwrite_cache`, `merge`, `deploy` and `pipeline` modules under `app/map`.
+  `overwrite_cache`, `merge` and `deploy` modules under `app/map`.
 - [ ] Move clothing extraction and counts under `app/clothing`.
 - [ ] Route the remaining map CLI workflows through `app/map`, keeping parsing
   and terminal concerns in `cli`.

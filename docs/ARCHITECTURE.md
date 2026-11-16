@@ -32,8 +32,9 @@ src/
 ```
 
 Shared archive extraction and publication live in `core/game_archive`, and
-vanilla-generation entry points live in `app/map` and `app/clothing`. Remaining
-workflow moves are tracked in the plan.
+vanilla-generation entry points and the map pipeline live in `app/map`, while the
+clothing entry point lives in `app/clothing`. Remaining workflow moves are
+tracked in the plan.
 
 Dependencies flow from `cli` to `app` to `core`; `core` does not depend on
 application features. The phased migration plan and its progress are tracked in

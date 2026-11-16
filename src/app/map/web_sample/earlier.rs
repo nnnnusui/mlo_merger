@@ -21,7 +21,7 @@ pub(super) fn earlier_versions() -> &'static [(String, Vec<u8>)] {
       fs::write(path, file.bytes).unwrap();
     }
     let asset = root.join("asset");
-    crate::core::pipeline::Pipeline {
+    crate::app::map::Pipeline {
       source_dir: asset.join("source"),
       game_dir: asset.join("missing-game"),
       magic: asset.join("magic.dat"),

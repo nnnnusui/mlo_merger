@@ -1,6 +1,6 @@
 use super::*;
+use crate::app::map::Pipeline;
 use crate::core::config::gamebuild::GameBuilds;
-use crate::core::pipeline::Pipeline;
 
 #[test]
 fn web_sample_is_what_the_module_builds() {
@@ -58,7 +58,7 @@ impl Workspace {
   fn pipeline(
     &self,
     gamebuild: Option<&str>,
-  ) -> crate::core::pipeline::PipelineSummary {
+  ) -> crate::app::map::PipelineSummary {
     let builds = GameBuilds::load(&self.asset("config.toml")).unwrap();
     Pipeline {
       source_dir: self.asset("source"),

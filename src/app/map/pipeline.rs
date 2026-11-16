@@ -4,11 +4,11 @@ mod report;
 #[cfg(test)]
 mod tests;
 
-use super::{
-  deploy::Deploy, merge::Merge, source_cache::BuildSourceCache, vanilla_cache::BuildVanillaCache,
-};
 use crate::common::path::absolute_path;
 use crate::core::config::gamebuild::GameBuild;
+use crate::core::{
+  deploy::Deploy, merge::Merge, source_cache::BuildSourceCache, vanilla_cache::BuildVanillaCache,
+};
 use crate::platform::fs;
 use crate::platform::process;
 use std::path::PathBuf;
@@ -52,7 +52,7 @@ impl Pipeline {
   /// The executable initializes the shared logger before calling this method.
   ///
   /// ```no_run
-  /// use mlo_merger::core::pipeline::Pipeline;
+  /// use mlo_merger::app::map::Pipeline;
   /// Pipeline {
   ///   source_dir: "asset/source".into(), game_dir: "/mnt/gtav".into(), magic: "magic.dat".into(),
   ///   vanilla_dir: "asset/vanilla".into(), vanilla_cache_dir: "asset/vanilla-cache".into(),

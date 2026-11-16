@@ -96,7 +96,7 @@ pub fn run(command: Pipeline) -> Result<String, Box<dyn std::error::Error>> {
       "--step-name selection is not implemented for --pipeline; use an explicit operation".into(),
     );
   }
-  let pipeline = crate::core::pipeline::Pipeline {
+  let pipeline = crate::app::map::Pipeline {
     source_dir: command.source_dir,
     game_dir: command.game_dir,
     magic: command.magic,
@@ -118,7 +118,7 @@ pub fn run(command: Pipeline) -> Result<String, Box<dyn std::error::Error>> {
     result.deploy.skipped,
     result.deploy.removed
   );
-  let report = crate::core::pipeline::PipelineReport {
+  let report = crate::app::map::PipelineReport {
     changes: result.changes,
     warnings: result.warnings,
   };
