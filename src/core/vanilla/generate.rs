@@ -28,7 +28,7 @@ pub struct BuildVanillaArchive {
   pub output_dir: PathBuf,
   /// CodeWalker's `magic.dat`, decoded with the key in GTA5.exe.
   pub magic: PathBuf,
-  /// Raw file families and content predicate for this archive.
+  /// Raw file families and content classifier for this archive.
   pub files: FileSelection,
 }
 

@@ -57,6 +57,7 @@ fn incremental_merge_preserves_and_restores_duplicate_reports() {
             },
           },
         )]),
+        file_kinds: Default::default(),
       }],
     },
   )

@@ -36,6 +36,7 @@ fn moves_vanilla_files_retains_history_and_updates_only_selected_resources() {
         parent: None,
         archives: vec![],
         unchanged: 0,
+        file_kinds: Default::default(),
         changes: BTreeMap::from([(
           "collision.ybn".into(),
           FileChange {

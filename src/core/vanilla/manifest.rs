@@ -43,6 +43,9 @@ pub struct CacheVersion {
   pub archives: Vec<String>,
   /// Lowercase filenames of the selected extensions added or replaced at this stage.
   pub changes: BTreeMap<String, FileChange>,
+  /// Optional per-file classification for formats whose entries share an extension.
+  #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+  pub file_kinds: BTreeMap<String, String>,
   /// Number of filenames whose content matched the preceding cumulative stage.
   #[serde(default)]
   pub unchanged: usize,

@@ -28,6 +28,7 @@ fn builds_source_inventory_and_skips_unchanged_inputs_without_diffing() {
       archives: vec![],
       changes: BTreeMap::new(),
       unchanged: 0,
+      file_kinds: Default::default(),
     }],
   };
   write_json(&vanilla.join("cache_info.json"), &raw_manifest).unwrap();

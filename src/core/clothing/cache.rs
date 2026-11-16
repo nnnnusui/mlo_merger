@@ -117,7 +117,7 @@ struct SummaryRow {
 }
 
 impl BuildClothingCache {
-  /// Counts every stage's changed YMTs and publishes the cache, reusing a current one.
+  /// Counts changed Ped variation YMTs and publishes the cache, reusing a current one.
   ///
   /// ```no_run
   /// mlo_merger::core::clothing::cache::BuildClothingCache {
@@ -149,6 +149,13 @@ impl BuildClothingCache {
       let files = version
         .changes
         .par_iter()
+        .filter_map(|(name, change)| {
+          version
+            .file_kinds
+            .get(name)
+            .is_none_or(|kind| kind == "ped_variation")
+            .then_some((name, change))
+        })
         .map(|(name, change)| {
           let path = self.clothing_dir.join(&change.file.object);
           let bytes = fs::read(&path).map_err(|error| format!("{}: {error}", path.display()))?;

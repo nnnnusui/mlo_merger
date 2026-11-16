@@ -135,6 +135,7 @@ mod tests {
           parent: None,
           archives: vec![],
           unchanged: 0,
+          file_kinds: BTreeMap::new(),
           changes: BTreeMap::from([
             ("Example.ymap".into(), change(None, "first", "0000-base/ymap/example.ymap")),
             ("a.ybn".into(), change(None, "ybn-first", "0000-base/ybn/a.ybn")),
@@ -145,6 +146,7 @@ mod tests {
           parent: Some("0000-base".into()),
           archives: vec![],
           unchanged: 1,
+          file_kinds: BTreeMap::new(),
           changes: BTreeMap::new(),
         },
         CacheVersion {
@@ -152,6 +154,7 @@ mod tests {
           parent: Some("0001-unchanged".into()),
           archives: vec![],
           unchanged: 0,
+          file_kinds: BTreeMap::new(),
           changes: BTreeMap::from([
             (
               "example.ymap".into(),

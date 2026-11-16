@@ -54,19 +54,44 @@ fn rbf(root: &str) -> Vec<u8> {
 }
 
 #[test]
-fn clothing_is_selected_by_root_type_in_every_supported_container() {
+fn clothing_ymts_are_classified_by_root_type_in_every_supported_container() {
   for build in [meta, pso, rbf] {
-    assert!(is_ped_variation(&build("CPedVariationInfo")).unwrap());
-    assert!(!is_ped_variation(&build("CScenarioManifest")).unwrap());
+    assert_eq!(
+      classify_ymt(&build("CPedVariationInfo")).unwrap(),
+      FileClassification::Included {
+        kind: Some("ped_variation")
+      }
+    );
+    assert_eq!(
+      classify_ymt(&build("CCreatureMetaData")).unwrap(),
+      FileClassification::Included {
+        kind: Some("creature_metadata")
+      }
+    );
+    assert_eq!(classify_ymt(&build("CScenarioManifest")).unwrap(), FileClassification::Excluded);
   }
-  assert!(is_ped_variation(b"<?xml version=\"1.0\"?><CPedVariationInfo/>").unwrap());
-  assert!(!is_ped_variation(b"<CPedModelInfo__InitDataList/>").unwrap());
+  assert_eq!(
+    classify_ymt(b"<?xml version=\"1.0\"?><CPedVariationInfo/>").unwrap(),
+    FileClassification::Included {
+      kind: Some("ped_variation")
+    }
+  );
+  assert_eq!(
+    classify_ymt(b"<CCreatureMetaData/>").unwrap(),
+    FileClassification::Included {
+      kind: Some("creature_metadata")
+    }
+  );
+  assert_eq!(
+    classify_ymt(b"<CPedModelInfo__InitDataList/>").unwrap(),
+    FileClassification::Excluded
+  );
   for bytes in [b"PSIN".as_slice(), b"RSC7", b"RBF0", b"<CPedVariationInfo>", b"\xff\0"] {
-    assert!(is_ped_variation(bytes).is_err());
+    assert!(classify_ymt(bytes).is_err());
   }
   let mut truncated = rbf("CPedVariationInfo");
   truncated.truncate(9);
-  assert!(is_ped_variation(&truncated).is_err());
+  assert!(classify_ymt(&truncated).is_err());
 }
 
 #[test]
@@ -77,7 +102,12 @@ fn clothing_extraction_keeps_raw_definitions_and_uses_vanilla_overlays() {
   let before = meta("CPedVariationInfo");
   let after = pso("CPedVariationInfo");
   let npc = rbf("CPedVariationInfo");
-  let nested = fixture(&[("same.ymt", &after, false), ("npc.ymt", &npc, false)]);
+  let creature_metadata = meta("CCreatureMetaData");
+  let nested = fixture(&[
+    ("same.ymt", &after, false),
+    ("npc.ymt", &npc, false),
+    ("mp_creaturemetadata_m_test.ymt", &creature_metadata, false),
+  ]);
   fs::write(
     root.join("pack/dlc.rpf"),
     fixture(&[
@@ -110,9 +140,29 @@ fn clothing_extraction_keeps_raw_definitions_and_uses_vanilla_overlays() {
     Ok((vec!["pack/dlc.rpf".into()], files.clone()))
   })
   .unwrap();
-  assert_eq!(current.keys().map(String::as_str).collect::<Vec<_>>(), ["npc.ymt", "same.ymt"]);
+  assert_eq!(
+    current.keys().map(String::as_str).collect::<Vec<_>>(),
+    ["mp_creaturemetadata_m_test.ymt", "npc.ymt", "same.ymt"]
+  );
   assert_eq!(fs::read(output.join("0000-base/ymt/same.ymt")).unwrap(), after);
   assert_eq!(fs::read(output.join("0000-base/ymt/npc.ymt")).unwrap(), npc);
+  assert_eq!(
+    fs::read(output.join("0000-base/ymt/mp_creaturemetadata_m_test.ymt")).unwrap(),
+    creature_metadata
+  );
+  assert_eq!(
+    manifest.versions[0].file_kinds,
+    BTreeMap::from([
+      ("mp_creaturemetadata_m_test.ymt".into(), "creature_metadata".into()),
+      ("npc.ymt".into(), "ped_variation".into()),
+      ("same.ymt".into(), "ped_variation".into()),
+    ])
+  );
+  let serialized: serde_json::Value = serde_json::to_value(&manifest).unwrap();
+  assert_eq!(
+    serialized["versions"][0]["file_kinds"]["mp_creaturemetadata_m_test.ymt"],
+    "creature_metadata"
+  );
   assert_eq!(current["same.ymt"].source, "pack/dlc.rpf/nested.rpf/same.ymt");
   let patch =
     files.iter().find(|(file, _)| file.source == "pack/dlc.rpf/same.ymt").unwrap().clone();
@@ -121,7 +171,7 @@ fn clothing_extraction_keeps_raw_definitions_and_uses_vanilla_overlays() {
   })
   .unwrap();
   assert!(manifest.versions[1].changes.is_empty());
-  assert_eq!(manifest.versions[1].unchanged, 2);
+  assert_eq!(manifest.versions[1].unchanged, 3);
   assert!(!output.join("0001-unchanged").exists());
   assert!(!output.join("0001-unchanged/ymt/same.ymt").exists());
   assert!(!output.join("0000-base/ymap").exists());
@@ -132,7 +182,7 @@ fn clothing_extraction_keeps_raw_definitions_and_uses_vanilla_overlays() {
   .unwrap();
   assert_eq!(fs::read(output.join("0002-patch/ymt/same.ymt")).unwrap(), before);
   assert_eq!(manifest.versions[2].changes["same.ymt"].previous_sha256.as_ref(), Some(&previous));
-  assert_eq!(manifest.resolve_version("0002-patch").unwrap().len(), 2);
+  assert_eq!(manifest.resolve_version("0002-patch").unwrap().len(), 3);
 
   let map_files = extract(
     &keys,

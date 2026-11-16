@@ -10,17 +10,29 @@ use std::path::{Path, PathBuf};
 use super::Result;
 use crate::core::format::rpf::{RpfArchive, RpfFile, RpfKeys};
 
-/// The raw file families to scan and the content predicate applied before storing them.
+/// The raw file families to scan and the content classifier applied before storing them.
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct FileSelection {
   pub(crate) extensions: &'static [&'static str],
-  pub(crate) accepts: fn(&[u8]) -> std::io::Result<bool>,
+  pub(crate) classify: fn(&[u8]) -> std::io::Result<FileClassification>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum FileClassification {
+  Excluded,
+  Included {
+    kind: Option<&'static str>,
+  },
 }
 
 impl FileSelection {
   pub(crate) const MAPS: Self = Self {
     extensions: &["ymap", "ybn"],
-    accepts: |_| Ok(true),
+    classify: |_| {
+      Ok(FileClassification::Included {
+        kind: None,
+      })
+    },
   };
 }
 
@@ -30,6 +42,7 @@ pub(crate) struct ExtractedFile {
   pub(crate) source: String,
   pub(crate) stored: String,
   pub(crate) sha256: String,
+  pub(crate) kind: Option<&'static str>,
 }
 
 #[derive(Deserialize)]
@@ -185,11 +198,16 @@ pub(crate) fn extract(
         let data = archive
           .extract(file, entry, keys)
           .map_err(|error| format!("Could not extract {}: {error}", entry.path))?;
-        if !traversal_metadata(&entry.path)
-          && !(selection.accepts)(&data).map_err(|error| format!("{}: {error}", entry.path))?
-        {
-          return Ok(None);
-        }
+        let kind = if traversal_metadata(&entry.path) {
+          None
+        } else {
+          match (selection.classify)(&data).map_err(|error| format!("{}: {error}", entry.path))? {
+            FileClassification::Excluded => return Ok(None),
+            FileClassification::Included {
+              kind,
+            } => kind,
+          }
+        };
         let name = entry.name_lower();
         let extension = Path::new(&name)
           .extension()
@@ -202,6 +220,7 @@ pub(crate) fn extract(
           source: format!("{relative}/{inner}"),
           stored,
           sha256: hex::encode(Sha256::digest(&data)),
+          kind,
         }))
       },
     )

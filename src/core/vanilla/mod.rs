@@ -13,7 +13,7 @@ mod publication;
 mod stage;
 mod versions;
 
-pub(crate) use archives::FileSelection;
+pub(crate) use archives::{FileClassification, FileSelection};
 #[cfg(test)]
 pub(crate) use archives::{extract, sub_pack_count};
 pub(crate) use check::check;

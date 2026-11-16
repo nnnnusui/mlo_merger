@@ -4,7 +4,7 @@ use std::{io, path::PathBuf};
 
 use crate::core::{
   format::gamefile::{meta::MetaResource, resource::Resource, xml_tree::parse_xml},
-  vanilla::{BuildVanillaArchive, FileSelection},
+  vanilla::{BuildVanillaArchive, FileClassification, FileSelection},
 };
 
 #[cfg(test)]
@@ -12,10 +12,10 @@ mod tests;
 
 pub(crate) const FILES: FileSelection = FileSelection {
   extensions: &["ymt"],
-  accepts: is_ped_variation,
+  classify: classify_ymt,
 };
 
-/// Collects all Ped clothing and appearance variation definitions, including NPCs.
+/// Collects Ped clothing, appearance variation, and creature metadata YMTs.
 #[derive(Debug, Clone)]
 pub struct GenerateVanillaClothing {
   /// Installed GTA V Legacy directory.
@@ -27,7 +27,7 @@ pub struct GenerateVanillaClothing {
 }
 
 impl GenerateVanillaClothing {
-  /// Extracts raw `CPedVariationInfo` YMTs in vanilla stage order.
+  /// Extracts raw supported clothing YMTs in vanilla stage order.
   ///
   /// Same-name overlays, unchanged-file reuse and output replacement follow vanilla
   /// generation. This collects definitions, not drawable or texture assets.
@@ -50,12 +50,10 @@ impl GenerateVanillaClothing {
   }
 }
 
-/// Classifies by root type, not Ped filenames or archive paths, which differ across DLCs.
+/// Classifies supported YMT roots rather than relying on DLC-specific filenames.
 /// RBF needs only its root descriptor here; the collected payload is kept raw.
-fn is_ped_variation(bytes: &[u8]) -> io::Result<bool> {
-  const ROOT: &str = "CPedVariationInfo";
-  const HASH: u32 = crate::core::format::gamefile::meta::jenk_hash(ROOT);
-  match bytes.get(..4) {
+fn classify_ymt(bytes: &[u8]) -> io::Result<FileClassification> {
+  let kind = match bytes.get(..4) {
     Some(b"RSC7") | Some(b"PSIN") => match Resource::decode(bytes)? {
       Resource::Rsc7(resource) => {
         let meta = MetaResource::parse(&resource)?;
@@ -66,9 +64,9 @@ fn is_ped_variation(bytes: &[u8]) -> io::Result<bool> {
           .ok_or_else(|| invalid("YMT META root block is invalid"))?;
         let root =
           meta.data_blocks.get(index).ok_or_else(|| invalid("YMT META root block is missing"))?;
-        Ok(root.structure_name_hash == HASH)
+        kind_from_hash(root.structure_name_hash)
       }
-      Resource::Pso(resource) => Ok(resource.root_type_hash()? == HASH),
+      Resource::Pso(resource) => kind_from_hash(resource.root_type_hash()?),
     },
     Some(b"RBF0") => {
       if bytes.get(4..6) != Some(&[0, 0]) {
@@ -78,13 +76,41 @@ fn is_ped_variation(bytes: &[u8]) -> io::Result<bool> {
       let length = usize::from(u16::from_le_bytes([length[0], length[1]]));
       let name =
         bytes.get(8..8 + length).ok_or_else(|| invalid("YMT RBF root name is truncated"))?;
-      Ok(name == ROOT.as_bytes())
+      kind_from_root_bytes(name)
     }
     _ => {
       let xml = std::str::from_utf8(bytes)
         .map_err(|_| invalid("Cannot classify unsupported binary YMT format"))?;
-      Ok(parse_xml(xml.trim_start_matches('\u{feff}'))?.name == ROOT)
+      kind_from_root(&parse_xml(xml.trim_start_matches('\u{feff}'))?.name)
     }
+  };
+  Ok(match kind {
+    Some(kind) => FileClassification::Included {
+      kind: Some(kind),
+    },
+    None => FileClassification::Excluded,
+  })
+}
+
+fn kind_from_hash(hash: u32) -> Option<&'static str> {
+  if hash == crate::core::format::gamefile::meta::jenk_hash("CPedVariationInfo") {
+    Some("ped_variation")
+  } else if hash == crate::core::format::gamefile::meta::jenk_hash("CCreatureMetaData") {
+    Some("creature_metadata")
+  } else {
+    None
+  }
+}
+
+fn kind_from_root(root: &str) -> Option<&'static str> {
+  kind_from_root_bytes(root.as_bytes())
+}
+
+fn kind_from_root_bytes(root: &[u8]) -> Option<&'static str> {
+  match root {
+    b"CPedVariationInfo" => Some("ped_variation"),
+    b"CCreatureMetaData" => Some("creature_metadata"),
+    _ => None,
   }
 }
 

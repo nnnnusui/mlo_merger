@@ -63,6 +63,7 @@ fn write_vanilla_files(
         archives: vec![],
         unchanged: 0,
         changes,
+        file_kinds: Default::default(),
       }],
     },
   )

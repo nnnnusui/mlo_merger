@@ -30,6 +30,7 @@ fn restoring_some_resources_keeps_the_others_cached_until_the_next_generation() 
         parent: None,
         archives: vec![],
         unchanged: 0,
+        file_kinds: Default::default(),
         changes: BTreeMap::from([(
           "collision.ybn".into(),
           FileChange {

@@ -50,6 +50,7 @@ fn generator_owns_missing_archive_generation_and_existing_archive_reuse() {
             archives: vec![],
             changes: BTreeMap::new(),
             unchanged: 0,
+            file_kinds: Default::default(),
           }],
         },
       )
@@ -107,6 +108,7 @@ fn dlc_setup_declares_subpacks_beside_dlc_rpf() {
     source: source.into(),
     stored: "00000000.xml".into(),
     sha256: String::new(),
+    kind: None,
   };
   fs::write(
     directory.join("00000000.xml"),
@@ -204,6 +206,7 @@ fn stages_store_only_changed_raw_files_and_resolve_prior_versions() {
         source: format!("nested.rpf/{name}"),
         stored: stored.into(),
         sha256: sha256.into(),
+        kind: None,
       },
       root.clone(),
     )
@@ -290,6 +293,7 @@ fn stages_cache_raw_ybn_replacements_and_ymap_files() {
         stored: stored.into(),
         source: format!("fixture.rpf/{name}"),
         sha256: hex::encode(Sha256::digest(fs::read(root.join(stored)).unwrap())),
+        kind: None,
       },
       root.clone(),
     )
@@ -403,6 +407,7 @@ fn publication_restores_existing_versions_if_root_metadata_cannot_be_replaced() 
         },
       },
     )]),
+    file_kinds: Default::default(),
     unchanged: 0,
   };
   let manifest = VanillaCacheManifest {
@@ -459,6 +464,7 @@ fn publication_keeps_empty_versions_in_metadata_without_stage_directories() {
     source: "fixture.rpf/map.ymap".into(),
     stored: "map.ymap".into(),
     sha256: hex::encode(Sha256::digest(b"raw map")),
+    kind: None,
   };
   stage(&mut manifest, &mut current, &build, "update", extensions, || {
     Ok((vec!["fixture.rpf".into()], vec![(file.clone(), root.clone())]))

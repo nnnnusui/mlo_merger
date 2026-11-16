@@ -39,6 +39,7 @@ fn builds_latest_files_through_selected_stage_and_reuses_valid_output() {
           },
         )]),
         unchanged: 0,
+        file_kinds: Default::default(),
       },
       CacheVersion {
         id: "0001-patch".into(),
@@ -52,6 +53,7 @@ fn builds_latest_files_through_selected_stage_and_reuses_valid_output() {
           },
         )]),
         unchanged: 0,
+        file_kinds: Default::default(),
       },
     ],
   };
@@ -258,6 +260,7 @@ fn writes_ymap_version_diffs_that_rebuild_each_version() {
         },
       )]),
       unchanged: 0,
+      file_kinds: Default::default(),
     });
   }
   write_json(

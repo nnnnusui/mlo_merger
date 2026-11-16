@@ -50,6 +50,7 @@ pub(crate) fn stage(
       }
     }
     let mut changes = BTreeMap::new();
+    let mut file_kinds = BTreeMap::new();
     let mut unchanged = 0;
     for (name, (file, directory)) in winners {
       let previous = current.get(&name);
@@ -77,6 +78,9 @@ pub(crate) fn stage(
         object,
         source: file.source,
       };
+      if let Some(kind) = file.kind {
+        file_kinds.insert(name.clone(), kind.to_string());
+      }
       changes.insert(
         name.clone(),
         FileChange {
@@ -96,6 +100,7 @@ pub(crate) fn stage(
       parent: manifest.versions.last().map(|version| version.id.clone()),
       archives,
       changes,
+      file_kinds,
       unchanged,
     };
     if !version.changes.is_empty() {

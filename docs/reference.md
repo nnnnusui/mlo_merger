@@ -595,10 +595,13 @@ of the map merge pipeline and defaults to `asset/vanilla-clothing`.
 mlo_merger --clothing --generate-vanilla -i /mnt/gtav --magic magic.dat
 ```
 
-YMTs are selected by their `CPedVariationInfo` root type in RSC7 META, PSO, RBF
-or XML, not their filename or directory. Drawable and texture assets and other
-YMT types are outside this collection. Classification errors stop extraction with
-the source path in the error.
+YMTs are selected by their root type in RSC7 META, PSO, RBF or XML, not their
+filename or directory: `CPedVariationInfo` clothing/appearance definitions and
+`CCreatureMetaData` creature metadata. Creature metadata YMTs are stored alongside
+the variation YMTs under `ymt/`; `cache_info.json` records their `file_kinds` as
+`creature_metadata` or `ped_variation`. Drawable and texture assets and other YMT
+types are outside this collection. Classification errors stop extraction with the
+source path in the error.
 
 ### Archive Layout
 
@@ -625,10 +628,12 @@ listed stage, including one with no file changes. Regeneration replaces the mark
 mlo_merger --clothing --generate-vanilla-cache
 ```
 
-Each changed YMT is counted whole: drawables and textures per component slot
-(`HEAD`, `UPPR`, …, named through `availComp`), and props per anchor
-(`ANCHOR_HEAD`, …). Freemode Peds get one YMT per DLC, so a stage's counts are
-that DLC's clothing; a replaced file's counts are cumulative at that stage.
+Only `ped_variation` YMTs are counted. Each changed file is counted whole:
+drawables and textures per component slot (`HEAD`, `UPPR`, …, named through
+`availComp`), and props per anchor (`ANCHOR_HEAD`, …). Freemode Peds get one YMT
+per DLC, so a stage's counts are that DLC's clothing; a replaced file's counts
+are cumulative at that stage.
+`creature_metadata` YMTs remain in the archive but are excluded from clothing counts.
 
 - `summary.json`: one row per stage with file and count totals, including stages
   without changes.

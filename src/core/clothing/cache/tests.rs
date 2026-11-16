@@ -180,6 +180,7 @@ fn cache_reuses_matching_archives_and_rebuilds_changed_or_forced_ones() {
       parent: None,
       archives: vec![],
       changes: BTreeMap::new(),
+      file_kinds: Default::default(),
       unchanged: 0,
     }],
   };
@@ -220,6 +221,65 @@ fn cache_reuses_matching_archives_and_rebuilds_changed_or_forced_ones() {
   assert!(!root.join("cache/canary").exists());
   let info: ClothingCacheInfo = read_json(root.join("cache/cache_info.json")).unwrap();
   assert_eq!(info.latest_version, "0000-update");
+}
+
+#[test]
+fn cache_skips_creature_metadata_when_counting_variation_ymts() {
+  let root = std::env::temp_dir().join(format!("creature_metadata_cache_{}", std::process::id()));
+  let _cleanup = Staging(root.clone());
+  let archive = root.join("clothing");
+  let object = "0000-base/ymt/mp_creaturemetadata_m_test.ymt";
+  fs::create_dir_all(archive.join("0000-base/ymt")).unwrap();
+  fs::write(archive.join(object), b"not a CPedVariationInfo resource").unwrap();
+  write_manifest(
+    &archive.join("cache_info.json"),
+    &serde_json::json!({
+      "format_version": 1,
+      "game_dir": root.join("game"),
+      "versions": [{
+        "id": "0000-base",
+        "parent": null,
+        "archives": [],
+        "changes": {
+          "mp_creaturemetadata_m_test.ymt": {
+            "previous_sha256": null,
+            "file": {
+              "sha256": "00",
+              "object": object,
+              "source": "x.rpf/mp_creaturemetadata_m_test.ymt"
+            }
+          }
+        },
+        "file_kinds": {
+          "mp_creaturemetadata_m_test.ymt": "creature_metadata"
+        },
+        "unchanged": 0
+      }]
+    }),
+  )
+  .unwrap();
+
+  BuildClothingCache {
+    clothing_dir: archive,
+    output_dir: root.join("cache"),
+    force: false,
+  }
+  .run()
+  .unwrap();
+  let summary: serde_json::Value =
+    serde_json::from_slice(&fs::read(root.join("cache/summary.json")).unwrap()).unwrap();
+  assert_eq!(
+    summary,
+    serde_json::json!([{
+      "version": "0000-base",
+      "files": 0,
+      "drawables": 0,
+      "textures": 0,
+      "props": 0,
+      "prop_textures": 0
+    }])
+  );
+  assert_eq!(fs::read_dir(root.join("cache/counts")).unwrap().count(), 0);
 }
 
 #[test]
