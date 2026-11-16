@@ -1,6 +1,6 @@
 //! Versioned raw Ped variation YMTs from base game, title updates and DLC archives.
 
-use std::{io, path::PathBuf};
+use std::{io, path::Path};
 
 use crate::core::{
   format::gamefile::{meta::MetaResource, resource::Resource, xml_tree::parse_xml},
@@ -16,39 +16,38 @@ pub(crate) const FILES: FileSelection = FileSelection {
   classify: classify_ymt,
 };
 
-/// Collects Ped clothing, appearance variation, and creature metadata YMTs.
+/// Compatibility entry point; use [`crate::app::clothing::GenerateVanillaClothing`] for new callers.
+#[deprecated(note = "Use mlo_merger::app::clothing::GenerateVanillaClothing")]
 #[derive(Debug, Clone)]
 pub struct GenerateVanillaClothing {
   /// Installed GTA V Legacy directory.
-  pub game_dir: PathBuf,
+  pub game_dir: std::path::PathBuf,
   /// Output archive, normally `asset/vanilla-clothing`.
-  pub output_dir: PathBuf,
-  /// CodeWalker's `magic.dat`, used with GTA5.exe to decrypt the archives.
-  pub magic: PathBuf,
+  pub output_dir: std::path::PathBuf,
+  /// CodeWalker's `magic.dat`, used with `GTA5.exe` to decrypt the archives.
+  pub magic: std::path::PathBuf,
 }
 
+#[allow(deprecated)]
 impl GenerateVanillaClothing {
   /// Extracts raw supported clothing YMTs in vanilla stage order.
-  ///
-  /// Same-name overlays, unchanged-file reuse and output replacement follow vanilla
-  /// generation. This collects definitions, not drawable or texture assets.
-  ///
-  /// ```no_run
-  /// mlo_merger::core::clothing::vanilla::GenerateVanillaClothing {
-  ///   game_dir: "/mnt/gtav".into(), output_dir: "asset/vanilla-clothing".into(),
-  ///   magic: "magic.dat".into(),
-  /// }.run()?;
-  /// # Ok::<(), Box<dyn std::error::Error>>(())
-  /// ```
   pub fn run(&self) -> Result<(), Box<dyn std::error::Error>> {
-    BuildGameArchive {
-      game_dir: self.game_dir.clone(),
-      output_dir: self.output_dir.clone(),
-      magic: self.magic.clone(),
-      files: FILES,
-    }
-    .run_with_metadata(&["hash_names.json"], &["rpf_names.json"], write_hash_index)
+    generate_archive(&self.game_dir, &self.output_dir, &self.magic)
   }
+}
+
+pub(crate) fn generate_archive(
+  game_dir: &Path,
+  output_dir: &Path,
+  magic: &Path,
+) -> Result<(), Box<dyn std::error::Error>> {
+  BuildGameArchive {
+    game_dir: game_dir.to_path_buf(),
+    output_dir: output_dir.to_path_buf(),
+    magic: magic.to_path_buf(),
+    files: FILES,
+  }
+  .run_with_metadata(&["hash_names.json"], &["rpf_names.json"], write_hash_index)
 }
 
 /// Classifies supported YMT roots rather than relying on DLC-specific filenames.

@@ -1,7 +1,8 @@
 //! Ordered raw vanilla YMAP/YBN files from GTA V RPF archives.
 
+use std::path::Path;
+
 use crate::platform::fs;
-use std::{error::Error, path::PathBuf};
 
 mod check;
 mod hash_index;
@@ -24,67 +25,40 @@ mod tests;
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
-/// Generates versioned raw vanilla stream files from installed GTA V archives.
+/// Compatibility entry point; use [`crate::app::map::GenerateVanilla`] for new callers.
+#[deprecated(note = "Use mlo_merger::app::map::GenerateVanilla")]
 #[derive(Debug, Clone)]
 pub struct GenerateVanilla {
   /// Installed GTA V Legacy directory.
-  pub game_dir: PathBuf,
+  pub game_dir: std::path::PathBuf,
   /// Output directory for versioned raw vanilla files.
-  pub output_dir: PathBuf,
+  pub output_dir: std::path::PathBuf,
   /// CodeWalker's `magic.dat`, needed only when generating.
-  pub magic: PathBuf,
+  pub magic: std::path::PathBuf,
   /// Reuses a valid existing archive; otherwise generates only into an empty destination.
   pub reuse_existing: bool,
 }
 
+#[allow(deprecated)]
 impl GenerateVanilla {
-  /// Reuses an archive when configured, or reads the game archives to generate it.
-  ///
-  /// Reuse validates the existing archive without requiring an installed game or
-  /// `magic.dat`. Generation extracts every stage.
-  /// Logger initialization belongs to the calling application.
-  ///
-  /// ```no_run
-  /// mlo_merger::core::vanilla::GenerateVanilla {
-  ///   game_dir: "/mnt/gtav".into(), output_dir: "asset/vanilla".into(),
-  ///   magic: "magic.dat".into(), reuse_existing: true,
-  /// }.run()?;
-  /// # Ok::<(), Box<dyn std::error::Error>>(())
-  /// ```
-  pub fn run(&self) -> std::result::Result<(), Box<dyn Error>> {
-    self.run_with_generation(|| self.generate())
+  /// Reuses a valid archive when configured, or generates one from the game archives.
+  pub fn run(&self) -> Result<()> {
+    generate_archive(&self.game_dir, &self.output_dir, &self.magic, self.reuse_existing)
   }
+}
 
-  fn run_with_generation(
-    &self,
-    generate: impl FnOnce() -> Result<()>,
-  ) -> Result<()> {
-    if self.reuse_existing {
-      if fs::is_file(self.output_dir.join("cache_info.json")) {
-        load_manifest(&self.output_dir)?;
-        tracing::info!("Reusing existing vanilla archive");
-        return Ok(());
-      }
-      if fs::is_dir(&self.output_dir)
-        && crate::platform::fs::read_dir(&self.output_dir)?.next().is_some()
-      {
-        return Err(
-          "Vanilla directory is nonempty but has no manifest; refusing automatic replacement"
-            .into(),
-        );
-      }
-      if !fs::is_dir(&self.game_dir) {
-        return Err(format!("Vanilla archive is missing; specify --game-dir with an installed GTA V directory (current: {})", self.game_dir.display()).into());
-      }
-    }
-    generate()
-  }
-
-  fn generate(&self) -> Result<()> {
+/// Runs the map archive generation policy shared with the core pipeline.
+pub(crate) fn generate_archive(
+  game_dir: &Path,
+  output_dir: &Path,
+  magic: &Path,
+  reuse_existing: bool,
+) -> Result<()> {
+  run_with_generation(game_dir, output_dir, reuse_existing, || {
     crate::core::game_archive::BuildGameArchive {
-      game_dir: self.game_dir.clone(),
-      output_dir: self.output_dir.clone(),
-      magic: self.magic.clone(),
+      game_dir: game_dir.to_path_buf(),
+      output_dir: output_dir.to_path_buf(),
+      magic: magic.to_path_buf(),
       files: FileSelection::MAPS,
     }
     .run_with_metadata(
@@ -92,5 +66,29 @@ impl GenerateVanilla {
       &["rpf_names.json"],
       |build, manifest, rpf_names| hash_index::write_hash_index(build, manifest, rpf_names),
     )
+  })
+}
+
+fn run_with_generation(
+  game_dir: &Path,
+  output_dir: &Path,
+  reuse_existing: bool,
+  generate: impl FnOnce() -> Result<()>,
+) -> Result<()> {
+  if reuse_existing {
+    if fs::is_file(output_dir.join("cache_info.json")) {
+      load_manifest(output_dir)?;
+      tracing::info!("Reusing existing vanilla archive");
+      return Ok(());
+    }
+    if fs::is_dir(output_dir) && crate::platform::fs::read_dir(output_dir)?.next().is_some() {
+      return Err(
+        "Vanilla directory is nonempty but has no manifest; refusing automatic replacement".into(),
+      );
+    }
+    if !fs::is_dir(game_dir) {
+      return Err(format!("Vanilla archive is missing; specify --game-dir with an installed GTA V directory (current: {})", game_dir.display()).into());
+    }
   }
+  generate()
 }

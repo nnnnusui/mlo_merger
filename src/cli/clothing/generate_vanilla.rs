@@ -34,9 +34,9 @@ pub fn parser(asset: &Path) -> impl Parser<GenerateVanillaClothing> + use<> {
     .command("--generate-vanilla")
 }
 
-/// Collects the raw clothing archive through the core workflow.
+/// Collects the raw clothing archive through the clothing application workflow.
 pub fn run(command: GenerateVanillaClothing) -> Result<String, Box<dyn std::error::Error>> {
-  crate::core::clothing::vanilla::GenerateVanillaClothing {
+  crate::app::clothing::GenerateVanillaClothing {
     game_dir: command.game_dir,
     output_dir: command.common.output,
     magic: command.magic,

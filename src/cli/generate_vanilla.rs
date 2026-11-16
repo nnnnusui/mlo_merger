@@ -42,9 +42,9 @@ pub fn magic_parser() -> impl Parser<PathBuf> {
     .fallback(PathBuf::from("magic.dat"))
 }
 
-/// Generates the raw vanilla archive through the core workflow.
+/// Generates the raw vanilla archive through the map application workflow.
 pub fn run(command: GenerateVanilla) -> Result<String, Box<dyn std::error::Error>> {
-  crate::core::vanilla::GenerateVanilla {
+  crate::app::map::GenerateVanilla {
     game_dir: command.game_dir,
     output_dir: command.common.output,
     magic: command.magic,

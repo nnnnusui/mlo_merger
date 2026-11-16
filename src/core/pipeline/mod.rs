@@ -5,8 +5,7 @@ mod report;
 mod tests;
 
 use super::{
-  deploy::Deploy, merge::Merge, source_cache::BuildSourceCache, vanilla::GenerateVanilla,
-  vanilla_cache::BuildVanillaCache,
+  deploy::Deploy, merge::Merge, source_cache::BuildSourceCache, vanilla_cache::BuildVanillaCache,
 };
 use crate::common::path::absolute_path;
 use crate::core::config::gamebuild::GameBuild;
@@ -77,13 +76,7 @@ impl Pipeline {
     self.validate_paths()?;
 
     tracing::info!("Pipeline: generate-vanilla");
-    GenerateVanilla {
-      game_dir: self.game_dir.clone(),
-      output_dir: self.vanilla_dir.clone(),
-      magic: self.magic.clone(),
-      reuse_existing: true,
-    }
-    .run()?;
+    crate::core::vanilla::generate_archive(&self.game_dir, &self.vanilla_dir, &self.magic, true)?;
 
     tracing::info!("Pipeline: generate-vanilla-cache");
     let vanilla_cache = BuildVanillaCache {

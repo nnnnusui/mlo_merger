@@ -31,8 +31,9 @@ src/
 └── platform/            OS and process abstractions
 ```
 
-Phase 1 is complete: shared archive extraction and publication live in
-`core/game_archive`; application workflow moves remain planned.
+Shared archive extraction and publication live in `core/game_archive`, and
+vanilla-generation entry points live in `app/map` and `app/clothing`. Remaining
+workflow moves are tracked in the plan.
 
 Dependencies flow from `cli` to `app` to `core`; `core` does not depend on
 application features. The phased migration plan and its progress are tracked in

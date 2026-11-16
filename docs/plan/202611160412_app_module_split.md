@@ -59,31 +59,41 @@ feature-specific parsing, caches and composition. Dependencies flow `cli -> app
   apart from already-added classification attributes, and version markers.
 - [x] Keep temporary re-exports only where needed to migrate callers incrementally.
 
-Phase 1 is complete. Existing `core::vanilla` paths remain as compatibility
-re-exports while consumers move; feature adapters provide archive metadata before
-the shared publication step.
+Phase 1 is complete. Existing `core::vanilla` paths remain available while
+consumers move; feature adapters provide archive metadata before the shared
+publication step.
 
 **Validation:** run archive, vanilla, clothing and publication tests; verify old
 manifest deserialization and the YMAP/YBN/YMT output paths.
 
 ### 2. Add Application Feature Modules
 
-- [ ] Create `app/map` and `app/clothing` module roots with feature-level
+- [x] Create `app/map` and `app/clothing` module roots with feature-level
   generation entry points.
-- [ ] Move the existing map and clothing vanilla-generation wrappers into their
+- [x] Move the existing map and clothing vanilla-generation wrappers into their
   respective app modules.
-- [ ] Change CLI dispatch to call application entry points; keep argument parsing
-  and terminal concerns in `cli`.
-- [ ] Enforce the dependency direction `cli -> app -> core`.
+- [x] Route vanilla-generation CLI and GUI dispatch through the application
+  entry points; keep argument parsing and terminal concerns in `cli`.
+- [x] Keep the new app entry points dependent on `core`, without a reverse
+  dependency.
+- [ ] Route the remaining CLI workflows through app modules as their owners move
+  in Phase 3.
 
 **Validation:** run CLI parsing tests and both feature-generation test groups;
 confirm command names, arguments and defaults are unchanged.
+
+Phase 2 generation entry points are in place. The core pipeline temporarily uses
+the core vanilla-generation helper until the pipeline moves in Phase 3. Deprecated
+core generation wrappers remain temporarily for Rust API compatibility pending
+the decision in Phase 4; the core does not depend on app modules.
 
 ### 3. Move Feature-Owned Workflows
 
 - [ ] Move map-specific `vanilla_cache`, `source_cache`, `overwrite`,
   `overwrite_cache`, `merge`, `deploy` and `pipeline` modules under `app/map`.
 - [ ] Move clothing extraction and counts under `app/clothing`.
+- [ ] Route the remaining map CLI workflows through `app/map`, keeping parsing
+  and terminal concerns in `cli`.
 - [ ] Place future clothing source analysis and composition in `app/clothing`,
   reusing shared `core` services rather than importing `app/map`.
 - [ ] Keep genuinely shared file formats, archive logic and low-level helpers in

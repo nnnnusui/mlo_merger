@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 
 use eframe::egui::{self, Color32, RichText};
 
-use mlo_merger::core::vanilla::GenerateVanilla;
+use mlo_merger::app::map::GenerateVanilla;
 
 use super::{
   game_dir::{self, GameDirStatus},
