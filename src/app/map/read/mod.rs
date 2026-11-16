@@ -5,6 +5,7 @@
 //! in, each recording the file it was read from; a JSON still describing its file is not written
 //! again.
 
+mod lod_parents;
 #[cfg(test)]
 mod tests;
 
@@ -19,10 +20,12 @@ use crate::platform::fs;
 use crate::platform::progress::{ProgressBar, ProgressStyle};
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, HashSet};
 use std::io::{BufWriter, Write};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
+
+pub use lod_parents::{EntityLodParent, EntityLodParentRef, EntityLodParentScope};
 
 /// Which stream files to read.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -123,11 +126,13 @@ pub struct YmapReadDocument {
   /// The `hash_names.json` that named its hashes, if any.
   pub hash_names: Option<ReadFingerprint>,
   pub model: Ymap,
+  /// Resolved LOD parents, indexed into the corresponding `model.entities` arrays.
+  pub entity_lod_parents: Vec<EntityLodParent>,
 }
 
 impl YmapReadDocument {
   /// The current [`Self::schema_version`].
-  pub const SCHEMA_VERSION: u32 = 1;
+  pub const SCHEMA_VERSION: u32 = 2;
 }
 
 /// A file a document was read from, as it was then.
@@ -189,6 +194,7 @@ struct Header {
 /// A stream file selected to be read.
 struct Selected {
   origin: ReadOrigin,
+  resource_id: Option<String>,
   input: PathBuf,
   /// [`Self::input`] relative to its store, as its document records it.
   stored: String,
@@ -305,25 +311,33 @@ impl Read {
             }
         })
     };
-    let names = if checked.iter().any(|(_, previous, source)| stale(previous, source)) {
-      load_hash_names_or_empty(&names_path)
-    } else {
-      HashMap::new()
-    };
+    let names = load_hash_names_or_empty(&names_path);
+    let parents = lod_parents::ParentMaps::new(self, &names)?;
 
-    // Stale documents are converted and written independently; results keep the selection's
-    // order.
+    // Reuse current models, but resolve their parents again before deciding whether to write.
     let progress = FileProgress::new(checked.len(), "Wrote")?;
     let files = checked
       .into_par_iter()
       .map(|(selected, previous, source)| {
         let _tick = progress.tick();
-        let updated = stale(&previous, &source);
+        let current = if stale(&previous, &source) {
+          None
+        } else {
+          crate::common::json::read_json::<YmapReadDocument>(&selected.output).ok()
+        };
+        let (model, old_parents) = match current {
+          Some(document) => (document.model, Some(document.entity_lod_parents)),
+          None => {
+            let bytes = fs::read(&selected.input)
+              .map_err(|error| format!("Cannot open {}: {error}", selected.input.display()))?;
+            let model = ymap_to_model(&bytes, &names)
+              .map_err(|error| format!("Cannot read {}: {error}", selected.input.display()))?;
+            (model, None)
+          }
+        };
+        let entity_lod_parents = parents.resolve(&selected, &model)?;
+        let updated = old_parents.as_ref() != Some(&entity_lod_parents);
         if updated {
-          let bytes = fs::read(&selected.input)
-            .map_err(|error| format!("Cannot open {}: {error}", selected.input.display()))?;
-          let model = ymap_to_model(&bytes, &names)
-            .map_err(|error| format!("Cannot read {}: {error}", selected.input.display()))?;
           write_minified(
             &selected.output,
             &YmapReadDocument {
@@ -331,6 +345,7 @@ impl Read {
               source,
               hash_names: hash_names.clone(),
               model,
+              entity_lod_parents,
             },
           )
           .map_err(|error| error.to_string())?;
@@ -404,6 +419,7 @@ impl Read {
             resource: file.resource_name.clone(),
             stream_path: file.stream_path.clone(),
           },
+          resource_id: Some(file.resource.clone()),
           input: file.path.clone(),
           stored: file.stored_path.clone(),
           output: self
@@ -453,6 +469,7 @@ impl Read {
             stream_path,
             sha256: sha256.to_string(),
           },
+          resource_id: selected.resource_id,
           input,
           stored,
         })
@@ -498,6 +515,7 @@ impl Read {
           version: holder.to_string(),
           file_name,
         },
+        resource_id: None,
         stored,
       });
     }

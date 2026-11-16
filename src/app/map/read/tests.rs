@@ -1,6 +1,7 @@
 use super::*;
 use serde_json::json;
 use sha2::{Digest, Sha256};
+use std::collections::HashMap;
 
 struct Fixture {
   root: PathBuf,
@@ -326,4 +327,148 @@ fn several_files_are_read_together_and_each_must_match() {
     .unwrap_err();
   assert!(error.to_string().contains("missing.ymap"), "{error}");
   assert!(!fixture.root.join("read-cache/resources").exists());
+}
+
+#[test]
+fn lod_parents_use_model_indices_and_refresh_when_the_parent_changes() {
+  use crate::core::format::ymap::binary::write_ymap;
+
+  let fixture = Fixture::new("lod_parents");
+  let child_path = fixture.root.join("source-cache/resources/alpha/child.ymap");
+  let parent_path = fixture.root.join("source/[maps]/alpha/stream/a/parent.ymap");
+  let load = |path: &Path| ymap_to_model(&fs::read(path).unwrap(), &HashMap::new()).unwrap();
+  let mut child = load(&child_path);
+  let mut parent = load(&parent_path);
+  let mut regular = parent.entities[0].clone();
+  regular.entity_type = "CEntityDef".into();
+  regular.parent_index = -1;
+  regular.lod_level = "LODTYPES_DEPTH_LOD".into();
+  let mut mlo = regular.clone();
+  mlo.entity_type = "CMloInstanceDef".into();
+  parent.entities = vec![mlo.clone(), regular.clone()];
+  fs::write(&parent_path, write_ymap(&parent, &parent.entities).unwrap()).unwrap();
+
+  let mut local_child = regular.clone();
+  local_child.lod_level = "LODTYPES_DEPTH_HD".into();
+  local_child.parent_index = 0;
+  local_child.flags &= !8;
+  let mut external_child = local_child.clone();
+  external_child.parent_index = 0;
+  external_child.flags |= 8;
+  let mut unresolved = external_child.clone();
+  unresolved.parent_index = 99;
+  child.entities = vec![mlo, regular, local_child, external_child, unresolved];
+  fs::write(&child_path, write_ymap(&child, &child.entities).unwrap()).unwrap();
+
+  let read = || fixture.read(ReadTarget::Resource("alpha".into()), &["child.ymap"]).unwrap();
+  let ambiguous = read();
+  let output = &ambiguous.files[0].output;
+  let document: serde_json::Value = serde_json::from_slice(&fs::read(output).unwrap()).unwrap();
+  assert_eq!(document["entity_lod_parents"][1]["parent"], serde_json::Value::Null);
+
+  // Leave alpha with one parent of this name; otherwise the parent is ambiguous.
+  let inventory_path = fixture.root.join("source-cache/cache_info.json");
+  let mut inventory: serde_json::Value =
+    serde_json::from_slice(&fs::read(&inventory_path).unwrap()).unwrap();
+  inventory["resources"]["[maps]/alpha"]["files_by_format"][".ymap"]
+    .as_array_mut()
+    .unwrap()
+    .remove(1);
+  fs::write(&inventory_path, serde_json::to_vec(&inventory).unwrap()).unwrap();
+
+  let first = read();
+  assert!(first.files[0].updated);
+  let output = &first.files[0].output;
+  let document: serde_json::Value = serde_json::from_slice(&fs::read(output).unwrap()).unwrap();
+  assert_eq!(document["schema_version"], 2);
+  assert_eq!(
+    document["entity_lod_parents"],
+    json!([
+      {"child_entity_index": 2, "parent": {"scope": "self", "entity_index": 1}},
+      {"child_entity_index": 3, "parent": {"scope": "parent", "entity_index": 1}},
+      {"child_entity_index": 4, "parent": null}
+    ])
+  );
+  assert!(!read().files[0].updated);
+
+  parent.entities.swap(0, 1);
+  fs::write(&parent_path, write_ymap(&parent, &parent.entities).unwrap()).unwrap();
+  assert!(read().files[0].updated);
+  let document: serde_json::Value = serde_json::from_slice(&fs::read(output).unwrap()).unwrap();
+  assert_eq!(document["entity_lod_parents"][1]["parent"]["entity_index"], 0);
+  assert!(!read().files[0].updated);
+
+  let mut old = document;
+  old["schema_version"] = json!(1);
+  fs::write(output, serde_json::to_vec(&old).unwrap()).unwrap();
+  assert!(read().files[0].updated);
+
+  let valid_parent = fs::read(&parent_path).unwrap();
+  fs::write(&parent_path, b"not a YMAP").unwrap();
+  assert!(fixture.read(ReadTarget::Resource("alpha".into()), &["child.ymap"]).is_err());
+  fs::write(&parent_path, valid_parent).unwrap();
+
+  inventory["resources"]["[maps]/alpha"]["files_by_format"][".ymap"]
+    .as_array_mut()
+    .unwrap()
+    .remove(0);
+  fs::write(&inventory_path, serde_json::to_vec(&inventory).unwrap()).unwrap();
+  let fallback = read();
+  let document: serde_json::Value =
+    serde_json::from_slice(&fs::read(&fallback.files[0].output).unwrap()).unwrap();
+  let vanilla_parent = load(&fixture.root.join("vanilla/0000-base/ymap/parent.ymap"));
+  let expected =
+    crate::core::format::ymap::relation::runtime_entity_indices(&vanilla_parent.entities)[0];
+  assert_eq!(document["entity_lod_parents"][1]["parent"]["entity_index"], expected);
+}
+
+#[test]
+fn lod_parents_follow_the_requested_vanilla_stage_for_the_same_child_file() {
+  use crate::core::format::ymap::binary::write_ymap;
+
+  let fixture = Fixture::new("lod_parent_stage");
+  let base_parent = fixture.root.join("vanilla/0000-base/ymap/parent.ymap");
+  let update_parent = fixture.root.join("vanilla/0001-update/ymap/parent.ymap");
+  let child_path = fixture.root.join("vanilla/0000-base/ymap/child.ymap");
+  let mut parent = ymap_to_model(&fs::read(&base_parent).unwrap(), &Default::default()).unwrap();
+  let mut child = ymap_to_model(
+    &fs::read(fixture.root.join("vanilla/0001-update/ymap/child.ymap")).unwrap(),
+    &Default::default(),
+  )
+  .unwrap();
+  let mut regular = parent.entities[0].clone();
+  regular.entity_type = "CEntityDef".into();
+  regular.parent_index = -1;
+  let mut mlo = regular.clone();
+  mlo.entity_type = "CMloInstanceDef".into();
+  parent.entities = vec![mlo, regular];
+  fs::write(&base_parent, write_ymap(&parent, &parent.entities).unwrap()).unwrap();
+  parent.entities.swap(0, 1);
+  fs::write(&update_parent, write_ymap(&parent, &parent.entities).unwrap()).unwrap();
+  child.entities[0].parent_index = 0;
+  child.entities[0].flags |= 8;
+  fs::write(&child_path, write_ymap(&child, &child.entities).unwrap()).unwrap();
+
+  let manifest_path = fixture.root.join("vanilla/cache_info.json");
+  let mut manifest: serde_json::Value =
+    serde_json::from_slice(&fs::read(&manifest_path).unwrap()).unwrap();
+  let child_change = manifest["versions"][1]["changes"]["child.ymap"].take();
+  manifest["versions"][0]["changes"]["child.ymap"] = child_change;
+  manifest["versions"][0]["changes"]["child.ymap"]["file"]["object"] =
+    json!("0000-base/ymap/child.ymap");
+  let mut parent_change = manifest["versions"][0]["changes"]["parent.ymap"].clone();
+  parent_change["file"]["object"] = json!("0001-update/ymap/parent.ymap");
+  manifest["versions"][1]["changes"] = json!({"parent.ymap": parent_change});
+  fs::write(&manifest_path, serde_json::to_vec(&manifest).unwrap()).unwrap();
+
+  fixture.build_vanilla_cache_for("0000-base");
+  let read = || fixture.read(ReadTarget::Vanilla, &["child.ymap"]).unwrap();
+  let base = read();
+  let output = &base.files[0].output;
+  let doc = || serde_json::from_slice::<serde_json::Value>(&fs::read(output).unwrap()).unwrap();
+  assert_eq!(doc()["entity_lod_parents"][0]["parent"]["entity_index"], 1);
+  fixture.build_vanilla_cache_for("0001-update");
+  assert!(read().files[0].updated);
+  assert_eq!(doc()["entity_lod_parents"][0]["parent"]["entity_index"], 0);
+  assert!(!read().files[0].updated);
 }

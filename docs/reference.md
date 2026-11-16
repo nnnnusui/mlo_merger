@@ -450,20 +450,20 @@ mlo_merger --read --all
 ```
 
 `--read` writes each YMAP's model as minified JSON (`YmapReadDocument`), with the path
-and fingerprint of the file it was read from and of the `hash_names.json` that named its
-hashes. A resource's file is written to
+and fingerprint of the file it was read from, the `hash_names.json` that named its
+hashes, and the resolved `entity_lod_parents` (see [usage](usage.md#--read)). A resource's file is written to
 `asset/read-cache/resources/{resourceName}/{stream-relative-path}.json` and a vanilla
 file to `asset/read-cache/vanilla/{version}/ymap/{fileName}.json`, where `{version}` is the
 version folder holding the file in the vanilla archive: the last version, up to the stage
 read, that changed it. Versions holding the same file share its document. A JSON is
-written again when its file changed, or with `-f`.
+written again when its file, hash names or resolved LOD parents change, or with `-f`.
 
 Vanilla files are read from the stage the vanilla cache was built for (`latest_version` in
 `asset/vanilla-cache/cache_info.json`, `--vanilla-cache` to change the cache), so they match
 the merge and the cache's `stream_file_rtree.json`; without a vanilla cache, or one built
 for a stage the archive lacks, from the last stage. `--gamebuild BUILD` reads them as of a
 game build instead, resolved as for the other commands (see [Game Builds](#game-builds)).
-`--gamebuild` changes only the vanilla files.
+`--gamebuild` also selects the vanilla stage used to resolve parent YMAPs.
 
 - `--resource NAME [FILE...]` reads one resource, by name or source-relative ID, from the
   existing source cache. Without a file it reads all of the resource's YMAPs. A file name

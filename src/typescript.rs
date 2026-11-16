@@ -131,6 +131,8 @@ mod tests {
     assert!(actual.contains("tolerance?: MatchTolerances"));
     assert!(actual.contains("source_conflicts?:"));
     assert!(actual.contains("modified_seconds: number"));
+    assert!(actual.contains("entity_lod_parents: EntityLodParent[]"));
+    assert!(actual.contains("export type EntityLodParentScope = \"self\" | \"parent\""));
     assert!(actual.contains("algorithm_versions?: { [key: string]: number }"));
     assert!(actual.contains("entities?: YmapEntityDiff[]"));
     assert!(actual.contains("ignore?: boolean; target?: OverwriteFingerprint | null"));

@@ -210,6 +210,15 @@ vanilla. The last stdout line is a `ReadResult`:
 ```
 
 - `output` is the `YmapReadDocument` to read; its `model` is the `Ymap`.
+- `entity_lod_parents` lists entities with a non-negative `parent_index`. Each
+  `child_entity_index` indexes `model.entities`; `parent` is either `null` when the
+  reference could not be resolved, or an object with `scope` (`"self"` or `"parent"`)
+  and `entity_index` in the corresponding YMAP's `model.entities`. Entities without
+  a parent index are omitted. A warning identifies unresolved references.
+- For `"parent"`, read `model.parent` from the same resource when available, otherwise
+  from vanilla at the selected stage. Parent YMAPs are consulted even if they were not
+  selected for output. Historical resource files use the current resource's parent.
+  Resolve the referenced YMAP at the same stage when traversing the relationships.
 - `updated` tells whether the JSON was rewritten; either way it describes the file.
 - For `origin.Resource`, `resource` (the resource directory name) and `stream_path`
   (the path below `stream/`) also key the diff document and the overwrite.
