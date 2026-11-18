@@ -48,7 +48,7 @@ impl IncrementalMerge<'_> {
     }
     let graph = self.ymap_graph()?;
     let groups = groups(&sources, &graph);
-    let now = chrono::Utc::now().to_rfc3339();
+    let now = jiff::Timestamp::now().to_string();
     let context = GroupContext {
       sources: &sources,
       baselines: &baselines,

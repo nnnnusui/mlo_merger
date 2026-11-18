@@ -183,9 +183,9 @@ pub(super) fn prepare(build: &BuildSourceCache) -> Result<Prepared> {
       || metadata.vanilla_cache_revision != derived_revision
   });
   let source_inputs = cached_inputs.clone();
-  let generated_at = chrono::Utc::now().to_rfc3339();
+  let generated_at = jiff::Timestamp::now().to_string();
   let history =
-    output.join("_old").join(chrono::Utc::now().format("%Y%m%dT%H%M%S%.9fZ").to_string());
+    output.join("_old").join(jiff::Timestamp::now().strftime("%Y%m%dT%H%M%S%.9fZ").to_string());
   let changed = exclusions_changed
     || relocated
     || upstream_changed

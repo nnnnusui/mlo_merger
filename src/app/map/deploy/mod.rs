@@ -143,7 +143,7 @@ impl Deploy {
     }
     let metadata = DeployMetadata {
       format_version: 1,
-      generated_at: chrono::Utc::now().to_rfc3339(),
+      generated_at: jiff::Timestamp::now().to_string(),
       files,
     };
     if previous.as_ref().is_none_or(|previous| previous.files != metadata.files) {

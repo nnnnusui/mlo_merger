@@ -36,7 +36,7 @@ disallowed-methods = [
   { path = "std::env::set_current_dir", reason = "use crate::platform::process::set_current_dir" },
   { path = "std::env::temp_dir", reason = "no temporary directory in the browser" },
   { path = "std::process::id", reason = "use crate::platform::process::id" },
-  { path = "std::time::SystemTime::now", reason = "panics in the browser; use chrono" },
+  { path = "std::time::SystemTime::now", reason = "panics in the browser; use jiff" },
   { path = "std::time::Instant::now", reason = "panics in the browser" },
   { path = "std::thread::spawn", reason = "the browser build has no threads; use rayon, which falls back to one" },
   { path = "std::thread::scope", reason = "the browser build has no threads; use rayon, which falls back to one" },

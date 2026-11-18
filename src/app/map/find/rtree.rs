@@ -319,7 +319,7 @@ fn index_store(
   Ok(RTreeIndex {
     schema_version: SCHEMA_VERSION,
     store: name.into(),
-    timestamp: chrono::Utc::now().to_rfc3339(),
+    timestamp: jiff::Timestamp::now().to_string(),
     input,
     file_count: ymap.len() + ybn.len(),
     ymap,

@@ -130,7 +130,8 @@ pub(crate) fn publish_cache(
       }
     }
   }
-  let backup = output.join(format!(".backup-{}", chrono::Local::now().format("%Y%m%d-%H%M%S-%f")));
+  let backup =
+    output.join(format!(".backup-{}", jiff::ZonedDateTime::now().strftime("%Y%m%d-%H%M%S-%9f")));
   fs::create_dir(&backup)?;
   let mut published = Vec::new();
   let mut published_metadata = Vec::new();

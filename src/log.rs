@@ -12,7 +12,7 @@ impl tracing_tree::time::FormatTime for LogTime {
     &self,
     writer: &mut impl std::fmt::Write,
   ) -> std::fmt::Result {
-    write!(writer, "{}", chrono::Local::now().format("%H:%M:%S"))
+    write!(writer, "{}", jiff::ZonedDateTime::now().strftime("%H:%M:%S"))
   }
 
   fn style_timestamp(
@@ -103,7 +103,7 @@ pub(crate) fn file_writer(
 
 /// `<dir>/mlo_merger_<timestamp>.log` for a run starting now.
 pub(crate) fn log_file_path(dir: &Path) -> PathBuf {
-  let name = format!("mlo_merger_{}.log", chrono::Local::now().format("%Y%m%d_%H%M%S"));
+  let name = format!("mlo_merger_{}.log", jiff::ZonedDateTime::now().strftime("%Y%m%d_%H%M%S"));
   dir.join(name)
 }
 
