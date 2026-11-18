@@ -22,7 +22,12 @@
 //! removes a LOD light pair, and one ships its own map, a child map of it and collision. A later
 //! version of that resource ships the map again, so the merge combines both versions: the sign
 //! they share is kept once, and the crate placed again under another GUID too, its child
-//! following the kept one. Edits to `smpl_block_01.ymap` carry over to its DLC generations.
+//! following the kept one. Another removes an oak from the park and places a bin there. Edits to
+//! `smpl_block_01.ymap` carry over to its DLC generations.
+//!
+//! The overwrites name one ignored overwrite of every reason on the first pipeline run: some
+//! written against earlier versions of the resources' files (see [`earlier_versions`]), the
+//! others in [`ignored::overwrites`].
 //!
 //! Every stream file covers [`EVERY_FILE_POSITION`].
 //!
@@ -31,6 +36,7 @@
 
 mod build;
 mod earlier;
+mod ignored;
 #[cfg(test)]
 mod tests;
 mod ybn;
@@ -67,6 +73,7 @@ mod guid {
   pub const FOUNTAIN: u32 = 0x534D_0204;
   pub const PARK_BENCH: u32 = 0x534D_0205;
   pub const KIOSK: u32 = 0x534D_0206;
+  pub const BLOCK_99_BENCH: u32 = 0x534D_0901;
   pub const PLANTER: u32 = 0x5A5A_0001;
   pub const BIRCH: u32 = 0x5A5A_0002;
   pub const CONE: u32 = 0x5A5A_0003;
@@ -75,6 +82,8 @@ mod guid {
   pub const CRATE_LABEL: u32 = 0x5A5A_0103;
   pub const CRATE_V2: u32 = 0x5A5A_0202;
   pub const BARREL: u32 = 0x5A5A_0203;
+  pub const PARK_BIN: u32 = 0x5A5A_0301;
+  pub const OLD_SIGN: u32 = 0x5A5A_0401;
 }
 
 /// A point every stream file of the sample covers: inside each YMAP's entity extents and each
@@ -361,6 +370,19 @@ fn custom_props_v2() -> Vec<(&'static str, Vec<u8>)> {
   vec![("stream/smpl_custom_01.ymap", ymap_bytes(&custom))]
 }
 
+/// Resource `smpl_park_tweaks`: removes an oak from the park as `smpl_summer` left it and
+/// places a bin by the fountain. Its `earlier` version, which an overwrite was written against,
+/// removed the other oak and placed the bin last.
+fn park_tweaks(earlier: bool) -> Vec<(&'static str, Vec<u8>)> {
+  let mut park = block_02(3);
+  park.entities.remove(find(&park, if earlier { guid::OAK_1 } else { guid::OAK_3 }));
+  let bin = entity("smpl_bin", guid::PARK_BIN, position(-7093.0, 7088.0, 20.0), 0.0);
+  let at = if earlier { park.entities.len() } else { find(&park, guid::FOUNTAIN) + 1 };
+  park.entities.insert(at, bin);
+  fit_extents(&mut park);
+  vec![("stream/smpl_block_02.ymap", ymap_bytes(&park))]
+}
+
 /// Every name the sample hashes, so `hash_names.json` resolves them all.
 const NAMES: &[&str] = &[
   "smpl_block_01",
@@ -374,6 +396,8 @@ const NAMES: &[&str] = &[
   "winter_distlodlights_small001",
   "smpl_custom_01",
   "smpl_custom_02",
+  "smpl_custom_old",
+  "smpl_block_99",
   "smpl_house_a",
   "smpl_house_b",
   "smpl_house_a_lod",
@@ -484,9 +508,11 @@ const CONFIG: &str = "\
 /// Every file of the sample workspace, with `files.json` listing them for the page.
 fn sample_files() -> Vec<SampleFile> {
   let mut files = workspace_files(false);
-  files.extend(earlier_versions().iter().map(|(path, bytes)| SampleFile {
-    path: path.clone(),
-    bytes: bytes.clone(),
+  files.extend(earlier_versions().iter().chain(&ignored::overwrites()).map(|(path, bytes)| {
+    SampleFile {
+      path: path.clone(),
+      bytes: bytes.clone(),
+    }
   }));
   // The files the page seeds.
   let mut listed = files.iter().map(|file| file.path.clone()).collect::<Vec<_>>();
@@ -548,6 +574,7 @@ fn workspace_files(earlier: bool) -> Vec<SampleFile> {
     ("smpl_block_rework", block_rework(earlier)),
     ("smpl_custom_props", custom_props()),
     ("smpl_custom_props_v2", custom_props_v2()),
+    ("smpl_park_tweaks", park_tweaks(earlier)),
   ] {
     files.push(SampleFile {
       path: format!("asset/source/{resource}/fxmanifest.lua"),

@@ -1,15 +1,17 @@
-//! The earlier versions of two resources' files, which the sample's overwrites were written
+//! The earlier versions of three resources' files, which the sample's overwrites were written
 //! against, and the source cache's history of them.
 
-use super::{block_01, find, guid, sha256, workspace_files};
+use super::{block_01, block_02, find, guid, sha256, workspace_files};
 use crate::platform::fs;
 
-/// The overwrites written against the earlier versions of two resources' `smpl_block_01.ymap`,
-/// and those versions with their diff documents, kept in the source cache's history as a
-/// pipeline run on them would have left them. The overwrite of `smpl_street_tweaks` reverts its
-/// planter and its cone, which the current version no longer adds, so it is rewritten; that of
-/// `smpl_block_rework` reverts its lamp's colour, which the current version changes otherwise,
-/// so it is left to be written again.
+/// The overwrites written against the earlier versions of two resources' `smpl_block_01.ymap`
+/// and of `smpl_park_tweaks`'s `smpl_block_02.ymap`, and those versions with their diff
+/// documents, kept in the source cache's history as a pipeline run on them would have left them.
+/// The overwrite of `smpl_street_tweaks` reverts its planter and its cone, which the current
+/// version no longer adds, so it is rewritten; that of `smpl_block_rework` reverts its lamp's
+/// colour, which the current version changes otherwise, and that of `smpl_park_tweaks` its
+/// removal of an oak and its bin, which the current version places elsewhere, so they are left
+/// to be written again.
 pub(super) fn earlier_versions() -> &'static [(String, Vec<u8>)] {
   static FILES: std::sync::OnceLock<Vec<(String, Vec<u8>)>> = std::sync::OnceLock::new();
   FILES.get_or_init(|| {
@@ -39,11 +41,14 @@ pub(super) fn earlier_versions() -> &'static [(String, Vec<u8>)] {
     .run()
     .unwrap();
     let lamp = find(&block_01("smpl_block_01"), guid::LAMP);
+    let oak = find(&block_02(3), guid::OAK_1);
     let mut files = Vec::new();
-    for resource in ["smpl_street_tweaks", "smpl_block_rework"] {
+    for (resource, stream_path) in [
+      ("smpl_street_tweaks", "smpl_block_01.ymap"),
+      ("smpl_block_rework", "maps/smpl_block_01.ymap"),
+      ("smpl_park_tweaks", "smpl_block_02.ymap"),
+    ] {
       let cache = asset.join("source-cache");
-      let stream_path =
-        if resource == "smpl_block_rework" { "maps/smpl_block_01.ymap" } else { "smpl_block_01.ymap" };
       let bytes = fs::read(cache.join(format!("resources/{resource}/{stream_path}"))).unwrap();
       let mut document: serde_json::Value = serde_json::from_slice(
         &fs::read(cache.join(format!("diff/{resource}/{stream_path}.diff.json"))).unwrap(),
@@ -54,11 +59,13 @@ pub(super) fn earlier_versions() -> &'static [(String, Vec<u8>)] {
         document[file]["modified_seconds"] = 0.into();
         document[file]["modified_nanos"] = 0.into();
       }
-      let skip = if resource == "smpl_street_tweaks" {
-        let added = |guid| serde_json::json!({"Added": {"target_index": added_index(&document, guid)}});
-        serde_json::json!({"entities": [added(guid::PLANTER), added(guid::CONE)]})
-      } else {
-        serde_json::json!({"entities": [{"Modified": {"base_index": lamp}}]})
+      let added = |guid| serde_json::json!({"Added": {"target_index": added_index(&document, guid)}});
+      let skip = match resource {
+        "smpl_street_tweaks" => {
+          serde_json::json!({"entities": [added(guid::PLANTER), added(guid::CONE)]})
+        }
+        "smpl_block_rework" => serde_json::json!({"entities": [{"Modified": {"base_index": lamp}}]}),
+        _ => serde_json::json!({"entities": [{"Removed": {"base_index": oak}}, added(guid::PARK_BIN)]}),
       };
       let sha = sha256(&bytes);
       let history = crate::app::map::source_cache::history::version_path(resource, stream_path, &sha);

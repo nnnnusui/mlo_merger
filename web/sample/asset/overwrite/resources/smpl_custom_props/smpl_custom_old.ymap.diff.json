@@ -1,0 +1,20 @@
+{
+  "schema_version": 2,
+  "target": {
+    "sha256": "a9ffd899e4767c2555441f54b66733049154909d054dd3a9dcaf3075e6931b63",
+    "size": 1068
+  },
+  "base": {
+    "sha256": "dcabc003546847ffdf011dd15e9f036032cb558165ef42f0b088340bd0323a1d",
+    "size": 657
+  },
+  "skip": {
+    "entities": [
+      {
+        "Added": {
+          "target_index": 0
+        }
+      }
+    ]
+  }
+}

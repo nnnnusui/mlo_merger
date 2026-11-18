@@ -1,0 +1,21 @@
+{
+  "schema_version": 2,
+  "base": {
+    "sha256": "ac91a0f8b8a4ac33aa960949b225a2e7db5d2eda2db68fd30f04490c3a4cda42",
+    "size": 1135
+  },
+  "diffs": {
+    "entities": [
+      {
+        "Removed": {
+          "base_index": 1
+        }
+      },
+      {
+        "Removed": {
+          "base_index": 3
+        }
+      }
+    ]
+  }
+}

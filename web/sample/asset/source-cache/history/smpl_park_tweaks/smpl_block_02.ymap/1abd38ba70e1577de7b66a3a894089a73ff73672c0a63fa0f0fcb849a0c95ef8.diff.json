@@ -1,0 +1,79 @@
+{
+  "base": {
+    "modified_nanos": 0,
+    "modified_seconds": 0,
+    "path": "0004-smpl_summer/ymap/smpl_block_02.ymap",
+    "sha256": "350e9f844e228d388ceb5f30b43270635737ea282a3f5462a9d8fb3331e51a5d",
+    "size": 1169
+  },
+  "diffs": {
+    "entities": [
+      {
+        "Removed": {
+          "base_index": 0
+        }
+      },
+      {
+        "Added": {
+          "anchor_base_index": 4,
+          "entity": {
+            "ambient_occlusion_multiplier": 255,
+            "archetype_name": "smpl_bin",
+            "artificial_ambient_occlusion": 255,
+            "child_lod_dist": 0.0,
+            "entity_type": "CEntityDef",
+            "flags": 1572864,
+            "guid": 1515848449,
+            "lod_dist": 120.0,
+            "lod_level": "LODTYPES_DEPTH_HD",
+            "num_children": 0,
+            "parent_index": -1,
+            "position": {
+              "x": -7093.0,
+              "y": 7088.0,
+              "z": 20.0
+            },
+            "priority_level": "PRI_REQUIRED",
+            "rotation": {
+              "w": 1.0,
+              "x": 0.0,
+              "y": 0.0,
+              "z": 0.0
+            },
+            "scale_x_y": 1.0,
+            "scale_z": 1.0,
+            "tint_value": 0
+          },
+          "parent": "None",
+          "target_index": 4
+        }
+      }
+    ],
+    "entities_extents_min": {
+      "x": -7110.0,
+      "y": 7072.0
+    },
+    "streaming_extents_min": {
+      "x": -7220.0,
+      "y": 6962.0
+    }
+  },
+  "schema_version": 12,
+  "target": {
+    "modified_nanos": 0,
+    "modified_seconds": 0,
+    "path": "resources/smpl_park_tweaks/smpl_block_02.ymap",
+    "sha256": "1abd38ba70e1577de7b66a3a894089a73ff73672c0a63fa0f0fcb849a0c95ef8",
+    "size": 1176
+  },
+  "tolerances": {
+    "ybn_position": 0.05,
+    "ymap": 0.001,
+    "ymap_box_occluder_position": 1,
+    "ymap_box_occluder_rotation": 1,
+    "ymap_car_generator_position_decimals": 3,
+    "ymap_grass_position": 0.01,
+    "ymap_lod_light_position_decimals": 3,
+    "ymap_occlude_model_position": 0.01
+  }
+}

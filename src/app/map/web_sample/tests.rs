@@ -205,8 +205,38 @@ fn pipeline_runs_on_the_web_sample() {
   );
   let rework = update("smpl_block_rework", "maps/smpl_block_01.ymap");
   assert_eq!(rework.outcome, crate::app::map::overwrite_cache::SourceUpdateOutcome::Manual);
-  assert_eq!(latest.warnings.ignored_overwrites.len(), 1);
-  assert_eq!(latest.warnings.ignored_overwrites[0].resource.as_deref(), Some("smpl_block_rework"));
+  // That of `smpl_park_tweaks` reverted its removal of an oak and its bin; the current version
+  // removes the other oak and places the bin elsewhere, so it is left too, its record listing
+  // the removal and the addition it reverted.
+  let park = update("smpl_park_tweaks", "smpl_block_02.ymap");
+  assert_eq!(park.outcome, crate::app::map::overwrite_cache::SourceUpdateOutcome::Manual);
+  let reverted = serde_json::to_value(&park.reverted).unwrap()["entities"].clone();
+  let variants = reverted
+    .as_array()
+    .unwrap()
+    .iter()
+    .map(|item| item.as_object().unwrap().keys().next().unwrap().clone())
+    .collect::<Vec<_>>();
+  assert_eq!(variants, ["Removed", "Added"]);
+  // One overwrite left out for each reason.
+  use crate::app::map::overwrite::IgnoredOverwriteReason::*;
+  let ignored = latest
+    .warnings
+    .ignored_overwrites
+    .iter()
+    .map(|overwrite| (overwrite.resource.as_deref(), overwrite.file.as_str(), overwrite.reason))
+    .collect::<Vec<_>>();
+  assert_eq!(
+    ignored,
+    [
+      (Some("smpl_block_rework"), "maps/smpl_block_01.ymap", SourceChanged),
+      (Some("smpl_custom_props"), "smpl_custom_old.ymap", MissingSource),
+      (Some("smpl_park_tweaks"), "smpl_block_02.ymap", SourceChanged),
+      (Some("smpl_street_tweaks"), "smpl_block_01.ybn", UnsupportedFormat),
+      (None, "0000-base/ymap/smpl_block_99.ymap", MissingVanilla),
+      (None, "0001-update/ymap/smpl_block_02.ymap", VanillaChanged),
+    ]
+  );
 
   // Every store is consistent with its metadata. An overwrite changed since, and an earlier
   // version gone from the history, show in the overwrite cache's check.
@@ -328,8 +358,8 @@ fn pipeline_runs_on_the_web_sample() {
   assert!(
     workspace.asset("read-cache/vanilla/0003-smpl_patch_01/ymap/smpl_block_02.ymap.json").is_file()
   );
-  // Nine resource YMAPs, the custom maps included, and the eight vanilla YMAPs of build 100.
-  assert_eq!(read.files.len(), 17);
+  // Ten resource YMAPs, the custom maps included, and the eight vanilla YMAPs of build 100.
+  assert_eq!(read.files.len(), 18);
 }
 
 #[test]
@@ -359,5 +389,5 @@ fn every_stream_file_covers_the_shared_position() {
     checked += 1;
   }
   // The earlier versions kept in the source cache's history included.
-  assert_eq!(checked, 28);
+  assert_eq!(checked, 30);
 }

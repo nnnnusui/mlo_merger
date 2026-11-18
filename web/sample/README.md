@@ -51,6 +51,8 @@ names, by which the merger pairs them.
   (`smpl_custom_props_v2`) first: the sign, by its GUID, and the crate, by its archetype, LOD
   level and position, are kept once, from `smpl_custom_props_v2`, and the label's parent index
   follows the crate it kept.
+- `smpl_park_tweaks` removes the third oak from the park as `smpl_summer` left it and places a
+  bin by the fountain.
 
 Edits to `smpl_block_01.ymap` and the LOD lights carry over to their DLC generations. The
 resources' collisions predate `smpl_summer`, so merging against the last stage removes the
@@ -58,25 +60,43 @@ kiosk's collision, while `--gamebuild 100` merges against the stage they were ma
 
 ## Overwrites Written Against Earlier Versions (`asset/overwrite`, `asset/source-cache/history`)
 
-Two overwrites were written against earlier versions of the resources' `smpl_block_01.ymap`,
-which the source cache keeps under `asset/source-cache/history/`, as a pipeline run on them
-would have left them, with their diff documents:
+Three overwrites were written against earlier versions of the resources' files, which the
+source cache keeps under `asset/source-cache/history/`, as a pipeline run on them would have
+left them, with their diff documents:
 
-- `smpl_street_tweaks`'s reverts the planter and a cone its earlier version added. The current
-  version no longer adds the cone, so the first pipeline run rewrites the overwrite in
-  `asset/overwrite` against it: it keeps reverting the planter and no longer names the cone.
-- `smpl_block_rework`'s reverts the lamp's colour, which the current version changes to
-  another colour. It is left as it is, not applied, and listed in `ignored_overwrites`, to be
-  written again.
+- `smpl_street_tweaks`'s, of `smpl_block_01.ymap`, reverts the planter and a cone its earlier
+  version added. The current version adds the planter only, so the first pipeline run rewrites
+  the overwrite in `asset/overwrite` against it: it keeps reverting the planter and no longer
+  names the cone.
+- `smpl_block_rework`'s, of `maps/smpl_block_01.ymap`, reverts the lamp's colour, which the
+  current version changes to another colour. It is left as it is, not applied, and listed in
+  `ignored_overwrites` as `source_changed`, to be written again.
+- `smpl_park_tweaks`'s, of `smpl_block_02.ymap`, reverts the removal of the first oak and the
+  bin its earlier version placed last. The current version removes the third oak instead and
+  places the bin right after the fountain, at another index, so this one is left as well,
+  listed as `source_changed`; its record lists the removal and the addition it reverted, and
+  why it was not rewritten.
 
-Both are recorded under `asset/overwrite-cache/source_updates/`. Read an earlier version with,
-for example,
+All three are recorded under `asset/overwrite-cache/source_updates/`. Read an earlier version
+with, for example,
 
 ```bash
 mlo_merger --read --resource smpl_street_tweaks --version {sha256} smpl_block_01.ymap
 ```
 
 where `{sha256}` names the file in the history.
+
+## Overwrites Left Out for Other Reasons (`asset/overwrite`)
+
+With the two above, the first pipeline run lists one entry of every reason in
+`ignored_overwrites`:
+
+| Overwrite | Reason | What it shows |
+|---|---|---|
+| `vanilla/0001-update/ymap/smpl_block_02.ymap.diff.json` | `vanilla_changed` | Written against the title update's park, which `0003-smpl_patch_01` and `0004-smpl_summer` replace. It removes the fountain, which the latest stage still has, and the second oak, which `smpl_summer` swaps for the kiosk; in the latest park, its base indices name the third oak and the bench. |
+| `resources/smpl_custom_props/smpl_custom_old.ymap.diff.json` | `missing_source` | Reverts a sign in `smpl_custom_old.ymap`, a map an earlier version of `smpl_custom_props` shipped and the current one drops. |
+| `vanilla/0000-base/ymap/smpl_block_99.ymap.diff.json` | `missing_vanilla` | Removes a bench from `smpl_block_99.ymap`, a file no stage of the vanilla archive has. |
+| `resources/smpl_street_tweaks/smpl_block_01.ybn.diff.json` | `unsupported_format` | Leaves out `smpl_street_tweaks`'s collision, a YBN; overwrites apply to YMAPs only. |
 
 ## A Position Every File Covers
 
