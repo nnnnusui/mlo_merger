@@ -16,7 +16,7 @@ use crate::core::format::gamefile::{
   meta::{MetaResource, jenk_hash},
   rsc7::Rsc7Resource,
 };
-use crate::core::game_archive::VanillaCacheManifest;
+use crate::core::game_archive::{VanillaCacheManifest, archives::RpfNames};
 
 const ARRAY_INFO_HASH: u32 = 0x100;
 #[cfg(test)]
@@ -39,7 +39,7 @@ struct ParsedYmapNames {
 pub(crate) fn write_hash_index(
   vanilla_dir: &Path,
   manifest: &VanillaCacheManifest,
-  rpf_names: &BTreeSet<String>,
+  rpf_names: &RpfNames,
 ) -> Result<()> {
   let manifest_bytes = fs::read(vanilla_dir.join("cache_info.json"))?;
   let latest_version = manifest.versions.last().ok_or("Vanilla archive has no stages")?.id.clone();
@@ -83,9 +83,9 @@ pub(crate) fn write_hash_index(
     }
     archetypes.extend(parsed.archetypes);
   }
-  add_rpf_name_candidates(&mut names, rpf_names.iter().cloned());
+  add_rpf_name_candidates(&mut names, rpf_names.stems.iter().cloned());
 
-  names.extend(entity_archetype_names(&archetypes, &names));
+  names.extend(entity_archetype_names(&archetypes, &names, &rpf_names.drawables));
 
   write_json(
     &vanilla_dir.join("hash_names.json"),
@@ -299,18 +299,64 @@ fn add_rpf_name_candidates(
   }
 }
 
+/// Names every entity archetype, deriving LOD names from drawable files for hashes no
+/// other name matches and keeping the rest as `hash_XXXXXXXX`.
 fn entity_archetype_names(
   archetypes: &BTreeSet<u32>,
   names: &BTreeMap<String, String>,
+  drawables: &BTreeSet<String>,
 ) -> BTreeMap<String, String> {
+  let unresolved = archetypes
+    .iter()
+    .copied()
+    .filter(|hash| !names.contains_key(&format!("{hash:08X}")))
+    .collect::<BTreeSet<_>>();
+  let mut derived = BTreeMap::new();
+  for drawable in drawables {
+    for name in lod_name_candidates(drawable) {
+      let hash = jenk_hash(&name);
+      if unresolved.contains(&hash) {
+        derived.entry(hash).or_insert(name);
+      }
+    }
+  }
   archetypes
     .iter()
     .map(|hash| {
       let key = format!("{hash:08X}");
-      let name = names.get(&key).cloned().unwrap_or_else(|| format!("hash_{key}"));
+      let name = names
+        .get(&key)
+        .or_else(|| derived.get(hash))
+        .cloned()
+        .unwrap_or_else(|| format!("hash_{key}"));
       (key, name)
     })
     .collect()
+}
+
+/// LOD archetype names implied by a lowercased `.ydr` or `.ydd` file name.
+///
+/// LOD archetypes are often stored in drawable dictionaries under hashed names, so no
+/// file or META string spells them out. These are the names CodeWalker's extended hash
+/// index derives from the same files.
+fn lod_name_candidates(file_name: &str) -> Vec<String> {
+  let mut candidates = Vec::new();
+  if let Some(stem) = file_name.strip_suffix(".ydr") {
+    candidates.extend(["_lod", "_loda", "_lodb"].map(|suffix| format!("{stem}{suffix}")));
+  } else if let Some(stem) = file_name.strip_suffix(".ydd") {
+    if let Some(base) = stem.strip_suffix("_children") {
+      candidates.push(base.to_owned());
+      candidates.extend(["_lod", "_loda", "_lodb"].map(|suffix| format!("{base}{suffix}")));
+    }
+    if let Some((group, _)) = stem.rsplit_once('_')
+      && let Some((base, _)) = group.rsplit_once('_')
+      && !base.is_empty()
+    {
+      candidates.push(format!("{base}_lod"));
+      candidates.extend((1..=100).map(|index| format!("{base}_{index:02}_lod")));
+    }
+  }
+  candidates
 }
 
 #[cfg(test)]
@@ -402,7 +448,7 @@ mod tests {
     let hash = jenk_hash(prop);
     let mut names = BTreeMap::new();
     add_rpf_name_candidates(&mut names, [prop.to_owned()]);
-    names.extend(entity_archetype_names(&BTreeSet::from([hash]), &names));
+    names.extend(entity_archetype_names(&BTreeSet::from([hash]), &names, &BTreeSet::new()));
     let index = HashIndex {
       format_version: 1,
       latest_version: "latest".into(),
@@ -418,7 +464,24 @@ mod tests {
   fn unresolved_archetype_hash_is_retained_in_names_as_hash_text() {
     let hash = 0x0001_D65D;
     let names = BTreeMap::new();
-    let all_names = entity_archetype_names(&BTreeSet::from([hash]), &names);
+    let all_names = entity_archetype_names(&BTreeSet::from([hash]), &names, &BTreeSet::new());
     assert_eq!(all_names["0001D65D"], "hash_0001D65D");
+  }
+
+  #[test]
+  fn drawable_file_names_resolve_lod_archetype_hashes() {
+    let slod = jenk_hash("sm_22_pnwstepslod");
+    let lod = jenk_hash("sm_22_office_lod");
+    let numbered = jenk_hash("hei_dt1_07_lod");
+    let drawables = BTreeSet::from([
+      "sm_22_pnwstepslod_children.ydd".to_owned(),
+      "sm_22_office.ydr".to_owned(),
+      "hei_dt1_02_children.ydd".to_owned(),
+    ]);
+    let names =
+      entity_archetype_names(&BTreeSet::from([slod, lod, numbered]), &BTreeMap::new(), &drawables);
+    assert_eq!(names[&format!("{slod:08X}")], "sm_22_pnwstepslod");
+    assert_eq!(names[&format!("{lod:08X}")], "sm_22_office_lod");
+    assert_eq!(names[&format!("{numbered:08X}")], "hei_dt1_07_lod");
   }
 }

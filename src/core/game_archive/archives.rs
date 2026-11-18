@@ -36,6 +36,15 @@ impl FileSelection {
   };
 }
 
+/// Names collected from RPF table-of-contents entries.
+#[derive(Debug, Default)]
+pub(crate) struct RpfNames {
+  /// Every entry's name stem, as stored and lowercased.
+  pub(crate) stems: BTreeSet<String>,
+  /// Lowercased `.ydr` and `.ydd` entry names, from which LOD archetype names are derived.
+  pub(crate) drawables: BTreeSet<String>,
+}
+
 #[derive(Debug, Clone)]
 pub(crate) struct ExtractedFile {
   pub(crate) name: String,
@@ -147,7 +156,7 @@ pub(crate) fn game_path(
 }
 
 /// Extracts selected extensions, dlclist.xml and a root setup2.xml recursively into `output`, preserving
-/// archive provenance, and collects every entry's name stem into `rpf_names`.
+/// archive provenance, and collects every entry's name into `rpf_names`.
 ///
 /// `subtree` limits extraction to one nested archive's full virtual path. Files are
 /// numbered in table-of-contents order, each archive's own files before its children's.
@@ -157,7 +166,7 @@ pub(crate) fn extract(
   relative: &str,
   output: &Path,
   subtree: Option<&str>,
-  rpf_names: &mut BTreeSet<String>,
+  rpf_names: &mut RpfNames,
   selection: FileSelection,
 ) -> Result<Vec<ExtractedFile>> {
   tracing::info!("Scanning {relative}");
@@ -173,8 +182,12 @@ pub(crate) fn extract(
       let name = file.name.rsplit_once('.').map_or(file.name.as_str(), |(stem, _)| stem);
       let name = if name.is_empty() { file.name.as_str() } else { name };
       if !name.trim().is_empty() {
-        rpf_names.insert(name.to_owned());
-        rpf_names.insert(name.to_lowercase());
+        rpf_names.stems.insert(name.to_owned());
+        rpf_names.stems.insert(name.to_lowercase());
+      }
+      let lower = file.name.to_lowercase();
+      if lower.ends_with(".ydr") || lower.ends_with(".ydd") {
+        rpf_names.drawables.insert(lower);
       }
       if file
         .path

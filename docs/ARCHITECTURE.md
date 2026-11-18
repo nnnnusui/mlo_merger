@@ -305,7 +305,10 @@ another matching policy.
 ## Vanilla Archive And Derived Cache
 
 The raw vanilla archive preserves ordered YMAP/YBN overlays from the base game, title
-update and DLCs, stored by version and extension, with a global hash-name table. A DLC
+update and DLCs, stored by version and extension, with a global hash-name table. The
+table names hashes from YMAP META strings and archive entry names; entity archetypes
+that neither spells out, mostly LOD and SLOD models, take the names CodeWalker derives
+from `.ydr` and `.ydd` file names. A DLC
 pack's stage reads its `dlc.rpf`, then the subpacks (`dlc1.rpf`, …) its `setup2.xml`
 declares, as the game mounts them, then its title-update patch. The derived cache selects
 the latest files through the last stage of the chosen game build and indexes YMAP

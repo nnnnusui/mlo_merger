@@ -2,8 +2,8 @@
 
 use super::{
   archives::{
-    DlcList, FileSelection, base_archives, dlc_archive, dlc_subpack, extract, game_path, patch_dlc,
-    platform_archives, sub_pack_count,
+    DlcList, FileSelection, RpfNames, base_archives, dlc_archive, dlc_subpack, extract, game_path,
+    patch_dlc, platform_archives, sub_pack_count,
   },
   manifest::VanillaCacheManifest,
   publication::{Staging, publish_cache, reset_output_directory},
@@ -13,7 +13,7 @@ use crate::common::json::write_json;
 use crate::core::format::rpf::RpfKeys;
 use crate::platform::fs;
 use crate::platform::process;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
@@ -37,7 +37,7 @@ impl BuildGameArchive {
     &self,
     metadata_files: &[&str],
     obsolete_files: &[&str],
-    write_metadata: impl FnOnce(&Path, &VanillaCacheManifest, &BTreeSet<String>) -> Result<()>,
+    write_metadata: impl FnOnce(&Path, &VanillaCacheManifest, &RpfNames) -> Result<()>,
   ) -> Result<()> {
     let game_dir = fs::canonicalize(&self.game_dir)?;
     let roots = base_archives(&game_dir)?;
@@ -82,7 +82,7 @@ impl BuildGameArchive {
     output_dir: &Path,
     metadata_files: &[&str],
     obsolete_files: &[&str],
-    write_metadata: impl FnOnce(&Path, &VanillaCacheManifest, &BTreeSet<String>) -> Result<()>,
+    write_metadata: impl FnOnce(&Path, &VanillaCacheManifest, &RpfNames) -> Result<()>,
   ) -> Result<()> {
     let extensions = self.files.extensions;
     let mut manifest = VanillaCacheManifest {
@@ -91,7 +91,7 @@ impl BuildGameArchive {
       versions: vec![],
     };
     let mut current = BTreeMap::new();
-    let mut rpf_names = BTreeSet::new();
+    let mut rpf_names = RpfNames::default();
     let base_dir = scratch.join("base");
     stage(&mut manifest, &mut current, build, "base", extensions, || {
       let mut files = Vec::new();
@@ -230,10 +230,10 @@ impl BuildGameArchive {
     build: &Path,
     output_dir: &Path,
     manifest: &VanillaCacheManifest,
-    rpf_names: &BTreeSet<String>,
+    rpf_names: &RpfNames,
     metadata_files: &[&str],
     obsolete_files: &[&str],
-    write_metadata: impl FnOnce(&Path, &VanillaCacheManifest, &BTreeSet<String>) -> Result<()>,
+    write_metadata: impl FnOnce(&Path, &VanillaCacheManifest, &RpfNames) -> Result<()>,
   ) -> Result<()> {
     write_json(&build.join("cache_info.json"), manifest)?;
     write_metadata(build, manifest, rpf_names)?;
