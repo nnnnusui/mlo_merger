@@ -96,6 +96,10 @@ document against the latest vanilla file. A YMAP that resources add, named after
 YMAP, is compared with an empty YMAP, so that its items are additions that overwrites can
 leave out; the baseline depends on no source, so overwrites stay current while their own
 source does. `added_ymap_relationships.json` records the added YMAPs' parents per resource.
+`hash_names.json` names the hashes the resources' file names spell, with the LOD names
+derived from their `.ydr` and `.ydd` files, so that `--read` names a resource's own YMAPs
+and archetypes; it is built from the inventory alone, as YMAP and YTYP META strings add no
+name the file names miss.
 The document records both files'
 fingerprints and the matching tolerances; it is reused while they are unchanged
 and regenerated otherwise. Checking reads every document, so `diff/inputs.json`

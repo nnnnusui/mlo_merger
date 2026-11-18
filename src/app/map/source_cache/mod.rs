@@ -8,6 +8,7 @@ mod generate;
 pub mod history;
 mod inventory;
 mod layout;
+mod names;
 mod publication;
 mod read;
 mod restore;
@@ -25,6 +26,7 @@ pub use added::{
   AddedYmapRelationships, added_ymap_relationships, empty_baseline_bytes, empty_baseline_file,
 };
 pub(crate) use check::check;
+pub(crate) use names::HASH_NAMES;
 pub(crate) use read::{CACHE_INFO, SourceYmapIndex, load_source_ymap_index};
 pub use read::{
   CachedFile, InventoriedFile, MergeInputs, MergeSourceFile, cache_info_path, cached_files,

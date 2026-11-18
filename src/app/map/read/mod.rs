@@ -9,7 +9,7 @@ mod lod_parents;
 #[cfg(test)]
 mod tests;
 
-use crate::app::map::source_cache::{InventoriedFile, inventoried_files};
+use crate::app::map::source_cache::{HASH_NAMES, InventoriedFile, inventoried_files};
 use crate::app::map::vanilla_cache::{built_version, target_version};
 use crate::common::{Result, fingerprint::Fingerprint};
 use crate::core::config::gamebuild::GameBuild;
@@ -125,6 +125,10 @@ pub struct YmapReadDocument {
   pub source: ReadFingerprint,
   /// The `hash_names.json` that named its hashes, if any.
   pub hash_names: Option<ReadFingerprint>,
+  /// For a resource's file, the source cache's `hash_names.json` that named the hashes
+  /// vanilla's did not, if any.
+  #[serde(default)]
+  pub source_hash_names: Option<ReadFingerprint>,
   pub model: Ymap,
   /// Resolved LOD parents, indexed into the corresponding `model.entities` arrays.
   pub entity_lod_parents: Vec<EntityLodParent>,
@@ -132,7 +136,7 @@ pub struct YmapReadDocument {
 
 impl YmapReadDocument {
   /// The current [`Self::schema_version`].
-  pub const SCHEMA_VERSION: u32 = 2;
+  pub const SCHEMA_VERSION: u32 = 3;
 }
 
 /// A file a document was read from, as it was then.
@@ -140,8 +144,8 @@ impl YmapReadDocument {
 #[cfg_attr(feature = "typescript", derive(specta::Type))]
 pub struct ReadFingerprint {
   /// The file relative to its store: the source cache for a resource's file moved there, the
-  /// source root for one that was not, the vanilla archive for vanilla files and
-  /// `hash_names.json`.
+  /// source root for one that was not, the vanilla archive for vanilla files and its
+  /// `hash_names.json`, the source cache for its `hash_names.json`.
   pub path: PathBuf,
   pub sha256: String,
   pub size: u64,
@@ -189,6 +193,8 @@ struct Header {
   schema_version: u32,
   source: ReadFingerprint,
   hash_names: Option<ReadFingerprint>,
+  #[serde(default)]
+  source_hash_names: Option<ReadFingerprint>,
 }
 
 /// A stream file selected to be read.
@@ -289,30 +295,57 @@ impl Read {
     progress.finish();
     let checked = checked?;
 
-    // Every document records the same `hash_names.json`; any previous document's record spares
-    // hashing it again when it is unchanged.
+    // Every document records the same vanilla `hash_names.json`, and every resource's document
+    // the same source-cache one; any previous document's record spares hashing them again when
+    // they are unchanged.
+    let fingerprint = |path: &Path,
+                       stored: &str,
+                       recorded: fn(&Header) -> Option<&ReadFingerprint>|
+     -> Result<Option<ReadFingerprint>> {
+      if !fs::is_file(path) {
+        return Ok(None);
+      }
+      let previous = checked.iter().find_map(|(_, previous, _)| recorded(previous.as_ref()?));
+      ReadFingerprint::read(path, stored, previous).map(Some)
+    };
     let names_path = self.vanilla_dir.join("hash_names.json");
-    let hash_names = fs::is_file(&names_path)
-      .then(|| {
-        let previous =
-          checked.iter().find_map(|(_, previous, _)| previous.as_ref()?.hash_names.as_ref());
-        ReadFingerprint::read(&names_path, "hash_names.json", previous)
-      })
-      .transpose()?;
-    let stale = |previous: &Option<Header>, source: &ReadFingerprint| {
+    let hash_names =
+      fingerprint(&names_path, "hash_names.json", |header| header.hash_names.as_ref())?;
+    let source_names_path = self.source_cache_dir.join(HASH_NAMES);
+    let reads_resources = checked.iter().any(|(selected, _, _)| selected.resource_id.is_some());
+    let source_hash_names = if reads_resources {
+      fingerprint(&source_names_path, HASH_NAMES, |header| header.source_hash_names.as_ref())?
+    } else {
+      None
+    };
+    let same = |previous: &Option<ReadFingerprint>, current: &Option<ReadFingerprint>| match (
+      previous, current,
+    ) {
+      (Some(previous), Some(current)) => previous.same_content(current),
+      (None, None) => true,
+      _ => false,
+    };
+    let source_names_of = |selected: &Selected| {
+      if selected.resource_id.is_some() { source_hash_names.clone() } else { None }
+    };
+    let stale = |selected: &Selected, previous: &Option<Header>, source: &ReadFingerprint| {
       self.force
         || !previous.as_ref().is_some_and(|previous| {
           previous.schema_version == YmapReadDocument::SCHEMA_VERSION
             && previous.source.same_content(source)
-            && match (&previous.hash_names, &hash_names) {
-              (Some(previous), Some(current)) => previous.same_content(current),
-              (None, None) => true,
-              _ => false,
-            }
+            && same(&previous.hash_names, &hash_names)
+            && same(&previous.source_hash_names, &source_names_of(selected))
         })
     };
     let names = load_hash_names_or_empty(&names_path);
-    let parents = lod_parents::ParentMaps::new(self, &names)?;
+    // A resource's own names only fill the hashes vanilla's leave unnamed.
+    let mut resource_names = names.clone();
+    if source_hash_names.is_some() {
+      for (hash, name) in load_hash_names_or_empty(&source_names_path) {
+        resource_names.entry(hash).or_insert(name);
+      }
+    }
+    let parents = lod_parents::ParentMaps::new(self, &resource_names)?;
 
     // Reuse current models, but resolve their parents again before deciding whether to write.
     let progress = FileProgress::new(checked.len(), "Wrote")?;
@@ -320,7 +353,7 @@ impl Read {
       .into_par_iter()
       .map(|(selected, previous, source)| {
         let _tick = progress.tick();
-        let current = if stale(&previous, &source) {
+        let current = if stale(&selected, &previous, &source) {
           None
         } else {
           crate::common::json::read_json::<YmapReadDocument>(&selected.output).ok()
@@ -330,7 +363,8 @@ impl Read {
           None => {
             let bytes = fs::read(&selected.input)
               .map_err(|error| format!("Cannot open {}: {error}", selected.input.display()))?;
-            let model = ymap_to_model(&bytes, &names)
+            let names = if selected.resource_id.is_some() { &resource_names } else { &names };
+            let model = ymap_to_model(&bytes, names)
               .map_err(|error| format!("Cannot read {}: {error}", selected.input.display()))?;
             (model, None)
           }
@@ -344,6 +378,7 @@ impl Read {
               schema_version: YmapReadDocument::SCHEMA_VERSION,
               source,
               hash_names: hash_names.clone(),
+              source_hash_names: source_names_of(&selected),
               model,
               entity_lod_parents,
             },

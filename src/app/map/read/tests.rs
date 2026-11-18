@@ -380,7 +380,7 @@ fn lod_parents_use_model_indices_and_refresh_when_the_parent_changes() {
   assert!(first.files[0].updated);
   let output = &first.files[0].output;
   let document: serde_json::Value = serde_json::from_slice(&fs::read(output).unwrap()).unwrap();
-  assert_eq!(document["schema_version"], 2);
+  assert_eq!(document["schema_version"], 3);
   assert_eq!(
     document["entity_lod_parents"],
     json!([
@@ -471,4 +471,36 @@ fn lod_parents_follow_the_requested_vanilla_stage_for_the_same_child_file() {
   assert!(read().files[0].updated);
   assert_eq!(doc()["entity_lod_parents"][0]["parent"]["entity_index"], 0);
   assert!(!read().files[0].updated);
+}
+
+#[test]
+fn a_resource_file_takes_the_source_cache_names_vanilla_lacks() {
+  use crate::core::format::{gamefile::meta::jenk_hash, ymap::binary::write_ymap};
+
+  let fixture = Fixture::new("source_names");
+  let path = fixture.root.join("source/beta/stream/parent.ymap");
+  let mut model = ymap_to_model(&fs::read(&path).unwrap(), &HashMap::new()).unwrap();
+  let hash = jenk_hash("beta_lod");
+  model.parent = format!("hash_{hash:08X}");
+  fs::write(&path, write_ymap(&model, &model.entities).unwrap()).unwrap();
+  let names = fixture.root.join("source-cache/hash_names.json");
+  let read = || fixture.read(ReadTarget::Resource("beta".into()), &["parent.ymap"]).unwrap();
+  let parent = |result: &ReadResult| {
+    let document: serde_json::Value =
+      serde_json::from_slice(&fs::read(&result.files[0].output).unwrap()).unwrap();
+    document["model"]["parent"].as_str().unwrap().to_owned()
+  };
+
+  assert_eq!(parent(&read()), format!("hash_{hash:08X}"));
+  fs::write(&names, format!(r#"{{"names":{{"{hash:08X}":"beta_lod"}}}}"#)).unwrap();
+  let named = read();
+  assert!(named.files[0].updated);
+  assert_eq!(parent(&named), "beta_lod");
+  assert!(!read().files[0].updated);
+
+  // Vanilla files keep to vanilla's names.
+  let vanilla = fixture.read(ReadTarget::Vanilla, &["parent.ymap"]).unwrap();
+  let document: serde_json::Value =
+    serde_json::from_slice(&fs::read(&vanilla.files[0].output).unwrap()).unwrap();
+  assert!(document["source_hash_names"].is_null());
 }

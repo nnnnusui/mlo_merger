@@ -133,7 +133,7 @@ archive, which is absolute when the two are on different drives.
 
 | Path relative to | Recorded for |
 |---|---|
-| The source cache (`asset/source-cache`) | Source files moved into the cache: `resources/{resource}/{stream path}` |
+| The source cache (`asset/source-cache`) | Source files moved into the cache: `resources/{resource}/{stream path}`; and `hash_names.json` |
 | The source root (`asset/source`) | Resources (their IDs), source files left in them, and each source's original path |
 | The vanilla cache (`asset/vanilla-cache`) | The vanilla archive the cache was built from (`vanilla_dir` in its `cache_info.json`, absolute only when the two share no root) |
 | The vanilla archive (`asset/vanilla`) | Latest vanilla files and vanilla versions read by `--read`: `{version}/{ymap,ybn}/{file name}`; and `hash_names.json` |

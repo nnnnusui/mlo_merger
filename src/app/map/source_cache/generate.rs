@@ -90,6 +90,7 @@ pub(super) fn run(build: &BuildSourceCache) -> Result<SourceCacheResult> {
     .collect::<BTreeSet<_>>();
   let published = publish::publish_if_changed(source, vanilla, publication, state, changed)?;
   super::added::write_added_stream_files(&output, &vanilla_ymap_names)?;
+  super::names::write_hash_names(&output)?;
   crate::core::config::matching::with_config(|| {
     diff::write_ymap_diffs(&source_dir, &output, &vanilla_dir, &vanilla_cache_dir)
   })??;

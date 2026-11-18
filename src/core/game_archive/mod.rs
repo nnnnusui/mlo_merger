@@ -15,7 +15,7 @@ pub(crate) use archives::{FileClassification, FileSelection};
 pub(crate) use archives::{extract, sub_pack_count};
 pub(crate) use build::BuildGameArchive;
 pub(crate) use check::check;
-pub(crate) use hash_index::write_hash_index;
+pub(crate) use hash_index::{lod_name_candidates, write_hash_index};
 pub use manifest::{CacheVersion, CachedFile, FileChange, VanillaCacheManifest};
 pub(crate) use manifest::{load_manifest, load_manifest_with_revision};
 #[cfg(test)]

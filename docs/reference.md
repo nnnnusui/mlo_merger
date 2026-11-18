@@ -450,8 +450,9 @@ mlo_merger --read --all
 ```
 
 `--read` writes each YMAP's model as minified JSON (`YmapReadDocument`), with the path
-and fingerprint of the file it was read from, the `hash_names.json` that named its
-hashes, and the resolved `entity_lod_parents` (see [usage](usage.md#--read)). A resource's file is written to
+and fingerprint of the file it was read from, the vanilla `hash_names.json` that named its
+hashes, for a resource's file the source cache's `hash_names.json` that named those vanilla
+leaves unnamed, and the resolved `entity_lod_parents` (see [usage](usage.md#--read)). A resource's file is written to
 `asset/read-cache/resources/{resourceName}/{stream-relative-path}.json` and a vanilla
 file to `asset/read-cache/vanilla/{version}/ymap/{fileName}.json`, where `{version}` is the
 version folder holding the file in the vanilla archive: the last version, up to the stage

@@ -339,7 +339,7 @@ fn entity_archetype_names(
 /// LOD archetypes are often stored in drawable dictionaries under hashed names, so no
 /// file or META string spells them out. These are the names CodeWalker's extended hash
 /// index derives from the same files.
-fn lod_name_candidates(file_name: &str) -> Vec<String> {
+pub(crate) fn lod_name_candidates(file_name: &str) -> Vec<String> {
   let mut candidates = Vec::new();
   if let Some(stem) = file_name.strip_suffix(".ydr") {
     candidates.extend(["_lod", "_loda", "_lodb"].map(|suffix| format!("{stem}{suffix}")));
