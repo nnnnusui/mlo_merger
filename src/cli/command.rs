@@ -255,6 +255,8 @@ pub fn run(args: Args) -> Result<(), Box<dyn std::error::Error>> {
 #[cfg(test)]
 mod tests {
   use super::*;
+  use crate::core::game_archive::ArchiveContent;
+  use std::collections::BTreeSet;
 
   fn parser() -> impl Parser<Command> {
     commands(Path::new("asset"))
@@ -555,6 +557,27 @@ mod tests {
     };
     assert_eq!(command.common.output, PathBuf::from("asset/vanilla"));
     assert_eq!(command.magic, PathBuf::from("magic.dat"));
+    assert_eq!(command.contents, ArchiveContent::ALL.into());
+    let contents = |content: &'static str| {
+      let args: &'static [&'static str] = match content {
+        "all" => &["--generate-vanilla", "-i", "game", "--content", "all"],
+        "map" => &["--generate-vanilla", "-i", "game", "--content", "map"],
+        _ => &["--generate-vanilla", "-i", "game", "--content", "clothing"],
+      };
+      let Command::GenerateVanilla(command) = parser().to_options().run_inner(args).unwrap() else {
+        panic!("Expected vanilla generation command")
+      };
+      command.contents
+    };
+    assert_eq!(contents("all"), BTreeSet::from(ArchiveContent::ALL));
+    assert_eq!(contents("map"), [ArchiveContent::Map].into());
+    assert_eq!(contents("clothing"), [ArchiveContent::Clothing].into());
+    assert!(
+      parser()
+        .to_options()
+        .run_inner(&["--generate-vanilla", "-i", "game", "--content", "ymt"])
+        .is_err()
+    );
     assert!(
       parser()
         .to_options()
@@ -565,44 +588,12 @@ mod tests {
 
   #[test]
   fn clothing_operations_nest_under_the_clothing_command() {
-    let Command::Clothing(Clothing::GenerateVanilla(command)) =
-      parser().to_options().run_inner(&["--clothing", "--generate-vanilla", "-i", "game"]).unwrap()
-    else {
-      panic!("Expected clothing generation command")
-    };
-    assert_eq!(command.common.output, PathBuf::from("asset/vanilla-clothing"));
-    assert_eq!(command.magic, PathBuf::from("magic.dat"));
-    let args = parse_args_from(&[
-      "--asset",
-      "other",
-      "--clothing",
-      "--generate-vanilla",
-      "-i",
-      "game",
-      "--magic",
-      "keys/magic.dat",
-    ])
-    .unwrap();
-    let Command::Clothing(Clothing::GenerateVanilla(command)) = args.command else {
-      panic!("Expected clothing generation command")
-    };
-    assert_eq!(command.common.output, PathBuf::from("other/vanilla-clothing"));
-    assert_eq!(command.game_dir, PathBuf::from("game"));
-    assert_eq!(command.magic, PathBuf::from("keys/magic.dat"));
-    let Command::Clothing(Clothing::GenerateVanilla(command)) = parser()
-      .to_options()
-      .run_inner(&["--clothing", "--generate-vanilla", "-i", "game", "-o", "clothes"])
-      .unwrap()
-    else {
-      panic!("Expected clothing generation command")
-    };
-    assert_eq!(command.common.output, PathBuf::from("clothes"));
     let Command::Clothing(Clothing::GenerateVanillaCache(command)) =
       parser().to_options().run_inner(&["--clothing", "--generate-vanilla-cache"]).unwrap()
     else {
       panic!("Expected clothing cache command")
     };
-    assert_eq!(command.clothing_dir, PathBuf::from("asset/vanilla-clothing"));
+    assert_eq!(command.vanilla_dir, PathBuf::from("asset/vanilla"));
     assert_eq!(command.output, PathBuf::from("asset/vanilla-clothing-cache"));
     assert!(!command.force);
     let Command::Clothing(Clothing::GenerateVanillaCache(command)) = parser()
@@ -612,13 +603,14 @@ mod tests {
     else {
       panic!("Expected clothing cache command")
     };
-    assert_eq!(command.clothing_dir, PathBuf::from("archive"));
+    assert_eq!(command.vanilla_dir, PathBuf::from("archive"));
     assert_eq!(command.output, PathBuf::from("counts"));
     assert!(command.force);
     // The former top-level spellings are no longer commands.
     for args in [
       vec!["--generate-vanilla-clothing", "-i", "game"],
       vec!["--generate-vanilla-clothing-cache"],
+      vec!["--clothing", "--generate-vanilla", "-i", "game"],
       vec!["--clothing"],
     ] {
       assert!(parser().to_options().run_inner(args.as_slice()).is_err(), "{args:?}");

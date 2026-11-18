@@ -7,34 +7,11 @@ use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
-use super::Result;
+use super::{
+  Result,
+  content::{FileClassification, FileSelection},
+};
 use crate::core::format::rpf::{RpfArchive, RpfFile, RpfKeys};
-
-/// The raw file families to scan and the content classifier applied before storing them.
-#[derive(Debug, Clone, Copy)]
-pub(crate) struct FileSelection {
-  pub(crate) extensions: &'static [&'static str],
-  pub(crate) classify: fn(&[u8]) -> std::io::Result<FileClassification>,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum FileClassification {
-  Excluded,
-  Included {
-    kind: Option<&'static str>,
-  },
-}
-
-impl FileSelection {
-  pub(crate) const MAPS: Self = Self {
-    extensions: &["ymap", "ybn"],
-    classify: |_| {
-      Ok(FileClassification::Included {
-        kind: None,
-      })
-    },
-  };
-}
 
 /// Names collected from RPF table-of-contents entries.
 #[derive(Debug, Default)]
@@ -167,7 +144,7 @@ pub(crate) fn extract(
   output: &Path,
   subtree: Option<&str>,
   rpf_names: &mut RpfNames,
-  selection: FileSelection,
+  selection: &FileSelection,
 ) -> Result<Vec<ExtractedFile>> {
   tracing::info!("Scanning {relative}");
   let path = game_path(game_dir, Path::new(relative))?;
@@ -192,7 +169,7 @@ pub(crate) fn extract(
       if file
         .path
         .rsplit_once('.')
-        .is_some_and(|(_, extension)| selection.extensions.contains(&extension))
+        .is_some_and(|(_, extension)| selection.content(extension).is_some())
         || traversal_metadata(&file.path)
       {
         selected.push((archive, file));
@@ -211,17 +188,21 @@ pub(crate) fn extract(
         let data = archive
           .extract(file, entry, keys)
           .map_err(|error| format!("Could not extract {}: {error}", entry.path))?;
+        let name = entry.name_lower();
         let kind = if traversal_metadata(&entry.path) {
           None
         } else {
-          match (selection.classify)(&data).map_err(|error| format!("{}: {error}", entry.path))? {
+          let extension = name.rsplit_once('.').map_or("", |(_, extension)| extension);
+          match selection
+            .classify(extension, &data)
+            .map_err(|error| format!("{}: {error}", entry.path))?
+          {
             FileClassification::Excluded => return Ok(None),
             FileClassification::Included {
               kind,
             } => kind,
           }
         };
-        let name = entry.name_lower();
         let extension = Path::new(&name)
           .extension()
           .map_or(String::new(), |extension| format!(".{}", extension.to_string_lossy()));

@@ -39,6 +39,6 @@ Source-cache diff documents currently cover YMAPs against the latest vanilla onl
 - [ ] Add YBN diff documents and their TypeScript types.
 - [ ] Implement `--get-diff SOURCE TARGET`; it currently only prints a mock invocation.
 
-## Clothing Collection (`asset/vanilla-clothing`)
+## Clothing Collection (`asset/vanilla`)
 
-- [x] Collect raw clothing and appearance variation YMTs for all vanilla and DLC Peds with `--clothing --generate-vanilla`, using a versioned archive layout.
+- [x] Collect raw clothing and appearance variation YMTs for all vanilla and DLC Peds with `--generate-vanilla --content clothing`, in the shared versioned vanilla archive.

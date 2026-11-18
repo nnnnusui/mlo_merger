@@ -91,7 +91,7 @@ Each stream file type is supported at one of three levels:
 | [Convert to and from XML](docs/reference.md#convert-files) | `--to-xml`, `--from-xml` |
 | [Check the stores for inconsistencies](docs/reference.md#check-the-stores) | `--check` |
 |||
-| [Collect vanilla and DLC clothing definitions](docs/reference.md#vanilla-clothing) | `--clothing --generate-vanilla` |
+| [Collect vanilla and DLC clothing definitions](docs/reference.md#vanilla-clothing) | `--generate-vanilla --content clothing` |
 | [Count clothing definitions per stage](docs/reference.md#derived-counts) | `--clothing --generate-vanilla-cache` |
 
 Run `mlo_merger --help` for the operations, and `mlo_merger --pipeline --help` (or any

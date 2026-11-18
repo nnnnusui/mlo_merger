@@ -174,7 +174,8 @@ fn cache_reuses_matching_archives_and_rebuilds_changed_or_forced_ones() {
   let archive = root.join("clothing");
   fs::create_dir_all(&archive).unwrap();
   let manifest = |label: &str| VanillaCacheManifest {
-    format_version: 1,
+    format_version: 2,
+    contents: crate::core::game_archive::ArchiveContent::ALL.into(),
     game_dir: root.join("game"),
     versions: vec![CacheVersion {
       id: format!("0000-{label}"),
@@ -187,7 +188,7 @@ fn cache_reuses_matching_archives_and_rebuilds_changed_or_forced_ones() {
   };
   write_manifest(&archive.join("cache_info.json"), &manifest("base")).unwrap();
   let build = BuildClothingCache {
-    clothing_dir: archive.clone(),
+    vanilla_dir: archive.clone(),
     output_dir: root.join("cache"),
     force: false,
   };
@@ -235,7 +236,8 @@ fn cache_skips_creature_metadata_when_counting_variation_ymts() {
   write_manifest(
     &archive.join("cache_info.json"),
     &serde_json::json!({
-      "format_version": 1,
+      "format_version": 2,
+      "contents": ["clothing"],
       "game_dir": root.join("game"),
       "versions": [{
         "id": "0000-base",
@@ -261,7 +263,7 @@ fn cache_skips_creature_metadata_when_counting_variation_ymts() {
   .unwrap();
 
   BuildClothingCache {
-    clothing_dir: archive,
+    vanilla_dir: archive,
     output_dir: root.join("cache"),
     force: false,
   }
@@ -291,7 +293,8 @@ fn cache_fails_on_unreadable_definitions_and_keeps_missing_output_absent() {
   fs::create_dir_all(archive.join("0000-base/ymt")).unwrap();
   fs::write(archive.join("0000-base/ymt/bad.ymt"), b"not a resource").unwrap();
   let manifest = serde_json::json!({
-    "format_version": 1,
+    "format_version": 2,
+    "contents": ["clothing"],
     "game_dir": root.join("game"),
     "versions": [{
       "id": "0000-base", "parent": null, "archives": [], "unchanged": 0,
@@ -302,7 +305,7 @@ fn cache_fails_on_unreadable_definitions_and_keeps_missing_output_absent() {
   });
   write_manifest(&archive.join("cache_info.json"), &manifest).unwrap();
   let error = BuildClothingCache {
-    clothing_dir: archive,
+    vanilla_dir: archive,
     output_dir: root.join("cache"),
     force: false,
   }

@@ -11,7 +11,7 @@ use crate::app::map::source_cache::{
 };
 use crate::app::map::vanilla_cache::load_cache;
 use crate::common::{changes::StoreChanges, json::write_json, path::ensure_safe_path};
-use crate::core::game_archive::load_manifest_with_revision;
+use crate::core::game_archive::{ArchiveContent, load_content};
 use crate::platform::fs;
 use std::{
   collections::{BTreeMap, BTreeSet},
@@ -173,7 +173,7 @@ pub(super) fn prepare(build: &BuildSourceCache) -> Result<Prepared> {
     relocated = true;
     tracing::info!("Relocated source resource {old_id} -> {id}");
   }
-  let (_, manifest_sha256) = load_manifest_with_revision(&vanilla_dir)?;
+  let (_, manifest_sha256) = load_content(&vanilla_dir, ArchiveContent::Map)?;
   let derived = load_cache(&vanilla_cache_dir, &manifest_sha256)?;
   let derived_revision = derived.revision.clone();
   let resource_revision = format!("{manifest_sha256}:{derived_revision}");

@@ -17,7 +17,7 @@ use crate::core::format::gamefile::{
   resource::Resource,
   struct_reader::{StructReader, field},
 };
-use crate::core::game_archive::load_manifest_with_revision;
+use crate::core::game_archive::{ArchiveContent, load_content};
 use crate::platform::{fs, process};
 
 #[cfg(test)]
@@ -50,18 +50,18 @@ const ANCHORS: [&str; 14] = [
   "NUM_ANCHORS",
 ];
 
-/// Builds the clothing-counts cache from a clothing archive.
+/// Builds the clothing-counts cache from the vanilla archive's clothing content.
 #[derive(Debug, Clone)]
 pub struct BuildClothingCache {
-  /// Clothing archive directory, normally `asset/vanilla-clothing`.
-  pub clothing_dir: PathBuf,
+  /// Vanilla archive directory, normally `asset/vanilla`.
+  pub vanilla_dir: PathBuf,
   /// Output directory, normally `asset/vanilla-clothing-cache`.
   pub output_dir: PathBuf,
   /// Rebuilds even when the recorded archive digest is current.
   pub force: bool,
 }
 
-/// Freshness record tying the cache to the clothing archive it was counted from.
+/// Freshness record tying the cache to the archive's clothing content it was counted from.
 #[derive(Debug, Serialize, Deserialize)]
 struct ClothingCacheInfo {
   format_version: u32,
@@ -121,17 +121,17 @@ impl BuildClothingCache {
   ///
   /// ```no_run
   /// mlo_merger::app::clothing::BuildClothingCache {
-  ///   clothing_dir: "asset/vanilla-clothing".into(),
+  ///   vanilla_dir: "asset/vanilla".into(),
   ///   output_dir: "asset/vanilla-clothing-cache".into(),
   ///   force: false,
   /// }.run()?;
   /// # Ok::<(), Box<dyn std::error::Error>>(())
   /// ```
   pub fn run(&self) -> Result<()> {
-    let (manifest, revision) = load_manifest_with_revision(&self.clothing_dir)?;
+    let (manifest, revision) = load_content(&self.vanilla_dir, ArchiveContent::Clothing)?;
     let latest_version =
-      manifest.versions.last().ok_or("Clothing archive has no stages")?.id.clone();
-    let output = prepare_output_path(&self.output_dir, &self.clothing_dir)?;
+      manifest.versions.last().ok_or("Vanilla archive has no stages")?.id.clone();
+    let output = prepare_output_path(&self.output_dir, &self.vanilla_dir)?;
     if !self.force
       && let Ok(existing) = read_json::<ClothingCacheInfo>(output.join("cache_info.json"))
       && existing.format_version == CACHE_SCHEMA
@@ -157,7 +157,7 @@ impl BuildClothingCache {
             .then_some((name, change))
         })
         .map(|(name, change)| {
-          let path = self.clothing_dir.join(&change.file.object);
+          let path = self.vanilla_dir.join(&change.file.object);
           let bytes = fs::read(&path).map_err(|error| format!("{}: {error}", path.display()))?;
           let counts = count_file(&bytes, &names)
             .map_err(|error| format!("{}: {error}", change.file.object))?;
@@ -291,18 +291,18 @@ impl Drop for Staging {
 
 fn prepare_output_path(
   output: &Path,
-  clothing_dir: &Path,
+  vanilla_dir: &Path,
 ) -> Result<PathBuf> {
   let absolute =
     if output.is_absolute() { output.to_path_buf() } else { process::current_dir()?.join(output) };
   let current_dir = fs::canonicalize(&process::current_dir()?)?;
-  let clothing_dir = fs::canonicalize(clothing_dir)?;
+  let vanilla_dir = fs::canonicalize(vanilla_dir)?;
   if absolute == current_dir
     || current_dir.starts_with(&absolute)
-    || absolute.starts_with(&clothing_dir)
-    || clothing_dir.starts_with(&absolute)
+    || absolute.starts_with(&vanilla_dir)
+    || vanilla_dir.starts_with(&absolute)
   {
-    return Err("Clothing-cache output must not overlap the workspace or clothing archive".into());
+    return Err("Clothing-cache output must not overlap the workspace or vanilla archive".into());
   }
   if fs::symlink_metadata(&absolute).is_ok_and(|metadata| metadata.file_type().is_symlink()) {
     return Err(format!("Refusing to replace symlink output {}", absolute.display()).into());

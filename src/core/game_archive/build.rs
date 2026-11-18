@@ -2,10 +2,11 @@
 
 use super::{
   archives::{
-    DlcList, FileSelection, RpfNames, base_archives, dlc_archive, dlc_subpack, extract, game_path,
-    patch_dlc, platform_archives, sub_pack_count,
+    DlcList, RpfNames, base_archives, dlc_archive, dlc_subpack, extract, game_path, patch_dlc,
+    platform_archives, sub_pack_count,
   },
-  manifest::VanillaCacheManifest,
+  content::FileSelection,
+  manifest::{FORMAT_VERSION, VanillaCacheManifest},
   publication::{Staging, publish_cache, reset_output_directory},
   stage::stage,
 };
@@ -27,7 +28,7 @@ pub(crate) struct BuildGameArchive {
   pub(crate) output_dir: PathBuf,
   /// CodeWalker's `magic.dat`, decoded with the key in GTA5.exe.
   pub(crate) magic: PathBuf,
-  /// Raw file families and content classifier for this archive.
+  /// The content sets extracted into this archive.
   pub(crate) files: FileSelection,
 }
 
@@ -84,9 +85,10 @@ impl BuildGameArchive {
     obsolete_files: &[&str],
     write_metadata: impl FnOnce(&Path, &VanillaCacheManifest, &RpfNames) -> Result<()>,
   ) -> Result<()> {
-    let extensions = self.files.extensions;
+    let extensions = &self.files.extensions();
     let mut manifest = VanillaCacheManifest {
-      format_version: 1,
+      format_version: FORMAT_VERSION,
+      contents: self.files.contents.clone(),
       game_dir: game_dir.into(),
       versions: vec![],
     };
@@ -98,7 +100,7 @@ impl BuildGameArchive {
       for relative in &roots {
         let directory = base_dir.join(relative);
         let extracted =
-          extract(keys, game_dir, relative, &directory, None, &mut rpf_names, self.files)?;
+          extract(keys, game_dir, relative, &directory, None, &mut rpf_names, &self.files)?;
         files.extend(
           extracted
             .into_iter()
@@ -121,7 +123,7 @@ impl BuildGameArchive {
         &update_dir,
         None,
         &mut rpf_names,
-        self.files,
+        &self.files,
       )?;
       let list = update
         .iter()
@@ -181,7 +183,7 @@ impl BuildGameArchive {
           &directory,
           subtree.as_deref(),
           &mut rpf_names,
-          self.files,
+          &self.files,
         )?;
         // Subpacks are mounted with the pack, after its dlc.rpf, as CodeWalker does.
         let sub_packs = if subtree.is_none() { sub_pack_count(&extracted, &directory)? } else { 0 };
@@ -196,7 +198,7 @@ impl BuildGameArchive {
           }
           let sub_directory = directory.join(format!("dlc{index}"));
           let extracted =
-            extract(keys, game_dir, &sub_pack, &sub_directory, None, &mut rpf_names, self.files)?;
+            extract(keys, game_dir, &sub_pack, &sub_directory, None, &mut rpf_names, &self.files)?;
           files.extend(extracted.into_iter().map(|file| (file, sub_directory.clone())));
           sub_pack_archives.push(sub_pack);
         }

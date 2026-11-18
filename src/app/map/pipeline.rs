@@ -9,6 +9,7 @@ use super::{
 };
 use crate::common::path::absolute_path;
 use crate::core::config::gamebuild::GameBuild;
+use crate::core::game_archive::ArchiveContent;
 use crate::platform::fs;
 use crate::platform::process;
 use std::path::PathBuf;
@@ -76,12 +77,14 @@ impl Pipeline {
     self.validate_paths()?;
 
     tracing::info!("Pipeline: generate-vanilla");
-    crate::app::map::vanilla::generate_archive(
-      &self.game_dir,
-      &self.vanilla_dir,
-      &self.magic,
-      true,
-    )?;
+    crate::app::vanilla::GenerateVanilla {
+      game_dir: self.game_dir.clone(),
+      output_dir: self.vanilla_dir.clone(),
+      magic: self.magic.clone(),
+      contents: [ArchiveContent::Map].into(),
+      reuse_existing: true,
+    }
+    .run()?;
 
     tracing::info!("Pipeline: generate-vanilla-cache");
     let vanilla_cache = BuildVanillaCache {

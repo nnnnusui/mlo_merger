@@ -69,12 +69,24 @@ operation itself.
 
 ## Vanilla Generation
 
-`--generate-vanilla` extracts raw YMAP/YBN files from the installed game's base,
-title-update and DLC archives into a versioned archive. Explicit generation replaces
-the selected output directory.
+`--generate-vanilla` extracts raw files from the installed game's base,
+title-update and DLC archives into a versioned archive. `--content` selects what is
+extracted, in one pass over the archives:
+
+- `map`: YMAP and YBN files, read by the map workflow.
+- `clothing`: clothing YMTs, read by the [clothing workflow](#vanilla-clothing).
+- `all` (default): both.
+
+Explicit generation replaces the selected output directory and extracts the selected
+content together with the content the existing archive already holds, so
+regenerating one content keeps the other. `cache_info.json` lists the archive's
+content in `contents`. The pipeline extracts `map` when the archive is missing; the
+GUI always extracts `map`. An operation that reads content the archive lacks fails,
+naming the `--content` value to regenerate with.
 
 ```bash
 mlo_merger --generate-vanilla -i /mnt/gtav -o asset/vanilla --magic magic.dat
+mlo_merger --generate-vanilla -i /mnt/gtav --magic magic.dat --content map
 ```
 
 The vanilla archive retains every version in `cache_info.json`. A stage with no
@@ -587,43 +599,29 @@ are arrays. File sizes and timestamps are JSON numbers, represented as TypeScrip
 
 ### Collecting Definitions
 
-`--clothing --generate-vanilla` collects clothing and appearance variation YMTs for
-all Peds, including protagonists, NPCs and online freemode Peds, from the base game,
-title updates and ordered DLCs, including subpacks and DLC patches. It is independent
-of the map merge pipeline and defaults to `asset/vanilla-clothing`.
+`--generate-vanilla --content clothing` (or the default `all`) collects clothing and
+appearance variation YMTs for all Peds, including protagonists, NPCs and online
+freemode Peds, from the base game, title updates and ordered DLCs, including subpacks
+and DLC patches, into the [vanilla archive](#vanilla-generation).
 
 ```bash
-mlo_merger --clothing --generate-vanilla -i /mnt/gtav --magic magic.dat
+mlo_merger --generate-vanilla -i /mnt/gtav --magic magic.dat --content clothing
 ```
 
 YMTs are selected by their root type in RSC7 META, PSO, RBF or XML, not their
 filename or directory: `CPedVariationInfo` clothing/appearance definitions and
-`CCreatureMetaData` creature metadata. Creature metadata YMTs are stored alongside
-the variation YMTs under `ymt/`; `cache_info.json` records their `file_kinds` as
+`CCreatureMetaData` creature metadata. Both are stored in their raw format as
+`{version}/ymt/{filename}`; `cache_info.json` records their `file_kinds` as
 `creature_metadata` or `ped_variation`. Drawable and texture assets and other YMT
 types are outside this collection. Classification errors stop extraction with the
-source path in the error.
-
-### Archive Layout
-
-Files are stored in their raw format as `{version}/ymt/{filename}`.
-
-The archive follows vanilla's versioned layout: metadata records additions,
-replacements, hashes and original RPF paths, while unchanged files reuse earlier
-stages. Within a stage, the last processed same-name definition wins; differing
-contents produce a warning. `-o` changes the output directory, which explicit
-generation replaces.
-
-The clothing archive retains every version in `cache_info.json`. A stage with no
-additions or replacements has no directory; `ymt/` is created only for files
-written at that stage.
-An empty `latest_version-{version_id}` file at the root identifies the final
-listed stage, including one with no file changes. Regeneration replaces the marker.
+source path in the error. Within a stage, the last processed same-name definition
+wins; differing contents produce a warning.
 
 ### Derived Counts
 
-`--clothing --generate-vanilla-cache` counts each stage's clothing definitions into
-`asset/vanilla-clothing-cache` (`-i` selects the archive, `-o` the output).
+`--clothing --generate-vanilla-cache` counts each stage's clothing definitions in the
+vanilla archive into `asset/vanilla-clothing-cache` (`-i` selects the archive, `-o` the
+output).
 
 ```bash
 mlo_merger --clothing --generate-vanilla-cache
@@ -640,5 +638,6 @@ are cumulative at that stage.
   without changes.
 - `counts/{version}.json`: per-file component and prop counts with file and stage
   totals, only for stages with changed files.
-- `cache_info.json`: the archive manifest digest the counts were taken from. A
-  matching cache is reused; `-f` and archive changes rebuild it.
+- `cache_info.json`: the digest of the archive's clothing content the counts were
+  taken from. A matching cache is reused; `-f` and changes to the clothing content
+  rebuild it.

@@ -6,7 +6,7 @@ use std::path::PathBuf;
 
 use serde::Serialize;
 
-use crate::core::game_archive::load_manifest;
+use crate::core::game_archive::{ArchiveContent, load_content};
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
@@ -60,10 +60,7 @@ impl ListVanillaVersions {
     if name.is_empty() || matches!(name, "." | "..") || name.contains(['/', '\\', ':']) {
       return Err("Expected a vanilla basename such as example.ymap or example.ybn".into());
     }
-    let manifest = load_manifest(&self.vanilla_cache_dir)?;
-    if manifest.format_version != 1 {
-      return Err(format!("Unsupported GTAV cache schema {}", manifest.format_version).into());
-    }
+    let (manifest, _) = load_content(&self.vanilla_cache_dir, ArchiveContent::Map)?;
     let mut ids = BTreeSet::new();
     let mut previous_version = None;
     let mut previous_hash: Option<&str> = None;
@@ -128,7 +125,8 @@ mod tests {
       },
     };
     let mut manifest = VanillaCacheManifest {
-      format_version: 1,
+      format_version: 2,
+      contents: crate::core::game_archive::ArchiveContent::ALL.into(),
       game_dir: root.join("missing-game"),
       versions: vec![
         CacheVersion {

@@ -3,7 +3,6 @@ use crate::{
   core::{
     format::gamefile::meta::{MetaDataBlock, MetaResource, jenk_hash},
     format::rpf::{RpfKeys, tests::fixture},
-    game_archive::FileClassification,
     game_archive::{Staging, VanillaCacheManifest, extract, stage, sub_pack_count},
   },
   platform::fs,
@@ -124,20 +123,23 @@ fn clothing_extraction_keeps_raw_definitions_and_uses_vanilla_overlays() {
   .unwrap();
   let scratch = root.join("scratch");
   let keys = RpfKeys::unencrypted();
+  let clothing = FileSelection::new([ArchiveContent::Clothing]);
   let files =
-    extract(&keys, &root, "pack/dlc.rpf", &scratch, None, &mut Default::default(), FILES).unwrap();
+    extract(&keys, &root, "pack/dlc.rpf", &scratch, None, &mut Default::default(), &clothing)
+      .unwrap();
   assert_eq!(sub_pack_count(&files, &scratch).unwrap(), 2);
   assert!(files.iter().any(|file| file.source.ends_with("/common/data/dlclist.xml")));
   let output = root.join("archive");
   fs::create_dir(&output).unwrap();
   let mut manifest = VanillaCacheManifest {
-    format_version: 1,
+    format_version: 2,
+    contents: crate::core::game_archive::ArchiveContent::ALL.into(),
     game_dir: root.clone(),
     versions: vec![],
   };
   let mut current = BTreeMap::new();
   let files: Vec<_> = files.into_iter().map(|file| (file, scratch.clone())).collect();
-  stage(&mut manifest, &mut current, &output, "base", FILES.extensions, || {
+  stage(&mut manifest, &mut current, &output, "base", &clothing.extensions(), || {
     Ok((vec!["pack/dlc.rpf".into()], files.clone()))
   })
   .unwrap();
@@ -167,7 +169,7 @@ fn clothing_extraction_keeps_raw_definitions_and_uses_vanilla_overlays() {
   assert_eq!(current["same.ymt"].source, "pack/dlc.rpf/nested.rpf/same.ymt");
   let patch =
     files.iter().find(|(file, _)| file.source == "pack/dlc.rpf/same.ymt").unwrap().clone();
-  stage(&mut manifest, &mut current, &output, "unchanged", FILES.extensions, || {
+  stage(&mut manifest, &mut current, &output, "unchanged", &clothing.extensions(), || {
     Ok((vec![], files))
   })
   .unwrap();
@@ -177,7 +179,7 @@ fn clothing_extraction_keeps_raw_definitions_and_uses_vanilla_overlays() {
   assert!(!output.join("0001-unchanged/ymt/same.ymt").exists());
   assert!(!output.join("0000-base/ymap").exists());
   let previous = current["same.ymt"].sha256.clone();
-  stage(&mut manifest, &mut current, &output, "patch", FILES.extensions, || {
+  stage(&mut manifest, &mut current, &output, "patch", &clothing.extensions(), || {
     Ok((vec![], vec![patch]))
   })
   .unwrap();
@@ -192,12 +194,40 @@ fn clothing_extraction_keeps_raw_definitions_and_uses_vanilla_overlays() {
     &root.join("maps"),
     None,
     &mut Default::default(),
-    FileSelection::MAPS,
+    &FileSelection::new([ArchiveContent::Map]),
   )
   .unwrap();
   let names = map_files.iter().map(|file| file.name.as_str()).collect::<Vec<_>>();
   assert!(names.contains(&"map.ymap") && names.contains(&"map.ybn"));
   assert!(!names.iter().any(|name| name.ends_with(".ymt")));
+
+  let all_files = extract(
+    &keys,
+    &root,
+    "pack/dlc.rpf",
+    &root.join("all"),
+    None,
+    &mut Default::default(),
+    &FileSelection::new(ArchiveContent::ALL),
+  )
+  .unwrap();
+  let mut names = all_files
+    .iter()
+    .filter(|file| file.name.contains('.') && !file.name.ends_with(".xml"))
+    .map(|file| (file.name.as_str(), file.kind))
+    .collect::<Vec<_>>();
+  names.sort();
+  assert_eq!(
+    names,
+    [
+      ("map.ybn", None),
+      ("map.ymap", None),
+      ("mp_creaturemetadata_m_test.ymt", Some("creature_metadata")),
+      ("npc.ymt", Some("ped_variation")),
+      ("same.ymt", Some("ped_variation")),
+      ("same.ymt", Some("ped_variation")),
+    ]
+  );
 
   fs::write(root.join("pack/broken.rpf"), fixture(&[("npc.ymt", b"PSIN", false)])).unwrap();
   let error = extract(
@@ -207,7 +237,7 @@ fn clothing_extraction_keeps_raw_definitions_and_uses_vanilla_overlays() {
     &root.join("broken"),
     None,
     &mut Default::default(),
-    FILES,
+    &clothing,
   )
   .unwrap_err();
   assert!(error.to_string().contains("npc.ymt"));

@@ -54,7 +54,8 @@ fn write_vanilla_files(
   write_json(
     &vanilla.join("cache_info.json"),
     &VanillaCacheManifest {
-      format_version: 1,
+      format_version: 2,
+      contents: crate::core::game_archive::ArchiveContent::ALL.into(),
       game_dir: vanilla.with_file_name("game"),
       versions: vec![CacheVersion {
         id: "0000-base".into(),

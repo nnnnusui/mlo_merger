@@ -17,7 +17,7 @@ use crate::{
       reference_hash,
       relation::{is_local_parent, runtime_entity_indices},
     },
-    game_archive::load_manifest,
+    game_archive::{ArchiveContent, load_content},
   },
   platform::fs,
 };
@@ -77,7 +77,7 @@ impl<'a> ParentMaps<'a> {
     }
     let mut vanilla = Candidates::new();
     if fs::is_file(read.vanilla_dir.join("cache_info.json")) {
-      let manifest = load_manifest(&read.vanilla_dir)?;
+      let (manifest, _) = load_content(&read.vanilla_dir, ArchiveContent::Map)?;
       let version = read.vanilla_version(&manifest)?;
       for (name, file) in manifest.resolve_version(&version)? {
         insert(&mut vanilla, &name, read.vanilla_dir.join(file.object));

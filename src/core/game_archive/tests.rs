@@ -93,35 +93,97 @@ fn resets_only_cache_output_and_refuses_game_or_workspace_paths() {
 }
 
 #[test]
-fn cache_manifest_requires_schema_one_and_root_metadata() {
+fn cache_manifest_accepts_known_schemas_and_reads_legacy_archives_as_maps() {
   let root = std::env::temp_dir().join(format!("vanilla_schema_test_{}", std::process::id()));
   fs::create_dir_all(&root).unwrap();
   let _cleanup = Staging(root.clone());
+  fs::write(
+    root.join("cache_info.json"),
+    r#"{"format_version":1,"game_dir":"game","versions":[]}"#,
+  )
+  .unwrap();
+  let legacy = load_manifest(&root).unwrap();
+  assert_eq!(legacy.contents, [ArchiveContent::Map].into());
+  assert!(load_content(&root, ArchiveContent::Map).is_ok());
+  assert!(
+    load_content(&root, ArchiveContent::Clothing)
+      .unwrap_err()
+      .to_string()
+      .contains("--generate-vanilla --content clothing")
+  );
   let mut manifest = VanillaCacheManifest {
-    format_version: 1,
+    format_version: FORMAT_VERSION,
+    contents: ArchiveContent::ALL.into(),
     game_dir: "game".into(),
     versions: vec![],
   };
   write_json(&root.join("cache_info.json"), &manifest).unwrap();
-  assert_eq!(load_manifest(&root).unwrap().format_version, 1);
-  let (loaded, revision) = load_manifest_with_revision(&root).unwrap();
-  assert_eq!(loaded.format_version, 1);
-  assert_eq!(
-    revision,
-    hex::encode(Sha256::digest(fs::read(root.join("cache_info.json")).unwrap()))
-  );
-  manifest.format_version = 2;
+  assert_eq!(load_manifest(&root).unwrap().format_version, FORMAT_VERSION);
+  manifest.format_version = FORMAT_VERSION + 1;
   write_json(&root.join("cache_info.json"), &manifest).unwrap();
-  assert!(
-    load_manifest(&root).unwrap_err().to_string().contains("Unsupported GTA V cache schema 2")
-  );
+  assert!(load_manifest(&root).unwrap_err().to_string().contains("Unsupported GTA V cache schema"));
   fs::remove_file(root.join("cache_info.json")).unwrap();
   assert!(load_manifest(&root).is_err());
 }
 
 #[test]
+fn content_views_keep_their_files_and_revisions_apart() {
+  let root = std::env::temp_dir().join(format!("vanilla_content_test_{}", std::process::id()));
+  fs::create_dir_all(&root).unwrap();
+  let _cleanup = Staging(root.clone());
+  let change = |name: &str, sha256: &str| {
+    (
+      name.to_owned(),
+      FileChange {
+        previous_sha256: None,
+        file: CachedFile {
+          sha256: sha256.into(),
+          object: format!("0000-base/{}/{name}", name.rsplit_once('.').unwrap().1),
+          source: format!("base.rpf/{name}"),
+        },
+      },
+    )
+  };
+  let manifest = |ymt: &str, unchanged: usize| VanillaCacheManifest {
+    format_version: FORMAT_VERSION,
+    contents: ArchiveContent::ALL.into(),
+    game_dir: "game".into(),
+    versions: vec![CacheVersion {
+      id: "0000-base".into(),
+      parent: None,
+      archives: vec!["base.rpf".into()],
+      changes: BTreeMap::from([
+        change("a.ymap", "map"),
+        change("a.ybn", "collision"),
+        change("a.ymt", ymt),
+      ]),
+      file_kinds: BTreeMap::from([("a.ymt".into(), "ped_variation".into())]),
+      unchanged,
+    }],
+  };
+  write_json(&root.join("cache_info.json"), &manifest("first", 0)).unwrap();
+  let (map, map_revision) = load_content(&root, ArchiveContent::Map).unwrap();
+  let (clothing, clothing_revision) = load_content(&root, ArchiveContent::Clothing).unwrap();
+  assert_eq!(map.contents, [ArchiveContent::Map].into());
+  assert_eq!(
+    map.versions[0].changes.keys().map(String::as_str).collect::<Vec<_>>(),
+    ["a.ybn", "a.ymap"]
+  );
+  assert!(map.versions[0].file_kinds.is_empty());
+  assert_eq!(clothing.versions[0].changes.keys().collect::<Vec<_>>(), ["a.ymt"]);
+  assert_eq!(clothing.versions[0].file_kinds["a.ymt"], "ped_variation");
+  assert_eq!(load_manifest(&root).unwrap().versions[0].changes.len(), 3);
+
+  write_json(&root.join("cache_info.json"), &manifest("second", 4)).unwrap();
+  let (_, changed_map) = load_content(&root, ArchiveContent::Map).unwrap();
+  let (_, changed_clothing) = load_content(&root, ArchiveContent::Clothing).unwrap();
+  assert_eq!(changed_map, map_revision);
+  assert_ne!(changed_clothing, clothing_revision);
+}
+
+#[test]
 fn stages_store_only_changed_raw_files_and_resolve_prior_versions() {
-  let extensions = FileSelection::MAPS.extensions;
+  let extensions = &FileSelection::new([ArchiveContent::Map]).extensions();
   let root = std::env::temp_dir().join(format!("vanilla_cache_test_{}", std::process::id()));
   fs::create_dir_all(&root).unwrap();
   let _cleanup = Staging(root.clone());
@@ -129,7 +191,8 @@ fn stages_store_only_changed_raw_files_and_resolve_prior_versions() {
   fs::write(root.join("second"), b"second map version").unwrap();
   fs::write(root.join("third"), b"third map version").unwrap();
   let mut manifest = VanillaCacheManifest {
-    format_version: 1,
+    format_version: 2,
+    contents: crate::core::game_archive::ArchiveContent::ALL.into(),
     game_dir: "game".into(),
     versions: vec![],
   };
@@ -207,7 +270,7 @@ fn stages_cache_raw_ybn_replacements_and_ymap_files() {
   use crate::core::format::ybn::xml::xml_to_ybn;
   use sha2::{Digest, Sha256};
 
-  let extensions = FileSelection::MAPS.extensions;
+  let extensions = &FileSelection::new([ArchiveContent::Map]).extensions();
   let root = std::env::temp_dir().join(format!("gtav_ybn_stages_{}", std::process::id()));
   fs::create_dir(&root).unwrap();
   let _cleanup = Staging(root.clone());
@@ -234,7 +297,8 @@ fn stages_cache_raw_ybn_replacements_and_ymap_files() {
     )
   };
   let mut manifest = VanillaCacheManifest {
-    format_version: 1,
+    format_version: 2,
+    contents: crate::core::game_archive::ArchiveContent::ALL.into(),
     game_dir: "missing-game".into(),
     versions: vec![],
   };
@@ -346,7 +410,8 @@ fn publication_restores_existing_versions_if_root_metadata_cannot_be_replaced() 
     unchanged: 0,
   };
   let manifest = VanillaCacheManifest {
-    format_version: 1,
+    format_version: 2,
+    contents: crate::core::game_archive::ArchiveContent::ALL.into(),
     game_dir: "game".into(),
     versions: vec![version],
   };
@@ -389,12 +454,13 @@ fn publication_keeps_empty_versions_in_metadata_without_stage_directories() {
   fs::create_dir_all(output.join("0000-base")).unwrap();
   fs::write(root.join("map.ymap"), b"raw map").unwrap();
   let mut manifest = VanillaCacheManifest {
-    format_version: 1,
+    format_version: 2,
+    contents: crate::core::game_archive::ArchiveContent::ALL.into(),
     game_dir: root.join("game"),
     versions: vec![],
   };
   let mut current = BTreeMap::new();
-  let extensions = FileSelection::MAPS.extensions;
+  let extensions = &FileSelection::new([ArchiveContent::Map]).extensions();
   stage(&mut manifest, &mut current, &build, "base", extensions, || Ok((vec![], vec![]))).unwrap();
   let file = ExtractedFile {
     name: "map.ymap".into(),

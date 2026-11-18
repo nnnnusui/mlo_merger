@@ -20,7 +20,8 @@ fn builds_source_inventory_and_skips_unchanged_inputs_without_diffing() {
   fs::write(source_resource.join("stream/unmatched.ybn"), b"source ybn").unwrap();
   fs::write(second_resource.join("stream/unmatched.ybn"), b"other source ybn").unwrap();
   let raw_manifest = VanillaCacheManifest {
-    format_version: 1,
+    format_version: 2,
+    contents: crate::core::game_archive::ArchiveContent::ALL.into(),
     game_dir: "game".into(),
     versions: vec![CacheVersion {
       id: "0000-base".into(),

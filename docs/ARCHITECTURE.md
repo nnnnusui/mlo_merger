@@ -20,6 +20,7 @@ Current module layout:
 ```text
 src/
 ├── app/
+│   ├── vanilla.rs       shared vanilla archive generation
 │   ├── map/             map/MLO workflows and composition
 │   └── clothing/        clothing workflows, including future composition
 ├── core/
@@ -34,7 +35,8 @@ src/
 Shared archive extraction, manifest handling, validation and publication live
 in `core/game_archive`. Map generation, caches, overwrite handling, merge,
 deployment, inspection and store checks live in `app/map`; clothing collection
-and its counts cache live in `app/clothing`.
+and its counts cache live in `app/clothing`; generation of the shared vanilla archive
+lives in `app/vanilla`.
 
 Production dependencies flow from `cli` to `app` to `core`; core runtime modules
 do not depend on application features.
@@ -81,7 +83,7 @@ resources rather than its path: a source root holding none of them is rejected.
 Format codecs (`format/*`) stay independent of artifact layout and batch processing.
 The GUI, opened when the executable starts without arguments, is a front end for
 vanilla generation only: it collects the game directory and `magic.dat` and runs the
-same generation as `--generate-vanilla`.
+same generation as `--generate-vanilla --content map`.
 
 ## Source Cache
 
@@ -308,8 +310,15 @@ another matching policy.
 
 ## Vanilla Archive And Derived Cache
 
-The raw vanilla archive preserves ordered YMAP/YBN overlays from the base game, title
-update and DLCs, stored by version and extension, with a global hash-name table. The
+The raw vanilla archive preserves ordered overlays from the base game, title update and
+DLCs, stored by version and extension, with a global hash-name table. It holds one or
+both content sets, extracted in one pass over the archives: `map` (YMAP, YBN) and
+`clothing` (YMT), listed in the manifest's `contents`; regeneration extracts the
+requested content with the content the archive already holds. Each feature reads the
+archive through its content's view (`core/game_archive::load_content`): every stage,
+with only that content's files, and a revision over them, so derived caches follow
+changes to their own content only. A schema-1 manifest, without `contents`, holds
+`map`. The
 table names hashes from YMAP META strings and archive entry names; entity archetypes
 that neither spells out, mostly LOD and SLOD models, take the names CodeWalker derives
 from `.ydr` and `.ydd` file names. A DLC
@@ -375,21 +384,16 @@ Remaining work: [TODO.md](TODO.md).
 
 ## Clothing Collection
 
-Clothing collection is an independent workflow (`--clothing --generate-vanilla`),
-owned by `clothing/vanilla`, with its own `vanilla-clothing` archive. It shares
-vanilla's RPF traversal, DLC order and versioned publication, selecting raw
-`CPedVariationInfo` and `CCreatureMetaData` YMTs by root type. Their `ped_variation`
-or `creature_metadata` kind is recorded per changed file in `cache_info.json`.
-Same-name overlays and unchanged-file reuse follow vanilla generation.
-
-The clothing archive lists every stage in `cache_info.json`, creates stage and
-`ymt/` directories only for additions or replacements, and names the final stage
-with an empty `latest_version-{version_id}` marker at its root.
+Clothing YMTs are the vanilla archive's `clothing` content
+(`--generate-vanilla --content clothing`). Its selector, in `core/game_archive`,
+keeps raw `CPedVariationInfo` and `CCreatureMetaData` YMTs by root type, and their
+`ped_variation` or `creature_metadata` kind is recorded per changed file in
+`cache_info.json`. Same-name overlays and unchanged-file reuse follow the map content.
 
 A derived counts cache (`--clothing --generate-vanilla-cache`, owned by
 `clothing/cache`) reads each stage's changed YMTs through the shared structure
 readers, whichever container holds them, and counts only `ped_variation` files,
 recording drawables and textures per component slot and props per anchor, with
 per-stage summaries. Creature metadata stays available in the raw archive but is
-not part of clothing counts. The cache is tied to the archive manifest's digest
-and rebuilt when that changes or on force.
+not part of clothing counts. The cache is tied to the revision of the archive's
+clothing content and rebuilt when that changes or on force.

@@ -68,6 +68,7 @@ mod tests {
       "SourceCacheConflictReport",
       "DerivedManifest",
       "VanillaCacheManifest",
+      "ArchiveContent",
       "DeployMetadata",
       "MatchingConfig",
       "RTreeIndex",

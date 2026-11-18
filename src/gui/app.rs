@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 
 use eframe::egui::{self, Color32, RichText};
 
-use mlo_merger::app::map::GenerateVanilla;
+use mlo_merger::{app::vanilla::GenerateVanilla, core::game_archive::ArchiveContent};
 
 use super::{
   game_dir::{self, GameDirStatus},
@@ -92,6 +92,7 @@ impl VanillaApp {
           game_dir: PathBuf::from(self.game_dir.trim()),
           output_dir: self.output_dir(),
           magic: PathBuf::from(self.magic.trim()),
+          contents: [ArchiveContent::Map].into(),
           reuse_existing: false,
         };
         Task::spawn(context, move || {

@@ -15,7 +15,7 @@ use crate::common::{Result, fingerprint::Fingerprint};
 use crate::core::config::gamebuild::GameBuild;
 use crate::core::conversion::load_hash_names_or_empty;
 use crate::core::format::ymap::{binary::ymap_to_model, model::ymap::Ymap};
-use crate::core::game_archive::{VanillaCacheManifest, load_manifest};
+use crate::core::game_archive::{ArchiveContent, VanillaCacheManifest, load_content};
 use crate::platform::fs;
 use crate::platform::progress::{ProgressBar, ProgressStyle};
 use rayon::prelude::*;
@@ -518,7 +518,7 @@ impl Read {
     &self,
     matched: &mut [bool],
   ) -> Result<Vec<Selected>> {
-    let manifest = load_manifest(&self.vanilla_dir)?;
+    let (manifest, _) = load_content(&self.vanilla_dir, ArchiveContent::Map)?;
     let version = self.vanilla_version(&manifest)?;
     let files = manifest.resolve_version(&version)?;
     let mut selected = Vec::new();

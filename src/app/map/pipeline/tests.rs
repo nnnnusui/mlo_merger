@@ -82,7 +82,8 @@ fn pipeline_routes_resources_through_merge_and_deploy_and_reuses_vanilla() {
   write_json(
     &pipeline.vanilla_dir.join("cache_info.json"),
     &VanillaCacheManifest {
-      format_version: 1,
+      format_version: 2,
+      contents: crate::core::game_archive::ArchiveContent::ALL.into(),
       game_dir: pipeline.game_dir.clone(),
       versions: vec![CacheVersion {
         id: "0000-base".into(),
@@ -259,7 +260,8 @@ fn pipeline_reuses_vanilla_and_applies_exclusions_only_for_this_run() {
   write_json(
     &pipeline.vanilla_dir.join("cache_info.json"),
     &VanillaCacheManifest {
-      format_version: 1,
+      format_version: 2,
+      contents: crate::core::game_archive::ArchiveContent::ALL.into(),
       game_dir: pipeline.game_dir.clone(),
       versions: vec![CacheVersion {
         id: "0000-base".into(),

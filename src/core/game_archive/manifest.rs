@@ -3,11 +3,11 @@
 use crate::platform::fs;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use super::Result;
+use super::{ArchiveContent, Result};
 
 /// A cache artifact and its source within the game's archive hierarchy.
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
@@ -55,8 +55,11 @@ pub struct CacheVersion {
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[cfg_attr(feature = "typescript", derive(specta::Type))]
 pub struct VanillaCacheManifest {
-  /// Cache schema version, currently 1.
+  /// Cache schema version, currently 2.
   pub format_version: u32,
+  /// The content sets extracted into the archive; schema 1 archives hold maps only.
+  #[serde(default = "map_content")]
+  pub contents: BTreeSet<ArchiveContent>,
   /// Installed game directory from which this cache was generated.
   pub game_dir: PathBuf,
   /// Base, title update, then DLC stages in dlclist.xml order.
@@ -68,16 +71,16 @@ impl VanillaCacheManifest {
   ///
   /// ```
   /// # use mlo_merger::core::game_archive::VanillaCacheManifest;
-  /// # let cache = VanillaCacheManifest { format_version: 1, game_dir: ".".into(), versions: vec![] };
+  /// # let cache = VanillaCacheManifest {
+  /// #   format_version: 2, contents: Default::default(), game_dir: ".".into(), versions: vec![],
+  /// # };
   /// assert!(cache.resolve_version("unknown").is_err());
   /// ```
   pub fn resolve_version(
     &self,
     id: &str,
   ) -> Result<BTreeMap<String, CachedFile>> {
-    if self.format_version != 1 {
-      return Err(format!("Unsupported GTA V cache schema {}", self.format_version).into());
-    }
+    check_format_version(self.format_version)?;
     let mut files = BTreeMap::new();
     for version in &self.versions {
       for (name, change) in &version.changes {
@@ -89,30 +92,122 @@ impl VanillaCacheManifest {
     }
     Err(format!("Unknown vanilla stage: {id}").into())
   }
+
+  /// The archive as `content` sees it: every stage, with only that content's files.
+  ///
+  /// Fails when the archive holds no `content`, naming how to extract it.
+  pub fn content(
+    &self,
+    content: ArchiveContent,
+  ) -> Result<Self> {
+    if !self.contents.contains(&content) {
+      return Err(missing_content(content));
+    }
+    let belongs = |name: &String| ArchiveContent::of_file(name) == Some(content);
+    Ok(Self {
+      format_version: self.format_version,
+      contents: BTreeSet::from([content]),
+      game_dir: self.game_dir.clone(),
+      versions: self
+        .versions
+        .iter()
+        .map(|version| CacheVersion {
+          changes: version
+            .changes
+            .iter()
+            .filter(|(name, _)| belongs(name))
+            .map(|(name, change)| (name.clone(), change.clone()))
+            .collect(),
+          file_kinds: version
+            .file_kinds
+            .iter()
+            .filter(|(name, _)| belongs(name))
+            .map(|(name, kind)| (name.clone(), kind.clone()))
+            .collect(),
+          ..version.clone()
+        })
+        .collect(),
+    })
+  }
+
+  /// A digest of the stages and their files, leaving out the unchanged counts, which count
+  /// every content's files; a content view's revision changes only with that content.
+  fn revision(&self) -> Result<String> {
+    let mut manifest = self.clone();
+    for version in &mut manifest.versions {
+      version.unchanged = 0;
+    }
+    Ok(hex::encode(Sha256::digest(serde_json::to_vec(&manifest)?)))
+  }
 }
 
-/// Loads the schema-1 cache manifest from the cache root.
+/// The schema version archives are written with.
+pub(crate) const FORMAT_VERSION: u32 = 2;
+
+fn check_format_version(version: u32) -> Result<()> {
+  if version == 1 || version == FORMAT_VERSION {
+    Ok(())
+  } else {
+    Err(format!("Unsupported GTA V cache schema {version}").into())
+  }
+}
+
+fn map_content() -> BTreeSet<ArchiveContent> {
+  BTreeSet::from([ArchiveContent::Map])
+}
+
+/// The decoded manifest and the view of each content set it holds, with its revision.
+struct LoadedManifest {
+  manifest: Arc<VanillaCacheManifest>,
+  views: BTreeMap<ArchiveContent, (Arc<VanillaCacheManifest>, String)>,
+}
+
+/// Loads the whole archive manifest from the archive root.
 pub(crate) fn load_manifest(cache: &Path) -> Result<Arc<VanillaCacheManifest>> {
-  load_manifest_with_revision(cache).map(|(manifest, _)| manifest)
+  Ok(load(cache)?.manifest.clone())
 }
 
-/// Reads and validates the raw manifest and hashes the same bytes that were decoded.
+/// Loads the archive as `content` sees it ([`VanillaCacheManifest::content`]) with its revision.
 ///
 /// The manifest is decoded once per process while it is unchanged, as every pipeline stage
 /// reads it.
-pub(crate) fn load_manifest_with_revision(
-  cache: &Path
+pub(crate) fn load_content(
+  cache: &Path,
+  content: ArchiveContent,
 ) -> Result<(Arc<VanillaCacheManifest>, String)> {
+  let loaded = load(cache)?;
+  let (manifest, revision) = loaded.views.get(&content).ok_or_else(|| missing_content(content))?;
+  Ok((manifest.clone(), revision.clone()))
+}
+
+/// The error for an archive without `content`, naming how to extract it.
+pub(crate) fn missing_content(content: ArchiveContent) -> Box<dyn std::error::Error> {
+  format!(
+    "The vanilla archive holds no {content} files; regenerate it with --generate-vanilla --content {content} (or all)"
+  )
+  .into()
+}
+
+fn load(cache: &Path) -> Result<Arc<LoadedManifest>> {
   let root = cache.join("cache_info.json");
   if !fs::is_file(&root) {
     return Err(format!("No vanilla cache manifest found in {}", cache.display()).into());
   }
-  let loaded = crate::common::json::read_shared(&root, |bytes| {
+  crate::common::json::read_shared(&root, |bytes| {
     let manifest: VanillaCacheManifest = serde_json::from_slice(bytes)?;
-    if manifest.format_version != 1 {
-      return Err(format!("Unsupported GTA V cache schema {}", manifest.format_version).into());
-    }
-    Ok((Arc::new(manifest), hex::encode(Sha256::digest(bytes))))
-  })?;
-  Ok((loaded.0.clone(), loaded.1.clone()))
+    check_format_version(manifest.format_version)?;
+    let views = manifest
+      .contents
+      .iter()
+      .map(|&content| {
+        let view = manifest.content(content)?;
+        let revision = view.revision()?;
+        Ok((content, (Arc::new(view), revision)))
+      })
+      .collect::<Result<_>>()?;
+    Ok(LoadedManifest {
+      manifest: Arc::new(manifest),
+      views,
+    })
+  })
 }
