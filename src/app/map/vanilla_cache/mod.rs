@@ -159,14 +159,14 @@ mod versions;
 
 pub use versions::{ListVanillaVersions, VanillaVersionChange, VanillaVersionEntry};
 
-/// The latest files of the local `asset/vanilla-cache`, for tests that need real vanilla files.
+/// The latest files of the local `asset/map/vanilla-cache`, for tests that need real vanilla files.
 #[cfg(test)]
 pub(crate) mod test_support {
   use std::path::{Path, PathBuf};
 
   /// The latest files with `extension`, sorted by file name.
   pub(crate) fn asset_latest_files(extension: &str) -> Vec<PathBuf> {
-    let cache = Path::new(env!("CARGO_MANIFEST_DIR")).join("asset/vanilla-cache");
+    let cache = Path::new(env!("CARGO_MANIFEST_DIR")).join("asset/map/vanilla-cache");
     let mut files = super::latest_files(&cache)
       .unwrap()
       .into_iter()
@@ -213,7 +213,7 @@ pub(crate) mod test_support {
 
   /// The latest file named `name`.
   pub(crate) fn asset_latest_file(name: &str) -> PathBuf {
-    let cache = Path::new(env!("CARGO_MANIFEST_DIR")).join("asset/vanilla-cache");
+    let cache = Path::new(env!("CARGO_MANIFEST_DIR")).join("asset/map/vanilla-cache");
     super::latest_files(&cache)
       .unwrap()
       .into_iter()

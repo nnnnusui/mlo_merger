@@ -1,5 +1,6 @@
 use std::path::{Path, PathBuf};
 
+use crate::cli::common::map_dir;
 use bpaf::*;
 
 use crate::app::map::read::{Read, ReadTarget};
@@ -36,26 +37,26 @@ fn options(asset: &Path) -> impl Parser<ReadCommand> + use<> {
     .optional();
   let files = positional::<String>("FILE").many();
   let source_dir = long("source")
-    .help("Source resource directory, for resource files not moved into the source cache (default: asset/source)")
+    .help("Source resource directory, for resource files not moved into the source cache (default: asset/map/source)")
     .argument::<PathBuf>("DIR")
-    .fallback(asset.join("source"));
+    .fallback(map_dir(asset).join("source"));
   let source_cache_dir = long("source-cache")
-    .help("Source cache directory (default: asset/source-cache)")
+    .help("Source cache directory (default: asset/map/source-cache)")
     .argument::<PathBuf>("DIR")
-    .fallback(asset.join("source-cache"));
+    .fallback(map_dir(asset).join("source-cache"));
   let vanilla_dir = long("vanilla-dir")
     .help("Vanilla archive directory (default: asset/vanilla)")
     .argument::<PathBuf>("DIR")
     .fallback(asset.join("vanilla"));
   let vanilla_cache_dir = long("vanilla-cache")
-    .help("Vanilla cache whose game build vanilla is read as of without --gamebuild (default: asset/vanilla-cache)")
+    .help("Vanilla cache whose game build vanilla is read as of without --gamebuild (default: asset/map/vanilla-cache)")
     .argument::<PathBuf>("DIR")
-    .fallback(asset.join("vanilla-cache"));
+    .fallback(map_dir(asset).join("vanilla-cache"));
   let output_dir = short('o')
     .long("output")
-    .help("Output directory (default: asset/read-cache)")
+    .help("Output directory (default: asset/map/read-cache)")
     .argument::<PathBuf>("DIR")
-    .fallback(asset.join("read-cache"));
+    .fallback(map_dir(asset).join("read-cache"));
   let force = short('f').long("force").help("Write every JSON again").switch();
   let version = long("version")
     .help("With --resource, read the earlier version with this SHA-256 of each named file, from the source cache's history")
@@ -129,8 +130,8 @@ mod tests {
     let read = parse(&["--read", "--resource", "[maps]/alpha", "map.ymap"]);
     assert_eq!(read.target, ReadTarget::Resource("[maps]/alpha".into()));
     assert_eq!(read.files, ["map.ymap"]);
-    assert_eq!(read.output_dir, PathBuf::from("asset/read-cache"));
-    assert_eq!(read.vanilla_cache_dir, PathBuf::from("asset/vanilla-cache"));
+    assert_eq!(read.output_dir, PathBuf::from("asset/map/read-cache"));
+    assert_eq!(read.vanilla_cache_dir, PathBuf::from("asset/map/vanilla-cache"));
     assert!(read.gamebuild.is_none());
     assert!(!read.force);
     assert!(parse(&["--read", "--resource", "alpha"]).files.is_empty());

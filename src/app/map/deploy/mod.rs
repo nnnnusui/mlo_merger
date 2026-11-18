@@ -58,7 +58,7 @@ impl Deploy {
   /// ```no_run
   /// use mlo_merger::app::map::deploy::Deploy;
   /// let summary = Deploy {
-  ///   merged_dir: "asset/merged".into(), source_cache_dir: "asset/source-cache".into(),
+  ///   merged_dir: "asset/map/merged".into(), source_cache_dir: "asset/map/source-cache".into(),
   ///   output_dir: "merged_mlo".into(), force: false,
   /// }.run()?;
   /// # Ok::<(), Box<dyn std::error::Error>>(())

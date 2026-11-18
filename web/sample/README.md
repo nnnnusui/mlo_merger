@@ -34,7 +34,7 @@ entities of `smpl_block_01_lod.ymap`. `smpl_block_01.ybn` has a geometry of tria
 and a sphere, and a box bound. The LOD light files keep the `lodlights_` and `distlodlights_`
 names, by which the merger pairs them.
 
-## Resources (`asset/source`)
+## Resources (`asset/map/source`)
 
 - `[smpl]/smpl_street_tweaks` moves the bench, locks the door, removes the car generator and
   adds a planter in `smpl_block_01.ymap`; removes a LOD light pair; adds the planter's
@@ -58,15 +58,15 @@ Edits to `smpl_block_01.ymap` and the LOD lights carry over to their DLC generat
 resources' collisions predate `smpl_summer`, so merging against the last stage removes the
 kiosk's collision, while `--gamebuild 100` merges against the stage they were made for.
 
-## Overwrites Written Against Earlier Versions (`asset/overwrite`, `asset/source-cache/history`)
+## Overwrites Written Against Earlier Versions (`asset/map/overwrite`, `asset/map/source-cache/history`)
 
 Three overwrites were written against earlier versions of the resources' files, which the
-source cache keeps under `asset/source-cache/history/`, as a pipeline run on them would have
+source cache keeps under `asset/map/source-cache/history/`, as a pipeline run on them would have
 left them, with their diff documents:
 
 - `smpl_street_tweaks`'s, of `smpl_block_01.ymap`, reverts the planter and a cone its earlier
   version added. The current version adds the planter only, so the first pipeline run rewrites
-  the overwrite in `asset/overwrite` against it: it keeps reverting the planter and no longer
+  the overwrite in `asset/map/overwrite` against it: it keeps reverting the planter and no longer
   names the cone.
 - `smpl_block_rework`'s, of `maps/smpl_block_01.ymap`, reverts the lamp's colour, which the
   current version changes to another colour. It is left as it is, not applied, and listed in
@@ -77,7 +77,7 @@ left them, with their diff documents:
   listed as `source_changed`; its record lists the removal and the addition it reverted, and
   why it was not rewritten.
 
-All three are recorded under `asset/overwrite-cache/source_updates/`. Read an earlier version
+All three are recorded under `asset/map/overwrite-cache/source_updates/`. Read an earlier version
 with, for example,
 
 ```bash
@@ -86,7 +86,7 @@ mlo_merger --read --resource smpl_street_tweaks --version {sha256} smpl_block_01
 
 where `{sha256}` names the file in the history.
 
-## Overwrites Left Out for Other Reasons (`asset/overwrite`)
+## Overwrites Left Out for Other Reasons (`asset/map/overwrite`)
 
 With the two above, the first pipeline run lists one entry of every reason in
 `ignored_overwrites`:

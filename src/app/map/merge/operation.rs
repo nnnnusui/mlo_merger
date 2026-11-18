@@ -53,10 +53,10 @@ impl Merge {
   ///
   /// ```no_run
   /// mlo_merger::app::map::merge::Merge {
-  ///   source_dir: "asset/source".into(), vanilla_cache_dir: "asset/vanilla-cache".into(),
-  ///   source_cache_dir: "asset/source-cache".into(), output_dir: "asset/merged".into(),
-  ///   overwrite_dir: Some("asset/overwrite".into()),
-  ///   overwrite_cache_dir: "asset/overwrite-cache".into(), force: false,
+  ///   source_dir: "asset/map/source".into(), vanilla_cache_dir: "asset/map/vanilla-cache".into(),
+  ///   source_cache_dir: "asset/map/source-cache".into(), output_dir: "asset/map/merged".into(),
+  ///   overwrite_dir: Some("asset/map/overwrite".into()),
+  ///   overwrite_cache_dir: "asset/map/overwrite-cache".into(), force: false,
   /// }.run()?;
   /// # Ok::<(), Box<dyn std::error::Error>>(())
   /// ```

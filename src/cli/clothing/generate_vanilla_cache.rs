@@ -2,6 +2,8 @@ use std::path::{Path, PathBuf};
 
 use bpaf::*;
 
+use crate::cli::common::clothing_dir;
+
 /// Arguments for counting clothing definitions per vanilla stage.
 #[derive(Debug, Clone)]
 pub struct GenerateVanillaClothingCache {
@@ -22,9 +24,9 @@ pub fn parser(asset: &Path) -> impl Parser<GenerateVanillaClothingCache> + use<>
     .fallback(asset.join("vanilla"));
   let output = short('o')
     .long("output")
-    .help("Output directory")
+    .help("Output directory (default: asset/clothing/vanilla-cache)")
     .argument::<PathBuf>("PATH")
-    .fallback(asset.join("vanilla-clothing-cache"));
+    .fallback(clothing_dir(asset).join("vanilla-cache"));
   let force = short('f').long("force").help("Force regeneration of this operation").switch();
   construct!(vanilla_dir, output, force)
     .map(|(vanilla_dir, output, force)| GenerateVanillaClothingCache {

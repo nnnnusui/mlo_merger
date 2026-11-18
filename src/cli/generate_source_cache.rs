@@ -1,5 +1,6 @@
 use std::path::{Path, PathBuf};
 
+use crate::cli::common::map_dir;
 use bpaf::*;
 
 use super::common::{self, CommonOptions};
@@ -29,10 +30,10 @@ fn options(asset: &Path) -> impl Parser<GenerateSourceCache> + use<> {
   let resource = positional::<String>("RESOURCE").optional();
   let source_dir = short('i')
     .long("input")
-    .help("Source resource directory (default: asset/source)")
+    .help("Source resource directory (default: asset/map/source)")
     .argument::<PathBuf>("DIR")
-    .fallback(asset.join("source"));
-  let common = common::parser(asset, asset.join("source-cache"));
+    .fallback(map_dir(asset).join("source"));
+  let common = common::parser(asset, map_dir(asset).join("source-cache"));
   let exclusions = exclusions_parser();
   construct!(source_dir, common, exclusions, resource).map(
     |(source_dir, common, exclusions, resource)| GenerateSourceCache {

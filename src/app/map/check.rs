@@ -30,10 +30,10 @@ impl Check {
   ///
   /// ```no_run
   /// let report = mlo_merger::app::map::Check {
-  ///   vanilla_dir: "asset/vanilla".into(), vanilla_cache_dir: "asset/vanilla-cache".into(),
-  ///   source_cache_dir: "asset/source-cache".into(), overwrite_dir: Some("asset/overwrite".into()),
-  ///   overwrite_cache_dir: "asset/overwrite-cache".into(), merged_dir: "asset/merged".into(),
-  ///   output_dir: "asset/merged_mlo".into(), deep: false,
+  ///   vanilla_dir: "asset/vanilla".into(), vanilla_cache_dir: "asset/map/vanilla-cache".into(),
+  ///   source_cache_dir: "asset/map/source-cache".into(), overwrite_dir: Some("asset/map/overwrite".into()),
+  ///   overwrite_cache_dir: "asset/map/overwrite-cache".into(), merged_dir: "asset/map/merged".into(),
+  ///   output_dir: "asset/map/merged_mlo".into(), deep: false,
   /// }.run()?;
   /// # Ok::<(), Box<dyn std::error::Error>>(())
   /// ```

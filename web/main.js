@@ -93,7 +93,7 @@ let busy = true;
 let before;
 /** path → entry now. */
 let current = new Map();
-const expanded = new Set([WORKSPACE, `${WORKSPACE}/asset`]);
+const expanded = new Set([WORKSPACE, `${WORKSPACE}/asset`, `${WORKSPACE}/asset/map`]);
 let selected;
 let liveWrites = 0;
 let statusFrame;

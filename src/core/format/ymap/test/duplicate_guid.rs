@@ -26,13 +26,13 @@ struct DuplicateGuidGroup {
 }
 
 #[test]
-#[ignore = "requires local asset/vanilla-cache YMAPs"]
+#[ignore = "requires local asset/map/vanilla-cache YMAPs"]
 fn dump_vanilla_cache_duplicate_guid_entities() {
   dump_duplicate_guid_entities("vanilla-cache", true);
 }
 
 #[test]
-#[ignore = "requires local asset/source-cache YMAPs"]
+#[ignore = "requires local asset/map/source-cache YMAPs"]
 fn dump_source_cache_duplicate_guid_entities() {
   dump_duplicate_guid_entities("source-cache", true);
 }

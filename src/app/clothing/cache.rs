@@ -55,7 +55,7 @@ const ANCHORS: [&str; 14] = [
 pub struct BuildClothingCache {
   /// Vanilla archive directory, normally `asset/vanilla`.
   pub vanilla_dir: PathBuf,
-  /// Output directory, normally `asset/vanilla-clothing-cache`.
+  /// Output directory, normally `asset/clothing/vanilla-cache`.
   pub output_dir: PathBuf,
   /// Rebuilds even when the recorded archive digest is current.
   pub force: bool,
@@ -122,7 +122,7 @@ impl BuildClothingCache {
   /// ```no_run
   /// mlo_merger::app::clothing::BuildClothingCache {
   ///   vanilla_dir: "asset/vanilla".into(),
-  ///   output_dir: "asset/vanilla-clothing-cache".into(),
+  ///   output_dir: "asset/clothing/vanilla-cache".into(),
   ///   force: false,
   /// }.run()?;
   /// # Ok::<(), Box<dyn std::error::Error>>(())

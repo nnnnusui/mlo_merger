@@ -9,7 +9,7 @@ use crate::{
 };
 
 #[test]
-#[ignore = "requires local asset/source-cache and asset/vanilla-cache"]
+#[ignore = "requires local asset/map/source-cache and asset/map/vanilla-cache"]
 fn reads_vanilla_and_source_ymaps_once() {
   let asset = Path::new(env!("CARGO_MANIFEST_DIR")).join("asset");
   let context = YmapComparisonContext::new(
@@ -83,7 +83,7 @@ fn reads_vanilla_and_source_ymaps_once() {
 }
 
 #[test]
-#[ignore = "requires local asset/source-cache and asset/vanilla-cache"]
+#[ignore = "requires local asset/map/source-cache and asset/map/vanilla-cache"]
 fn resolves_parents_of_every_source_ymap() {
   let asset = Path::new(env!("CARGO_MANIFEST_DIR")).join("asset");
   let context = YmapComparisonContext::new(
@@ -159,7 +159,7 @@ struct ParentChangeReport {
 }
 
 #[test]
-#[ignore = "requires local asset/source-cache and asset/vanilla-cache"]
+#[ignore = "requires local asset/map/source-cache and asset/map/vanilla-cache"]
 fn dump_source_ymaps_with_changed_parents() {
   let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
   let asset = manifest.join("asset");

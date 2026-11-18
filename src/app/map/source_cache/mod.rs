@@ -118,8 +118,8 @@ impl BuildSourceCache {
   /// ```no_run
   /// use mlo_merger::app::map::source_cache::BuildSourceCache;
   /// BuildSourceCache {
-  ///   source_dir: "asset/source".into(), output_dir: "asset/source-cache".into(),
-  ///   vanilla_dir: "asset/vanilla".into(), vanilla_cache_dir: "asset/vanilla-cache".into(),
+  ///   source_dir: "asset/map/source".into(), output_dir: "asset/map/source-cache".into(),
+  ///   vanilla_dir: "asset/vanilla".into(), vanilla_cache_dir: "asset/map/vanilla-cache".into(),
   ///   resource: Some("maps".into()), exclusions: None, force: false,
   /// }.run()?;
   /// # Ok::<(), Box<dyn std::error::Error>>(())

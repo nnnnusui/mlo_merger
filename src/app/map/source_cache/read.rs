@@ -136,7 +136,7 @@ pub struct CachedFile {
 ///
 /// ```no_run
 /// let files = mlo_merger::app::map::source_cache::cached_files(
-///   std::path::Path::new("asset/source-cache"),
+///   std::path::Path::new("asset/map/source-cache"),
 /// )?;
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```

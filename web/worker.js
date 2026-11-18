@@ -9,7 +9,7 @@
 import init, { run, set_current_dir } from "./pkg/mlo_merger_web.js";
 import * as vfs from "./vfs.js";
 
-/** Where the sample workspace lives; relative paths such as `asset/source` resolve here. */
+/** Where the sample workspace lives; relative paths such as `asset/map/source` resolve here. */
 const WORKSPACE = "/work";
 /** Seeded files get times from here on, a second apart, so files a run writes stand out. */
 const SEEDED_AT = Date.UTC(2026, 0, 1);

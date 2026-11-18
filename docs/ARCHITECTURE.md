@@ -38,6 +38,9 @@ deployment, inspection and store checks live in `app/map`; clothing collection
 and its counts cache live in `app/clothing`; generation of the shared vanilla archive
 lives in `app/vanilla`.
 
+Command defaults place the shared vanilla archive, config and log directly under the
+asset directory, and each workflow's stores under its own directory (`map/`, `clothing/`).
+
 Production dependencies flow from `cli` to `app` to `core`; core runtime modules
 do not depend on application features.
 
@@ -158,7 +161,7 @@ otherwise deployed as a clone; one several resources ship is always written, rep
 theirs.
 
 Merge output is staged and replaces the selected output directory after a
-successful run. The default output is `asset/merged`. A missing or stale diff
+successful run. The default output is `asset/map/merged`. A missing or stale diff
 document fails the merge. YMAP output is limited to final models that differ from
 vanilla after merging and parent-reference repairs. Only source YMAPs replaced by
 generated output are listed in `_omit.txt`. Merged YMAPs are written
@@ -219,7 +222,7 @@ overwrites are not yet supported.
 
 ### Model Reading
 
-`--read` writes typed stream-file models as JSON under `asset/read-cache` for
+`--read` writes typed stream-file models as JSON under `asset/map/read-cache` for
 external tools such as overwrite editors. Each document records the fingerprints
 of its file and of the hash-name table used to name it, and is rewritten only when
 those change or when forced. Resources are read from the source cache; vanilla

@@ -278,7 +278,7 @@ mod tests {
   use super::*;
 
   #[test]
-  #[ignore = "requires local asset/source-cache and asset/vanilla-cache"]
+  #[ignore = "requires local asset/map/source-cache and asset/map/vanilla-cache"]
   fn writes_ymap_diffs_for_local_source_cache() {
     let asset = Path::new(env!("CARGO_MANIFEST_DIR")).join("asset");
     let source_cache = asset.join("source-cache");

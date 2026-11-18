@@ -1,7 +1,7 @@
 # Source Sample
 
 Two resources editing vanilla `hei_ch1_11.ymap` (`../sample.ymap`), laid out as
-`asset/source`: `[maps]/sample_resource_a/stream/hei_ch1_11.ymap` and
+`asset/map/source`: `[maps]/sample_resource_a/stream/hei_ch1_11.ymap` and
 `sample_resource_b/stream/maps/hei_ch1_11.ymap`. `../overwrite` describes their
 edits and holds overwrites for them.
 

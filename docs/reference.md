@@ -22,20 +22,33 @@ else on stderr.
 
 | Path | Default | Option |
 |---|---|---|
-| Source resources | `asset/source` | `-i` |
+| Source resources | `asset/map/source` | `-i` |
 | Raw vanilla archive | `asset/vanilla` | `--vanilla` |
-| Derived vanilla cache | `asset/vanilla-cache` | `--vanilla-cache` |
-| Source cache | `asset/source-cache` | `--source-cache` |
-| Merged files | `asset/merged` | `--merged` |
-| Overwrites | `asset/overwrite` | `--overwrite` |
-| Overwrite cache | `asset/overwrite-cache` | `--overwrite-cache` |
-| Deployment | `asset/merged_mlo` | `-o` |
+| Derived vanilla cache | `asset/map/vanilla-cache` | `--vanilla-cache` |
+| Source cache | `asset/map/source-cache` | `--source-cache` |
+| Merged files | `asset/map/merged` | `--merged` |
+| Overwrites | `asset/map/overwrite` | `--overwrite` |
+| Overwrite cache | `asset/map/overwrite-cache` | `--overwrite-cache` |
+| Deployment | `asset/map/merged_mlo` | `-o` |
 
 Every command takes `--asset DIR`, which puts each default under `DIR` instead of `asset/`,
 including the config file (`--config`) and the log directory (`--log-dir`). Use
 `--no-log-file` to disable the run's log file. A path given by its own option is used as
 given: `--asset other --source-cache cache` reads
-`other/vanilla-cache` and `cache`.
+`other/map/vanilla-cache` and `cache`.
+
+Below the asset directory, the vanilla archive, the config file and the log directory are
+shared; every other default sits in the directory of its workflow, so a command of one
+workflow never defaults into the other's:
+
+```text
+asset/
+├── config.toml
+├── log/
+├── vanilla/      raw vanilla archive
+├── map/          map stores, sources, overwrites and deployment
+└── clothing/     clothing stores
+```
 
 Overlapping artifact directories are rejected. The source root can contain them: for
 example, use `resources` as source while running the tool from `resources/mlo_merged`.
@@ -53,14 +66,14 @@ archive. `--gamebuild` selects the game build the vanilla cache, and so merge, t
 
 ```bash
 mlo_merger --generate-vanilla -i /mnt/gtav -o asset/vanilla --magic magic.dat
-mlo_merger --generate-vanilla-cache --vanilla asset/vanilla -o asset/vanilla-cache
-mlo_merger --generate-source-cache -i asset/source --vanilla-cache asset/vanilla-cache -o asset/source-cache
+mlo_merger --generate-vanilla-cache --vanilla asset/vanilla -o asset/map/vanilla-cache
+mlo_merger --generate-source-cache -i asset/map/source --vanilla-cache asset/map/vanilla-cache -o asset/map/source-cache
 mlo_merger --generate-source-cache --exclude 'resourceName,[maps]/shops'
-mlo_merger --generate-overwrite-cache -i asset/source --overwrite asset/overwrite -o asset/overwrite-cache
-mlo_merger --merge --vanilla-cache asset/vanilla-cache --source-cache asset/source-cache -o asset/merged
-mlo_merger --deploy -i asset/merged --source-cache asset/source-cache -o asset/merged_mlo
+mlo_merger --generate-overwrite-cache -i asset/map/source --overwrite asset/map/overwrite -o asset/map/overwrite-cache
+mlo_merger --merge --vanilla-cache asset/map/vanilla-cache --source-cache asset/map/source-cache -o asset/map/merged
+mlo_merger --deploy -i asset/map/merged --source-cache asset/map/source-cache -o asset/map/merged_mlo
 
-mlo_merger --restore-source-cache -i asset/source --source-cache asset/source-cache
+mlo_merger --restore-source-cache -i asset/map/source --source-cache asset/map/source-cache
 mlo_merger --restore-source-cache resourceName '[maps]/resource_b'
 ```
 
@@ -292,8 +305,8 @@ visible through another copy.
 ## Overwrites
 
 Overwrites are the only inputs written from outside the tool besides the sources. They are
-read from `--overwrite` (default: `asset/overwrite`), and what they call for is derived
-into the overwrite cache (`--overwrite-cache`, default `asset/overwrite-cache`) by
+read from `--overwrite` (default: `asset/map/overwrite`), and what they call for is derived
+into the overwrite cache (`--overwrite-cache`, default `asset/map/overwrite-cache`) by
 `--generate-overwrite-cache`, which `--merge` and `--pipeline` run first. The merge always
 reads it, even with no overwrites, since it also records which resources each added stream file is
 merged from; a missing one, or one older than the source and vanilla caches or the
@@ -437,7 +450,7 @@ Searches write XML to stdout.
   to search all supported shapes. Unsupported shapes are skipped.
 - `occlude-position` measures box occluders from their center, converted from stored
   quarter-metre units, and occlude models from the nearest point of their bounds.
-- `-i` selects a merged directory (default: `asset/merged`). `--filter` accepts a
+- `-i` selects a merged directory (default: `asset/map/merged`). `--filter` accepts a
   case-insensitive filename glob; quote wildcard patterns. Duplicate occurrences are kept.
 - With `--all`, the inputs the merge recorded are read from `--source`, `--source-cache` and
   `--vanilla-cache` (defaults under `asset/`), which the merge records names relative to.
@@ -465,14 +478,14 @@ mlo_merger --read --all
 and fingerprint of the file it was read from, the vanilla `hash_names.json` that named its
 hashes, for a resource's file the source cache's `hash_names.json` that named those vanilla
 leaves unnamed, and the resolved `entity_lod_parents` (see [usage](usage.md#--read)). A resource's file is written to
-`asset/read-cache/resources/{resourceName}/{stream-relative-path}.json` and a vanilla
-file to `asset/read-cache/vanilla/{version}/ymap/{fileName}.json`, where `{version}` is the
+`asset/map/read-cache/resources/{resourceName}/{stream-relative-path}.json` and a vanilla
+file to `asset/map/read-cache/vanilla/{version}/ymap/{fileName}.json`, where `{version}` is the
 version folder holding the file in the vanilla archive: the last version, up to the stage
 read, that changed it. Versions holding the same file share its document. A JSON is
 written again when its file, hash names or resolved LOD parents change, or with `-f`.
 
 Vanilla files are read from the stage the vanilla cache was built for (`latest_version` in
-`asset/vanilla-cache/cache_info.json`, `--vanilla-cache` to change the cache), so they match
+`asset/map/vanilla-cache/cache_info.json`, `--vanilla-cache` to change the cache), so they match
 the merge and the cache's `stream_file_rtree.json`; without a vanilla cache, or one built
 for a stage the archive lacks, from the last stage. `--gamebuild BUILD` reads them as of a
 game build instead, resolved as for the other commands (see [Game Builds](#game-builds)).
@@ -491,9 +504,9 @@ game build instead, resolved as for the other commands (see [Game Builds](#game-
   If any name matches no file, nothing is written.
 - Files are read and written in parallel; the result keeps the order above.
 
-The source cache and vanilla archive default to `asset/source-cache` and `asset/vanilla`
+The source cache and vanilla archive default to `asset/map/source-cache` and `asset/vanilla`
 (`--source-cache`, `--vanilla-dir`), and resource files not moved into the source cache are
-read from `--source` (default: `asset/source`); `-o` changes the output root. Each document
+read from `--source` (default: `asset/map/source`); `-o` changes the output root. Each document
 records the file it was read from relative to its store. The command prints a
 `ReadResult` JSON line listing each input, its output and whether it was written.
 
@@ -501,7 +514,7 @@ records the file it was read from relative to its store. The command prints a
 
 ```bash
 mlo_merger --check
-mlo_merger --check --deep --merged asset/merged -o asset/merged_mlo
+mlo_merger --check --deep --merged asset/map/merged -o asset/map/merged_mlo
 ```
 
 `--check` compares every store with its own metadata, prints one
@@ -522,7 +535,7 @@ exist are skipped. Store paths take the same options and defaults as the other c
   and `stream/{extension}/clone/` directories are checked for unrecorded files, since other
   files are left to the user.
 - The overwrite cache is checked against what it was built from (`--overwrite`, default
-  `asset/overwrite`), and for the files it names: the sources of `added_stream_files.json`
+  `asset/map/overwrite`), and for the files it names: the sources of `added_stream_files.json`
   in the source cache, and the earlier versions `source_updates/` records in the source
   cache's history; one that is missing is reported as `missing` on the record naming it.
 - Without `--deep`, contents are compared by size; the vanilla archive and cache record no
@@ -620,7 +633,7 @@ wins; differing contents produce a warning.
 ### Derived Counts
 
 `--clothing --generate-vanilla-cache` counts each stage's clothing definitions in the
-vanilla archive into `asset/vanilla-clothing-cache` (`-i` selects the archive, `-o` the
+vanilla archive into `asset/clothing/vanilla-cache` (`-i` selects the archive, `-o` the
 output).
 
 ```bash

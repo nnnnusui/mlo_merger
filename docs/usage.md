@@ -58,9 +58,10 @@ Start the executable from server-side code with `spawn` (spawnProcess).
   opens the vanilla generator GUI; run the pipeline as `mlo_merger --pipeline`. `--asset`,
   `--config`, `--log-dir` and `--no-log-file` go before or after the operation and its options.
 - Set the working directory to the directory containing `asset/`. Every path
-  below, and every command default, is relative to it. `--asset DIR` puts every default
-  under `DIR` instead of `asset/`; an option given for one path still overrides its
-  default.
+  below, and every command default, is relative to it. Map defaults sit in `asset/map/`,
+  besides the shared `asset/vanilla/`, `asset/config.toml` and `asset/log/`. `--asset DIR`
+  puts every default under `DIR` instead of `asset/`; an option given for one path still
+  overrides its default.
 - Paths recorded in the JSON files are relative to the store holding each file (see
   [Recorded Paths](#recorded-paths)), so they stay valid when `asset/` moves. Command results
   on stdout name files as the command was given them.
@@ -133,11 +134,11 @@ archive, which is absolute when the two are on different drives.
 
 | Path relative to | Recorded for |
 |---|---|
-| The source cache (`asset/source-cache`) | Source files moved into the cache: `resources/{resource}/{stream path}`; and `hash_names.json` |
-| The source root (`asset/source`) | Resources (their IDs), source files left in them, and each source's original path |
-| The vanilla cache (`asset/vanilla-cache`) | The vanilla archive the cache was built from (`vanilla_dir` in its `cache_info.json`, absolute only when the two share no root) |
+| The source cache (`asset/map/source-cache`) | Source files moved into the cache: `resources/{resource}/{stream path}`; and `hash_names.json` |
+| The source root (`asset/map/source`) | Resources (their IDs), source files left in them, and each source's original path |
+| The vanilla cache (`asset/map/vanilla-cache`) | The vanilla archive the cache was built from (`vanilla_dir` in its `cache_info.json`, absolute only when the two share no root) |
 | The vanilla archive (`asset/vanilla`) | Latest vanilla files and vanilla versions read by `--read`: `{version}/{ymap,ybn}/{file name}`; and `hash_names.json` |
-| The merge output (`asset/merged`) | Merged files: `{ymap,ybn}/{file name}` |
+| The merge output (`asset/map/merged`) | Merged files: `{ymap,ybn}/{file name}` |
 
 A bounds index's `path` and a merge input's `path` name the file relative to its own store:
 a latest vanilla file relative to the vanilla archive, a source file moved into the cache
@@ -150,11 +151,11 @@ source root.
 |---|---|---|---|
 | Index file bounds | none; written by vanilla-cache, source-cache and merge runs | | `asset/{vanilla-cache,source-cache,merged}/stream_file_rtree.json` (`RTreeIndex`) |
 | Convert YMAPs to JSON | `--read FILE` | `ReadResult` | each `files[].output` (`YmapReadDocument`) |
-| Inspect differences | none; written by source-cache generation | | `asset/source-cache/diff/{resource}/{stream_path}.diff.json` (`YmapComparisonDiff`) |
-| Inspect changes carried to newer DLC generations | none; written by source-cache generation | | `asset/source-cache/propagated/{resource}/{file_name}.diff.json` (`YmapPropagatedDiff`); each carried item's `reason` names the item it came from |
-| Inspect vanilla version differences | none; vanilla-cache generation would write them, but it is currently disabled | | `asset/vanilla-cache/ymap_versions.json` (`VanillaYmapVersionIndex`), then `asset/vanilla-cache/diff/{version}/ymap/{name}.diff.json` (`VanillaYmapDiff`) for each version after a YMAP's first |
-| Apply overwrites | `--pipeline`, or `--merge` then `--deploy` | `PipelineReport` (pipeline only) | `asset/merged/duplicates.json` (`DuplicateReport`) |
-| Check overwrites | `--generate-overwrite-cache`; also run by `--merge` and `--pipeline` | | `asset/overwrite-cache/warnings.json` (`OverwriteWarnings`), `asset/overwrite-cache/added_stream_files.json` (`AddedStreamFiles`) |
+| Inspect differences | none; written by source-cache generation | | `asset/map/source-cache/diff/{resource}/{stream_path}.diff.json` (`YmapComparisonDiff`) |
+| Inspect changes carried to newer DLC generations | none; written by source-cache generation | | `asset/map/source-cache/propagated/{resource}/{file_name}.diff.json` (`YmapPropagatedDiff`); each carried item's `reason` names the item it came from |
+| Inspect vanilla version differences | none; vanilla-cache generation would write them, but it is currently disabled | | `asset/map/vanilla-cache/ymap_versions.json` (`VanillaYmapVersionIndex`), then `asset/map/vanilla-cache/diff/{version}/ymap/{name}.diff.json` (`VanillaYmapDiff`) for each version after a YMAP's first |
+| Apply overwrites | `--pipeline`, or `--merge` then `--deploy` | `PipelineReport` (pipeline only) | `asset/map/merged/duplicates.json` (`DuplicateReport`) |
+| Check overwrites | `--generate-overwrite-cache`; also run by `--merge` and `--pipeline` | | `asset/map/overwrite-cache/warnings.json` (`OverwriteWarnings`), `asset/map/overwrite-cache/added_stream_files.json` (`AddedStreamFiles`) |
 
 ### Stream-File Bounds Indexes
 
@@ -163,9 +164,9 @@ when the store is built (by its own command or by the pipeline):
 
 | Index | Files | Listed from | Rebuilt after |
 |---|---|---|---|
-| `asset/vanilla-cache/stream_file_rtree.json` | latest vanilla files | `asset/vanilla-cache/cache_info.json` | a vanilla-cache update |
-| `asset/source-cache/stream_file_rtree.json` | inventoried source stream files, in source or moved into the cache | `asset/source-cache/cache_info.json` | a source-cache update |
-| `asset/merged/stream_file_rtree.json` | merged files | `asset/merged/cache_info.json` | a merge that changed output |
+| `asset/map/vanilla-cache/stream_file_rtree.json` | latest vanilla files | `asset/map/vanilla-cache/cache_info.json` | a vanilla-cache update |
+| `asset/map/source-cache/stream_file_rtree.json` | inventoried source stream files, in source or moved into the cache | `asset/map/source-cache/cache_info.json` | a source-cache update |
+| `asset/map/merged/stream_file_rtree.json` | merged files | `asset/map/merged/cache_info.json` | a merge that changed output |
 
 Each `RTreeIndex` has `ymap` and `ybn` arrays of `RTreeItem`s with RBush-compatible
 `minX`/`minY`/`maxX`/`maxY`, plus `minZ`/`maxZ`, the file `name` and `path`, the `resource`
@@ -175,7 +176,7 @@ vanilla files. Its `input` records the fingerprint of the metadata it was listed
 
 A vanilla item's `version` is the version folder holding the file, the same value `--read`
 reports as `origin.Vanilla.version`, so once read its document is
-`asset/read-cache/vanilla/{version}/ymap/{name}.json`. `--read` reads vanilla as of the stage
+`asset/map/read-cache/vanilla/{version}/ymap/{name}.json`. `--read` reads vanilla as of the stage
 the vanilla cache was built for, so the two agree whichever `--gamebuild` the pipeline ran
 with.
 
@@ -201,11 +202,11 @@ vanilla. The last stdout line is a `ReadResult`:
 ```json
 {"files":[
   {"origin":{"Resource":{"resource":"sample_resource_a","stream_path":"hei_ch1_11.ymap"}},
-   "input":"asset/source-cache/resources/sample_resource_a/hei_ch1_11.ymap",
-   "output":"asset/read-cache/resources/sample_resource_a/hei_ch1_11.ymap.json","updated":true},
+   "input":"asset/map/source-cache/resources/sample_resource_a/hei_ch1_11.ymap",
+   "output":"asset/map/read-cache/resources/sample_resource_a/hei_ch1_11.ymap.json","updated":true},
   {"origin":{"Vanilla":{"version":"0012-mpheist","file_name":"hei_ch1_11.ymap"}},
    "input":"asset/vanilla/0012-mpheist/ymap/hei_ch1_11.ymap",
-   "output":"asset/read-cache/vanilla/0012-mpheist/ymap/hei_ch1_11.ymap.json","updated":false}
+   "output":"asset/map/read-cache/vanilla/0012-mpheist/ymap/hei_ch1_11.ymap.json","updated":false}
 ]}
 ```
 
@@ -224,7 +225,7 @@ vanilla. The last stdout line is a `ReadResult`:
   (the path below `stream/`) also key the diff document and the overwrite.
 - For `origin.Vanilla`, `version` is the version folder holding the file: the last version,
   up to the stage read, that changed it, not necessarily that stage itself. Its document
-  sits under that folder in `asset/read-cache/vanilla`.
+  sits under that folder in `asset/map/read-cache/vanilla`.
 - Vanilla is read as of the stage the vanilla cache was built for, the game build the last
   pipeline ran with, so it is the vanilla the merge used; pass `--gamebuild` to read another
   build's.
@@ -235,7 +236,7 @@ vanilla. The last stdout line is a `ReadResult`:
   some may be missing.
 - `--read --resource NAME --version SHA256 FILE` reads the earlier version with that SHA-256
   of a resource's file, which the source cache keeps in its history, as
-  `origin.History`, to `asset/read-cache/history/{resource}/{stream_path}/{sha256}.ymap.json`.
+  `origin.History`, to `asset/map/read-cache/history/{resource}/{stream_path}/{sha256}.ymap.json`.
 - `--read --all` reads every YMAP of every resource and of vanilla, for
   tools that want all documents up front.
 
@@ -246,9 +247,9 @@ its own base:
 
 | Document | Base | Holds |
 |---|---|---|
-| `asset/source-cache/diff/{resource}/{stream_path}.diff.json` | The resource's baseline YMAP: the vanilla YMAP of that name, an empty YMAP, or the base source's YMAP | `diffs`, the resource's differences |
-| `asset/overwrite/resources/{resource}/{stream_path}.diff.json` | The source-cache diff document at the same path | `skip`, the differences of that document to cancel |
-| `asset/overwrite/vanilla/{version}/ymap/{file_name}.diff.json` | The latest vanilla YMAP, `{version}/ymap/{file_name}` in the vanilla archive | `diffs`, differences of its own |
+| `asset/map/source-cache/diff/{resource}/{stream_path}.diff.json` | The resource's baseline YMAP: the vanilla YMAP of that name, an empty YMAP, or the base source's YMAP | `diffs`, the resource's differences |
+| `asset/map/overwrite/resources/{resource}/{stream_path}.diff.json` | The source-cache diff document at the same path | `skip`, the differences of that document to cancel |
+| `asset/map/overwrite/vanilla/{version}/ymap/{file_name}.diff.json` | The latest vanilla YMAP, `{version}/ymap/{file_name}` in the vanilla archive | `diffs`, differences of its own |
 
 - A diff document leads from its `base` file to its `target` file. Array differences name
   base items by `base_index`, so the diffs of several resources from one base combine
@@ -271,7 +272,7 @@ YMAP it replaces, or, for a YMAP the resource adds, against its baseline (see
 [Added Stream Files](reference.md#added-stream-files)):
 
 ```text
-asset/source-cache/diff/{resource}/{stream_path}.diff.json
+asset/map/source-cache/diff/{resource}/{stream_path}.diff.json
 ```
 
 - `diffs` holds the resource's differences from vanilla. Overwrite `skip` selectors pick
@@ -300,7 +301,7 @@ asset/source-cache/diff/{resource}/{stream_path}.diff.json
 ### Overwrite Documents
 
 ```text
-asset/overwrite/resources/{resource}/{stream_path}.diff.json
+asset/map/overwrite/resources/{resource}/{stream_path}.diff.json
 ```
 
 A resource overwrite cancels differences of the diff document at the same path (see
@@ -322,7 +323,7 @@ A resource overwrite cancels differences of the diff document at the same path (
 ```
 
 - There is one document per stream file, at the same relative path as its diff document
-  (`asset/source-cache/diff/{resource}/{stream_path}.diff.json`, or the overwrite cache's).
+  (`asset/map/source-cache/diff/{resource}/{stream_path}.diff.json`, or the overwrite cache's).
   Resource names and stream paths are matched case-insensitively.
 - `{ "schema_version": 2, "ignore": true }` leaves the stream file out of the merge whole,
   whatever it holds; it needs no fingerprints. For a YMAP several resources add, the file is
@@ -342,7 +343,7 @@ See [docs/sample/overwrite](sample/overwrite/README.md) for complete examples.
 ### Vanilla Overwrite Documents
 
 ```text
-asset/overwrite/vanilla/{version}/ymap/{file_name}.diff.json
+asset/map/overwrite/vanilla/{version}/ymap/{file_name}.diff.json
 ```
 
 A vanilla overwrite is a diff document of its own against a latest vanilla YMAP, merged
@@ -388,7 +389,7 @@ its source-cache diff document lists everything in it as additions. When several
 one, every version is merged (YMAPs only, so far):
 
 - Versions are merged from the resource whose name sorts last (the one loaded last), which
-  wins where they conflict. `asset/overwrite-cache/added_stream_files.json`
+  wins where they conflict. `asset/map/overwrite-cache/added_stream_files.json`
   (`AddedStreamFiles`) lists each added file's `sources` in that order and every resource
   shipping it (`shipped_by`).
 - An addition an earlier version makes already is left out; for a YMAP:
@@ -431,8 +432,8 @@ mlo_merger --pipeline -y -i <resources directory> -o <deployed resource> --gameb
 
 The pipeline updates the source cache, merges and deploys only what changed. Overwrites are
 part of merge freshness, so `-f` is not needed. Use `--merge` alone to update only
-`asset/merged`. Overwrites that are not applied are listed in the pipeline's
-`ignored_overwrites` and in `asset/overwrite-cache/warnings.json` (see
+`asset/map/merged`. Overwrites that are not applied are listed in the pipeline's
+`ignored_overwrites` and in `asset/map/overwrite-cache/warnings.json` (see
 [Overwrite Warnings](#overwrite-warnings)); both commands also log each one on stderr as a
 warning starting with `Overwrite of`.
 
@@ -445,7 +446,7 @@ without the overwrite: the overwrite is left out whole, its document stays as it
 merge succeeds.
 
 When only the resource's file changed, the source cache keeps the version the overwrite was
-written against (`asset/source-cache/history/{resource}/{stream_path}/{sha256}.*`), and
+written against (`asset/map/source-cache/history/{resource}/{stream_path}/{sha256}.*`), and
 building the overwrite cache compares that version's diff document with the current one:
 
 - Selectors naming a `target_index` are first pointed at the same item of the current
@@ -455,11 +456,11 @@ building the overwrite cache compares that version's diff document with the curr
   selector with no single such item is kept as it is.
 - If every difference the overwrite left out is still left out by the same selector, or the
   resource no longer makes it, and the selectors leave out nothing new, the overwrite is
-  **rewritten in `asset/overwrite`** against the current version, without the selectors that
+  **rewritten in `asset/map/overwrite`** against the current version, without the selectors that
   match nothing any more, and applies again.
 - Otherwise, as when an added entity with the same GUID or placed alike, or the change to
   the same vanilla item, differs, it is left as it is and listed in `ignored_overwrites`, to be written again.
-- Either way `asset/overwrite-cache/source_updates/{resource}/{stream_path}/{sha256}.json`
+- Either way `asset/map/overwrite-cache/source_updates/{resource}/{stream_path}/{sha256}.json`
   (`SourceUpdate`), named after the version it was written against, records it: the
   overwrite as it was (`overwrite`), the differences it left out of that version's diff
   (`reverted`, a diff document's `diffs`), both versions' files relative to the source cache
@@ -481,7 +482,7 @@ building the overwrite cache compares that version's diff document with the curr
 ### Overwrite Warnings
 
 `--generate-overwrite-cache` (and so `--merge` and `--pipeline`) writes
-`asset/overwrite-cache/warnings.json` (`OverwriteWarnings`): the overwrites that no longer
+`asset/map/overwrite-cache/warnings.json` (`OverwriteWarnings`): the overwrites that no longer
 match the current source and vanilla caches. It is rewritten
 whenever the caches or the overwrites change, the merge logs every entry on stderr on each
 run, and the pipeline prints the same lists (see [Pipeline Output](#pipeline-output)).
@@ -509,10 +510,10 @@ or removed (`PipelineChanges`), and the [overwrite warnings](#overwrite-warnings
   "vanilla_cache": { "added": [], "modified": [], "removed": [] },
   "source_cache": {
     "added": [],
-    "modified": ["asset/source-cache/resources/sample_resource_a/hei_ch1_11.ymap"],
+    "modified": ["asset/map/source-cache/resources/sample_resource_a/hei_ch1_11.ymap"],
     "removed": []
   },
-  "merged": { "added": [], "modified": ["asset/merged/ymap/hei_ch1_11.ymap"], "removed": [] },
+  "merged": { "added": [], "modified": ["asset/map/merged/ymap/hei_ch1_11.ymap"], "removed": [] },
   "ignored_overwrites": [
     { "resource": "sample_resource_a", "file": "hei_ch1_11.ymap", "reason": "source_changed" },
     { "file": "0000-base/ymap/hei_ch1_12.ymap", "reason": "vanilla_changed" }
@@ -632,7 +633,7 @@ import { MERGER_CWD, runMerger } from "./merger";
 
 const readJson = <T>(path: string): T => JSON.parse(readFileSync(resolve(MERGER_CWD, path), "utf8"));
 
-const stores = { merged: "asset/merged", source: "asset/source-cache", vanilla: "asset/vanilla-cache" };
+const stores = { merged: "asset/map/merged", source: "asset/map/source-cache", vanilla: "asset/map/vanilla-cache" };
 type Store = keyof typeof stores;
 const indexes: Partial<Record<Store, { modified: number; index: RTreeIndex }>> = {};
 
@@ -668,7 +669,7 @@ async function inspect(x: number, y: number, z: number): Promise<InspectedFile[]
     for (const file of result.files) {
       if (!("Resource" in file.origin)) continue;
       const { resource, stream_path } = file.origin.Resource;
-      const diffPath = join("asset/source-cache/diff", resource, `${stream_path}.diff.json`);
+      const diffPath = join("asset/map/source-cache/diff", resource, `${stream_path}.diff.json`);
       files.push({
         name,
         resource,
@@ -764,7 +765,7 @@ const DEPLOY_DIR = "C:/fxserver/resources/[local]/mlo_merged";
 
 onNet("mlo:skip", async (request: SkipRequest, gameBuild: number) => {
   const path = resolve(
-    MERGER_CWD, "asset/overwrite/resources", request.resource, `${request.streamPath}.diff.json`,
+    MERGER_CWD, "asset/map/overwrite/resources", request.resource, `${request.streamPath}.diff.json`,
   );
   const current: StreamFileOverwrite | undefined = existsSync(path)
     ? JSON.parse(readFileSync(path, "utf8"))

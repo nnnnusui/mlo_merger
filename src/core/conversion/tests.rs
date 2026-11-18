@@ -172,7 +172,7 @@ fn ybn_xml_does_not_require_a_schema_directory() {
 #[test]
 fn discovers_matching_vanilla_ymap_schema_for_source_xml() {
   let root = std::env::temp_dir().join(format!("ymap_schema_discovery_{}", std::process::id()));
-  let input_dir = root.join("asset/source/resource/stream/ymap");
+  let input_dir = root.join("asset/map/source/resource/stream/ymap");
   let xml = input_dir.join("hei_sc1_18_strm_0.ymap.xml");
   let schema = root.join("asset/vanilla/ymap/hei_sc1_18_strm_0.ymap");
   crate::platform::fs::create_dir_all(&input_dir).unwrap();

@@ -50,7 +50,7 @@ impl ListVanillaVersions {
   ///
   /// ```no_run
   /// let query = mlo_merger::app::map::vanilla_cache::ListVanillaVersions {
-  ///   file_name: "ch1_01.ymap".into(), vanilla_cache_dir: "asset/vanilla-cache".into(),
+  ///   file_name: "ch1_01.ymap".into(), vanilla_cache_dir: "asset/map/vanilla-cache".into(),
   /// };
   /// let versions = query.versions()?;
   /// # Ok::<(), Box<dyn std::error::Error>>(())

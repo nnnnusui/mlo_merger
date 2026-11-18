@@ -55,8 +55,8 @@ impl FindEntityGuid {
   /// ```no_run
   /// use mlo_merger::app::map::find::{FindEntityGuid, InputStores};
   /// let xml = FindEntityGuid {
-  ///   guid: 2443198849, merged_dir: "asset/merged".into(),
-  ///   stores: InputStores::under("asset".as_ref()),
+  ///   guid: 2443198849, merged_dir: "asset/map/merged".into(),
+  ///   stores: InputStores::under("asset/map".as_ref()),
   ///   filter: Some("lr_cs4_10_strm_0.ymap".into()), diff_all: true,
   /// }.run()?;
   /// # Ok::<(), Box<dyn std::error::Error>>(())
@@ -80,7 +80,7 @@ impl FindEntity {
   /// use mlo_merger::app::map::find::{EntityQuery, FindEntity, InputStores};
   /// let xml = FindEntity {
   ///   query: EntityQuery::Position { position: [3.5, 4.2, 0.0], radius: 1.0 },
-  ///   merged_dir: "asset/merged".into(), stores: InputStores::under("asset".as_ref()),
+  ///   merged_dir: "asset/map/merged".into(), stores: InputStores::under("asset/map".as_ref()),
   ///   filter: None,
   ///   diff_all: false,
   /// }.run()?;

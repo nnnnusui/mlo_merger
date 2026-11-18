@@ -85,18 +85,20 @@ pipeline tests.
 
 ### 2. Per-Feature Asset Layout
 
-- [ ] Resolve default paths per feature in the CLI: map operations under
+- [x] Resolve default paths per feature in the CLI: map operations under
   `{asset}/map`, clothing operations under `{asset}/clothing`; shared
   `{asset}/vanilla`, `{asset}/config.toml`, `{asset}/log`.
-- [ ] Rename the clothing counts cache output to `{asset}/clothing/vanilla-cache`.
-- [ ] Record the feature in each store's `cache_info.json` and reject a store of
-  the other feature.
-- [ ] Update the web sample, `docs/usage.md`, `docs/reference.md`,
+- [x] Rename the clothing counts cache output to `{asset}/clothing/vanilla-cache`.
+- [x] Update the web sample, `docs/usage.md`, `docs/reference.md`,
   `docs/ARCHITECTURE.md` and the Readme for the new paths.
 
 **Validation:** CLI default-path tests for every operation (no default of one
-feature under the other's directory), cross-feature store rejection, pipeline
-overlap checks with the new paths.
+feature under the other's directory), pipeline overlap checks with the new paths.
+
+Phase 2 is complete. Recording the feature in each store moved to phase 3: map
+stores, the merge output and the clothing counts cache each prepare and publish
+their output with their own copy of the same code, so the check belongs in the
+shared publication step extracted there rather than in every copy.
 
 ### 3. Shared Resource Store
 
@@ -109,6 +111,8 @@ to the extracted code in the same step:
 - [ ] Moving selected files into the cache, `history/`, restoration and
   exclusions, parameterised by a per-feature file predicate.
 - [ ] Fingerprint freshness and staged publication of cache metadata.
+- [ ] Record the feature in each store's `cache_info.json` at publication and
+  refuse to replace a directory recording another feature.
 - [ ] Deployment of merged and cloned files as managed files, with the stream
   directory layout supplied by the feature.
 

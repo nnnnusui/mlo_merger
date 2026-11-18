@@ -24,7 +24,7 @@ pub(super) fn overwrites() -> Vec<(String, Vec<u8>)> {
   };
   let mut files = Vec::new();
   let mut push = |path: &str, document: Vec<u8>| {
-    files.push((format!("asset/overwrite/{path}.diff.json"), document));
+    files.push((format!("asset/map/overwrite/{path}.diff.json"), document));
   };
 
   let update = block_02(1);

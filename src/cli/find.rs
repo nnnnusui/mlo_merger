@@ -1,4 +1,5 @@
 use crate::app::map::find::{EntityQuery, InputStores};
+use crate::cli::common::map_dir;
 use bpaf::*;
 use std::path::{Path, PathBuf};
 
@@ -26,17 +27,17 @@ pub fn parser(asset: &Path) -> impl Parser<Find> + use<> {
 }
 
 fn options(asset: &Path) -> impl Parser<Find> + use<> {
-  let defaults = InputStores::under(asset);
+  let defaults = InputStores::under(&map_dir(asset));
   let source_dir = long("source")
-    .help("Source resource directory, for --all (default: asset/source)")
+    .help("Source resource directory, for --all (default: asset/map/source)")
     .argument::<PathBuf>("DIR")
     .fallback(defaults.source_dir);
   let source_cache_dir = long("source-cache")
-    .help("Source cache directory, for --all (default: asset/source-cache)")
+    .help("Source cache directory, for --all (default: asset/map/source-cache)")
     .argument::<PathBuf>("DIR")
     .fallback(defaults.source_cache_dir);
   let vanilla_cache_dir = long("vanilla-cache")
-    .help("Derived vanilla cache directory, for --all (default: asset/vanilla-cache)")
+    .help("Derived vanilla cache directory, for --all (default: asset/map/vanilla-cache)")
     .argument::<PathBuf>("DIR")
     .fallback(defaults.vanilla_cache_dir);
   let stores = construct!(InputStores {
@@ -70,9 +71,9 @@ fn search_parser(asset: &Path) -> impl Parser<Find> + use<> {
     );
   let merged_dir = short('i')
     .long("input")
-    .help("Merged directory (default: asset/merged)")
+    .help("Merged directory (default: asset/map/merged)")
     .argument::<PathBuf>("DIR")
-    .fallback(asset.join("merged"));
+    .fallback(map_dir(asset).join("merged"));
   let filter = long("filter")
     .help("Restrict resource filenames with a case-insensitive glob (quote wildcard patterns)")
     .argument::<String>("GLOB")
@@ -95,7 +96,7 @@ fn search_parser(asset: &Path) -> impl Parser<Find> + use<> {
     (!matches!(value.as_str(), "-h" | "--help")).then_some(value)
   });
   // Replaced by the parsed stores in `parser`.
-  let stores = InputStores::under(asset);
+  let stores = InputStores::under(&map_dir(asset));
   construct!(merged_dir, filter, all, radius, shape_type, kind, value).parse(
     move |(merged_dir, filter, all, radius, shape_type, kind, value)| {
       if kind != "ybn-position" && shape_type.is_some() {

@@ -30,8 +30,8 @@ async function seed() {
   let time = Date.UTC(2026, 0, 1);
   for (const path of paths) {
     const data = await readFile(join(web, "sample", path));
-    const target = path.startsWith("asset/source/")
-      ? `${ROOT}/${path.slice("asset/source/".length)}`
+    const target = path.startsWith("asset/map/source/")
+      ? `${ROOT}/${path.slice("asset/map/source/".length)}`
       : `${HOST}/${path}`;
     vfs.addFile(target, data, (time += 1000));
   }

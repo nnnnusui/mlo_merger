@@ -6,7 +6,7 @@ sources are under `../source`, and their vanilla baseline is `../sample.ymap`
 
 - `resources/{resourceName}/{stream-relative-path}.diff.json` holds the overwrite of one
   source, at the same relative path as its diff document. Use it as
-  `asset/overwrite/resources/`.
+  `asset/map/overwrite/resources/`.
 - `diff/{resourceName}/{stream-relative-path}.diff.json` is the diff document the
   source cache writes for each source; the `skip` selectors pick their
   differences from its `diffs`. Paths are repository-relative and modification

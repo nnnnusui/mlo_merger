@@ -27,8 +27,8 @@ use crate::common::{
 ///
 /// ```no_run
 /// let restored = mlo_merger::app::map::source_cache::restore_source_cache(
-///   std::path::Path::new("asset/source-cache"),
-///   std::path::Path::new("asset/source"),
+///   std::path::Path::new("asset/map/source-cache"),
+///   std::path::Path::new("asset/map/source"),
 ///   &["[maps]/resource_b".into()],
 /// )?;
 /// # Ok::<(), Box<dyn std::error::Error>>(())

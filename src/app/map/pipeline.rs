@@ -55,11 +55,11 @@ impl Pipeline {
   /// ```no_run
   /// use mlo_merger::app::map::Pipeline;
   /// Pipeline {
-  ///   source_dir: "asset/source".into(), game_dir: "/mnt/gtav".into(), magic: "magic.dat".into(),
-  ///   vanilla_dir: "asset/vanilla".into(), vanilla_cache_dir: "asset/vanilla-cache".into(),
-  ///   source_cache_dir: "asset/source-cache".into(), merged_dir: "asset/merged".into(),
-  ///   exclusions: None, overwrite_dir: Some("asset/overwrite".into()),
-  ///   overwrite_cache_dir: "asset/overwrite-cache".into(),
+  ///   source_dir: "asset/map/source".into(), game_dir: "/mnt/gtav".into(), magic: "magic.dat".into(),
+  ///   vanilla_dir: "asset/vanilla".into(), vanilla_cache_dir: "asset/map/vanilla-cache".into(),
+  ///   source_cache_dir: "asset/map/source-cache".into(), merged_dir: "asset/map/merged".into(),
+  ///   exclusions: None, overwrite_dir: Some("asset/map/overwrite".into()),
+  ///   overwrite_cache_dir: "asset/map/overwrite-cache".into(),
   ///   output_dir: "merged_mlo".into(), gamebuild: None, force: false,
   /// }.run()?;
   /// # Ok::<(), Box<dyn std::error::Error>>(())

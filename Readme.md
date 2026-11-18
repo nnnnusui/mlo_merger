@@ -40,11 +40,11 @@ mlo_merger --pipeline -i resources -o merged_mlo --gamebuild 3095
 
 The pipeline extracts vanilla when its archive is missing, updates the vanilla and source
 caches, merges, then deploys, reusing every unchanged stage. Resources are read from
-`asset/source` and the deployable resource is written to `asset/merged_mlo`; see the
+`asset/map/source` and the deployable resource is written to `asset/map/merged_mlo`; see the
 [command reference](docs/reference.md#pipeline) for every path and option.
 
 **Source-cache generation moves vanilla-named YMAP/YBN files and every other YMAP out of
-resource stream directories** into `asset/source-cache`; `--restore-source-cache` moves them
+resource stream directories** into `asset/map/source-cache`; `--restore-source-cache` moves them
 back.
 
 ## Supported Files

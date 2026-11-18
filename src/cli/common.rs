@@ -25,6 +25,16 @@ pub struct CommonOptions {
   pub step_names: Vec<String>,
 }
 
+/// The directory of the map stores below the asset root `asset`.
+pub fn map_dir(asset: &Path) -> PathBuf {
+  asset.join("map")
+}
+
+/// The directory of the clothing stores below the asset root `asset`.
+pub fn clothing_dir(asset: &Path) -> PathBuf {
+  asset.join("clothing")
+}
+
 /// Resolves `--gamebuild` against `[gamebuild]` in the config file.
 pub(crate) fn gamebuild(
   requested: Option<&str>
@@ -50,13 +60,13 @@ pub fn parser(
     .argument::<PathBuf>("DIR")
     .fallback(asset.join("vanilla"));
   let vanilla_cache = long("vanilla-cache")
-    .help("Derived vanilla cache directory (default: asset/vanilla-cache)")
+    .help("Derived vanilla cache directory (default: asset/map/vanilla-cache)")
     .argument::<PathBuf>("DIR")
-    .fallback(asset.join("vanilla-cache"));
+    .fallback(map_dir(asset).join("vanilla-cache"));
   let source_cache = long("source-cache")
-    .help("Derived source cache directory (default: asset/source-cache)")
+    .help("Derived source cache directory (default: asset/map/source-cache)")
     .argument::<PathBuf>("DIR")
-    .fallback(asset.join("source-cache"));
+    .fallback(map_dir(asset).join("source-cache"));
   let gamebuild = long("gamebuild")
     .help("Game build the vanilla cache targets: a build number or DLC name from [gamebuild] in the config file")
     .argument::<String>("BUILD")

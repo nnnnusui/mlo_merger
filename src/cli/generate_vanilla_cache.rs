@@ -1,5 +1,6 @@
 use std::path::Path;
 
+use crate::cli::common::map_dir;
 use bpaf::*;
 
 use super::common::{self, CommonOptions};
@@ -20,7 +21,7 @@ pub fn parser(asset: &Path) -> impl Parser<GenerateVanillaCache> + use<> {
 }
 
 fn options(asset: &Path) -> impl Parser<GenerateVanillaCache> + use<> {
-  let common = common::parser(asset, asset.join("vanilla-cache"));
+  let common = common::parser(asset, map_dir(asset).join("vanilla-cache"));
   common.map(|common| GenerateVanillaCache {
     common,
   })

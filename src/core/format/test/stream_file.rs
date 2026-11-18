@@ -70,7 +70,7 @@ fn assert_readable(
 fn reads_all_vanilla_cache_latest_stream_files() {
   let mut paths = crate::app::map::vanilla_cache::test_support::asset_latest_files("ymap");
   paths.extend(crate::app::map::vanilla_cache::test_support::asset_latest_files("ybn"));
-  assert_readable("the latest files of asset/vanilla-cache", &paths);
+  assert_readable("the latest files of asset/map/vanilla-cache", &paths);
 }
 
 #[test]

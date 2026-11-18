@@ -246,7 +246,7 @@ mod tests {
   /// Every latest vanilla RSC7 YMAP embeds schemas of the table's layouts, and the table holds
   /// exactly those; `MLO_WRITE_SAMPLES=1` rewrites it from them.
   #[test]
-  #[ignore = "requires local asset/vanilla-cache"]
+  #[ignore = "requires local asset/map/vanilla-cache"]
   fn the_table_holds_the_latest_vanilla_schemas() {
     let mut catalog = MetaSchemaCatalog::default();
     let mut conflicts = Vec::new();

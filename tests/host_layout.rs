@@ -64,7 +64,7 @@ fn runs_with_resources_outside_the_working_directory() {
   let root = temporary.join("txData/preview/resources");
   let host = root.join("[n4u]/n4u_mlomerger");
   let merged: PathBuf = root.join("[n4u]/mlo_merged");
-  copy_dir(&sample.join("source"), &root);
+  copy_dir(&sample.join("map/source"), &root);
   copy_dir(&sample.join("vanilla"), &host.join("asset/vanilla"));
   fs::copy(sample.join("config.toml"), host.join("asset/config.toml")).unwrap();
   fs::write(host.join("fxmanifest.lua"), "fx_version 'cerulean'\n").unwrap();

@@ -1,4 +1,5 @@
 use super::common::{self, CommonOptions};
+use crate::cli::common::map_dir;
 use bpaf::*;
 use std::path::{Path, PathBuf};
 
@@ -22,10 +23,10 @@ pub fn parser(asset: &Path) -> impl Parser<Deploy> + use<> {
 fn options(asset: &Path) -> impl Parser<Deploy> + use<> {
   let merged_dir = short('i')
     .long("input")
-    .help("Merged directory (default: asset/merged)")
+    .help("Merged directory (default: asset/map/merged)")
     .argument::<PathBuf>("DIR")
-    .fallback(asset.join("merged"));
-  let common = common::parser(asset, asset.join("merged_mlo"));
+    .fallback(map_dir(asset).join("merged"));
+  let common = common::parser(asset, map_dir(asset).join("merged_mlo"));
   construct!(merged_dir, common).map(|(merged_dir, common)| Deploy {
     merged_dir,
     common,

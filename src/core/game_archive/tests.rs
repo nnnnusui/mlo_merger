@@ -353,11 +353,11 @@ fn discovers_all_installed_base_archives_without_assuming_a_final_letter() {
 }
 
 #[test]
-#[ignore = "requires regenerated schema-1 cache under asset/vanilla-cache"]
+#[ignore = "requires regenerated schema-1 cache under asset/map/vanilla-cache"]
 fn real_ybn_cache_stores_raw_replacements() {
   use sha2::{Digest, Sha256};
 
-  let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("asset/vanilla-cache");
+  let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("asset/map/vanilla-cache");
   let manifest = load_manifest(&root).unwrap();
   let (name, change) = manifest
     .versions

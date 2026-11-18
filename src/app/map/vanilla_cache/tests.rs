@@ -213,7 +213,7 @@ fn builds_latest_files_through_selected_stage_and_reuses_valid_output() {
 }
 
 #[test]
-#[ignore = "requires generated asset/vanilla-cache"]
+#[ignore = "requires generated asset/map/vanilla-cache"]
 fn direct_parent_reader_matches_latest_ymap_model() {
   let path = super::test_support::asset_latest_file("airfield.ymap");
   let ymap = read_ymap(&path).unwrap();

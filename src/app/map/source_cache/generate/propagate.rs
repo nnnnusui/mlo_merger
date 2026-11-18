@@ -566,9 +566,9 @@ mod tests {
   use super::*;
 
   /// Carries the diffs of the local source cache over, against the vanilla cache named by
-  /// `MLO_VANILLA_CACHE` (default `asset/vanilla-cache`), which needs a generation index.
+  /// `MLO_VANILLA_CACHE` (default `asset/map/vanilla-cache`), which needs a generation index.
   #[test]
-  #[ignore = "requires local asset/source-cache and a vanilla cache with generations"]
+  #[ignore = "requires local asset/map/source-cache and a vanilla cache with generations"]
   fn carries_local_source_cache_diffs_to_newer_generations() {
     let asset = Path::new(env!("CARGO_MANIFEST_DIR")).join("asset");
     let vanilla_cache = std::env::var_os("MLO_VANILLA_CACHE")

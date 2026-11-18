@@ -1,4 +1,5 @@
 use super::common::{self, CommonOptions};
+use crate::cli::common::map_dir;
 use bpaf::*;
 use std::path::{Path, PathBuf};
 
@@ -34,27 +35,27 @@ pub fn parser(asset: &Path) -> impl Parser<Pipeline> + use<> {
 fn options(asset: &Path) -> impl Parser<Pipeline> + use<> {
   let source_dir = short('i')
     .long("input")
-    .help("Source resource directory (default: asset/source)")
+    .help("Source resource directory (default: asset/map/source)")
     .argument::<PathBuf>("DIR")
-    .fallback(asset.join("source"));
+    .fallback(map_dir(asset).join("source"));
   let game_dir = long("game-dir")
     .help("Game directory for missing vanilla archives (default: /mnt/gtav)")
     .argument::<PathBuf>("DIR")
     .fallback(PathBuf::from("/mnt/gtav"));
   let magic = super::generate_vanilla::magic_parser();
   let merged_dir = long("merged")
-    .help("Intermediate merged directory (default: asset/merged)")
+    .help("Intermediate merged directory (default: asset/map/merged)")
     .argument::<PathBuf>("DIR")
-    .fallback(asset.join("merged"));
+    .fallback(map_dir(asset).join("merged"));
   let overwrite_dir = long("overwrite")
-    .help("Overwrites applied to source diffs before merging (default: asset/overwrite)")
+    .help("Overwrites applied to source diffs before merging (default: asset/map/overwrite)")
     .argument::<PathBuf>("DIR")
-    .fallback(asset.join("overwrite"));
+    .fallback(map_dir(asset).join("overwrite"));
   let overwrite_cache_dir = long("overwrite-cache")
-    .help("What the overwrites call for, derived from them (default: asset/overwrite-cache)")
+    .help("What the overwrites call for, derived from them (default: asset/map/overwrite-cache)")
     .argument::<PathBuf>("DIR")
-    .fallback(asset.join("overwrite-cache"));
-  let common = common::parser(asset, asset.join("merged_mlo"));
+    .fallback(map_dir(asset).join("overwrite-cache"));
+  let common = common::parser(asset, map_dir(asset).join("merged_mlo"));
   let exclusions = super::generate_source_cache::exclusions_parser();
   construct!(
     source_dir,

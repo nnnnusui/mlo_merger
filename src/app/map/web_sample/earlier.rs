@@ -23,18 +23,19 @@ pub(super) fn earlier_versions() -> &'static [(String, Vec<u8>)] {
       fs::write(path, file.bytes).unwrap();
     }
     let asset = root.join("asset");
+    let map = asset.join("map");
     crate::app::map::Pipeline {
-      source_dir: asset.join("source"),
+      source_dir: map.join("source"),
       game_dir: asset.join("missing-game"),
       magic: asset.join("magic.dat"),
       vanilla_dir: asset.join("vanilla"),
-      vanilla_cache_dir: asset.join("vanilla-cache"),
-      source_cache_dir: asset.join("source-cache"),
+      vanilla_cache_dir: map.join("vanilla-cache"),
+      source_cache_dir: map.join("source-cache"),
       exclusions: None,
-      merged_dir: asset.join("merged"),
+      merged_dir: map.join("merged"),
       overwrite_dir: None,
-      overwrite_cache_dir: asset.join("overwrite-cache"),
-      output_dir: asset.join("merged_mlo"),
+      overwrite_cache_dir: map.join("overwrite-cache"),
+      output_dir: map.join("merged_mlo"),
       gamebuild: None,
       force: false,
     }
@@ -48,7 +49,7 @@ pub(super) fn earlier_versions() -> &'static [(String, Vec<u8>)] {
       ("smpl_block_rework", "maps/smpl_block_01.ymap"),
       ("smpl_park_tweaks", "smpl_block_02.ymap"),
     ] {
-      let cache = asset.join("source-cache");
+      let cache = map.join("source-cache");
       let bytes = fs::read(cache.join(format!("resources/{resource}/{stream_path}"))).unwrap();
       let mut document: serde_json::Value = serde_json::from_slice(
         &fs::read(cache.join(format!("diff/{resource}/{stream_path}.diff.json"))).unwrap(),
@@ -79,13 +80,13 @@ pub(super) fn earlier_versions() -> &'static [(String, Vec<u8>)] {
         "base": fingerprint("base"),
         "skip": skip,
       });
-      files.push((format!("asset/source-cache/{history}"), bytes));
+      files.push((format!("asset/map/source-cache/{history}"), bytes));
       files.push((
-        format!("asset/source-cache/{diff}"),
+        format!("asset/map/source-cache/{diff}"),
         serde_json::to_vec_pretty(&document).unwrap(),
       ));
       files.push((
-        format!("asset/overwrite/resources/{resource}/{stream_path}.diff.json"),
+        format!("asset/map/overwrite/resources/{resource}/{stream_path}.diff.json"),
         serde_json::to_vec_pretty(&overwrite).unwrap(),
       ));
     }

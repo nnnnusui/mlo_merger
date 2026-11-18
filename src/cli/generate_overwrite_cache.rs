@@ -1,5 +1,6 @@
 use std::path::{Path, PathBuf};
 
+use crate::cli::common::map_dir;
 use bpaf::*;
 
 use super::common::{self, CommonOptions};
@@ -25,14 +26,14 @@ pub fn parser(asset: &Path) -> impl Parser<GenerateOverwriteCache> + use<> {
 fn options(asset: &Path) -> impl Parser<GenerateOverwriteCache> + use<> {
   let source_dir = short('i')
     .long("input")
-    .help("Source resource directory (default: asset/source)")
+    .help("Source resource directory (default: asset/map/source)")
     .argument::<PathBuf>("DIR")
-    .fallback(asset.join("source"));
+    .fallback(map_dir(asset).join("source"));
   let overwrite_dir = long("overwrite")
-    .help("Overwrites the cache is derived from (default: asset/overwrite)")
+    .help("Overwrites the cache is derived from (default: asset/map/overwrite)")
     .argument::<PathBuf>("DIR")
-    .fallback(asset.join("overwrite"));
-  let common = common::parser(asset, asset.join("overwrite-cache"));
+    .fallback(map_dir(asset).join("overwrite"));
+  let common = common::parser(asset, map_dir(asset).join("overwrite-cache"));
   let exclusions = super::generate_source_cache::exclusions_parser();
   construct!(source_dir, overwrite_dir, common, exclusions).map(
     |(source_dir, overwrite_dir, common, exclusions)| GenerateOverwriteCache {

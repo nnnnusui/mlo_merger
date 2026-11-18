@@ -1,5 +1,6 @@
 use std::path::{Path, PathBuf};
 
+use crate::cli::common::map_dir;
 use bpaf::*;
 
 /// Arguments for returning cached stream files to source resources.
@@ -26,13 +27,13 @@ pub fn parser(asset: &Path) -> impl Parser<RestoreSourceCache> + use<> {
 fn options(asset: &Path) -> impl Parser<RestoreSourceCache> + use<> {
   let source_dir = short('i')
     .long("input")
-    .help("Source resource directory (default: asset/source)")
+    .help("Source resource directory (default: asset/map/source)")
     .argument::<PathBuf>("DIR")
-    .fallback(asset.join("source"));
+    .fallback(map_dir(asset).join("source"));
   let cache_dir = long("source-cache")
-    .help("Source cache directory (default: asset/source-cache)")
+    .help("Source cache directory (default: asset/map/source-cache)")
     .argument::<PathBuf>("DIR")
-    .fallback(asset.join("source-cache"));
+    .fallback(map_dir(asset).join("source-cache"));
   let yes = short('y').long("yes").help("Accepted for non-interactive execution").switch();
   let resources = positional::<String>("RESOURCE")
     .help("Restore only these resources (names or source-relative paths)")
@@ -70,6 +71,6 @@ mod tests {
     assert!(parse(&["--restore-source-cache"]).resources.is_empty());
     let restore = parse(&["--restore-source-cache", "-y", "alpha", "[maps]/beta"]);
     assert_eq!(restore.resources, ["alpha", "[maps]/beta"]);
-    assert_eq!(restore.source_dir, PathBuf::from("asset/source"));
+    assert_eq!(restore.source_dir, PathBuf::from("asset/map/source"));
   }
 }

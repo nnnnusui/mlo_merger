@@ -577,12 +577,12 @@ fn workspace_files(earlier: bool) -> Vec<SampleFile> {
     ("smpl_park_tweaks", park_tweaks(earlier)),
   ] {
     files.push(SampleFile {
-      path: format!("asset/source/{resource}/fxmanifest.lua"),
+      path: format!("asset/map/source/{resource}/fxmanifest.lua"),
       bytes: FXMANIFEST.into(),
     });
     for (path, bytes) in resource_files {
       files.push(SampleFile {
-        path: format!("asset/source/{resource}/{path}"),
+        path: format!("asset/map/source/{resource}/{path}"),
         bytes,
       });
     }

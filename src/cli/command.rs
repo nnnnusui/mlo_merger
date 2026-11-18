@@ -290,6 +290,7 @@ mod tests {
   fn asset_moves_every_default_path() {
     for args in [
       &["--generate-vanilla", "-i", "game"][..],
+      &["--clothing", "--generate-vanilla-cache"],
       &["--generate-vanilla-cache"],
       &["--generate-source-cache"],
       &["--generate-overwrite-cache"],
@@ -311,6 +312,28 @@ mod tests {
   }
 
   #[test]
+  fn feature_defaults_stay_in_their_feature_directory() {
+    let clothing = parse_args_from(&["--clothing", "--generate-vanilla-cache"]).unwrap();
+    let clothing = format!("{:?}", clothing.command);
+    assert!(clothing.contains("asset/clothing/") && !clothing.contains("/map/"), "{clothing}");
+    for args in [
+      &["--generate-vanilla-cache"][..],
+      &["--generate-source-cache"],
+      &["--generate-overwrite-cache"],
+      &["--restore-source-cache"],
+      &["--merge"],
+      &["--deploy"],
+      &["--find", "entity-guid", "1"],
+      &["--check"],
+      &["--read"],
+      &["--pipeline"],
+    ] {
+      let map = format!("{:?}", parse_args_from(args).unwrap().command);
+      assert!(map.contains("asset/map/") && !map.contains("/clothing"), "{args:?}: {map}");
+    }
+  }
+
+  #[test]
   fn asset_is_overridden_by_each_path() {
     let args = parse_args_from(&["--merge", "--asset=other", "--source-cache", "cache"]).unwrap();
     assert_eq!(args.asset, PathBuf::from("other"));
@@ -319,10 +342,10 @@ mod tests {
     let Command::Merge(merge) = args.command else {
       panic!("Expected merge")
     };
-    assert_eq!(merge.source_dir, PathBuf::from("other/source"));
-    assert_eq!(merge.common.vanilla_cache, PathBuf::from("other/vanilla-cache"));
+    assert_eq!(merge.source_dir, PathBuf::from("other/map/source"));
+    assert_eq!(merge.common.vanilla_cache, PathBuf::from("other/map/vanilla-cache"));
     assert_eq!(merge.common.source_cache, PathBuf::from("cache"));
-    assert_eq!(merge.common.output, PathBuf::from("other/merged"));
+    assert_eq!(merge.common.output, PathBuf::from("other/map/merged"));
     let args = parse_args_from(&["--read", "--", "--asset"]).unwrap();
     assert_eq!(args.asset, PathBuf::from("asset"));
   }
@@ -358,8 +381,8 @@ mod tests {
     else {
       panic!("Expected restore-source-cache command")
     };
-    assert_eq!(command.source_dir, PathBuf::from("asset/source"));
-    assert_eq!(command.cache_dir, PathBuf::from("asset/source-cache"));
+    assert_eq!(command.source_dir, PathBuf::from("asset/map/source"));
+    assert_eq!(command.cache_dir, PathBuf::from("asset/map/source-cache"));
     let Command::RestoreSourceCache(command) = parser()
       .to_options()
       .run_inner(&["--restore-source-cache", "-i", "resources", "--source-cache", "cache", "-y"])
@@ -458,7 +481,7 @@ mod tests {
     };
     assert!(command.deep);
     assert_eq!(command.merged_dir, PathBuf::from("out"));
-    assert_eq!(command.source_cache_dir, PathBuf::from("asset/source-cache"));
+    assert_eq!(command.source_cache_dir, PathBuf::from("asset/map/source-cache"));
   }
 
   #[test]
@@ -473,10 +496,10 @@ mod tests {
     else {
       panic!("Expected pipeline")
     };
-    assert_eq!(command.source_dir, PathBuf::from("asset/source"));
+    assert_eq!(command.source_dir, PathBuf::from("asset/map/source"));
     assert_eq!(command.magic, PathBuf::from("magic.dat"));
-    assert_eq!(command.merged_dir, PathBuf::from("asset/merged"));
-    assert_eq!(command.common.output, PathBuf::from("asset/merged_mlo"));
+    assert_eq!(command.merged_dir, PathBuf::from("asset/map/merged"));
+    assert_eq!(command.common.output, PathBuf::from("asset/map/merged_mlo"));
     let Command::Pipeline(command) = parser()
       .to_options()
       .run_inner(&[
@@ -594,7 +617,7 @@ mod tests {
       panic!("Expected clothing cache command")
     };
     assert_eq!(command.vanilla_dir, PathBuf::from("asset/vanilla"));
-    assert_eq!(command.output, PathBuf::from("asset/vanilla-clothing-cache"));
+    assert_eq!(command.output, PathBuf::from("asset/clothing/vanilla-cache"));
     assert!(!command.force);
     let Command::Clothing(Clothing::GenerateVanillaCache(command)) = parser()
       .to_options()
@@ -656,7 +679,7 @@ mod tests {
     else {
       panic!("Expected vanilla cache command")
     };
-    assert_eq!(command.common.output, PathBuf::from("asset/vanilla-cache"));
+    assert_eq!(command.common.output, PathBuf::from("asset/map/vanilla-cache"));
 
     let Command::GenerateSourceCache(command) = parser()
       .to_options()
@@ -667,15 +690,15 @@ mod tests {
     };
     assert_eq!(command.source_dir, PathBuf::from("resources"));
     assert_eq!(command.common.source_cache, PathBuf::from("source-cache"));
-    assert_eq!(command.common.output, PathBuf::from("asset/source-cache"));
+    assert_eq!(command.common.output, PathBuf::from("asset/map/source-cache"));
 
     let Command::Merge(command) = parser().to_options().run_inner(&["--merge"]).unwrap() else {
       panic!("Expected merge command")
     };
-    assert_eq!(command.source_dir, PathBuf::from("asset/source"));
-    assert_eq!(command.common.vanilla_cache, PathBuf::from("asset/vanilla-cache"));
-    assert_eq!(command.common.source_cache, PathBuf::from("asset/source-cache"));
-    assert_eq!(command.common.output, PathBuf::from("asset/merged"));
+    assert_eq!(command.source_dir, PathBuf::from("asset/map/source"));
+    assert_eq!(command.common.vanilla_cache, PathBuf::from("asset/map/vanilla-cache"));
+    assert_eq!(command.common.source_cache, PathBuf::from("asset/map/source-cache"));
+    assert_eq!(command.common.output, PathBuf::from("asset/map/merged"));
 
     let Command::Merge(command) =
       parser().to_options().run_inner(&["--merge", "-i", "resources", "-o", "merged"]).unwrap()
@@ -784,8 +807,8 @@ mod tests {
     let Command::Deploy(command) = parser().to_options().run_inner(&["--deploy"]).unwrap() else {
       panic!("Expected deploy command")
     };
-    assert_eq!(command.merged_dir, PathBuf::from("asset/merged"));
-    assert_eq!(command.common.output, PathBuf::from("asset/merged_mlo"));
+    assert_eq!(command.merged_dir, PathBuf::from("asset/map/merged"));
+    assert_eq!(command.common.output, PathBuf::from("asset/map/merged_mlo"));
   }
 
   #[test]
@@ -807,7 +830,7 @@ mod tests {
     assert_eq!(command.query, crate::app::map::find::EntityQuery::Guid(2443198849));
     assert_eq!(command.filter.as_deref(), Some("lr_cs4_10_strm_0.ymap"));
     assert!(command.diff_all);
-    assert_eq!(command.merged_dir, PathBuf::from("asset/merged"));
+    assert_eq!(command.merged_dir, PathBuf::from("asset/map/merged"));
     let Command::Find(command) = parser()
       .to_options()
       .run_inner(&["--find", "entity-guid", "2443198849", "-i", "merged"])

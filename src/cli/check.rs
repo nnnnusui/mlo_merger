@@ -1,5 +1,6 @@
 use std::path::{Path, PathBuf};
 
+use crate::cli::common::map_dir;
 use bpaf::*;
 
 use crate::app::map::Check;
@@ -10,37 +11,42 @@ pub fn parser(asset: &Path) -> impl Parser<Check> + use<> {
 }
 
 fn options(asset: &Path) -> impl Parser<Check> + use<> {
-  let directory = |name: &'static str, help: &'static str, default: &str| {
-    long(name).help(help).argument::<PathBuf>("DIR").fallback(asset.join(default))
+  let map = map_dir(asset);
+  let directory = |name: &'static str, help: &'static str, default: PathBuf| {
+    long(name).help(help).argument::<PathBuf>("DIR").fallback(default)
   };
-  let vanilla_dir =
-    directory("vanilla", "Vanilla archive directory (default: asset/vanilla)", "vanilla");
+  let vanilla_dir = directory(
+    "vanilla",
+    "Vanilla archive directory (default: asset/vanilla)",
+    asset.join("vanilla"),
+  );
   let vanilla_cache_dir = directory(
     "vanilla-cache",
-    "Derived vanilla cache directory (default: asset/vanilla-cache)",
-    "vanilla-cache",
+    "Derived vanilla cache directory (default: asset/map/vanilla-cache)",
+    map.join("vanilla-cache"),
   );
   let source_cache_dir = directory(
     "source-cache",
-    "Source cache directory (default: asset/source-cache)",
-    "source-cache",
+    "Source cache directory (default: asset/map/source-cache)",
+    map.join("source-cache"),
   );
   let overwrite_dir = directory(
     "overwrite",
-    "Overwrites the overwrite cache is built from (default: asset/overwrite)",
-    "overwrite",
+    "Overwrites the overwrite cache is built from (default: asset/map/overwrite)",
+    map.join("overwrite"),
   );
   let overwrite_cache_dir = directory(
     "overwrite-cache",
-    "Overwrite cache directory (default: asset/overwrite-cache)",
-    "overwrite-cache",
+    "Overwrite cache directory (default: asset/map/overwrite-cache)",
+    map.join("overwrite-cache"),
   );
-  let merged_dir = directory("merged", "Merged directory (default: asset/merged)", "merged");
+  let merged_dir =
+    directory("merged", "Merged directory (default: asset/map/merged)", map.join("merged"));
   let output_dir = short('o')
     .long("output")
-    .help("Deployment directory (default: asset/merged_mlo)")
+    .help("Deployment directory (default: asset/map/merged_mlo)")
     .argument::<PathBuf>("DIR")
-    .fallback(asset.join("merged_mlo"));
+    .fallback(map.join("merged_mlo"));
   let deep = long("deep").help("Also compare the SHA-256 of every recorded file").switch();
   construct!(
     vanilla_dir,

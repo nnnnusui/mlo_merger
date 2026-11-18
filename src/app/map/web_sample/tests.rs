@@ -55,23 +55,30 @@ impl Workspace {
     self.0.join("asset").join(path)
   }
 
+  fn map(
+    &self,
+    path: &str,
+  ) -> PathBuf {
+    self.asset("map").join(path)
+  }
+
   fn pipeline(
     &self,
     gamebuild: Option<&str>,
   ) -> crate::app::map::PipelineSummary {
     let builds = GameBuilds::load(&self.asset("config.toml")).unwrap();
     Pipeline {
-      source_dir: self.asset("source"),
+      source_dir: self.map("source"),
       game_dir: self.asset("missing-game"),
       magic: self.asset("magic.dat"),
       vanilla_dir: self.asset("vanilla"),
-      vanilla_cache_dir: self.asset("vanilla-cache"),
-      source_cache_dir: self.asset("source-cache"),
+      vanilla_cache_dir: self.map("vanilla-cache"),
+      source_cache_dir: self.map("source-cache"),
       exclusions: None,
-      merged_dir: self.asset("merged"),
-      overwrite_dir: Some(self.asset("overwrite")),
-      overwrite_cache_dir: self.asset("overwrite-cache"),
-      output_dir: self.asset("merged_mlo"),
+      merged_dir: self.map("merged"),
+      overwrite_dir: Some(self.map("overwrite")),
+      overwrite_cache_dir: self.map("overwrite-cache"),
+      output_dir: self.map("merged_mlo"),
       gamebuild: gamebuild.map(|build| builds.resolve(build).unwrap()),
       force: false,
     }
@@ -83,7 +90,7 @@ impl Workspace {
     &self,
     path: &str,
   ) -> serde_json::Value {
-    serde_json::from_slice(&fs::read(self.asset(path)).unwrap()).unwrap()
+    serde_json::from_slice(&fs::read(self.map(path)).unwrap()).unwrap()
   }
 
   fn merged_ymap(
@@ -91,7 +98,7 @@ impl Workspace {
     name: &str,
   ) -> Ymap {
     let names = hash_names().into_iter().collect();
-    ymap_to_model(&fs::read(self.asset(&format!("merged/ymap/{name}"))).unwrap(), &names).unwrap()
+    ymap_to_model(&fs::read(self.map(&format!("merged/ymap/{name}"))).unwrap(), &names).unwrap()
   }
 
   /// The polygons of every geometry child of a merged collision.
@@ -99,7 +106,7 @@ impl Workspace {
     &self,
     name: &str,
   ) -> usize {
-    let bytes = fs::read(self.asset(&format!("merged/ybn/{name}"))).unwrap();
+    let bytes = fs::read(self.map(&format!("merged/ybn/{name}"))).unwrap();
     let bound = crate::core::format::ybn::read_ybn(&bytes).unwrap();
     bound
       .children
@@ -168,7 +175,7 @@ fn pipeline_runs_on_the_web_sample() {
     "smpl_block_rework/winter_smpl_block_01.ymap",
   ] {
     assert!(
-      workspace.asset(&format!("source-cache/propagated/{diff}.diff.json")).is_file(),
+      workspace.map(&format!("source-cache/propagated/{diff}.diff.json")).is_file(),
       "{diff}"
     );
   }
@@ -180,21 +187,19 @@ fn pipeline_runs_on_the_web_sample() {
   let update =
     |resource: &str, stream_path: &str| -> crate::app::map::overwrite_cache::SourceUpdate {
       let directory =
-        workspace.asset(&format!("overwrite-cache/source_updates/{resource}/{stream_path}"));
+        workspace.map(&format!("overwrite-cache/source_updates/{resource}/{stream_path}"));
       let record = fs::read_dir(directory).unwrap().next().unwrap().unwrap().path();
       serde_json::from_slice(&fs::read(record).unwrap()).unwrap()
     };
   let tweaks = update("smpl_street_tweaks", "smpl_block_01.ymap");
   assert_eq!(tweaks.outcome, crate::app::map::overwrite_cache::SourceUpdateOutcome::Rewritten);
   let rewritten: serde_json::Value = serde_json::from_slice(
-    &fs::read(
-      workspace.asset("overwrite/resources/smpl_street_tweaks/smpl_block_01.ymap.diff.json"),
-    )
-    .unwrap(),
+    &fs::read(workspace.map("overwrite/resources/smpl_street_tweaks/smpl_block_01.ymap.diff.json"))
+      .unwrap(),
   )
   .unwrap();
   let current: serde_json::Value = serde_json::from_slice(
-    &fs::read(workspace.asset("source-cache/diff/smpl_street_tweaks/smpl_block_01.ymap.diff.json"))
+    &fs::read(workspace.map("source-cache/diff/smpl_street_tweaks/smpl_block_01.ymap.diff.json"))
       .unwrap(),
   )
   .unwrap();
@@ -243,12 +248,12 @@ fn pipeline_runs_on_the_web_sample() {
   let check = || {
     crate::app::map::Check {
       vanilla_dir: workspace.asset("vanilla"),
-      vanilla_cache_dir: workspace.asset("vanilla-cache"),
-      source_cache_dir: workspace.asset("source-cache"),
-      overwrite_dir: Some(workspace.asset("overwrite")),
-      overwrite_cache_dir: workspace.asset("overwrite-cache"),
-      merged_dir: workspace.asset("merged"),
-      output_dir: workspace.asset("merged_mlo"),
+      vanilla_cache_dir: workspace.map("vanilla-cache"),
+      source_cache_dir: workspace.map("source-cache"),
+      overwrite_dir: Some(workspace.map("overwrite")),
+      overwrite_cache_dir: workspace.map("overwrite-cache"),
+      merged_dir: workspace.map("merged"),
+      output_dir: workspace.map("merged_mlo"),
       deep: true,
     }
     .run()
@@ -260,10 +265,10 @@ fn pipeline_runs_on_the_web_sample() {
   };
   assert_eq!(check(), []);
   let rework_overwrite =
-    workspace.asset("overwrite/resources/smpl_block_rework/maps/smpl_block_01.ymap.diff.json");
+    workspace.map("overwrite/resources/smpl_block_rework/maps/smpl_block_01.ymap.diff.json");
   let original = fs::read(&rework_overwrite).unwrap();
   fs::write(&rework_overwrite, [&original[..], b"\n"].concat()).unwrap();
-  let earlier = workspace.asset("source-cache").join(rework.before.source.as_ref().unwrap());
+  let earlier = workspace.map("source-cache").join(rework.before.source.as_ref().unwrap());
   let earlier_bytes = fs::read(&earlier).unwrap();
   fs::remove_file(&earlier).unwrap();
   let record = format!(
@@ -303,7 +308,7 @@ fn pipeline_runs_on_the_web_sample() {
   // added, as both resources were made from the collision before it.
   assert_eq!(workspace.merged_polygons("smpl_block_01.ybn"), 4);
   let park_diff =
-    fs::read(workspace.asset("source-cache/diff/smpl_custom_props/smpl_block_02.ymap.diff.json"))
+    fs::read(workspace.map("source-cache/diff/smpl_custom_props/smpl_block_02.ymap.diff.json"))
       .unwrap();
 
   // Build 100 ends before `smpl_summer`: an older park and collision, no parasol generation.
@@ -332,10 +337,10 @@ fn pipeline_runs_on_the_web_sample() {
     .into()
   );
   assert!(build.changes.vanilla_cache.modified.is_empty());
-  assert!(!workspace.asset("merged/ymap/summer_smpl_block_01.ymap").exists());
+  assert!(!workspace.map("merged/ymap/summer_smpl_block_01.ymap").exists());
   assert_eq!(workspace.merged_polygons("smpl_block_01.ybn"), 4);
   assert_ne!(
-    fs::read(workspace.asset("source-cache/diff/smpl_custom_props/smpl_block_02.ymap.diff.json"))
+    fs::read(workspace.map("source-cache/diff/smpl_custom_props/smpl_block_02.ymap.diff.json"))
       .unwrap(),
     park_diff
   );
@@ -344,10 +349,10 @@ fn pipeline_runs_on_the_web_sample() {
   let read = crate::app::map::read::Read {
     target: crate::app::map::read::ReadTarget::All,
     files: Vec::new(),
-    source_dir: workspace.asset("source"),
-    source_cache_dir: workspace.asset("source-cache"),
+    source_dir: workspace.map("source"),
+    source_cache_dir: workspace.map("source-cache"),
     vanilla_dir: workspace.asset("vanilla"),
-    vanilla_cache_dir: workspace.asset("vanilla-cache"),
+    vanilla_cache_dir: workspace.map("vanilla-cache"),
     gamebuild: None,
     output_dir: workspace.asset("read-cache"),
     force: false,
