@@ -1,3 +1,4 @@
+pub mod dlc_activity;
 pub mod gamebuild;
 pub mod matching;
 
@@ -38,6 +39,9 @@ struct Config {
   /// FiveM game builds and the DLC names that identify them, keyed by build number.
   #[cfg_attr(feature = "typescript", specta(optional))]
   gamebuild: BTreeMap<String, Vec<String>>,
+  /// Corrections to which DLC archives the game loads.
+  #[cfg_attr(feature = "typescript", specta(optional))]
+  dlc_activity: dlc_activity::DlcActivityTable,
 }
 
 impl Config {

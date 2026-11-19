@@ -1,11 +1,15 @@
 //! What a DLC pack's `setup2.xml` and `content.xml` declare about the archives it mounts: its
 //! device, its data files, and the content change sets the game executes, which enable some of
-//! those archives and invalidate or disable others.
+//! those archives and invalidate or disable others; and the islands its island hopper files
+//! define.
 
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 
 use super::Result;
+
+/// The `fileType` of a data file defining an island ([`IslandHopper`]).
+pub const ISLAND_HOPPER_FILE: &str = "ISLAND_HOPPER_FILE";
 
 /// The change set groups the game executes for a DLC pack in multiplayer without a script asking
 /// for them; `GROUP_ON_DEMAND` sets run only when a script requests them.
@@ -32,6 +36,21 @@ pub struct DlcContent {
   #[serde(default, skip_serializing_if = "Vec::is_empty")]
   #[cfg_attr(feature = "typescript", specta(optional))]
   pub on_demand: Vec<DlcChangeSet>,
+  /// The islands the pack's island hopper files define.
+  #[serde(default, skip_serializing_if = "Vec::is_empty")]
+  #[cfg_attr(feature = "typescript", specta(optional))]
+  pub island_hoppers: Vec<IslandHopper>,
+}
+
+/// An island an island hopper file (`CIslandHopperData`) defines, which scripts enable and
+/// disable, with the YMAP of LOD lights the game loads while it is enabled.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
+pub struct IslandHopper {
+  /// Its name, such as `HeistIsland`.
+  pub name: String,
+  /// The name of its LOD lights YMAP, lowercase, without extension, such as `island_lodlights`.
+  pub lod_lights: String,
 }
 
 /// One data file of a DLC pack's `content.xml`.
@@ -44,6 +63,10 @@ pub struct DlcDataFile {
   pub overlay: bool,
   /// Whether it is mounted only when a change set enables it.
   pub disabled: bool,
+  /// Its `fileType`, such as `RPF_FILE` or [`ISLAND_HOPPER_FILE`].
+  #[serde(default, skip_serializing_if = "String::is_empty")]
+  #[cfg_attr(feature = "typescript", specta(optional))]
+  pub file_type: String,
 }
 
 /// One content change set: the files it invalidates, disables and enables, those of its map
@@ -139,11 +162,30 @@ pub fn parse(
         path: archive_path(&file.filename),
         overlay: file.overlay.as_ref().is_some_and(|value| value.value),
         disabled: file.disabled.as_ref().is_some_and(|value| value.value),
+        file_type: file.file_type.trim().to_owned(),
       })
       .collect(),
     change_sets,
     on_demand,
+    island_hoppers: Vec::new(),
   })
+}
+
+/// Reads an island hopper file.
+pub fn parse_island_hopper(bytes: &[u8]) -> Result<IslandHopper> {
+  let data: IslandHopperXml = quick_xml::de::from_str(&text(bytes))?;
+  Ok(IslandHopper {
+    name: data.name.trim().to_owned(),
+    lod_lights: data.lod_lights.trim().to_ascii_lowercase(),
+  })
+}
+
+#[derive(Deserialize)]
+struct IslandHopperXml {
+  #[serde(rename = "Name", default)]
+  name: String,
+  #[serde(rename = "LodLights", default)]
+  lod_lights: String,
 }
 
 /// The XML text of `bytes`, without a byte order mark.
@@ -183,6 +225,8 @@ struct ContentXml {
 struct DataFileXml {
   #[serde(default)]
   filename: String,
+  #[serde(rename = "fileType", default)]
+  file_type: String,
   #[serde(default)]
   overlay: Option<BoolValue>,
   #[serde(default)]
@@ -248,7 +292,7 @@ mod tests {
       </contentChangeSetGroups><contentChangeSets /></SSetupData>";
     let content = "<CDataFileMgr__ContentsOfDataFileXml><dataFiles>
         <Item><filename>dlcMPHeist:/%PLATFORM%/levels/gta5/a.rpf</filename><overlay value=\"true\" /><disabled value=\"true\" /></Item>
-        <Item><filename>dlcMPHeist:/common/data/b.meta</filename></Item>
+        <Item><filename>dlcMPHeist:/common/data/b.meta</filename><fileType>ISLAND_HOPPER_FILE</fileType></Item>
       </dataFiles><contentChangeSets>
         <Item><changeSetName>HEIST_MAP</changeSetName>
           <mapChangeSetData><Item><associatedMap>MO</associatedMap>
@@ -271,11 +315,13 @@ mod tests {
           path: "dlcmpheist:/levels/gta5/a.rpf".into(),
           overlay: true,
           disabled: true,
+          file_type: String::new(),
         },
         DlcDataFile {
           path: "dlcmpheist:/common/data/b.meta".into(),
           overlay: false,
           disabled: false,
+          file_type: "ISLAND_HOPPER_FILE".into(),
         },
       ]
     );
@@ -289,5 +335,19 @@ mod tests {
       }]
     );
     assert_eq!(parsed.on_demand[0].enable, ["dlcmpheist:/levels/gta5/c.rpf"]);
+  }
+
+  #[test]
+  fn reads_an_islands_lod_lights() {
+    let hopper = "<CIslandHopperData><Name>HeistIsland</Name><Cullbox>HeistIsland</Cullbox>
+      <LodLights>Island_LodLights</LodLights><IPLsToEnable><Item>h4_beach</Item></IPLsToEnable>
+      </CIslandHopperData>";
+    assert_eq!(
+      parse_island_hopper(hopper.as_bytes()).unwrap(),
+      IslandHopper {
+        name: "HeistIsland".into(),
+        lod_lights: "island_lodlights".into(),
+      }
+    );
   }
 }

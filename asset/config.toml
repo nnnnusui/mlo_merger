@@ -52,3 +52,15 @@ ymap_grass_position = 0.01
 3751 = ["mp2025_02"]
 3788 = []
 3889 = ["mp2026_01"]
+
+# Which DLC archives the game loads, as dlc_activity.json in the vanilla cache records it.
+# A DLC's change set usually enables its archive in place of a base game archive, invalidating
+# the base game path: the archive then replaces the one standing for that path before, so of the
+# packs re-releasing one archive in turn, such as the LOD lights of hei_, apa_, vw_ and m25_2_,
+# only the last one's is loaded. An additive archive is the opposite: it loads in addition to
+# the archives standing for the path, which stay loaded, and no later pack replaces it. The LOD
+# lights of an island an island hopper file defines (island_lodlights of mpheist4) are additive
+# without being listed here; list an archive the game turns out to load the same way, spelled as
+# content.xml spells it without the platform directory.
+[dlc_activity]
+additive_archives = []

@@ -13,6 +13,7 @@ pub(super) fn cache_is_current(
   revision: &str,
   latest_version: &str,
   input_timestamps: &BTreeMap<String, SourceTimestamp>,
+  configured_additive: &[String],
 ) -> Result<bool> {
   let relationships_path = output_dir.join("ymap_relationships.json");
   let Some(manifest) = manifest else {
@@ -42,6 +43,19 @@ pub(super) fn cache_is_current(
   }
   if !generations::index_is_current(output_dir, revision, latest_version) {
     return Ok(false);
+  }
+  // The archives the config names additive change which YMAPs the game loads. An archive
+  // recording no DLC content has no activity.
+  let activity_path = output_dir.join(super::activity::DLC_ACTIVITY_FILE);
+  if fs::is_file(&activity_path) {
+    let current = crate::common::json::read_json::<super::activity::DlcActivity>(&activity_path)
+      .is_ok_and(|activity| {
+        activity.format_version == super::activity::FORMAT_VERSION
+          && activity.configured_additive == configured_additive
+      });
+    if !current {
+      return Ok(false);
+    }
   }
   // Checked again once YMAP version diffs are generated; see `BuildVanillaCache::run_cache`.
   // if !ymap_diffs_are_current(output_dir, revision, latest_version) {

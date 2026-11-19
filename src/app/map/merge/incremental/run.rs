@@ -349,12 +349,25 @@ impl IncrementalMerge<'_> {
       left_behind.entry(change.file_name.to_ascii_lowercase()).or_default().push(change.clone());
     }
     let names = files.keys().cloned().chain(left_behind.keys().cloned()).collect::<BTreeSet<_>>();
+    // A YMAP first shipped after the game build is reported at its own vanilla version; a
+    // cache recording none has none.
+    let newer = if names.iter().any(|name| name.ends_with(".ymap") && !baselines.contains_key(name))
+    {
+      crate::app::map::vanilla_cache::newer_files(self.vanilla_cache)
+        .unwrap_or_default()
+        .into_iter()
+        .map(|file| (file.name.to_ascii_lowercase(), file.object))
+        .collect::<BTreeMap<_, _>>()
+    } else {
+      BTreeMap::new()
+    };
     let vanilla = names
       .iter()
       .map(|name| {
         let path = baselines
           .get(name)
-          .map(|path| self.stored_vanilla_path(path).to_string_lossy().replace('\\', "/"));
+          .map(|path| self.stored_vanilla_path(path).to_string_lossy().replace('\\', "/"))
+          .or_else(|| newer.get(name).cloned());
         (name.clone(), path)
       })
       .collect::<BTreeMap<_, _>>();

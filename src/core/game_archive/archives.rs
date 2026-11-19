@@ -225,24 +225,33 @@ pub(crate) fn extract(
 
 fn traversal_metadata(path: &str) -> bool {
   let pack_metadata = |path: &str| path.ends_with("/setup2.xml") || path.ends_with("/content.xml");
+  // Data files a pack's `content.xml` may declare, such as island hopper files.
+  let data_file = |rest: &str| {
+    rest.strip_prefix("common/data/").is_some_and(|name| !name.contains('/'))
+      && rest.to_ascii_lowercase().ends_with(".meta")
+  };
   path.ends_with("/common/data/dlclist.xml")
     || (path.matches('/').count() == 1 && pack_metadata(path))
+    || path.strip_prefix("dlc.rpf/").is_some_and(data_file)
     // The title update's replacements of a pack's, at `dlc_patch/{pack}/`.
     || path.split_once("/dlc_patch/").is_some_and(|(_, rest)| {
-      rest.matches('/').count() == 1 && pack_metadata(&format!("/{rest}"))
+      (rest.matches('/').count() == 1 && pack_metadata(&format!("/{rest}")))
+        || rest.split_once('/').is_some_and(|(_, rest)| data_file(rest))
     })
 }
 
 /// What the DLC pack `pack`, whose `dlc.rpf` `extracted` was taken from into `directory`,
-/// declares in its `setup2.xml` and `content.xml`, either taken from the title update's
-/// replacements at `update/update.rpf/dlc_patch/{pack}/` among `update`, extracted into
-/// `update_directory`, when it has them. `None` when either is missing.
+/// declares in its `setup2.xml` and `content.xml`, and the islands its island hopper files in
+/// `common/data/` define, each file taken from the title update's replacements at
+/// `update/update.rpf/dlc_patch/{pack}/` among `update`, extracted into `update_directory`,
+/// when it has them. `None` when `setup2.xml` or `content.xml` is missing.
 pub(crate) fn dlc_content(
   pack: &str,
   (extracted, directory): (&[ExtractedFile], &Path),
   (update, update_directory): (&[ExtractedFile], &Path),
 ) -> Result<Option<super::dlc_content::DlcContent>> {
   let find = |name: &str| {
+    let name = name.to_ascii_lowercase();
     let patch = format!("update/update.rpf/dlc_patch/{}/{name}", pack.to_ascii_lowercase());
     update
       .iter()
@@ -260,11 +269,25 @@ pub(crate) fn dlc_content(
   else {
     return Ok(None);
   };
-  let parsed = super::dlc_content::parse(
+  let mut parsed = super::dlc_content::parse(
     &fs::read(setup_dir.join(&setup.stored))?,
     &fs::read(content_dir.join(&content.stored))?,
   )
   .map_err(|error| format!("{}: {error}", content.source))?;
+  for file in &parsed.data_files {
+    if !file.file_type.eq_ignore_ascii_case(super::dlc_content::ISLAND_HOPPER_FILE) {
+      continue;
+    }
+    let below = file.path.split_once(":/").map_or(file.path.as_str(), |(_, below)| below);
+    let Some((hopper, hopper_dir)) = find(below) else {
+      tracing::warn!("{pack} declares the island hopper file {}, which is missing", file.path);
+      continue;
+    };
+    let island =
+      super::dlc_content::parse_island_hopper(&fs::read(hopper_dir.join(&hopper.stored))?)
+        .map_err(|error| format!("{}: {error}", hopper.source))?;
+    parsed.island_hoppers.push(island);
+  }
   Ok(Some(parsed))
 }
 

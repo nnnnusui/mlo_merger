@@ -293,7 +293,9 @@ generation and carry the changes resources make to the others over to it.
 
 - Each DLC stage of the raw archive records its pack's device, data files and the change
   sets the game executes without a script (`dlc` in `cache_info.json`), from the title
-  update's `dlc_patch/{pack}/setup2.xml` and `content.xml` where it has them.
+  update's `dlc_patch/{pack}/setup2.xml` and `content.xml` where it has them, and the
+  islands its island hopper files (`ISLAND_HOPPER_FILE` data files in `common/data/`)
+  define, with their LOD lights YMAP.
 - The vanilla cache applies them in stage order. A base game archive is loaded unless a
   change set invalidates its path. A pack's archive is loaded once a change set enables
   it, or when its data file is mounted enabled. An archive a change set enables while
@@ -302,7 +304,12 @@ generation and carry the changes resources make to the others over to it.
   last one's is loaded. An archive mounted over a valid path (`overlay`) stands for it as
   well; one mounted over an invalidated path by a change set that does not invalidate it
   is not loaded. A pack's archive that is no data file, such as a title update patch of an
-  archive the pack does not declare, is not loaded. `generations.json` lists the YMAPs not
+  archive the pack does not declare, is not loaded. An additive archive loads in addition
+  to those standing for the path it is enabled in place of: enabling it unloads none of
+  them, and no later change set unloads it. Additive are the archives holding an island's
+  LOD lights, which the game loads while a script enables the island, such as `mpheist4`'s
+  `island_lodlights`, and those `additive_archives` under `[dlc_activity]` in the config
+  file names, spelled as `dlc_activity.json` keys archives. `generations.json` lists the YMAPs not
   loaded in `inactive`, with why. An archive built without this record loads every YMAP.
 - The vanilla cache groups YMAPs into generations by prefix and into families of the
   same name apart from the prefix and a trailing number, such as every
@@ -323,6 +330,15 @@ generation and carry the changes resources make to the others over to it.
 - `generations.json` names, per family in `successors`, the YMAP loaded in place of each one
   that is not: of the newest generation pairing its items, the loaded YMAP holding most of
   them.
+- Generations are formed from the whole raw archive, so a cache built for an older game
+  build also pairs the YMAPs first shipped after it, which that build does not load and
+  `generations.json` lists in `newer_than_build`. Streaming one on that build loads it beside
+  the generation the build loads. Its successor is, of the newest older generation pairing
+  its items, the loaded YMAP holding most of them, and the cache records each with a
+  successor in `newer_files` of `cache_info.json`: the source cache diffs a resource's YMAP
+  of that name against it, and merge carries the changes back to the successor as it carries
+  an older generation's forward, and deploys the YMAP no more than other YMAPs with a
+  successor. A YMAP's own source wins over changes carried back to it.
 - Merge carries each source YMAP's changes, after its LOD light pair document's skip and its
   overwrite, and the removals that document implies for a vanilla YMAP the resource does
   not ship, to each item they pair with in a newer generation's loaded YMAP, YMAPs the

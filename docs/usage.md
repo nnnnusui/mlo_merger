@@ -201,6 +201,7 @@ pack's change sets (see [Newer DLC Generations](reference.md#newer-dlc-generatio
 
 - `archives` keys each archive holding vanilla YMAPs by its path as the packs' `content.xml`
   spells it. `unloaded` says why the game does not load it, and is absent when it does;
+  `additive` says why it loads beside the archives it would otherwise replace;
   `ymaps` lists the latest YMAPs it holds.
 - `files` keys every version of every vanilla YMAP by its path in the vanilla archive,
   `{version}/ymap/{file_name}`, the version `--read` reports, with the key of its archive in

@@ -16,6 +16,11 @@
 //!   loaded.
 //! - A pack's archive that is neither a data file nor enabled, such as a title update patch of
 //!   an archive the pack does not declare, is not loaded.
+//! - An additive archive loads in addition to the archives standing for the path it is enabled
+//!   in place of: a change set enabling it unloads none of them, and none invalidating the path
+//!   later unloads it. Additive are the archives holding the LOD lights of an island an island
+//!   hopper file defines, which the game loads while a script enables the island, and those the
+//!   config's `[dlc_activity]` names.
 //!
 //! Files outside archives, and those of packs the archive records no content of, are loaded.
 
@@ -146,6 +151,8 @@ pub struct DlcActivity {
   pub version: String,
   /// The packs applied, in stage order.
   pub packs: Vec<PackActivity>,
+  /// The archives the config's `[dlc_activity] additive_archives` names.
+  pub configured_additive: Vec<String>,
   /// The archives holding YMAPs of the stages applied, keyed by their path as `content.xml`
   /// spells it, such as `platform:/levels/gta5/lodlights.rpf` or
   /// `dlcmpheist:/levels/gta5/lodlights.rpf`.
@@ -196,14 +203,33 @@ pub struct ArchiveActivity {
   pub stands_for: Option<String>,
   /// Whether only a script's change set enables it.
   pub on_demand: bool,
+  /// Why it loads in addition to the archives standing for the path it is enabled in place of,
+  /// when it does.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  #[cfg_attr(feature = "typescript", specta(optional))]
+  pub additive: Option<Additive>,
   /// The latest YMAPs it holds, in lowercase.
   pub ymaps: Vec<String>,
+}
+
+/// Why an archive is additive.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case", tag = "kind")]
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
+pub enum Additive {
+  /// It holds the LOD lights of the island `island`, which the game loads while a script
+  /// enables the island.
+  IslandHopper {
+    island: String,
+  },
+  /// The config's `[dlc_activity] additive_archives` names it.
+  Config,
 }
 
 /// File name of [`DlcActivity`] in the vanilla cache.
 pub(crate) const DLC_ACTIVITY_FILE: &str = "dlc_activity.json";
 /// Bump when [`DlcActivity`] changes.
-const FORMAT_VERSION: u32 = 1;
+pub(super) const FORMAT_VERSION: u32 = 2;
 
 /// The state of the archives after the stages are applied.
 #[derive(Default)]
@@ -225,15 +251,21 @@ struct Mounts {
   stands_for: BTreeMap<String, String>,
   /// Why each archive enabled is unloaded; absent for those loaded.
   unloaded: BTreeMap<String, Unloaded>,
+  /// The additive archives.
+  additive: BTreeMap<String, Additive>,
 }
 
 impl Mounts {
   fn apply(
     manifest: &VanillaCacheManifest,
     through_index: usize,
+    additive: BTreeMap<String, Additive>,
     packs: &mut Vec<PackActivity>,
   ) -> Self {
-    let mut mounts = Self::default();
+    let mut mounts = Self {
+      additive,
+      ..Self::default()
+    };
     for version in manifest.versions.iter().take(through_index + 1) {
       let Some(content) = &version.dlc else {
         continue;
@@ -261,6 +293,18 @@ impl Mounts {
         };
         let invalidates = set.invalidate.iter().cloned().collect::<BTreeSet<_>>();
         for path in &set.invalidate {
+          // A change set enabling only additive archives in place of the path keeps those
+          // standing for it.
+          let in_place = set.enable.iter().filter(|enabled| {
+            enabled.split_once(":/").is_some_and(|(_, below)| format!("platform:/{below}") == *path)
+          });
+          let mut in_place = in_place.peekable();
+          let additive_only = in_place.peek().is_some()
+            && in_place.all(|enabled| mounts.additive.contains_key(enabled));
+          if additive_only {
+            mounts.invalidated.insert(path.clone(), by.clone());
+            continue;
+          }
           for archive in mounts.standing_for.remove(path).into_iter().flatten() {
             mounts.unloaded.insert(
               archive,
@@ -294,6 +338,9 @@ impl Mounts {
   ) {
     self.enabled.insert(path.to_owned());
     self.unloaded.remove(path);
+    if self.additive.contains_key(path) {
+      return;
+    }
     let Some((_, below)) = path.split_once(":/") else {
       return;
     };
@@ -358,21 +405,70 @@ impl Mounts {
   }
 }
 
+/// The additive archives of the stages through `through_index` of `manifest`: those holding the
+/// LOD lights YMAP of an island an island hopper file of those stages defines, and
+/// `configured`.
+fn additive_archives(
+  manifest: &VanillaCacheManifest,
+  through_index: usize,
+  configured: &[String],
+) -> BTreeMap<String, Additive> {
+  let stages = &manifest.versions[..=through_index];
+  let devices = stages
+    .iter()
+    .filter_map(|version| {
+      let pack = version.id.split_once('-').map_or(version.id.as_str(), |(_, label)| label);
+      Some((pack.to_ascii_lowercase(), version.dlc.as_ref()?.device.clone()))
+    })
+    .collect::<BTreeMap<_, _>>();
+  let mut additive =
+    configured.iter().map(|path| (path.clone(), Additive::Config)).collect::<BTreeMap<_, _>>();
+  let islands = stages
+    .iter()
+    .filter_map(|version| version.dlc.as_ref())
+    .flat_map(|content| &content.island_hoppers)
+    .map(|island| (format!("{}.ymap", island.lod_lights), &island.name))
+    .collect::<BTreeMap<_, _>>();
+  for version in stages {
+    for (name, change) in &version.changes {
+      let Some(island) = islands.get(&name.to_ascii_lowercase()) else {
+        continue;
+      };
+      let Some(archive) = archive_of(&change.file.source) else {
+        continue;
+      };
+      let path = match &archive.pack {
+        None => format!("platform:/{}", archive.path),
+        Some(pack) => match devices.get(pack) {
+          Some(device) => format!("{device}:/{}", archive.path),
+          None => continue,
+        },
+      };
+      additive.entry(path).or_insert_with(|| Additive::IslandHopper {
+        island: (*island).clone(),
+      });
+    }
+  }
+  additive
+}
+
 /// The archives holding the YMAPs of the stages through `through_index` of `manifest`, whose
 /// latest files are `current` (keyed by file name), and whether the game loads them at that
-/// stage; `None` when the archive records no DLC content, as archives built before it was
-/// recorded.
+/// stage, the archives `configured_additive` names additive; `None` when the archive records no
+/// DLC content, as archives built before it was recorded.
 pub(crate) fn dlc_activity(
   manifest: &VanillaCacheManifest,
   through_index: usize,
   current: &BTreeMap<String, (String, CachedFile)>,
+  configured_additive: &[String],
   revision: &str,
 ) -> Option<DlcActivity> {
   if manifest.versions.iter().all(|version| version.dlc.is_none()) {
     return None;
   }
   let mut packs = Vec::new();
-  let mounts = Mounts::apply(manifest, through_index, &mut packs);
+  let additive = additive_archives(manifest, through_index, configured_additive);
+  let mounts = Mounts::apply(manifest, through_index, additive, &mut packs);
   let latest = current
     .iter()
     .map(|(name, (_, file))| (name.to_ascii_lowercase(), file.object.as_str()))
@@ -396,6 +492,7 @@ pub(crate) fn dlc_activity(
         unloaded: mounts.not_loaded(&path, archive.pack.is_some()),
         stands_for: mounts.stands_for.get(&path).cloned(),
         on_demand: mounts.on_demand.contains(&path) && !mounts.enabled.contains(&path),
+        additive: mounts.additive.get(&path).cloned(),
         ymaps: Vec::new(),
       });
       let is_latest = latest.get(&name) == Some(&change.file.object.as_str());
@@ -416,6 +513,7 @@ pub(crate) fn dlc_activity(
     vanilla_manifest_sha256: revision.to_owned(),
     version: manifest.versions[through_index].id.clone(),
     packs,
+    configured_additive: configured_additive.to_vec(),
     archives,
     files,
   })
@@ -474,6 +572,7 @@ mod tests {
       path: path.into(),
       overlay,
       disabled: true,
+      file_type: "RPF_FILE".into(),
     };
     let set = |name: &str, invalidate: &[&str], enable: &[&str]| DlcChangeSet {
       name: name.into(),
@@ -536,6 +635,7 @@ mod tests {
               set("L", &["platform:/levels/gta5/l.rpf"], &["dlcheist:/levels/gta5/l.rpf"]),
             ],
             on_demand: vec![],
+            island_hoppers: vec![],
           }),
           &[
             ("hei_a.ymap", "update/update.rpf/dlc_patch/heist/x64/levels/gta5/a.rpf/hei_a.ymap"),
@@ -556,6 +656,7 @@ mod tests {
               set("L", &["platform:/levels/gta5/l.rpf"], &["dlclow:/levels/gta5/l.rpf"]),
             ],
             on_demand: vec![],
+            island_hoppers: vec![],
           }),
           &[
             ("lr_a.ymap", "update/x64/dlcpacks/lowrider/dlc.rpf/x64/levels/gta5/a.rpf/lr_a.ymap"),
@@ -577,8 +678,38 @@ mod tests {
               &["dlcpatch:/levels/gta5/v.rpf", "dlcpatch:/levels/gta5/a.rpf"],
             )],
             on_demand: vec![],
+            island_hoppers: vec![],
           }),
           &[("v.ymap", "update/x64/dlcpacks/patch/dlc.rpf/x64/levels/gta5/v.rpf/v.ymap")],
+        ),
+        version(
+          "0004-island",
+          Some(DlcContent {
+            device: "dlcisland".into(),
+            data_files: vec![
+              data_file("dlcisland:/levels/gta5/l.rpf", false),
+              data_file("dlcisland:/levels/gta5/v.rpf", false),
+            ],
+            change_sets: vec![
+              set("L", &["platform:/levels/gta5/l.rpf"], &["dlcisland:/levels/gta5/l.rpf"]),
+              set("V", &["platform:/levels/gta5/v.rpf"], &["dlcisland:/levels/gta5/v.rpf"]),
+            ],
+            on_demand: vec![],
+            island_hoppers: vec![crate::core::game_archive::dlc_content::IslandHopper {
+              name: "Island".into(),
+              lod_lights: "island_l".into(),
+            }],
+          }),
+          &[
+            (
+              "island_l.ymap",
+              "update/x64/dlcpacks/island/dlc.rpf/x64/levels/gta5/l.rpf/island_l.ymap",
+            ),
+            (
+              "island_v.ymap",
+              "update/x64/dlcpacks/island/dlc.rpf/x64/levels/gta5/v.rpf/island_v.ymap",
+            ),
+          ],
         ),
       ],
     };
@@ -588,7 +719,8 @@ mod tests {
         current.insert(name.clone(), (version.id.clone(), change.file.clone()));
       }
     }
-    let activity = dlc_activity(&manifest, 3, &current, "revision");
+    let configured = ["dlcisland:/levels/gta5/v.rpf".to_owned()];
+    let activity = dlc_activity(&manifest, 4, &current, &configured, "revision");
     let inactive = inactive_ymaps(activity.as_ref());
     // The base game's version of the patched YMAP stays indexed, in its invalidated archive.
     let activity = activity.unwrap();
@@ -605,5 +737,15 @@ mod tests {
     assert!(!inactive.contains_key("hei_v.ymap"));
     assert!(!inactive.contains_key("lr_l.ymap"));
     assert!(!inactive.contains_key("lr_a.ymap"));
+    // The island's LOD lights, and the archive the config names, load beside those they would
+    // otherwise replace.
+    assert_eq!(
+      activity.archives["dlcisland:/levels/gta5/l.rpf"].additive,
+      Some(Additive::IslandHopper {
+        island: "Island".into()
+      })
+    );
+    assert_eq!(activity.archives["dlcisland:/levels/gta5/v.rpf"].additive, Some(Additive::Config));
+    assert!(!inactive.contains_key("island_l.ymap") && !inactive.contains_key("island_v.ymap"));
   }
 }

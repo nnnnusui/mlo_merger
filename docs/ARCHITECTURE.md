@@ -122,8 +122,10 @@ change sets each DLC stage of the raw archive records in order to find the archi
 game does not load, and lists them with every YMAP version they hold in
 `dlc_activity.json`. It pairs the items of each family's generations, one unit per older
 and newer generation, stored by a digest of its YMAPs so that rebuilds and game build
-switches reuse them, names the loaded successor of each YMAP the game does not load, and
-indexes the selected build's units in `generations.json`. After taking the diffs, the
+switches reuse them, names the loaded successor of each YMAP the game does not load, those
+first shipped after the selected build included, and indexes the selected build's units in
+`generations.json`; the YMAPs newer than the build with a successor are recorded in
+`cache_info.json` as `newer_files`, which source YMAPs of their names are diffed against. After taking the diffs, the
 source cache writes to `implied/` what keeps each resource's LOD light pairs in step: the
 lights a YMAP adds that the other YMAP of its pair does not, to leave out, and, for a
 resource shipping only one YMAP of a pair, the removals of the vanilla other one. They are
@@ -134,8 +136,9 @@ unchanged. Generations are resolved by the merge.
 
 1. Ensure the derived vanilla and source caches are current.
 2. Carry each source YMAP's changes, after its LOD light pair document's skip and its
-   overwrite, over to the paired items of the newer generations the game loads
-   (`app::map::merge::generations`), writing them to `generations/`.
+   overwrite, over to the paired items of the newer generations the game loads, or of the
+   older ones for a YMAP first shipped after the build (`app::map::merge::generations`),
+   writing them to `generations/`.
 3. Leave out the YMAPs with a successor, omitting their sources, and dispatch the other
    latest vanilla `.ybn` and `.ymap` files, and the YMAPs resources add, to separate merge
    handlers.

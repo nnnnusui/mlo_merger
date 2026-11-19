@@ -32,6 +32,9 @@ impl BuildVanillaCache {
     )?;
     let output_dir = prepare_output_path(&self.output_dir, &vanilla_dir)?;
     let previous = previous_manifest(&output_dir);
+    let configured_additive =
+      crate::core::config::dlc_activity::DlcActivityConfig::load(&crate::core::config::path())?
+        .additive_archives;
 
     if !self.force
       && cache_is_current(
@@ -41,6 +44,7 @@ impl BuildVanillaCache {
         &revision,
         &latest_version,
         &input_timestamps,
+        &configured_additive,
       )?
     {
       return Ok(VanillaCacheResult {
@@ -51,7 +55,13 @@ impl BuildVanillaCache {
     }
 
     let staging = Staging(create_staging_directory(&output_dir)?);
-    let activity = super::activity::dlc_activity(&manifest, through_index, &current, &revision);
+    let activity = super::activity::dlc_activity(
+      &manifest,
+      through_index,
+      &current,
+      &configured_additive,
+      &revision,
+    );
     if let Some(activity) = &activity {
       write_json(&staging.0.join(super::activity::DLC_ACTIVITY_FILE), activity)?;
     }

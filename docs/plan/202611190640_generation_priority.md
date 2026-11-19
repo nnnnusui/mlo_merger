@@ -22,6 +22,13 @@ merge cannot carry, or ignores in favour of another change, per vanilla YMAP for
 - On a game build without a pack, streaming that pack's YMAP loads it beside the loaded
   generation too: on build 3570, `m25_2_distlodlights_medium015` showed its lights beside
   `vw_`'s, as `hei_` and `apa_` did, while `vw_` alone replaced them.
+- `mpheist4`'s LOD lights archive, holding only `island_lodlights` and its distant lights,
+  invalidates the base game path as the others do, but leaves `vw_`'s loaded: on build 3570,
+  streaming `vw_distlodlights_medium015` alone moved its light. An island hopper file of the
+  pack names `island_lodlights` as the island's LOD lights. Its `content.xml`, `setup2.xml`
+  and `dlclist.xml` are those of the build's own title update, which FiveM mounts for it.
+- The latest title update's `lodlights.rpf` holds the `m25_2_` LOD lights; build 3570's holds
+  the base game's.
 - The successors found from the change sets match those found by pairing items for all but
   four YMAPs, LOD lights no generation of which is loaded.
 - Pairing entities by GUID first, then by archetype and position, leaves 1418 older entities
@@ -57,6 +64,9 @@ Between carried modifications, the newer origin generation wins.
   write them with every YMAP version they hold to `dlc_activity.json` for tools to draw.
 - [x] Pair entities of generations by GUID before position and archetype.
 - [x] Record each YMAP not loaded with its loaded successor in `generations.json`.
+- [x] Record the islands of island hopper files, and load the archives holding their LOD
+  lights, and those `[dlc_activity] additive_archives` names, beside the archives they would
+  otherwise replace.
 
 ### 3. Source Cache: Consistency of Each Source
 
@@ -87,13 +97,16 @@ Between carried modifications, the newer origin generation wins.
 
 ### 5. Generations Newer Than the Game Build
 
-- [ ] Pair and record the generations of the whole raw archive, not only those of the
+- [x] Pair and record the generations of the whole raw archive, not only those of the
   selected game build.
-- [ ] Carry the changes resources make to YMAPs of generations newer than the game build
+- [x] Carry the changes resources make to YMAPs of generations newer than the game build
   back to the generation the build loads.
 - [x] Find whether streaming such a YMAP on an older build loads it: it does, beside the
   loaded generation.
-- [ ] Omit such YMAPs from the merge, as YMAPs with a successor are.
+- [x] Omit such YMAPs from the merge, as YMAPs with a successor are.
+- [x] Verify on build 3570 with a merge of a resource streaming a changed newer YMAP: the
+  `m25_2_` source is omitted and its changes reach `vw_`.
+- [x] Check in game on build 3570 that the carried lights show once, at the carried position.
 
 ### 6. Merge: YMAPs Not Loaded
 
