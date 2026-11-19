@@ -174,10 +174,7 @@ fn pipeline_runs_on_the_web_sample() {
     "smpl_street_tweaks/0000-base/winter_lodlights_small001.ymap",
     "smpl_block_rework/0000-base/winter_smpl_block_01.ymap",
   ] {
-    assert!(
-      workspace.map(&format!("merged/generations/{diff}.diff.json")).is_file(),
-      "{diff}"
-    );
+    assert!(workspace.map(&format!("merged/generations/{diff}.diff.json")).is_file(), "{diff}");
   }
 
   // The overwrite of `smpl_street_tweaks`, written against its earlier version, is rewritten

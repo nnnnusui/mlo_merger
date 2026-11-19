@@ -4,9 +4,10 @@
 //! them would place what they share once per version. [`thin_additions`] leaves out the
 //! additions of later sources that an earlier source already makes:
 //!
-//! - An entity is the same as one an earlier source adds when it has the same non-zero GUID,
-//!   whether or not they differ otherwise, or the same type, archetype and LOD level at the same
-//!   position, within the `ymap` matching tolerance, whatever its rotation, scale and GUID. The
+//! - An entity is the same as one an earlier source adds when it has the same GUID, whether or
+//!   not they differ otherwise, or the same type, archetype and LOD level at the same position,
+//!   within the `ymap` matching tolerance, whatever its rotation, scale and GUID. A GUID counts
+//!   only when it is not 0 and no other entity its source adds has it. The
 //!   earlier one is kept. A left-out entity with another non-zero GUID is listed in
 //!   [`Thinned::aliases`], so that children pointing at it, in its YMAP or another, point at the
 //!   kept one; one the kept entity cannot stand in for, as it has no GUID, is kept.
@@ -118,13 +119,24 @@ fn thin_entities(
   sources: &mut [YmapDiffFields],
   tolerances: &MatchTolerances,
 ) -> Thinned {
-  // The entities kept so far, with where they are.
-  let mut earlier = Vec::<(YmapEntity, (usize, usize))>::new();
+  // The entities kept so far, with where they are and whether their GUID identifies them.
+  let mut earlier = Vec::<(YmapEntity, (usize, usize), bool)>::new();
   let mut thinned = Thinned::default();
   for (index, source) in sources.iter_mut().enumerate() {
     let Some(entities) = &mut source.entities else {
       continue;
     };
+    let mut guids = std::collections::HashMap::<u32, usize>::new();
+    for diff in entities.iter() {
+      if let YmapEntityDiff::Added {
+        entity,
+        ..
+      } = diff
+      {
+        *guids.entry(entity.guid).or_default() += 1;
+      }
+    }
+    let identifies = |guid: u32| guid != 0 && guids.get(&guid) == Some(&1);
     let mut kept = Vec::new();
     let mut position = 0;
     entities.retain(|diff| {
@@ -137,10 +149,14 @@ fn thin_entities(
       else {
         return true;
       };
+      let unique = identifies(entity.guid);
       let same = earlier
         .iter()
-        .find(|(other, _)| entity.guid != 0 && other.guid == entity.guid)
-        .or_else(|| earlier.iter().find(|(other, _)| placed_alike(entity, other, tolerances.ymap)));
+        .find(|(other, _, other_unique)| unique && *other_unique && other.guid == entity.guid)
+        .or_else(|| {
+          earlier.iter().find(|(other, ..)| placed_alike(entity, other, tolerances.ymap))
+        })
+        .map(|(other, kept_at, _)| (other, kept_at));
       let left_out = match same {
         Some((other, _)) if other.guid == entity.guid || entity.guid == 0 => true,
         // Children may point at it by its GUID, so it is left out only for one that has one.
@@ -171,7 +187,7 @@ fn thin_entities(
             kept: *kept_at,
           });
         }
-        _ => kept.push((entity.clone(), at)),
+        _ => kept.push((entity.clone(), at, unique)),
       }
       !left_out
     });
@@ -392,6 +408,16 @@ mod tests {
       sources[1],
       adding(vec![entity(3, 0.0, "LODTYPES_DEPTH_LOD"), entity(4, 5.0, hd), entity(5, 10.0, hd)])
     );
+
+    // A GUID one source gives several entities identifies none of them: of the later source's
+    // entities with the earlier's GUID, only the one placed alike is left out.
+    let mut sources = vec![
+      adding(vec![entity(7, 0.0, hd), entity(7, 20.0, hd)]),
+      adding(vec![entity(7, 0.0, hd), entity(7, 40.0, hd)]),
+    ];
+    let thinned = thin_additions(&mut sources, &MatchTolerances::default());
+    assert_eq!(thinned.left_out.len(), 1);
+    assert_eq!(sources[1], adding(vec![entity(7, 40.0, hd)]));
   }
 
   #[test]

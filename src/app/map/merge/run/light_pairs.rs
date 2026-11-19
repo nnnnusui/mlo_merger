@@ -172,8 +172,7 @@ impl MergeYmap {
     let Some(path) = self.implied.get(&mod_info.mod_ymap_path) else {
       return Ok(None);
     };
-    let implied: crate::app::map::source_cache::YmapImplied =
-      crate::common::json::read_json(path)?;
+    let implied: crate::app::map::source_cache::YmapImplied = crate::common::json::read_json(path)?;
     Ok((implied.target == *target && implied.base == *base).then_some(implied))
   }
 }

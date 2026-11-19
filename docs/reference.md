@@ -198,8 +198,9 @@ they are.
 For an added YMAP:
 
 - The empty baseline has no name, flags, extents or block, so the source's are kept.
-- An addition an earlier version makes already is an entity with the same GUID or of the
-  same type, archetype and LOD level at the same position (within the `ymap`
+- An addition an earlier version makes already is an entity with the same GUID, not 0 and
+  given to no other entity of either version, or of the same type, archetype and LOD level at
+  the same position (within the `ymap`
   [matching tolerance](#matching-configuration)), its children then pointing at the kept
   one, or another item equal within the matching tolerances; LOD lights and distant LOD
   lights are kept. The extents cover every version's.
@@ -302,7 +303,10 @@ generation and carry the changes resources make to the others over to it.
   removed from either YMAP of a LOD light pair is removed from both YMAPs of the newer
   pairs. Entities a resource adds with no parent to a YMAP with a successor are added to
   the end of the successor, with the physics dictionaries it adds there, and LOD lights to
-  the end of the same YMAP of the successor pair.
+  the end of the same YMAP of the successor pair. Of the additions a resource carries to a
+  YMAP, those it adds there already, in its own YMAP or carried from a newer generation, are
+  left out, matched as the versions of an added YMAP are (see
+  [Added Stream Files](#added-stream-files)); other resources' additions are kept.
 - Entity parent changes and modifications of nested arrays such as occlude model
   triangles are not carried. When several changes of one generation reach one item, a
   removal wins and otherwise the first is kept. `generations/left_behind.json`

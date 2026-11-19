@@ -71,6 +71,12 @@ Between carried modifications, the newer origin generation wins.
   generation first.
 - [x] Carry entity additions without a parent to the successor, with the physics
   dictionaries they add, and LOD light additions to both YMAPs of the successor pair.
+- [x] Leave out an addition a resource makes to an older generation when the same resource
+  adds the same item to its successor, or to a newer generation carried there before: an
+  entity by its GUID when it is not 0 and unique in its YMAP, else by type, archetype, LOD
+  level and position within the matching tolerances, as `compare::added` thins the
+  versions of an added YMAP; other items by equality within the tolerances. Additions only
+  the older generation makes are carried, and other resources' additions are not thinned.
 - [x] Record each change carried, already met in the loaded generation (an item it lacks
   removed), or lost (a modification of an item it lacks, an addition that cannot be carried).
 

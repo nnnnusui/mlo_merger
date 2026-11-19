@@ -161,7 +161,8 @@ resource's version that no overwrite ignores, as the overwrite cache records the
 compared with an empty file of its format; YMAPs are the only format merged this way so far.
 For an added YMAP, its name, flags, extents and block are kept. Versions are merged from the resource whose name sorts last, the one
 loaded last, and the additions an earlier version makes already are left out before the
-diffs are combined (`core::format::ymap::compare::added`): entities by GUID or by type,
+diffs are combined (`core::format::ymap::compare::added`): entities by a GUID unique to each
+version or by type,
 archetype, LOD level and position, other items by equality within the matching tolerances
 (`struct_diff::Diff::same_as`), and the extents cover every version's. Parent references to
 an entity left out in favour of one with another GUID resolve to the kept one through an

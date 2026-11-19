@@ -173,13 +173,13 @@ pub(in crate::app::map::source_cache) fn write_implied(
           && directory(&other.path) == directory(&file.path)
       });
       let partner_added = match partner {
-        Some(partner) => diff(partner)?.map(|diff| added(&diff.diffs, side.other())).unwrap_or_default(),
+        Some(partner) => {
+          diff(partner)?.map(|diff| added(&diff.diffs, side.other())).unwrap_or_default()
+        }
         None => BTreeSet::new(),
       };
-      let unpaired = added(&document.diffs, side)
-        .difference(&partner_added)
-        .copied()
-        .collect::<BTreeSet<_>>();
+      let unpaired =
+        added(&document.diffs, side).difference(&partner_added).copied().collect::<BTreeSet<_>>();
       let implied_partner = match partner {
         Some(_) => None,
         None => {

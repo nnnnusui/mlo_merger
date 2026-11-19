@@ -536,7 +536,7 @@ fn propagated_changes_merge_into_vanilla_ymaps_and_reject_stale_documents() {
       output_dir: output.clone(),
       rebuild_all: false,
       overwrites: Default::default(),
-    implied: Default::default(),
+      implied: Default::default(),
       vanilla_overwrites: Default::default(),
       added: Default::default(),
       replacing: Default::default(),
@@ -558,5 +558,76 @@ fn propagated_changes_merge_into_vanilla_ymaps_and_reject_stale_documents() {
   write_document(&"0".repeat(64), 0);
   let error = merge().unwrap_err().to_string();
   assert!(error.contains("rebuild the source cache"), "{error}");
+  fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn additions_a_resource_carries_from_two_generations_are_added_once() {
+  use crate::common::fingerprint::Fingerprint;
+  use crate::core::format::gamefile::test_support::sample_ymap;
+  use crate::core::format::ymap::compare::{YmapComparisonFile, YmapPropagatedDiff};
+  let root = std::env::temp_dir().join(format!("mlo_carried_additions_{}", std::process::id()));
+  let _ = fs::remove_dir_all(&root);
+  let vanilla = root.join("vanilla/parent.ymap");
+  copy_sample("vanilla_parent.ymap", &vanilla);
+  let model = sample_ymap("parent_refs/vanilla_parent.ymap");
+  let fingerprint = Fingerprint::read(&vanilla.canonicalize().unwrap(), None, false).unwrap();
+  let mut added = model.entities[0].clone();
+  added.parent_index = -1;
+  added.lod_level = "LODTYPES_DEPTH_ORPHANHD".into();
+  added.position.x += 50.0;
+  let document = |name: &str, resource: &str, guid: u32| {
+    let mut entity = added.clone();
+    entity.guid = guid;
+    let carried = YmapPropagatedDiff {
+      schema_version: YmapPropagatedDiff::SCHEMA_VERSION,
+      resource: resource.into(),
+      base: YmapComparisonFile {
+        path: "latest/ymap/parent.ymap".into(),
+        sha256: fingerprint.sha256.clone(),
+        size: fingerprint.size,
+        modified_seconds: fingerprint.modified_seconds,
+        modified_nanos: fingerprint.modified_nanos,
+      },
+      origins: Vec::new(),
+      diffs: serde_json::from_value(serde_json::json!({ "entities": [
+        serde_json::to_value(crate::core::format::ymap::compare::YmapEntityDiff::Added {
+          anchor_base_index: Some(model.entities.len() - 1),
+          target_index: None,
+          entity,
+          parent: crate::core::format::ymap::compare::EntityParent::None,
+        })
+        .unwrap(),
+      ]}))
+      .unwrap(),
+    };
+    let path = root.join(name);
+    fs::write(&path, serde_json::to_vec(&carried).unwrap()).unwrap();
+    (resource.to_owned(), "parent.ymap".to_owned(), path)
+  };
+  let output = root.join("output");
+  MergeYmap {
+    vanilla_dir: root.join("vanilla"),
+    output_dir: output.clone(),
+    rebuild_all: false,
+    overwrites: Default::default(),
+    implied: Default::default(),
+    vanilla_overwrites: Default::default(),
+    added: Default::default(),
+    replacing: Default::default(),
+    // The resource adds the entity to a newer and an older generation; another resource adds
+    // one placed alike.
+    propagated: vec![
+      document("newer.diff.json", "resource", 900),
+      document("older.diff.json", "resource", 900),
+      document("other.diff.json", "other", 901),
+    ],
+  }
+  .run_with_latest_vanilla_files(std::slice::from_ref(&vanilla), &[])
+  .unwrap();
+  let parent = OriginalMap::load(&output.join("parent.ymap")).unwrap();
+  let mut guids = parent.entities.iter().map(|entity| entity.guid).collect::<Vec<_>>();
+  guids.sort_unstable();
+  assert_eq!(guids, [100, 200, 900, 901]);
   fs::remove_dir_all(root).unwrap();
 }

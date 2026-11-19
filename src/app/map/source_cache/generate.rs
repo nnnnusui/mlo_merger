@@ -13,8 +13,8 @@ use crate::app::map::vanilla_cache::LoadedCache;
 use crate::common::changes::StoreChanges;
 
 pub(super) mod diff;
-mod prepare;
 pub(super) mod implied;
+mod prepare;
 mod publish;
 mod resources;
 

@@ -46,6 +46,8 @@ impl<'a> MergeRun<'a> {
       original.entities.iter().map(|entity| (entity.guid, entity)).collect::<HashMap<_, _>>();
     let mut duplicates = Collector::default();
     let mut ymap_diffs = Vec::new();
+    // Each resource's diffs among `ymap_diffs`, its own and those carried from other generations.
+    let mut by_resource = HashMap::<String, Vec<usize>>::new();
     for mod_info in mod_refs {
       tracing::info!("  Mod: {} ({})", mod_info.mod_name, mod_info.mod_ymap_path.display());
       let Some(source) = self.sources.get(Some(&mod_info.mod_name), hash)? else {
@@ -79,6 +81,7 @@ impl<'a> MergeRun<'a> {
         (&mod_info.mod_name, &mod_info.mod_ymap_path),
         |_, guid| source_by_guid.get(&guid).map(|entity| (*entity).clone()),
       );
+      by_resource.entry(mod_info.mod_name.clone()).or_default().push(ymap_diffs.len());
       ymap_diffs.push(ymap_diff);
     }
     for (resource, mut ymap_diff) in implied.remove(&hash).into_iter().flatten() {
@@ -95,6 +98,24 @@ impl<'a> MergeRun<'a> {
       );
       log_diff_counts(&ymap_diff);
       leave_out(&mut ymap_diff, IgnoredChange::MERGE);
+      // What the resource adds here already, itself or from a newer generation, is added once.
+      let earlier = by_resource.entry(resource.clone()).or_default();
+      if !earlier.is_empty() {
+        let mut diffs = earlier.iter().map(|&index| ymap_diffs[index].clone()).collect::<Vec<_>>();
+        diffs.push(ymap_diff);
+        let thinned =
+          compare_added::thin_additions(&mut diffs, &crate::core::config::matching::current());
+        ymap_diff = diffs.pop().ok_or("Thinned diffs lost the carried one")?;
+        if !thinned.left_out.is_empty() {
+          tracing::info!(
+            "    Left out {} additions {resource} makes to a newer generation too",
+            thinned.left_out.len()
+          );
+        }
+        for (left_out, kept) in thinned.aliases {
+          self.references.alias(hash, left_out, kept)?;
+        }
+      }
       record_entity_changes(
         &mut duplicates,
         &ymap_diff,
@@ -102,6 +123,7 @@ impl<'a> MergeRun<'a> {
         (&resource, &path),
         |_, _| None,
       );
+      by_resource.entry(resource).or_default().push(ymap_diffs.len());
       ymap_diffs.push(ymap_diff);
     }
     // Merged as the last source, so the merge policy weighs it against the resources'. The

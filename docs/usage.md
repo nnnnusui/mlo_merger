@@ -444,7 +444,7 @@ one, every version is merged (YMAPs only, so far):
 
   | Item | Left out when an earlier version adds |
   |---|---|
-  | Entity | An entity with the same GUID, even with other values; or one of the same type, archetype and LOD level at the same position, within the `ymap` [matching tolerance](reference.md#matching-configuration), whatever its rotation, scale and GUID. Children pointing at it, in its YMAP or another, point at the kept one. One with a GUID is kept when the earlier entity has none, which children could not point at |
+  | Entity | An entity with the same GUID, not 0 and given to no other entity of either version, even with other values; or one of the same type, archetype and LOD level at the same position, within the `ymap` [matching tolerance](reference.md#matching-configuration), whatever its rotation, scale and GUID. Children pointing at it, in its YMAP or another, point at the kept one. One with a GUID is kept when the earlier entity has none, which children could not point at |
   | Box occluder, occlude model, grass batch, time-cycle modifier, car generator | An equal item, within the [matching tolerances](reference.md#matching-configuration) |
   | Physics dictionary, prop instance name | The same name (as for every merge) |
   | LOD light, distant LOD light | Never: they pair by index across the two YMAPs of a LOD light pair |
