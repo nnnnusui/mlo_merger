@@ -139,6 +139,7 @@ mod tests {
             ("Example.ymap".into(), change(None, "first", "0000-base/ymap/example.ymap")),
             ("a.ybn".into(), change(None, "ybn-first", "0000-base/ybn/a.ybn")),
           ]),
+          dlc: None,
         },
         CacheVersion {
           id: "0001-unchanged".into(),
@@ -147,6 +148,7 @@ mod tests {
           unchanged: 1,
           file_kinds: BTreeMap::new(),
           changes: BTreeMap::new(),
+          dlc: None,
         },
         CacheVersion {
           id: "0002-patch".into(),
@@ -162,6 +164,7 @@ mod tests {
             ("other.ymap".into(), change(None, "other", "0002-patch/ymap/other.ymap")),
             ("a.ybn".into(), change(Some("ybn-first"), "ybn-second", "0002-patch/ybn/a.ybn")),
           ]),
+          dlc: None,
         },
       ],
     };

@@ -45,6 +45,7 @@ fn restoring_some_resources_keeps_the_others_cached_until_the_next_generation() 
             },
           },
         )]),
+        dlc: None,
       }],
     },
   )

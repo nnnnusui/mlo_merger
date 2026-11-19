@@ -224,8 +224,48 @@ pub(crate) fn extract(
 }
 
 fn traversal_metadata(path: &str) -> bool {
+  let pack_metadata = |path: &str| path.ends_with("/setup2.xml") || path.ends_with("/content.xml");
   path.ends_with("/common/data/dlclist.xml")
-    || (path.matches('/').count() == 1 && path.ends_with("/setup2.xml"))
+    || (path.matches('/').count() == 1 && pack_metadata(path))
+    // The title update's replacements of a pack's, at `dlc_patch/{pack}/`.
+    || path.split_once("/dlc_patch/").is_some_and(|(_, rest)| {
+      rest.matches('/').count() == 1 && pack_metadata(&format!("/{rest}"))
+    })
+}
+
+/// What the DLC pack `pack`, whose `dlc.rpf` `extracted` was taken from into `directory`,
+/// declares in its `setup2.xml` and `content.xml`, either taken from the title update's
+/// replacements at `update/update.rpf/dlc_patch/{pack}/` among `update`, extracted into
+/// `update_directory`, when it has them. `None` when either is missing.
+pub(crate) fn dlc_content(
+  pack: &str,
+  (extracted, directory): (&[ExtractedFile], &Path),
+  (update, update_directory): (&[ExtractedFile], &Path),
+) -> Result<Option<super::dlc_content::DlcContent>> {
+  let find = |name: &str| {
+    let patch = format!("update/update.rpf/dlc_patch/{}/{name}", pack.to_ascii_lowercase());
+    update
+      .iter()
+      .find(|file| file.source.to_ascii_lowercase() == patch)
+      .map(|file| (file, update_directory))
+      .or_else(|| {
+        extracted
+          .iter()
+          .find(|file| file.source.to_ascii_lowercase().ends_with(&format!("/dlc.rpf/{name}")))
+          .map(|file| (file, directory))
+      })
+  };
+  let (Some((setup, setup_dir)), Some((content, content_dir))) =
+    (find("setup2.xml"), find("content.xml"))
+  else {
+    return Ok(None);
+  };
+  let parsed = super::dlc_content::parse(
+    &fs::read(setup_dir.join(&setup.stored))?,
+    &fs::read(content_dir.join(&content.stored))?,
+  )
+  .map_err(|error| format!("{}: {error}", content.source))?;
+  Ok(Some(parsed))
 }
 
 pub(crate) fn patch_dlc(source: &str) -> Option<&str> {

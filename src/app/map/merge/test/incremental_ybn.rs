@@ -53,6 +53,7 @@ fn merge_dispatches_latest_vanilla_ybn_and_writes_omit_list() {
         )]),
         unchanged: 0,
         file_kinds: Default::default(),
+        dlc: None,
       }],
     },
   )

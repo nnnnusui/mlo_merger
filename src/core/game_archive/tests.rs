@@ -159,6 +159,7 @@ fn content_views_keep_their_files_and_revisions_apart() {
       ]),
       file_kinds: BTreeMap::from([("a.ymt".into(), "ped_variation".into())]),
       unchanged,
+      dlc: None,
     }],
   };
   write_json(&root.join("cache_info.json"), &manifest("first", 0)).unwrap();
@@ -408,6 +409,7 @@ fn publication_restores_existing_versions_if_root_metadata_cannot_be_replaced() 
     )]),
     file_kinds: Default::default(),
     unchanged: 0,
+    dlc: None,
   };
   let manifest = VanillaCacheManifest {
     format_version: 2,

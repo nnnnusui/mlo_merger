@@ -49,6 +49,7 @@ fn moves_vanilla_files_retains_history_and_updates_only_selected_resources() {
             },
           },
         )]),
+        dlc: None,
       }],
     },
   )

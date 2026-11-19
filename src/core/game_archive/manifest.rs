@@ -49,6 +49,10 @@ pub struct CacheVersion {
   /// Number of filenames whose content matched the preceding cumulative stage.
   #[serde(default)]
   pub unchanged: usize,
+  /// What the DLC pack of this stage declares about the archives it mounts.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  #[cfg_attr(feature = "typescript", specta(optional))]
+  pub dlc: Option<super::dlc_content::DlcContent>,
 }
 
 /// Ordered manifest of changed raw files from a particular installed game's archives.

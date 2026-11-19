@@ -326,7 +326,8 @@ table names hashes from YMAP META strings and archive entry names; entity archet
 that neither spells out, mostly LOD and SLOD models, take the names CodeWalker derives
 from `.ydr` and `.ydd` file names. A DLC
 pack's stage reads its `dlc.rpf`, then the subpacks (`dlc1.rpf`, …) its `setup2.xml`
-declares, as the game mounts them, then its title-update patch. The derived cache selects
+declares, as the game mounts them, then its title-update patch, and records the pack's
+device, data files and change sets. The derived cache selects
 the latest files through the last stage of the chosen game build and indexes YMAP
 parent/child relationships. Its metadata names the raw archive, relative to the cache
 when they share a root so that the two move together, and each latest file's path in it;

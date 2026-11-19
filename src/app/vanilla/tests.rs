@@ -27,6 +27,7 @@ fn write_archive(
         changes: BTreeMap::new(),
         unchanged: 0,
         file_kinds: Default::default(),
+        dlc: None,
       }],
     },
   )

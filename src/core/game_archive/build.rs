@@ -2,8 +2,8 @@
 
 use super::{
   archives::{
-    DlcList, RpfNames, base_archives, dlc_archive, dlc_subpack, extract, game_path, patch_dlc,
-    platform_archives, sub_pack_count,
+    DlcList, RpfNames, base_archives, dlc_archive, dlc_content, dlc_subpack, extract, game_path,
+    patch_dlc, platform_archives, sub_pack_count,
   },
   content::FileSelection,
   manifest::{FORMAT_VERSION, VanillaCacheManifest},
@@ -161,6 +161,7 @@ impl BuildGameArchive {
     let mut platform_index = None;
     for (item, relative, label) in dlc_stages {
       let directory = scratch.join("dlc");
+      let mut content = None;
       stage(&mut manifest, &mut current, build, &label, extensions, || {
         let (physical, subtree) =
           if relative.starts_with("x64/") && game_path(game_dir, Path::new(&relative)).is_err() {
@@ -185,6 +186,7 @@ impl BuildGameArchive {
           &mut rpf_names,
           &self.files,
         )?;
+        content = dlc_content(&label, (&extracted, &directory), (&update, &update_dir))?;
         // Subpacks are mounted with the pack, after its dlc.rpf, as CodeWalker does.
         let sub_packs = if subtree.is_none() { sub_pack_count(&extracted, &directory)? } else { 0 };
         let mut files: Vec<_> =
@@ -216,6 +218,13 @@ impl BuildGameArchive {
         Ok((archives, files))
       })?;
       fs::remove_dir_all(directory)?;
+      if let Some(version) = manifest.versions.last_mut() {
+        version.dlc = content;
+        let info = build.join(&version.id).join("version_info.json");
+        if fs::is_file(&info) {
+          write_json(&info, &*version)?;
+        }
+      }
     }
     Self::publish_cache(
       build,

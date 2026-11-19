@@ -92,6 +92,7 @@ fn pipeline_routes_resources_through_merge_and_deploy_and_reuses_vanilla() {
         changes,
         unchanged: 0,
         file_kinds: Default::default(),
+        dlc: None,
       }],
     },
   )
@@ -270,6 +271,7 @@ fn pipeline_reuses_vanilla_and_applies_exclusions_only_for_this_run() {
         changes: BTreeMap::new(),
         unchanged: 0,
         file_kinds: Default::default(),
+        dlc: None,
       }],
     },
   )

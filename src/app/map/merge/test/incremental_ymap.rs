@@ -54,6 +54,7 @@ fn incremental_ymap_merge_caches_noop_results_and_removes_obsolete_outputs() {
           },
         )]),
         file_kinds: Default::default(),
+        dlc: None,
       }],
     },
   )

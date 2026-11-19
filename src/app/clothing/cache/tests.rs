@@ -184,6 +184,7 @@ fn cache_reuses_matching_archives_and_rebuilds_changed_or_forced_ones() {
       changes: BTreeMap::new(),
       file_kinds: Default::default(),
       unchanged: 0,
+      dlc: None,
     }],
   };
   write_manifest(&archive.join("cache_info.json"), &manifest("base")).unwrap();

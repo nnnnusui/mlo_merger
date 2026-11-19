@@ -30,6 +30,7 @@ fn builds_source_inventory_and_skips_unchanged_inputs_without_diffing() {
       changes: BTreeMap::new(),
       unchanged: 0,
       file_kinds: Default::default(),
+      dlc: None,
     }],
   };
   write_json(&vanilla.join("cache_info.json"), &raw_manifest).unwrap();

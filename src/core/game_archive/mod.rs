@@ -4,6 +4,7 @@ pub(crate) mod archives;
 mod build;
 mod check;
 mod content;
+pub mod dlc_content;
 mod hash_index;
 mod manifest;
 pub(crate) mod publication;

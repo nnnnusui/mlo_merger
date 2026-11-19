@@ -102,6 +102,7 @@ pub(crate) fn stage(
       changes,
       file_kinds,
       unchanged,
+      dlc: None,
     };
     if !version.changes.is_empty() {
       write_json(&directory.join("version_info.json"), &version)?;
