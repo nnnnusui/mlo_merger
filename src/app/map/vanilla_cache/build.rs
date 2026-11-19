@@ -21,7 +21,15 @@ impl BuildVanillaCache {
     let through_index = resolve_through_version(&manifest, self.gamebuild.as_ref())?;
     let latest_version = manifest.versions[through_index].id.clone();
     let current = resolve_files(&manifest, through_index)?;
-    let input_timestamps = source_timestamps(&vanilla_dir, &current)?;
+    // YMAPs first shipped after the selected stage, of which the game loads an older generation.
+    let newer = resolve_files(&manifest, manifest.versions.len() - 1)?
+      .into_iter()
+      .filter(|(name, _)| name.ends_with(".ymap") && !current.contains_key(name))
+      .collect::<BTreeMap<_, _>>();
+    let input_timestamps = source_timestamps(
+      &vanilla_dir,
+      &current.iter().chain(&newer).map(|(name, file)| (name.clone(), file.clone())).collect(),
+    )?;
     let output_dir = prepare_output_path(&self.output_dir, &vanilla_dir)?;
     let previous = previous_manifest(&output_dir);
 
@@ -43,27 +51,37 @@ impl BuildVanillaCache {
     }
 
     let staging = Staging(create_staging_directory(&output_dir)?);
+    let activity = super::activity::dlc_activity(&manifest, through_index, &current, &revision);
+    if let Some(activity) = &activity {
+      write_json(&staging.0.join(super::activity::DLC_ACTIVITY_FILE), activity)?;
+    }
+    let mut inactive = super::activity::inactive_ymaps(activity.as_ref());
+    for (name, (version, _)) in &newer {
+      inactive.insert(name.clone(), format!("first shipped in {version}, after {latest_version}"));
+    }
+    let generations = write_generations(
+      &staging.0,
+      &output_dir,
+      &generation_sources(&vanilla_dir, &manifest, &current, &newer)?,
+      &inactive,
+      &newer.keys().cloned().collect(),
+      &manifest.versions.iter().map(|version| version.id.clone()).collect::<Vec<_>>(),
+      &revision,
+      &latest_version,
+    )?;
+    // Only those an older generation stands for are diffed and carried; the others are added.
+    let newer = newer
+      .into_iter()
+      .filter(|(name, _)| generations.successor(name).is_some())
+      .collect::<BTreeMap<_, _>>();
     let latest_files = Self::build(
       &vanilla_dir,
       &staging.0,
       &output_dir,
       &latest_version,
       &revision,
-      &current,
+      (&current, &newer),
       &input_timestamps,
-    )?;
-    let activity = super::activity::dlc_activity(&manifest, through_index, &current, &revision);
-    if let Some(activity) = &activity {
-      write_json(&staging.0.join(super::activity::DLC_ACTIVITY_FILE), activity)?;
-    }
-    write_generations(
-      &staging.0,
-      &output_dir,
-      &generation_sources(&vanilla_dir, &manifest, through_index, &current)?,
-      &super::activity::inactive_ymaps(activity.as_ref()),
-      &manifest.versions.iter().map(|version| version.id.clone()).collect::<Vec<_>>(),
-      &revision,
-      &latest_version,
     )?;
     // YMAP version diffs are not generated until vanilla version inference is implemented;
     // see "Limitations" in docs/reference.md.
@@ -105,7 +123,7 @@ impl BuildVanillaCache {
     output_dir: &Path,
     latest_version: &str,
     revision: &str,
-    current: &BTreeMap<String, (String, CachedFile)>,
+    (current, newer): (&ResolvedFiles, &ResolvedFiles),
     input_timestamps: &BTreeMap<String, SourceTimestamp>,
   ) -> Result<BTreeMap<String, LatestFile>> {
     use rayon::prelude::*;
@@ -132,15 +150,7 @@ impl BuildVanillaCache {
       if let Some(parent) = parent {
         parent_by_child.insert(name.to_ascii_lowercase(), parent);
       }
-      latest_files.insert(
-        name.clone(),
-        LatestFile {
-          version: version.clone(),
-          sha256: file.sha256.clone(),
-          object: file.object.clone(),
-          source: file.source.clone(),
-        },
-      );
+      latest_files.insert(name.clone(), latest_file(version, file));
     }
 
     write_json(
@@ -152,6 +162,10 @@ impl BuildVanillaCache {
         latest_version: latest_version.to_owned(),
         vanilla_input_timestamps: input_timestamps.clone(),
         files: latest_files.clone(),
+        newer_files: newer
+          .iter()
+          .map(|(name, (version, file))| (name.clone(), latest_file(version, file)))
+          .collect(),
       },
     )?;
     write_json(
@@ -167,28 +181,44 @@ impl BuildVanillaCache {
   }
 }
 
-/// The latest YMAPs of `current`, keyed by lowercase file name, with the first of the stages up
-/// to `through_index` shipping a YMAP of their name.
+/// Files keyed by lowercase name, each with the stage it comes from.
+type ResolvedFiles = BTreeMap<String, (String, CachedFile)>;
+
+fn latest_file(
+  version: &str,
+  file: &CachedFile,
+) -> LatestFile {
+  LatestFile {
+    version: version.to_owned(),
+    sha256: file.sha256.clone(),
+    object: file.object.clone(),
+    source: file.source.clone(),
+  }
+}
+
+/// The YMAPs of `current` and `newer`, keyed by lowercase file name, with the first stage
+/// shipping a YMAP of their name.
 fn generation_sources(
   vanilla_dir: &Path,
   manifest: &VanillaCacheManifest,
-  through_index: usize,
   current: &BTreeMap<String, (String, CachedFile)>,
+  newer: &BTreeMap<String, (String, CachedFile)>,
 ) -> Result<BTreeMap<String, generations::SourceYmap>> {
   let mut first_stages = BTreeMap::new();
-  for (stage, version) in manifest.versions.iter().enumerate().take(through_index + 1) {
+  for (stage, version) in manifest.versions.iter().enumerate() {
     for name in version.changes.keys() {
       first_stages.entry(name.to_ascii_lowercase()).or_insert(stage);
     }
   }
   current
     .iter()
+    .chain(newer)
     .filter(|(name, _)| name.ends_with(".ymap"))
     .map(|(name, (_, file))| {
       let source = generations::SourceYmap {
         sha256: file.sha256.clone(),
         path: existing_artifact_path(vanilla_dir, file)?,
-        first_stage: first_stages.get(name).copied().unwrap_or(through_index),
+        first_stage: first_stages[name],
       };
       Ok((name.clone(), source))
     })

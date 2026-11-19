@@ -85,14 +85,34 @@ pub struct VanillaLatestFile {
 /// Lists the latest vanilla stream files recorded in the derived cache's metadata, as files of
 /// the vanilla archive it names, without checking them against the archive.
 pub fn latest_files(cache_dir: &Path) -> Result<Vec<VanillaLatestFile>> {
+  recorded_files(cache_dir, |manifest| &manifest.files)
+}
+
+/// Lists the YMAPs first shipped after the cache's stage that an older generation the game loads
+/// stands for, as [`latest_files`] lists the latest files.
+pub fn newer_files(cache_dir: &Path) -> Result<Vec<VanillaLatestFile>> {
+  recorded_files(cache_dir, |manifest| &manifest.newer_files)
+}
+
+/// The vanilla YMAPs source YMAPs are diffed against: the latest ones and [`newer_files`].
+pub(crate) fn ymap_bases(cache_dir: &Path) -> Result<Vec<VanillaLatestFile>> {
+  let mut files = latest_files(cache_dir)?;
+  files.retain(|file| file.name.to_ascii_lowercase().ends_with(".ymap"));
+  files.extend(newer_files(cache_dir)?);
+  Ok(files)
+}
+
+fn recorded_files(
+  cache_dir: &Path,
+  files: impl Fn(&DerivedManifest) -> &BTreeMap<String, super::LatestFile>,
+) -> Result<Vec<VanillaLatestFile>> {
   let loaded = read_derived(cache_dir)?;
   let metadata = &loaded.manifest;
   if metadata.format_version != CACHE_SCHEMA {
     return Err(format!("Unsupported vanilla-cache schema {}", metadata.format_version).into());
   }
   let archive = archive_dir_of(cache_dir, metadata);
-  metadata
-    .files
+  files(metadata)
     .iter()
     .map(|(name, file)| {
       Ok(VanillaLatestFile {
@@ -108,6 +128,7 @@ pub fn latest_files(cache_dir: &Path) -> Result<Vec<VanillaLatestFile>> {
 /// Validated metadata and a revision covering the exact manifest/index bytes read.
 pub(crate) struct LoadedCache {
   pub(crate) latest_version: String,
+  /// The latest files and the newer YMAPs an older generation stands for.
   pub(crate) files: BTreeMap<String, DerivedVanillaFile>,
   pub(crate) relationships: YmapRelationshipIndex,
   pub(crate) revision: String,
@@ -138,6 +159,7 @@ pub(crate) fn load_cache(
   let paths = metadata
     .files
     .values()
+    .chain(metadata.newer_files.values())
     .map(|file| super::checked_source_path(&archive, &file.object))
     .collect::<Result<Vec<_>>>()?;
   if let Some(missing) = paths.par_iter().find_any(|path| !fs::is_file(path)) {
@@ -153,6 +175,7 @@ pub(crate) fn load_cache(
     files: metadata
       .files
       .iter()
+      .chain(&metadata.newer_files)
       .map(|(name, file)| {
         let file = DerivedVanillaFile {
           version: file.version.clone(),

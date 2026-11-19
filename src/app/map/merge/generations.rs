@@ -162,7 +162,7 @@ pub(super) fn carry_generations(
       carry_sources.push(carried(file_name, diffs));
     }
   }
-  let vanilla_files = crate::app::map::vanilla_cache::latest_files(vanilla_cache_dir)?
+  let vanilla_files = crate::app::map::vanilla_cache::ymap_bases(vanilla_cache_dir)?
     .into_iter()
     .map(|file| (file.name.to_ascii_lowercase(), (file.path, file.object)))
     .collect();
@@ -566,7 +566,7 @@ impl Propagation<'_> {
     let diffs = serde_json::to_value(diffs)?;
     for change in changes(&diffs) {
       let counterparts =
-        self.counterparts.newer(&listed, change.array.kind(), change.index as u32)?;
+        self.counterparts.loaded(&listed, change.array.kind(), change.index as u32)?;
       if counterparts.is_empty() {
         // A change of a YMAP that merges deploy applies there.
         if index.loads(&listed) || index.successor(&file_label).is_none() {

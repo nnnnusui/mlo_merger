@@ -74,6 +74,8 @@ pub(super) struct DuplicateReport {
 
 #[derive(Default)]
 pub(super) struct Collector {
+  /// The stage of the vanilla YMAP the changes are merged into, as the archive names it.
+  pub loaded_version: Option<String>,
   entries: BTreeMap<u32, Vec<Candidate>>,
   /// Additions left out for the same addition of a source merged before.
   thinned: Vec<EntityDuplicate>,
@@ -164,7 +166,7 @@ impl Collector {
               IgnoredReason::IdenticalDuplicate
             } else if applied.source.change == Change::Removed {
               IgnoredReason::RemovalWins
-            } else if newer(&applied.source, &candidate.source) {
+            } else if newer(&applied.source, &candidate.source, self.loaded_version.as_deref()) {
               IgnoredReason::NewerGenerationWins
             } else {
               IgnoredReason::EarlierSourceWins
@@ -184,13 +186,15 @@ impl Collector {
 }
 
 /// Whether `applied` comes from a newer generation than `other`: a YMAP's own source from the
-/// loaded one, a carried change from its origin.
-fn newer(
+/// loaded one, of the vanilla YMAP at stage `loaded_version`, older than a generation first
+/// shipped after it, and a carried change from its origin.
+pub(super) fn newer(
   applied: &Contribution,
   other: &Contribution,
+  loaded_version: Option<&str>,
 ) -> bool {
   match (&applied.origin, &other.origin) {
-    (None, Some(_)) => true,
+    (None, Some(other)) => loaded_version.is_none_or(|loaded| other.as_str() < loaded),
     (Some(applied), Some(other)) => applied > other,
     _ => false,
   }

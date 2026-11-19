@@ -43,7 +43,14 @@ impl<'a> MergeRun<'a> {
     let vanilla_ymap = &original.model;
     let vanilla_parents = parents_of(&mut self.sources, &mut self.references, None, vanilla_ymap)?;
     let added = self.merge.added.contains(&ymap_name.to_ascii_lowercase());
+    // The archive holds a vanilla YMAP at `{version}/ymap/{file}`.
     let mut duplicates = Collector::default();
+    duplicates.loaded_version = vanilla_ymap_path
+      .strip_prefix(&self.merge.vanilla_dir)
+      .ok()
+      .filter(|path| path.components().count() > 1)
+      .and_then(|path| path.components().next())
+      .map(|version| version.as_os_str().to_string_lossy().into_owned());
     let mut ymap_diffs = Vec::new();
     // The resource, file and origin generation of each of `ymap_diffs` recorded.
     let mut contributors = HashMap::<usize, Contributor>::new();
@@ -271,6 +278,7 @@ fn record_thinned(
     } => Some((entity, *target_index)),
     _ => None,
   };
+  let loaded_version = duplicates.loaded_version.clone();
   let contribution = |(resource, path, origin): &Contributor, index| Contribution {
     resource: resource.clone(),
     path: path.clone(),
@@ -289,12 +297,13 @@ fn record_thinned(
     else {
       continue;
     };
-    // A YMAP's own sources come from the loaded generation, carried changes from their origin.
-    let newer = match (&kept.2, &source.2) {
-      (None, Some(_)) => true,
-      (Some(kept), Some(source)) => kept > source,
-      _ => false,
-    };
+    let (kept_contribution, left_contribution) =
+      (contribution(kept, kept_index), contribution(source, index));
+    let newer = crate::app::map::merge::duplicates::newer(
+      &kept_contribution,
+      &left_contribution,
+      loaded_version.as_deref(),
+    );
     let reason = if kept.0 == source.0 && newer {
       IgnoredReason::SameAdditionNewer
     } else if entity == kept_entity {
@@ -302,12 +311,7 @@ fn record_thinned(
     } else {
       IgnoredReason::EarlierSourceWins
     };
-    duplicates.add_ignored(
-      entity.guid,
-      contribution(kept, kept_index),
-      contribution(source, index),
-      reason,
-    );
+    duplicates.add_ignored(entity.guid, kept_contribution, left_contribution, reason);
   }
 }
 

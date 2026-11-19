@@ -77,9 +77,8 @@ impl YmapComparisonContext {
       serde_json::from_slice(&fs::read(vanilla_cache_dir.join("cache_info.json"))?)?;
     let source_index = load_source_ymap_index(source_cache_dir, source_dir)?;
     let mut file_names_by_hash = HashMap::<u32, BTreeSet<String>>::new();
-    let vanilla_files = crate::app::map::vanilla_cache::latest_files(vanilla_cache_dir)?
+    let vanilla_files = crate::app::map::vanilla_cache::ymap_bases(vanilla_cache_dir)?
       .into_iter()
-      .filter(|file| file.name.to_ascii_lowercase().ends_with(".ymap"))
       .map(|file| (file.name.to_ascii_lowercase(), (file.path, file.object)))
       .collect::<HashMap<_, _>>();
     let source_names = source_index.paths.keys().map(|(_, file_name)| file_name.clone());

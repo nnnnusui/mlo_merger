@@ -42,7 +42,7 @@ pub(crate) fn check(
       return Ok(());
     }
   };
-  for file in manifest.files.values() {
+  for file in manifest.files.values().chain(manifest.newer_files.values()) {
     let path = Path::new(&manifest.vanilla_dir).join(&file.object);
     findings.recorded_file(dir, &path.to_string_lossy(), None, &file.sha256, deep)?;
   }

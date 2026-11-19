@@ -43,7 +43,7 @@ pub(crate) const GENERATIONS_FILE: &str = "generations.json";
 /// Directory of the units in the vanilla cache.
 const UNITS_DIR: &str = "generation-units";
 /// Bump when how generations, families or units are formed, or the unit layout, change.
-pub(crate) const ALGORITHM_VERSION: u32 = 2;
+pub(crate) const ALGORITHM_VERSION: u32 = 3;
 /// Prefixes found for at least this many YMAPs apply to YMAPs without an unprefixed counterpart.
 const MIN_PREFIX_FILES: usize = 10;
 /// Per-axis distance within which two items of a unit are at the same place.
@@ -132,7 +132,8 @@ impl<V: specta::Type> specta::Type for ByKind<V> {
   }
 }
 
-/// The generations and units of the selected game build; see the module docs.
+/// The generations and units of the selected game build, with those first shipped after it; see
+/// the module docs.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "typescript", derive(specta::Type))]
 pub struct GenerationIndex {
@@ -141,10 +142,13 @@ pub struct GenerationIndex {
   pub vanilla_manifest_sha256: String,
   pub version: String,
   pub families: BTreeMap<String, Family>,
-  /// The latest YMAPs the game does not load, keyed by lowercase file name, with why (see
-  /// [`super::activity`]).
+  /// The YMAPs the game does not load, keyed by lowercase file name, with why: latest ones (see
+  /// [`super::activity`]), and those first shipped after [`Self::version`].
   #[serde(default)]
   pub inactive: BTreeMap<String, String>,
+  /// The YMAPs first shipped after [`Self::version`], in lowercase.
+  #[serde(default)]
+  pub newer_than_build: BTreeSet<String>,
 }
 
 /// The generations of one family, oldest first, the units pairing their items, and the YMAPs the
@@ -154,9 +158,10 @@ pub struct GenerationIndex {
 pub struct Family {
   pub generations: Vec<Generation>,
   pub units: Vec<UnitRef>,
-  /// Each YMAP the game does not load whose items a newer generation's loaded YMAP holds, with
-  /// its successor: the loaded YMAP of the newest generation pairing its items that holds most
-  /// of them.
+  /// Each YMAP the game does not load whose items another generation's loaded YMAP holds, with
+  /// its successor: of the generations pairing its items, the newest newer one, or for a YMAP
+  /// first shipped after the game build the newest older one, its loaded YMAP holding most of
+  /// them.
   pub successors: BTreeMap<String, String>,
 }
 
@@ -248,7 +253,7 @@ impl GenerationIndex {
     })
   }
 
-  /// The successor of the vanilla YMAP `file_name`, which the game does not load, when a newer
+  /// The successor of the vanilla YMAP `file_name`, which the game does not load, when another
   /// generation holds its items; a `lodlights_*` YMAP's is its `distlodlights_*` partner's
   /// partner.
   pub(crate) fn successor(
@@ -283,6 +288,8 @@ pub(crate) struct Counterparts<'a> {
   cache_dir: &'a Path,
   /// Per unit key, its pairs of each kind.
   units: HashMap<String, HashMap<ItemKind, UnitPairs>>,
+  /// Per unit key, its pairs of each kind from the newer item to the older.
+  reversed: HashMap<String, HashMap<ItemKind, UnitPairs>>,
   /// Per unit key, its older and newer YMAP names.
   files: HashMap<String, (Vec<String>, Vec<String>)>,
 }
@@ -296,14 +303,16 @@ impl<'a> Counterparts<'a> {
       index,
       cache_dir,
       units: HashMap::new(),
+      reversed: HashMap::new(),
       files: HashMap::new(),
     }
   }
 
-  /// The YMAP and index of each item of a newer generation's YMAP the game loads that item
-  /// `index` of kind `kind` of the vanilla YMAP `file_name` pairs with; `file_name` and the
-  /// YMAPs are listed as their family lists them, a `distlodlights_*` YMAP for lights.
-  pub(crate) fn newer(
+  /// The YMAP and index of each item of another generation's YMAP the game loads that item
+  /// `index` of kind `kind` of the vanilla YMAP `file_name` pairs with: of newer generations, or
+  /// of older ones for a YMAP first shipped after the game build. `file_name` and the YMAPs are
+  /// listed as their family lists them, a `distlodlights_*` YMAP for lights.
+  pub(crate) fn loaded(
     &mut self,
     file_name: &str,
     kind: ItemKind,
@@ -313,19 +322,30 @@ impl<'a> Counterparts<'a> {
     let Some(located) = self.index.locate(&file) else {
       return Ok(Vec::new());
     };
+    let backward = self.index.newer_than_build.contains(&file);
     let mut found = Vec::new();
-    for unit in located.family.units.iter().filter(|unit| unit.older == located.generation) {
+    for unit in located
+      .family
+      .units
+      .iter()
+      .filter(|unit| located.generation == if backward { unit.newer } else { unit.older })
+    {
       let key = unit.key.clone();
       self.load(&key)?;
       let (older, newer) = &self.files[&key];
-      let Some(older_file) = older.iter().position(|name| *name == file) else {
+      let (from, to, pairs) = if backward {
+        (newer, older, &self.reversed[&key])
+      } else {
+        (older, newer, &self.units[&key])
+      };
+      let Some(from_file) = from.iter().position(|name| *name == file) else {
         continue;
       };
-      if let Some(&(newer_file, newer_index)) =
-        self.units[&key].get(&kind).and_then(|pairs| pairs.get(&(older_file as u32, index)))
-        && self.index.loads(&newer[newer_file as usize])
+      if let Some(&(to_file, to_index)) =
+        pairs.get(&kind).and_then(|pairs| pairs.get(&(from_file as u32, index)))
+        && self.index.loads(&to[to_file as usize])
       {
-        found.push((newer[newer_file as usize].clone(), newer_index));
+        found.push((to[to_file as usize].clone(), to_index));
       }
     }
     Ok(found)
@@ -346,9 +366,17 @@ impl<'a> Counterparts<'a> {
         (*kind, pairs.iter().map(|&[of, oi, nf, ni]| ((of, oi), (nf, ni))).collect())
       })
       .collect();
+    let reversed = unit
+      .pairs
+      .iter()
+      .map(|(kind, pairs)| {
+        (*kind, pairs.iter().map(|&[of, oi, nf, ni]| ((nf, ni), (of, oi))).collect())
+      })
+      .collect();
     let names = |files: &[UnitFile]| files.iter().map(|file| file.name.clone()).collect();
     self.files.insert(key.to_owned(), (names(&unit.older), names(&unit.newer)));
     self.units.insert(key.to_owned(), pairs);
+    self.reversed.insert(key.to_owned(), reversed);
     Ok(())
   }
 }
@@ -398,17 +426,20 @@ pub(super) struct SourceYmap {
   pub first_stage: usize,
 }
 
-/// Writes the generation index and units of `ymaps` (keyed by lowercase file name) into
-/// `staging`, keeping the units of `previous` (the published cache) and building the rest.
+/// Writes the generation index and units of `ymaps` (keyed by lowercase file name), of which
+/// `newer` are first shipped after `version`, into `staging`, keeping the units of `previous`
+/// (the published cache) and building the rest; returns the index.
+#[allow(clippy::too_many_arguments)]
 pub(super) fn write_generations(
   staging: &Path,
   previous: &Path,
   ymaps: &BTreeMap<String, SourceYmap>,
   inactive: &BTreeMap<String, String>,
+  newer: &BTreeSet<String>,
   stage_ids: &[String],
   revision: &str,
   version: &str,
-) -> Result<()> {
+) -> Result<GenerationIndex> {
   let families = families(ymaps, stage_ids);
   let units_dir = staging.join(UNITS_DIR);
   fs::create_dir_all(&units_dir)?;
@@ -423,6 +454,7 @@ pub(super) fn write_generations(
     version: version.to_owned(),
     families: BTreeMap::new(),
     inactive: inactive.clone(),
+    newer_than_build: newer.clone(),
   };
   for (name, generations) in families {
     let unit_files = |generation: &Generation| -> Vec<UnitFile> {
@@ -495,9 +527,10 @@ pub(super) fn write_generations(
       .collect::<std::result::Result<Vec<_>, String>>()?;
   }
   for family in index.families.values_mut() {
-    family.successors = successors(family, &units_dir, inactive)?;
+    family.successors = successors(family, &units_dir, inactive, newer)?;
   }
-  write_json(&staging.join(GENERATIONS_FILE), &index)
+  write_json(&staging.join(GENERATIONS_FILE), &index)?;
+  Ok(index)
 }
 
 /// The successor of each YMAP of `family` whose items a newer generation holds, from the units
@@ -506,9 +539,21 @@ fn successors(
   family: &Family,
   units_dir: &Path,
   inactive: &BTreeMap<String, String>,
+  newer_than_build: &BTreeSet<String>,
 ) -> Result<BTreeMap<String, String>> {
-  // Per older YMAP, the newest generation pairing its items and how many each YMAP there holds.
-  let mut best = BTreeMap::<String, (usize, BTreeMap<String, usize>)>::new();
+  // Per YMAP not loaded, the newest generation pairing its items, newer than it or, for one
+  // first shipped after the game build, older, and how many each loaded YMAP there holds.
+  let mut best = BTreeMap::<String, (Option<usize>, BTreeMap<String, usize>)>::new();
+  let mut count = |from: &String, to: &String, generation: usize| {
+    let (best_generation, counts) = best.entry(from.clone()).or_default();
+    if best_generation.is_none_or(|best| generation > best) {
+      *best_generation = Some(generation);
+      counts.clear();
+    }
+    if *best_generation == Some(generation) {
+      *counts.entry(to.clone()).or_default() += 1;
+    }
+  };
   for unit_ref in &family.units {
     let path = units_dir.join(format!("{}.json", unit_ref.key));
     let unit: GenerationUnit = crate::common::json::read_json(&path)
@@ -516,16 +561,15 @@ fn successors(
     for &[older_file, _, newer_file, _] in unit.pairs.values().flatten() {
       let older = &unit.older[older_file as usize].name;
       let newer = &unit.newer[newer_file as usize].name;
-      if !inactive.contains_key(older) || inactive.contains_key(newer) {
-        continue;
-      }
-      let (generation, counts) = best.entry(older.clone()).or_default();
-      if unit_ref.newer > *generation {
-        *generation = unit_ref.newer;
-        counts.clear();
-      }
-      if unit_ref.newer == *generation {
-        *counts.entry(newer.clone()).or_default() += 1;
+      if newer_than_build.contains(newer) {
+        if !inactive.contains_key(older) {
+          count(newer, older, unit_ref.older);
+        }
+      } else if inactive.contains_key(older)
+        && !newer_than_build.contains(older)
+        && !inactive.contains_key(newer)
+      {
+        count(older, newer, unit_ref.newer);
       }
     }
   }

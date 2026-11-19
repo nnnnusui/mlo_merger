@@ -140,7 +140,7 @@ pub(in crate::app::map::source_cache) fn write_implied(
 
   remove_dir_if_exists(&staging)?;
   fs::create_dir_all(&staging)?;
-  let vanilla = crate::app::map::vanilla_cache::latest_files(vanilla_cache_dir)?
+  let vanilla = crate::app::map::vanilla_cache::ymap_bases(vanilla_cache_dir)?
     .into_iter()
     .map(|file| (file.name.to_ascii_lowercase(), (file.path, file.object)))
     .collect::<BTreeMap<_, _>>();

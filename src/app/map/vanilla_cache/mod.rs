@@ -84,6 +84,11 @@ struct DerivedManifest {
   latest_version: String,
   vanilla_input_timestamps: BTreeMap<String, SourceTimestamp>,
   files: BTreeMap<String, LatestFile>,
+  /// The YMAPs first shipped after [`Self::latest_version`] that an older generation the game
+  /// loads stands for (see [`generations::Family::successors`]), with their latest version:
+  /// sources streaming them are diffed against them, and the merge carries their changes back.
+  #[serde(default)]
+  newer_files: BTreeMap<String, LatestFile>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -130,8 +135,9 @@ use filesystem::*;
 use freshness::{cache_is_current, previous_manifest};
 use generations::write_generations;
 pub(crate) use read::archive_dir;
+pub(crate) use read::ymap_bases;
 pub(crate) use read::{DerivedVanillaFile, LoadedCache, load_cache};
-pub use read::{VanillaLatestFile, cache_info_path, latest_files};
+pub use read::{VanillaLatestFile, cache_info_path, latest_files, newer_files};
 use relationships::children_by_parent;
 pub(crate) use relationships::ymap_parent_hash;
 use source::*;
@@ -207,6 +213,7 @@ pub(crate) mod test_support {
           ((*name).to_owned(), file)
         })
         .collect(),
+      newer_files: Default::default(),
     };
     crate::platform::fs::create_dir_all(cache_dir).unwrap();
     super::write_json(&super::cache_info_path(cache_dir), &manifest).unwrap();
