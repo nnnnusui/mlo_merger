@@ -39,6 +39,7 @@ fn ybn_version_change_reuses_current_ymap_groups() {
       source_path: name.clone(),
       file_name: name,
       diff_path: None,
+      implied_path: None,
       stream_path: String::new(),
       propagated: false,
     }
@@ -54,12 +55,14 @@ fn ybn_version_change_reuses_current_ymap_groups() {
         original_path: Some(PathBuf::from(&input.source_path)),
         fingerprint: Fingerprint::read(&input.path, None, false).unwrap(),
         overwrite: None,
+        implied: None,
       }],
       vanilla: None,
       dependencies: BTreeSet::new(),
       replaces_other_resources: false,
       dependency_fingerprint: String::new(),
       output: None,
+      superseded_by: None,
       merged_at: "cached".into(),
       duplicates: Vec::new(),
     };
@@ -83,7 +86,6 @@ fn ybn_version_change_reuses_current_ymap_groups() {
   let inputs = MergeInputs {
     ymap: vec![ymap],
     ybn: vec![ybn],
-    propagated: Vec::new(),
     vanilla_ymaps_to_read: BTreeSet::new(),
     added_stream_files: BTreeSet::new(),
   };
@@ -97,6 +99,7 @@ fn ybn_version_change_reuses_current_ymap_groups() {
       ybn: &[],
       ymap: &[],
       inputs: &inputs,
+      carried: &[],
       force: false,
       overwrites: &Default::default(),
       vanilla_overwrites: &Default::default(),
@@ -132,6 +135,7 @@ fn dependency_groups_invalidate_connected_maps_but_not_independent_maps() {
     source_path: name.into(),
     file_name: name.into(),
     diff_path: None,
+    implied_path: None,
     stream_path: String::new(),
     propagated: false,
   };
@@ -160,11 +164,13 @@ fn dependency_groups_invalidate_connected_maps_but_not_independent_maps() {
         modified_nanos: 0,
       },
       overwrite: None,
+      implied: None,
     }),
     dependencies: graph[name].clone(),
     replaces_other_resources: false,
     dependency_fingerprint: String::new(),
     output: None,
+    superseded_by: None,
     merged_at: "cached".into(),
     duplicates: Vec::new(),
   };

@@ -27,7 +27,7 @@ impl IncrementalMerge<'_> {
       sources.entry(source.file_name.to_ascii_lowercase()).or_default().push(source);
     }
     // Carried-over changes are merged like a source into the vanilla file they change.
-    for source in &self.inputs.propagated {
+    for source in self.carried {
       let name = source.file_name.to_ascii_lowercase();
       if baselines.contains_key(&name) {
         sources.entry(name).or_default().push(source);
@@ -46,8 +46,34 @@ impl IncrementalMerge<'_> {
         tracing::debug!("Vanilla overwrite of {name} names no latest vanilla YMAP; not applied");
       }
     }
+    // A YMAP of a superseded generation is not merged: the source cache carries its changes to the
+    // latest generation, its sources are omitted and the vanilla file stays.
+    let mut superseded = BTreeMap::<String, (String, Vec<&MergeSourceFile>)>::new();
+    if let Some(generations) =
+      crate::app::map::vanilla_cache::generations::GenerationIndex::load(self.vanilla_cache)?
+    {
+      let names =
+        sources.keys().filter(|name| name.ends_with(".ymap")).cloned().collect::<Vec<_>>();
+      for name in names {
+        let Some(successor) = generations.successor(&name) else {
+          continue;
+        };
+        if self.vanilla_overwrite(&name).is_some() {
+          tracing::warn!(
+            "The vanilla overwrite of {name} is not applied, as {successor} supersedes it"
+          );
+        }
+        let files = sources.remove(&name).unwrap_or_default();
+        superseded.insert(name, (successor, files));
+      }
+    }
     let graph = self.ymap_graph()?;
-    let groups = groups(&sources, &graph);
+    let mut groups = groups(&sources, &graph);
+    // A superseded YMAP is recorded on its own below, whatever its relations.
+    for group in &mut groups {
+      group.names.retain(|name| !superseded.contains_key(name));
+    }
+    groups.retain(|group| !group.names.is_empty());
     let now = jiff::Timestamp::now().to_string();
     let context = GroupContext {
       sources: &sources,
@@ -105,6 +131,38 @@ impl IncrementalMerge<'_> {
         }
       }
       files.extend(outcome.planned);
+    }
+    for (name, (successor, sources)) in superseded {
+      let merge_sources = sources
+        .iter()
+        .map(|source| self.source_input(source, &previous_inputs))
+        .collect::<Result<Vec<_>>>()?;
+      for input in &merge_sources {
+        if let Some(original) = &input.original_path {
+          omitted.insert(original.to_string_lossy().replace('\\', "/"));
+        }
+      }
+      let merged_at = previous
+        .as_ref()
+        .and_then(|previous| previous.files.get(&name))
+        .filter(|old| {
+          old.merge_sources == merge_sources && old.superseded_by.as_ref() == Some(&successor)
+        })
+        .map_or_else(|| now.clone(), |old| old.merged_at.clone());
+      files.insert(
+        name,
+        FileRecord {
+          merge_sources,
+          vanilla: None,
+          dependencies: BTreeSet::new(),
+          replaces_other_resources: false,
+          dependency_fingerprint: String::new(),
+          output: None,
+          superseded_by: Some(successor),
+          merged_at,
+          duplicates: Vec::new(),
+        },
+      );
     }
     let omit_text = omitted.into_iter().collect::<Vec<_>>().join("\n");
     let duplicates = DuplicateReport {
@@ -166,21 +224,7 @@ impl IncrementalMerge<'_> {
         .get(name)
         .into_iter()
         .flatten()
-        .map(|source| {
-          let stored = PathBuf::from(&source.stored_path);
-          Ok(InputFile {
-            fingerprint: Fingerprint::read(
-              &source.path,
-              context.previous_inputs.get(&stored).copied(),
-              self.force,
-            )?,
-            path: stored,
-            resource: Some(source.resource.clone()),
-            // Carried-over changes replace no source file.
-            original_path: (!source.propagated).then(|| PathBuf::from(&source.source_path)),
-            overwrite: self.overwrite(source).map(StreamFileOverwrite::digest),
-          })
-        })
+        .map(|source| self.source_input(source, context.previous_inputs))
         .collect::<Result<Vec<_>>>()?;
       let vanilla = context
         .baselines
@@ -197,6 +241,7 @@ impl IncrementalMerge<'_> {
             resource: None,
             original_path: None,
             overwrite: self.vanilla_overwrite(name).map(VanillaOverwrite::digest),
+            implied: None,
           })
         })
         .transpose()?;
@@ -209,6 +254,7 @@ impl IncrementalMerge<'_> {
           replaces_other_resources: self.added.get(name).is_some_and(|file| file.replaces_others()),
           dependency_fingerprint: String::new(),
           output: None,
+          superseded_by: None,
           merged_at: context.now.to_string(),
           duplicates: Vec::new(),
         },
@@ -284,6 +330,38 @@ impl IncrementalMerge<'_> {
       planned,
       retained,
       rebuilt,
+    })
+  }
+}
+
+impl IncrementalMerge<'_> {
+  /// The record of `source` as a merge input, its fingerprint reused from `previous_inputs` when
+  /// the file is unchanged.
+  fn source_input(
+    &self,
+    source: &MergeSourceFile,
+    previous_inputs: &BTreeMap<PathBuf, &Fingerprint>,
+  ) -> Result<InputFile> {
+    let stored = PathBuf::from(&source.stored_path);
+    let previous = previous_inputs.get(&stored).copied();
+    let mut fingerprint = Fingerprint::read(&source.path, previous, self.force)?;
+    // Carried-over changes are written again on every run; the same content is the same input.
+    if let Some(previous) = previous.filter(|previous| previous.same_content(&fingerprint)) {
+      fingerprint = previous.clone();
+    }
+    let implied = source
+      .implied_path
+      .as_ref()
+      .map(|path| Ok::<_, Box<dyn std::error::Error>>(hex::encode(Sha256::digest(fs::read(path)?))))
+      .transpose()?;
+    Ok(InputFile {
+      fingerprint,
+      path: stored,
+      resource: Some(source.resource.clone()),
+      // Carried-over changes replace no source file.
+      original_path: (!source.propagated).then(|| PathBuf::from(&source.source_path)),
+      overwrite: self.overwrite(source).map(StreamFileOverwrite::digest),
+      implied,
     })
   }
 }

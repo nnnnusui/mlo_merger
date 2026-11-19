@@ -57,21 +57,21 @@ Between carried modifications, the newer origin generation wins.
 
 ### 3. Source Cache: Consistency of Each Source
 
-- [ ] Write what keeps each resource's LOD light pairs in step to `implied/`, leaving the diff
+- [x] Write what keeps each resource's LOD light pairs in step to `implied/`, leaving the diff
   documents as they are: the removals the other YMAP of a pair needs, as a diff, the
   resource's own other YMAP or vanilla's, and the additions made to one YMAP only, as a
   `skip`.
 
 ### 4. Merge: Carrying Changes
 
-- [ ] Resolve generations when merging, from the vanilla cache's generations and the source
+- [x] Resolve generations when merging, from the vanilla cache's generations and the source
   cache's diff and `implied/` documents, leaving the source cache free of generations.
-- [ ] Carry removals, modifications and replacements, after step 3, to the paired items of
+- [x] Carry removals, modifications and replacements, after step 3, to the paired items of
   the newer loaded generations, including YMAPs the resource ships itself, newest origin
   generation first.
-- [ ] Carry entity additions without a parent to the successor, with the physics
+- [x] Carry entity additions without a parent to the successor, with the physics
   dictionaries they add, and LOD light additions to both YMAPs of the successor pair.
-- [ ] Record each change carried, already met in the loaded generation (an item it lacks
+- [x] Record each change carried, already met in the loaded generation (an item it lacks
   removed), or lost (a modification of an item it lacks, an addition that cannot be carried).
 
 ### 5. Generations Newer Than the Game Build
@@ -85,7 +85,7 @@ Between carried modifications, the newer origin generation wins.
 
 ### 6. Merge: YMAPs Not Loaded
 
-- [ ] Plan no output for a YMAP with a successor; omit its sources.
+- [x] Plan no output for a YMAP with a successor; omit its sources.
 
 ### 7. Merge Report
 

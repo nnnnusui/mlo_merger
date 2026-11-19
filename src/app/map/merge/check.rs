@@ -5,8 +5,16 @@ use crate::core::check::{CheckIssueKind, Findings};
 use std::{collections::BTreeSet, path::Path};
 
 /// Entries of the merge output besides its metadata.
-const OUTPUT_ENTRIES: [&str; 6] =
-  [CACHE_INFO, "duplicates.json", "_omit.txt", "stream_file_rtree.json", "ymap", "ybn"];
+const OUTPUT_ENTRIES: [&str; 7] = [
+  CACHE_INFO,
+  "duplicates.json",
+  "_omit.txt",
+  "stream_file_rtree.json",
+  "ymap",
+  "ybn",
+  // The changes carried over to newer generations, which the merge reads as sources.
+  super::generations::GENERATIONS_DIR,
+];
 
 /// Checks that each merged file the metadata records is there with its recorded size (and
 /// SHA-256 when `deep`), and that `ymap/` and `ybn/` hold nothing else.

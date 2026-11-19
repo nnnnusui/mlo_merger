@@ -164,7 +164,9 @@ resource paths under `-i`, preserving modification times.
 ## Merge
 
 Merge writes native files under `ymap/` and `ybn/`, plus `_omit.txt` for replaced source
-paths and `duplicates.json` for competing entity changes to vanilla YMAPs. It rebuilds only
+paths, `duplicates.json` for competing entity changes to vanilla YMAPs and `generations/` for
+the changes it carries over to newer generations (see
+[Newer DLC Generations](#newer-dlc-generations)). It rebuilds only
 changed or invalid groups. Failed merges leave the prior output intact.
 
 Merge applies every source's differences from the latest vanilla file together to
@@ -235,17 +237,26 @@ For an added YMAP:
   and `distantLodLightsSOA` of the same lights, read by index, so a light removed from
   either is removed from both. The source cache adds the other YMAP's removals to each
   one's diff as `{"Removed": {"base_index": i, "implied": true}}`, and the document's
-  `partner` records the files they were taken from. A resource shipping only one of the
-  two has its removals merged into the other's vanilla YMAP as well. Pairs whose vanilla
-  YMAPs differ in light count are left alone.
+  `partner` records the files they were taken from. Pairs whose vanilla YMAPs differ in
+  light count are left alone.
+- Source-cache generation writes `implied/{resourceName}/{streamPath}.json`
+  (`YmapImplied`) for a resource's YMAP of a pair that needs more to stay in step, recording
+  the files of its diff document in `target` and `base`. `skip`, in the shape of an
+  overwrite's, leaves out the lights it adds that the resource's other YMAP of the pair, in
+  the same directory, does not add at the same index, or all of them when the resource does
+  not ship it: a distant light has no direction, falloff or flags to complete a LOD light
+  with, and a LOD light no position or colour. `partner`, for a resource shipping only one
+  YMAP of a pair, holds the removals of the vanilla other one. Merge applies the skip before
+  the resource's overwrite, and merges the removals into the other vanilla YMAP as far as
+  the overwrite keeps the removals they follow from.
 
 ### Newer DLC Generations
 
 DLCs ship vanilla YMAPs again under a prefix of their own, such as `lodlights_medium031`,
-`hei_`, `apa_`, `vw_` and `m25_2_lodlights_medium031`. The game loads the one each pack's
-change sets leave in place, and streaming another can load it beside that one. A change a
-resource makes to one generation's item is therefore carried over to the same item of each
-newer generation, so a removed light or entity does not stay visible through another copy.
+`hei_`, `apa_`, `vw_` and `m25_2_lodlights_medium031`, and the game loads the one each
+pack's change sets leave in place. Streaming a YMAP the game does not load can load it
+again beside the one it does, placing its items twice, so merges deploy only the loaded
+generation and carry the changes resources make to the others over to it.
 
 - Each DLC stage of the raw archive records its pack's device, data files and the change
   sets the game executes without a script (`dlc` in `cache_info.json`), from the title
@@ -258,11 +269,8 @@ newer generation, so a removed light or entity does not stay visible through ano
   last one's is loaded. An archive mounted over a valid path (`overlay`) stands for it as
   well; one mounted over an invalidated path by a change set that does not invalidate it
   is not loaded. A pack's archive that is no data file, such as a title update patch of an
-  archive the pack does not declare, is not loaded. Change sets only a script executes
-  count as enabling archives, not as invalidating any. `dlc_activity.json` lists the
-  archives with why the game does not load them, and every YMAP version with its archive;
-  `generations.json` lists the latest YMAPs not loaded in `inactive`. An archive built
-  without the change sets loads every YMAP.
+  archive the pack does not declare, is not loaded. `generations.json` lists the YMAPs not
+  loaded in `inactive`, with why. An archive built without this record loads every YMAP.
 - The vanilla cache groups YMAPs into generations by prefix and into families of the
   same name apart from the prefix and a trailing number, such as every
   `*distlodlights_small###`, since newer generations move items between those blocks.
@@ -282,19 +290,31 @@ newer generation, so a removed light or entity does not stay visible through ano
 - `generations.json` names, per family in `successors`, the YMAP loaded in place of each one
   that is not: of the newest generation pairing its items, the loaded YMAP holding most of
   them.
-- Source-cache generation writes `propagated/{resourceName}/{fileName}.diff.json`
-  (`YmapPropagatedDiff`) for each vanilla YMAP of a newer generation that the resource's
-  changes reach and that it does not ship. Each carried removal or modification names
-  the item it came from in `reason`, such as
-  `"propagated from resourceName: vw_lodlights_medium031.ymap lod_lights[14]"`. A
-  light removed from either YMAP of a LOD light pair is removed from both YMAPs of the
-  newer pairs.
-- Merge merges each document into its vanilla YMAP like one more resource diff, under
-  the same policy; a stale document fails the merge.
-- Only removals and modifications are carried. Additions and replacements, entity parent
-  changes and modifications of nested arrays such as occlude model triangles are not,
-  and neither are changes to items with no counterpart in a newer generation. When
-  several changes reach one item, a removal wins and otherwise the first is kept.
+- Merge carries each source YMAP's changes, after its LOD light pair document's skip and its
+  overwrite, and the removals that document implies for a vanilla YMAP the resource does
+  not ship, to each item they pair with in a newer generation's loaded YMAP, YMAPs the
+  resource ships included. It writes them to
+  `generations/{resourceName}/{version}/{fileName}.diff.json` (`YmapPropagatedDiff`) of
+  its output, `version` naming the stage first shipping the generation the changes come
+  from. Each carried removal, modification or replacement names the item it came from in
+  `reason`, such as
+  `"propagated from resourceName: vw_lodlights_medium031.ymap lod_lights[14]"`. A light
+  removed from either YMAP of a LOD light pair is removed from both YMAPs of the newer
+  pairs. Entities a resource adds with no parent to a YMAP with a successor are added to
+  the end of the successor, with the physics dictionaries it adds there, and LOD lights to
+  the end of the same YMAP of the successor pair.
+- Entity parent changes and modifications of nested arrays such as occlude model
+  triangles are not carried. When several changes of one generation reach one item, a
+  removal wins and otherwise the first is kept. `generations/left_behind.json`
+  (`LeftBehind`) lists the changes of YMAPs with a successor carried nowhere: removals of
+  items the loaded generation lacks already (`already_absent`), other changes of such
+  items (`no_loaded_counterpart`), and additions of entities with a parent or of other
+  arrays (`addition_not_carried`).
+- Merge deploys no YMAP with a successor: its sources are listed in `_omit.txt`, its
+  record in `cache_info.json` names the successor in `superseded_by`, and a vanilla
+  overwrite of it is not applied. It merges each carried document into its vanilla YMAP
+  like one more resource diff after that YMAP's own, newest origin first, under the same
+  policy, so a removal wins and otherwise the newer generation's change.
 
 ### Entity Parents
 

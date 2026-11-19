@@ -14,7 +14,7 @@ use crate::common::changes::StoreChanges;
 
 pub(super) mod diff;
 mod prepare;
-pub(super) mod propagate;
+pub(super) mod implied;
 mod publish;
 mod resources;
 
@@ -94,7 +94,12 @@ pub(super) fn run(build: &BuildSourceCache) -> Result<SourceCacheResult> {
   crate::core::config::matching::with_config(|| {
     diff::write_ymap_diffs(&source_dir, &output, &vanilla_dir, &vanilla_cache_dir)
   })??;
-  propagate::write_propagated_diffs(&output, &vanilla_cache_dir)?;
+  implied::write_implied(&output, &vanilla_cache_dir)?;
+  // Changes to newer generations are carried by merges; an earlier cache's carried documents go.
+  match crate::platform::fs::remove_dir_all(output.join("propagated")) {
+    Err(error) if error.kind() != std::io::ErrorKind::NotFound => return Err(error.into()),
+    _ => {}
+  }
   crate::app::map::find::rtree::update_store_index(
     crate::app::map::find::rtree::Store::Source {
       source_dir: &source_dir,

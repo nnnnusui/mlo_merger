@@ -1,9 +1,12 @@
 //! Source diffs, and the LOD light removals they imply for YMAPs their resources do not ship.
 //!
 //! A light removed from either YMAP of a LOD light pair is removed from both (see
-//! [`lod_light_pairs`](crate::core::format::ymap::compare::lod_light_pairs)). The source cache adds those removals to the diffs of resources shipping
-//! both YMAPs; a resource shipping only one leaves the other vanilla, so its removals are merged
-//! into the vanilla YMAP of the other as a diff of their own.
+//! [`lod_light_pairs`](crate::core::format::ymap::compare::lod_light_pairs)). The source cache adds
+//! those removals to the diffs of resources shipping both YMAPs, and writes what else keeps a
+//! source's pair in step to its LOD light pair document (`YmapImplied`): the lights it adds to one
+//! YMAP only, which are left out of its diff, and, for a resource shipping only one YMAP, the
+//! removals of the vanilla other one, merged into it as a diff of their own as far as the
+//! source's overwrite keeps the removals they follow from.
 
 use super::*;
 use crate::core::format::ymap::compare::lod_light_pairs::LightSide;
@@ -49,7 +52,13 @@ impl MergeYmap {
           OverwriteFingerprint::from(&document.target),
           OverwriteFingerprint::from(&document.base),
         );
-        (document.diffs, Some(fingerprints))
+        let mut diffs = document.diffs;
+        if let Some(implied) = self.implied_document(mod_info, &document.target, &document.base)?
+          && let Some(skip) = &implied.skip
+        {
+          crate::app::map::overwrite::skip_diffs(&mut diffs, skip)?;
+        }
+        (diffs, Some(fingerprints))
       }
       // Sources outside a source cache are compared here, against the latest vanilla.
       None => {
@@ -126,12 +135,76 @@ impl MergeYmap {
         if removed.is_empty() {
           continue;
         }
-        let mut partner_diff = YmapDiffFields::default();
-        side.other().imply_removals(&mut partner_diff, &removed);
+        // A source of the source cache takes the removals its LOD light pair document implies.
+        let partner_diff = match &mod_info.diff_path {
+          Some(diff_path) => {
+            let document: YmapComparisonDiff = crate::common::json::read_json(diff_path)?;
+            let Some(partner) = self
+              .implied_document(mod_info, &document.target, &document.base)?
+              .and_then(|implied| implied.partner)
+            else {
+              continue;
+            };
+            keep_removals(partner.diffs, side.other(), &removed)
+          }
+          None => {
+            let mut partner_diff = YmapDiffFields::default();
+            side.other().imply_removals(&mut partner_diff, &removed);
+            partner_diff
+          }
+        };
         implied.entry(partner_hash).or_default().push((mod_info.mod_name.clone(), partner_diff));
       }
     }
     Ok(implied)
+  }
+}
+
+impl MergeYmap {
+  /// The LOD light pair document of `mod_info`'s source, when it has one taken from the files
+  /// `target` and `base` its diff document was.
+  fn implied_document(
+    &self,
+    mod_info: &ModYmapReference,
+    target: &crate::core::format::ymap::compare::YmapComparisonFile,
+    base: &crate::core::format::ymap::compare::YmapComparisonFile,
+  ) -> Result<Option<crate::app::map::source_cache::YmapImplied>, Box<dyn std::error::Error>> {
+    let Some(path) = self.implied.get(&mod_info.mod_ymap_path) else {
+      return Ok(None);
+    };
+    let implied: crate::app::map::source_cache::YmapImplied =
+      crate::common::json::read_json(path)?;
+    Ok((implied.target == *target && implied.base == *base).then_some(implied))
+  }
+}
+
+/// The removals of the lights of `side` that `diffs` makes and `kept` names, marked `implied`.
+fn keep_removals(
+  diffs: YmapDiffFields,
+  side: LightSide,
+  kept: &std::collections::BTreeSet<usize>,
+) -> YmapDiffFields {
+  let removed = match side {
+    LightSide::LodLights => diffs.lod_lights.iter().flatten().filter_map(removed_index).collect(),
+    LightSide::DistantLodLights => diffs
+      .distant_lod_lights
+      .iter()
+      .flat_map(|lights| lights.items.iter().flatten())
+      .filter_map(removed_index)
+      .collect::<std::collections::BTreeSet<_>>(),
+  };
+  let mut kept_diffs = YmapDiffFields::default();
+  side.imply_removals(&mut kept_diffs, &removed.intersection(kept).copied().collect());
+  kept_diffs
+}
+
+fn removed_index<T, C>(diff: &crate::core::format::ymap::compare::ItemDiff<T, C>) -> Option<usize> {
+  match diff {
+    crate::core::format::ymap::compare::ItemDiff::Removed {
+      base_index,
+      ..
+    } => Some(*base_index),
+    _ => None,
   }
 }
 

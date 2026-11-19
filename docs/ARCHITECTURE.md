@@ -123,20 +123,27 @@ game does not load, and lists them with every YMAP version they hold in
 `dlc_activity.json`. It pairs the items of each family's generations, one unit per older
 and newer generation, stored by a digest of its YMAPs so that rebuilds and game build
 switches reuse them, names the loaded successor of each YMAP the game does not load, and
-indexes the selected build's units in `generations.json`. After
-taking the diffs, the source cache carries each resource's removals and modifications of
-vanilla items over to the paired items of newer generations it does not ship, as
-`propagated/` documents whose items name their origin in `reason`; they are derived from the
-diff record and the generation index alone, and are kept while both are unchanged.
+indexes the selected build's units in `generations.json`. After taking the diffs, the
+source cache writes to `implied/` what keeps each resource's LOD light pairs in step: the
+lights a YMAP adds that the other YMAP of its pair does not, to leave out, and, for a
+resource shipping only one YMAP of a pair, the removals of the vanilla other one. They are
+derived from the diff record and the vanilla cache revision, and are kept while both are
+unchanged. Generations are resolved by the merge.
 
 ## Merge
 
 1. Ensure the derived vanilla and source caches are current.
-2. Dispatch latest vanilla `.ybn` and `.ymap` files, and the YMAPs resources add, to
-   separate merge handlers.
-3. For YMAPs, read each source's diff document, leave out the differences its
-   resource overwrite selects, add the LOD light removals of resources shipping only
-   the other YMAP of a light pair and the changes carried over from older generations,
+2. Carry each source YMAP's changes, after its LOD light pair document's skip and its
+   overwrite, over to the paired items of the newer generations the game loads
+   (`app::map::merge::generations`), writing them to `generations/`.
+3. Leave out the YMAPs with a successor, omitting their sources, and dispatch the other
+   latest vanilla `.ybn` and `.ymap` files, and the YMAPs resources add, to separate merge
+   handlers.
+4. For YMAPs, read each source's diff document, leave out the additions its LOD light pair
+   document skips and the differences its resource overwrite selects, add the LOD light
+   removals of resources shipping only the other YMAP of a light pair, as their documents
+   imply them and their overwrites keep them, and the changes carried over from other
+   generations, newest origin first,
    append the vanilla overwrite as the last source,
    combine the differences and apply them to the latest vanilla file. Combining keeps
    every change of its inputs; the merge stage first leaves name, flag, extent, block and
@@ -146,7 +153,7 @@ diff record and the generation index alone, and are kept while both are unchange
    the vanilla overwrite's included: the merge counts each parent's children from the
    final parent references. Diffs and their application stay complete, so other uses
    replay every change. YBNs apply supported source changes directly.
-4. Write merged native stream files under extension subdirectories (`ymap/`, `ybn/`),
+5. Write merged native stream files under extension subdirectories (`ymap/`, `ybn/`),
    `_omit.txt` and `duplicates.json` at the selected output root.
 
 A stream file that resources add, named after no vanilla file, is merged from every

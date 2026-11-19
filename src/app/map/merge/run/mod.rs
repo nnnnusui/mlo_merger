@@ -34,6 +34,10 @@ pub struct MergeYmap {
   pub rebuild_all: bool,
   /// The overwrites of the sources, keyed by source path, applied to their diffs.
   pub overwrites: HashMap<PathBuf, StreamFileOverwrite>,
+  /// The source cache's LOD light pair documents of the sources (`YmapImplied`), keyed by source
+  /// path: their `skip` is applied to the sources' diffs before the overwrites, and their
+  /// `partner` removals merged into the vanilla other YMAP of the pair.
+  pub implied: HashMap<PathBuf, PathBuf>,
   /// The overwrites of the latest vanilla files, keyed by lowercase file name, merged after the
   /// sources' diffs. A vanilla file with one is merged even when no source replaces it.
   pub vanilla_overwrites: HashMap<String, VanillaOverwrite>,

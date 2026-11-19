@@ -2,7 +2,7 @@
 
 use super::{
   Result,
-  generate::propagate::{PROPAGATED_DIR, read_record},
+  generate::implied::{IMPLIED_DIR, recorded_documents},
   read_metadata, stream_file_diff_path,
 };
 use crate::core::check::{CheckIssueKind, Findings};
@@ -18,7 +18,7 @@ const CACHE_ENTRIES: [&str; 12] = [
   "stream_file_rtree.json",
   "resources",
   "diff",
-  "propagated",
+  "implied",
   "added_ymap_relationships.json",
   "hash_names.json",
   // Archived resources, which nothing reads.
@@ -62,22 +62,19 @@ pub(crate) fn check(
   }
   findings.unrecorded_below(dir, "resources", &cached)?;
   findings.unrecorded_below(dir, "diff", &diffs)?;
-  if fs::is_dir(dir.join(PROPAGATED_DIR)) {
-    let mut propagated = BTreeSet::from([format!("{PROPAGATED_DIR}/inputs.json")]);
-    match read_record(dir) {
-      Some(record) => {
-        for document in record.documents {
-          if !fs::is_file(dir.join(&document.path)) {
-            findings.add(CheckIssueKind::Missing, &document.path, None);
-          }
-          propagated.insert(document.path);
-        }
-      }
-      None => {
-        findings.add(CheckIssueKind::Unreadable, format!("{PROPAGATED_DIR}/inputs.json"), None)
+  if fs::is_dir(dir.join(IMPLIED_DIR)) {
+    let inputs = format!("{IMPLIED_DIR}/inputs.json");
+    let documents = recorded_documents(dir);
+    if !fs::is_file(dir.join(&inputs)) {
+      findings.add(CheckIssueKind::Missing, &inputs, None);
+    }
+    for document in &documents {
+      if !fs::is_file(dir.join(document)) {
+        findings.add(CheckIssueKind::Missing, document, None);
       }
     }
-    findings.unrecorded_below(dir, PROPAGATED_DIR, &propagated)?;
+    let recorded = std::iter::once(inputs).chain(documents).collect::<BTreeSet<_>>();
+    findings.unrecorded_below(dir, IMPLIED_DIR, &recorded)?;
   }
   findings.unknown_entries(dir, &CACHE_ENTRIES)
 }

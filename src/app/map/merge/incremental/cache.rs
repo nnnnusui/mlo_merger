@@ -67,6 +67,10 @@ pub(in crate::app::map::merge) struct InputFile {
   #[serde(default, skip_serializing_if = "Option::is_none")]
   #[cfg_attr(feature = "typescript", specta(optional))]
   pub overwrite: Option<String>,
+  /// SHA-256 of the source cache's LOD light pair document of this source.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  #[cfg_attr(feature = "typescript", specta(optional))]
+  pub implied: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -88,6 +92,11 @@ pub(in crate::app::map::merge) struct FileRecord {
   pub replaces_other_resources: bool,
   pub dependency_fingerprint: String,
   pub output: Option<OutputFile>,
+  /// The successor of a vanilla YMAP of a superseded generation, which is not merged: its
+  /// sources are omitted and the vanilla file stays.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  #[cfg_attr(feature = "typescript", specta(optional))]
+  pub superseded_by: Option<String>,
   pub merged_at: String,
   #[serde(default)]
   pub duplicates: Vec<EntityDuplicate>,
@@ -164,6 +173,9 @@ pub(super) fn signature(
           });
           if let Some(overwrite) = &input.overwrite {
             value["overwrite"] = overwrite.as_str().into();
+          }
+          if let Some(implied) = &input.implied {
+            value["implied"] = implied.as_str().into();
           }
           value
         })
@@ -294,6 +306,7 @@ mod tests {
           replaces_other_resources: false,
           dependency_fingerprint: original.clone(),
           output: None,
+          superseded_by: None,
           merged_at: "before".into(),
           duplicates: Vec::new(),
         };
@@ -321,6 +334,7 @@ mod tests {
         path: "ybn/map.ybn".into(),
         fingerprint: fingerprint.clone(),
       }),
+      superseded_by: None,
       merged_at: "original".into(),
       duplicates: Vec::new(),
     };

@@ -34,7 +34,8 @@ in `web/`, described under `web` in its `release.json`; see [Browser build](web.
 | `--read` stdout | `ReadResult`, `ReadFileResult`, `ReadOrigin` |
 | `--read` JSON documents | `YmapReadDocument`, `ReadFingerprint`, `Ymap`, `YmapEntity`, `Position`, `Rotation` |
 | Source-cache diff documents | `YmapComparisonDiff`, `YmapComparisonFile`, `YmapDiffFields`, `YmapEntityDiff`, `YmapEntityFieldDiff` |
-| Changes carried to newer DLC generations | `YmapPropagatedDiff`, `YmapPropagationOrigin` |
+| Changes carried to newer DLC generations | `YmapPropagatedDiff`, `YmapPropagationOrigin`, `LeftBehind`, `LeftBehindReason` |
+| LOD light pair documents | `YmapImplied`, `YmapImpliedPartner` |
 | Vanilla YMAP generations | `GenerationIndex`, `GenerationUnit` |
 | Vanilla archives the game loads | `DlcActivity`, `ArchiveActivity`, `FileActivity`, `PackActivity`, `Unloaded`, `ChangeSetRef` |
 | Overwrite documents | `StreamFileOverwrite`, `OverwriteFingerprint`, `YmapDiffSkip`, `VanillaOverwrite` |
@@ -154,7 +155,8 @@ source root.
 | Convert YMAPs to JSON | `--read FILE` | `ReadResult` | each `files[].output` (`YmapReadDocument`) |
 | Inspect differences | none; written by source-cache generation | | `asset/map/source-cache/diff/{resource}/{stream_path}.diff.json` (`YmapComparisonDiff`) |
 | Inspect which vanilla YMAPs the game loads | none; written by vanilla-cache generation | | `asset/map/vanilla-cache/dlc_activity.json` (`DlcActivity`); see [Loaded Vanilla YMAPs](#loaded-vanilla-ymaps) |
-| Inspect changes carried to newer DLC generations | none; written by source-cache generation | | `asset/map/source-cache/propagated/{resource}/{file_name}.diff.json` (`YmapPropagatedDiff`); each carried item's `reason` names the item it came from |
+| Inspect what keeps a resource's LOD light pairs in step | none; written by source-cache generation | | `asset/map/source-cache/implied/{resource}/{stream_path}.json` (`YmapImplied`) |
+| Inspect changes carried to newer DLC generations | none; written by merge | | `asset/map/merged/generations/{resource}/{version}/{file_name}.diff.json` (`YmapPropagatedDiff`); each carried item's `reason` names the item it came from; `asset/map/merged/generations/left_behind.json` (`LeftBehind[]`) lists the changes carried nowhere |
 | Inspect vanilla version differences | none; vanilla-cache generation would write them, but it is currently disabled | | `asset/map/vanilla-cache/ymap_versions.json` (`VanillaYmapVersionIndex`), then `asset/map/vanilla-cache/diff/{version}/ymap/{name}.diff.json` (`VanillaYmapDiff`) for each version after a YMAP's first |
 | Apply overwrites | `--pipeline`, or `--merge` then `--deploy` | `PipelineReport` (pipeline only) | `asset/map/merged/duplicates.json` (`DuplicateReport`) |
 | Check overwrites | `--generate-overwrite-cache`; also run by `--merge` and `--pipeline` | | `asset/map/overwrite-cache/warnings.json` (`OverwriteWarnings`), `asset/map/overwrite-cache/added_stream_files.json` (`AddedStreamFiles`) |

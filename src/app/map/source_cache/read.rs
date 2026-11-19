@@ -37,9 +37,13 @@ pub struct MergeSourceFile {
   /// other formats.
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub diff_path: Option<PathBuf>,
-  /// Whether this is not a stream file but the changes the resource's YMAPs make, carried over
-  /// to a newer generation of the vanilla YMAP [`Self::file_name`] (a `YmapPropagatedDiff` at
-  /// [`Self::path`]); the resource does not ship that YMAP.
+  /// The source cache's document keeping this YMAP's LOD light pair in step
+  /// (`YmapImplied`), when it has one.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub implied_path: Option<PathBuf>,
+  /// Whether this is not a stream file but the changes the resource's YMAPs make to another
+  /// generation, carried over by the merge to the loaded generation's vanilla YMAP
+  /// [`Self::file_name`] (a `YmapPropagatedDiff` at [`Self::path`]).
   #[serde(default, skip_serializing_if = "std::ops::Not::not")]
   pub propagated: bool,
 }
@@ -73,9 +77,6 @@ pub struct MergeInputs {
   pub ymap: Vec<MergeSourceFile>,
   /// Conflicting source YBNs with a latest vanilla baseline.
   pub ybn: Vec<MergeSourceFile>,
-  /// Changes of source YMAPs carried over to newer generations of their vanilla YMAPs, one per
-  /// resource and vanilla YMAP; see [`MergeSourceFile::propagated`].
-  pub propagated: Vec<MergeSourceFile>,
   /// Latest vanilla YMAP filenames required by the source load plan.
   pub vanilla_ymaps_to_read: BTreeSet<String>,
   /// The lowercase file names of the stream files resources add, which replace no vanilla file,
@@ -356,6 +357,10 @@ pub fn load_merge_inputs(
   source_dir: &Path,
 ) -> Result<MergeInputs> {
   let metadata = read_metadata(cache_dir)?;
+  let implied = generate::implied::recorded_documents(cache_dir)
+    .into_iter()
+    .map(|path| cache_dir.join(path))
+    .collect::<BTreeSet<_>>();
   let conflicts: SourceCacheConflictReport =
     crate::common::json::read_json(cache_dir.join("stream_conflicts.json"))?;
   let conflict_paths = [".ymap", ".ybn"]
@@ -434,6 +439,11 @@ pub fn load_merge_inputs(
             .then(|| stream_file_diff_path(&resource.source, &file.path))
             .transpose()?
             .map(|path| cache_dir.join(DIFF_DIR).join(path));
+          let implied_path = (extension == ".ymap")
+            .then(|| generate::implied::implied_document_path(&resource.source, &file.path))
+            .transpose()?
+            .map(|path| cache_dir.join(generate::implied::IMPLIED_DIR).join(path))
+            .filter(|path| implied.contains(path));
           selected.push(MergeSourceFile {
             resource: resource_id.clone(),
             path: source_path,
@@ -444,30 +454,13 @@ pub fn load_merge_inputs(
             file_name: file.file_name,
             stream_path: layout::stream_relative_path(&file.path).unwrap_or(&file.path).to_string(),
             diff_path,
+            implied_path,
             propagated: false,
           });
         }
       }
     }
   }
-  for document in
-    generate::propagate::read_record(cache_dir).map(|record| record.documents).unwrap_or_default()
-  {
-    let path = cache_dir.join(&document.path);
-    inputs.propagated.push(MergeSourceFile {
-      resource: document.resource,
-      path: path.clone(),
-      stored_path: document.path,
-      moved: false,
-      original_path: PathBuf::new(),
-      source_path: String::new(),
-      file_name: document.file_name,
-      stream_path: String::new(),
-      diff_path: Some(path),
-      propagated: true,
-    });
-  }
-  inputs.propagated.sort_by(|left, right| left.path.cmp(&right.path));
   inputs.ymap.sort_by(|left, right| left.path.cmp(&right.path));
   inputs.ybn.sort_by(|left, right| left.path.cmp(&right.path));
   Ok(inputs)

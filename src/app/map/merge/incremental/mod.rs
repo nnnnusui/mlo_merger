@@ -20,7 +20,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 /// Bump when YMAP merge policy, encoding or cached reports change.
-const YMAP_ALGORITHM_VERSION: u32 = 12;
+const YMAP_ALGORITHM_VERSION: u32 = 13;
 /// Bump when YBN merge policy, encoding or cached reports change.
 const YBN_ALGORITHM_VERSION: u32 = 9;
 
@@ -46,6 +46,8 @@ pub(super) struct IncrementalMerge<'a> {
   pub ybn: &'a [PathBuf],
   pub ymap: &'a [PathBuf],
   pub inputs: &'a MergeInputs,
+  /// The changes of the sources carried over to newer generations, as merge sources.
+  pub carried: &'a [MergeSourceFile],
   /// The overwrites applied to the source YMAPs' diffs.
   pub overwrites: &'a Overwrites,
   /// The overwrites of the latest vanilla files written against their versions, keyed by

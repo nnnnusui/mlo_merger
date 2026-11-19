@@ -74,11 +74,16 @@ impl IncrementalMerge<'_> {
         .iter()
         .filter_map(|source| Some((source.path.clone(), self.overwrite(source)?.clone())))
         .collect();
+      let implied = stream_files
+        .iter()
+        .filter_map(|source| Some((source.path.clone(), source.implied_path.clone()?)))
+        .collect();
       MergeYmap {
         vanilla_dir: self.vanilla_archive.to_path_buf(),
         output_dir: directory.clone(),
         rebuild_all: true,
         overwrites,
+        implied,
         vanilla_overwrites,
         propagated: propagated
           .iter()

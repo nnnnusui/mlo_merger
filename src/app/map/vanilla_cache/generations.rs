@@ -247,6 +247,110 @@ impl GenerationIndex {
       })
     })
   }
+
+  /// The successor of the vanilla YMAP `file_name`, which the game does not load, when a newer
+  /// generation holds its items; a `lodlights_*` YMAP's is its `distlodlights_*` partner's
+  /// partner.
+  pub(crate) fn successor(
+    &self,
+    file_name: &str,
+  ) -> Option<String> {
+    let located = self.locate(file_name)?;
+    let listed = &located.family.generations[located.generation].files[located.file];
+    let successor = located.family.successors.get(listed)?;
+    match LightSide::of(&file_name.to_ascii_lowercase()) {
+      Some(LightSide::LodLights) => LightSide::partner_name(successor),
+      _ => Some(successor.clone()),
+    }
+  }
+
+  /// Whether the game loads the vanilla YMAP `file_name`, listed as its family lists it.
+  pub(crate) fn loads(
+    &self,
+    file_name: &str,
+  ) -> bool {
+    !self.inactive.contains_key(&file_name.to_ascii_lowercase())
+  }
+}
+
+/// A unit's pairs of one kind: the newer file and index of each older file and index.
+type UnitPairs = HashMap<(u32, u32), (u32, u32)>;
+
+/// Finds the items of newer generations that items of older ones stand for, loading units as it
+/// needs them.
+pub(crate) struct Counterparts<'a> {
+  index: &'a GenerationIndex,
+  cache_dir: &'a Path,
+  /// Per unit key, its pairs of each kind.
+  units: HashMap<String, HashMap<ItemKind, UnitPairs>>,
+  /// Per unit key, its older and newer YMAP names.
+  files: HashMap<String, (Vec<String>, Vec<String>)>,
+}
+
+impl<'a> Counterparts<'a> {
+  pub(crate) fn new(
+    index: &'a GenerationIndex,
+    cache_dir: &'a Path,
+  ) -> Self {
+    Self {
+      index,
+      cache_dir,
+      units: HashMap::new(),
+      files: HashMap::new(),
+    }
+  }
+
+  /// The YMAP and index of each item of a newer generation's YMAP the game loads that item
+  /// `index` of kind `kind` of the vanilla YMAP `file_name` pairs with; `file_name` and the
+  /// YMAPs are listed as their family lists them, a `distlodlights_*` YMAP for lights.
+  pub(crate) fn newer(
+    &mut self,
+    file_name: &str,
+    kind: ItemKind,
+    index: u32,
+  ) -> Result<Vec<(String, u32)>> {
+    let file = file_name.to_ascii_lowercase();
+    let Some(located) = self.index.locate(&file) else {
+      return Ok(Vec::new());
+    };
+    let mut found = Vec::new();
+    for unit in located.family.units.iter().filter(|unit| unit.older == located.generation) {
+      let key = unit.key.clone();
+      self.load(&key)?;
+      let (older, newer) = &self.files[&key];
+      let Some(older_file) = older.iter().position(|name| *name == file) else {
+        continue;
+      };
+      if let Some(&(newer_file, newer_index)) =
+        self.units[&key].get(&kind).and_then(|pairs| pairs.get(&(older_file as u32, index)))
+        && self.index.loads(&newer[newer_file as usize])
+      {
+        found.push((newer[newer_file as usize].clone(), newer_index));
+      }
+    }
+    Ok(found)
+  }
+
+  fn load(
+    &mut self,
+    key: &str,
+  ) -> Result<()> {
+    if self.units.contains_key(key) {
+      return Ok(());
+    }
+    let unit = load_unit(self.cache_dir, key)?;
+    let pairs = unit
+      .pairs
+      .iter()
+      .map(|(kind, pairs)| {
+        (*kind, pairs.iter().map(|&[of, oi, nf, ni]| ((of, oi), (nf, ni))).collect())
+      })
+      .collect();
+    let names = |files: &[UnitFile]| files.iter().map(|file| file.name.clone()).collect();
+    self.files.insert(key.to_owned(), (names(&unit.older), names(&unit.newer)));
+    self.units.insert(key.to_owned(), pairs);
+    Ok(())
+  }
 }
 
 /// Where [`GenerationIndex::locate`] found a YMAP.
@@ -269,16 +373,6 @@ pub(crate) fn load_unit(
     return Err(format!("{} is of another algorithm version", path.display()).into());
   }
   Ok(unit)
-}
-
-/// The digest of the generation index of the vanilla cache at `cache_dir`, for records of what
-/// was derived from it; `None` when it has none.
-pub(crate) fn index_digest(cache_dir: &Path) -> Result<Option<String>> {
-  match fs::read(cache_dir.join(GENERATIONS_FILE)) {
-    Ok(bytes) => Ok(Some(hex::encode(Sha256::digest(bytes)))),
-    Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
-    Err(error) => Err(error.into()),
-  }
 }
 
 /// Whether the cache at `output_dir` has the generation index of `revision` at `version`.
