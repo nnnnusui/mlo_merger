@@ -81,6 +81,8 @@ mod tests {
       "DlcActivity",
       "YmapImplied",
       "LeftBehind",
+      "MergeReportIndex",
+      "YmapMergeReport",
       "GenerationUnit",
       "VanillaYmapDiff",
       "VanillaYmapVersion",

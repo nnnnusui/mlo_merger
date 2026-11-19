@@ -4,6 +4,7 @@ mod generations;
 mod incremental;
 mod operation;
 mod outputs;
+mod report;
 pub mod run;
 pub mod ybn_conflicts;
 mod ymap_parent_refs;

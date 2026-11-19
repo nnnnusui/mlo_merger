@@ -7,7 +7,7 @@ use std::{collections::BTreeSet, path::Path};
 /// Entries of the merge output besides its metadata.
 const OUTPUT_ENTRIES: [&str; 7] = [
   CACHE_INFO,
-  "duplicates.json",
+  super::report::REPORT_DIR,
   "_omit.txt",
   "stream_file_rtree.json",
   "ymap",

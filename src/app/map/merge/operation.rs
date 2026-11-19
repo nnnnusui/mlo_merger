@@ -92,7 +92,7 @@ impl Merge {
     let vanilla_archive = crate::app::map::vanilla_cache::archive_dir(&vanilla_cache_dir)?;
     let output_dir = prepare_output_path(&self.output_dir)?;
     let staging = Staging(create_staging_directory(&output_dir)?);
-    let carried = super::generations::carry_generations(
+    let (carried, left_behind) = super::generations::carry_generations(
       &vanilla_cache_dir,
       &merge_inputs.ymap,
       &overwrites,
@@ -108,6 +108,7 @@ impl Merge {
       ymap: &latest_files.ymap,
       inputs: &merge_inputs,
       carried: &carried,
+      left_behind: &left_behind,
       overwrites: &overwrites,
       vanilla_overwrites: &vanilla_overwrites,
       added: &added,

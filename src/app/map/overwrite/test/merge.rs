@@ -458,9 +458,14 @@ fn vanilla_overwrites_merge_after_the_sources() {
   assert_eq!(result.entities[1].position.x, edited.entities[1].position.x);
   assert_eq!(result.streaming_extents_max, edited.streaming_extents_max);
   assert_eq!(result.entities_extents_min, vanilla_model.entities_extents_min);
-  let duplicates = fs::read_to_string(output.join("duplicates.json")).unwrap();
-  assert!(duplicates.contains("first_change_wins"), "{duplicates}");
-  assert!(duplicates.contains("overwrite/vanilla"), "{duplicates}");
+  let index: serde_json::Value =
+    serde_json::from_slice(&fs::read(output.join("report/index.json")).unwrap()).unwrap();
+  let report = fs::read_to_string(output.join(
+    index["files"].as_object().unwrap().values().next().unwrap()["report"].as_str().unwrap(),
+  ))
+  .unwrap();
+  assert!(report.contains("earlier_source_wins"), "{report}");
+  assert!(report.contains("vanilla_overwrite"), "{report}");
   let applied = merged_at();
   merge.run_after_caches(&vanilla).unwrap();
   assert_eq!(merged_at(), applied);
@@ -633,11 +638,11 @@ fn added_ymaps_merge_every_version_without_shared_additions() {
     files["files"]["custom.ymap"]["shipped_by"],
     serde_json::json!(["resource_a", "resource_b", "resource_c"])
   );
-  // The merge's duplicate report leaves them to the overwrite cache, which records each entity
-  // left out by its resource and index, with the one kept in its place.
-  let duplicates: serde_json::Value =
-    serde_json::from_reader(fs::File::open(output.join("duplicates.json")).unwrap()).unwrap();
-  assert!(duplicates["files"].get("custom.ymap").is_none(), "{duplicates}");
+  // The merge's report leaves them to the overwrite cache, which records each entity left out
+  // by its resource and index, with the one kept in its place.
+  let index: serde_json::Value =
+    serde_json::from_slice(&fs::read(output.join("report/index.json")).unwrap()).unwrap();
+  assert!(index["files"].get("custom.ymap").is_none(), "{index}");
   let entity_left_out = files["files"]["custom.ymap"]["left_out"]
     .as_array()
     .unwrap()

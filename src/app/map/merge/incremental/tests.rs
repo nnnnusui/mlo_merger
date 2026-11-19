@@ -100,6 +100,7 @@ fn ybn_version_change_reuses_current_ymap_groups() {
       ymap: &[],
       inputs: &inputs,
       carried: &[],
+      left_behind: &[],
       force: false,
       overwrites: &Default::default(),
       vanilla_overwrites: &Default::default(),

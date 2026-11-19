@@ -19,6 +19,9 @@ merge cannot carry, or ignores in favour of another change, per vanilla YMAP for
 - Streaming a YMAP of an archive a later pack replaced loads it again beside the loaded one,
   placing its items twice. A YMAP of an invalidated base game archive stays unloaded when
   streamed.
+- On a game build without a pack, streaming that pack's YMAP loads it beside the loaded
+  generation too: on build 3570, `m25_2_distlodlights_medium015` showed its lights beside
+  `vw_`'s, as `hei_` and `apa_` did, while `vw_` alone replaced them.
 - The successors found from the change sets match those found by pairing items for all but
   four YMAPs, LOD lights no generation of which is loaded.
 - Pairing entities by GUID first, then by archetype and position, leaves 1418 older entities
@@ -86,8 +89,9 @@ Between carried modifications, the newer origin generation wins.
   selected game build.
 - [ ] Carry the changes resources make to YMAPs of generations newer than the game build
   back to the generation the build loads.
-- [ ] Find whether streaming such a YMAP on an older build loads it, and deploy or omit it
-  accordingly.
+- [x] Find whether streaming such a YMAP on an older build loads it: it does, beside the
+  loaded generation.
+- [ ] Omit such YMAPs from the merge, as YMAPs with a successor are.
 
 ### 6. Merge: YMAPs Not Loaded
 
@@ -95,10 +99,13 @@ Between carried modifications, the newer origin generation wins.
 
 ### 7. Merge Report
 
-- [ ] Write `merged/report/index.json` and `merged/report/vanilla/{version}/ymap/{file}.json`
-  in place of `duplicates.json`: each item names the applied and ignored contributions by
-  resource and stream path, with array, `base_index` and a reason.
-- [ ] Report each YMAP not deployed with its successor and units, and each change lost.
+- [x] Write `merged/report/index.json` and `merged/report/vanilla/{version}/ymap/{file}.json`
+  in place of `duplicates.json`: each entity competed for names the applied and ignored
+  changes by resource and stream path or carried document, with its index in that diff and
+  a reason.
+- [x] Report each YMAP not deployed with its successor, and each change carried nowhere; the
+  units pairing it with the successor are in `generations.json`.
+- [ ] Report the other arrays' competing changes as entities' are.
 
 ### 8. Documentation
 

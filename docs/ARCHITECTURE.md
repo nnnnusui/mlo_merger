@@ -154,7 +154,8 @@ unchanged. Generations are resolved by the merge.
    final parent references. Diffs and their application stay complete, so other uses
    replay every change. YBNs apply supported source changes directly.
 5. Write merged native stream files under extension subdirectories (`ymap/`, `ybn/`),
-   `_omit.txt` and `duplicates.json` at the selected output root.
+   `_omit.txt` and the merge report (`report/`, `app::map::merge::report`) at the selected
+   output root.
 
 A stream file that resources add, named after no vanilla file, is merged from every
 resource's version that no overwrite ignores, as the overwrite cache records them, each

@@ -164,10 +164,38 @@ resource paths under `-i`, preserving modification times.
 ## Merge
 
 Merge writes native files under `ymap/` and `ybn/`, plus `_omit.txt` for replaced source
-paths, `duplicates.json` for competing entity changes to vanilla YMAPs and `generations/` for
-the changes it carries over to newer generations (see
-[Newer DLC Generations](#newer-dlc-generations)). It rebuilds only
-changed or invalid groups. Failed merges leave the prior output intact.
+paths, `generations/` for the changes it carries over to newer generations (see
+[Newer DLC Generations](#newer-dlc-generations)) and `report/` for what it decided (see
+[Merge Report](#merge-report)). It rebuilds only changed or invalid groups. Failed merges
+leave the prior output intact.
+
+### Merge Report
+
+`report/index.json` (`MergeReportIndex`) lists each vanilla YMAP the merge has something to
+report of: sources competing for one of its entities, changes to it carried nowhere, or its
+not being deployed for a successor. For each it gives its report, what the output holds of
+it (`written`, `unchanged` or `omitted`), its successor, and how many entities are competed
+for and changes carried nowhere; `by_resource` lists the reported YMAPs each resource's
+changes are among.
+
+`report/vanilla/{version}/ymap/{fileName}.json` (`YmapMergeReport`), `version` and the file
+name those of the latest vanilla YMAP, holds the entities competed for, each with the change
+applied and those not, with why:
+
+| Reason | The applied change |
+|---|---|
+| `identical_duplicate` | Is the same |
+| `removal_wins` | Removes the entity |
+| `newer_generation_wins` | Comes from a newer generation: the YMAP's own sources from the loaded one, carried changes from their origin |
+| `earlier_source_wins` | Comes from a source merged before |
+| `same_addition_newer` | Is the same resource's addition of the entity in a newer generation |
+
+A change names its resource and source: a stream file by its `stream_path`, whose
+source-cache diff document holds the change, a carried document of `generations/` with the
+stage of its origin generation, or a vanilla overwrite. Its `index` is where that diff names
+the entity: `base_index` for a removal or a modification, `target_index` for an addition.
+The report also lists the changes to the YMAP carried nowhere (`left_behind`, see
+[Newer DLC Generations](#newer-dlc-generations)).
 
 Merge applies every source's differences from the latest vanilla file together to
 vanilla. YMAP differences are read from the source cache's
@@ -612,7 +640,7 @@ YBN conversion needs no schemas.
 ## TypeScript Types
 
 The release archives contain `asset/gen_mlo_merger.ts`, generated from the Rust Serde
-models: merge diagnostics, vanilla/source/merge/deploy caches, stream conflicts,
+models: the merge report, vanilla/source/merge/deploy caches, stream conflicts,
 diff-cache reports, source-cache YMAP diff documents (`YmapComparisonDiff`), overwrite
 documents (`StreamFileOverwrite`, `VanillaOverwrite`), the overwrite cache's added stream files
 and warnings (`AddedStreamFiles`, `OverwriteWarnings`), `--read` documents and results (`YmapReadDocument`,
@@ -622,7 +650,7 @@ Schema documents, and it is not checked into the repository; see
 [development.md](development.md#typescript-types) to generate it locally.
 
 ```typescript
-import type { DuplicateReport, MatchingConfig } from "./asset/gen_mlo_merger";
+import type { MatchingConfig, MergeReportIndex } from "./asset/gen_mlo_merger";
 
 const config: MatchingConfig = { tolerance: { ybn_position: 0.05 } };
 ```

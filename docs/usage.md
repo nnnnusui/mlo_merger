@@ -41,7 +41,7 @@ in `web/`, described under `web` in its `release.json`; see [Browser build](web.
 | Overwrite documents | `StreamFileOverwrite`, `OverwriteFingerprint`, `YmapDiffSkip`, `VanillaOverwrite` |
 | Overwrite cache | `AddedStreamFiles`, `AddedStreamFile`, `AddedStreamFileSource`, `LeftOutAddition`, `AddedItem`, `OverwriteWarnings`, `SourceUpdate`, `SourceVersion`, `SourceUpdateOutcome` |
 | Pipeline stdout | `PipelineReport`, `PipelineChanges`, `StoreChanges`, `OverwriteWarnings`, `IgnoredOverwrite`, `IgnoredOverwriteReason` |
-| Merge diagnostics | `DuplicateReport` |
+| Merge report | `MergeReportIndex`, `ReportedFile`, `ReportedOutput`, `YmapMergeReport`, `EntityReport`, `ReportedChange`, `ReportedKind`, `ChangeSource`, `IgnoredChange`, `IgnoredReason` |
 
 ```typescript
 import type {
@@ -158,7 +158,7 @@ source root.
 | Inspect what keeps a resource's LOD light pairs in step | none; written by source-cache generation | | `asset/map/source-cache/implied/{resource}/{stream_path}.json` (`YmapImplied`) |
 | Inspect changes carried to newer DLC generations | none; written by merge | | `asset/map/merged/generations/{resource}/{version}/{file_name}.diff.json` (`YmapPropagatedDiff`); each carried item's `reason` names the item it came from; `asset/map/merged/generations/left_behind.json` (`LeftBehind[]`) lists the changes carried nowhere |
 | Inspect vanilla version differences | none; vanilla-cache generation would write them, but it is currently disabled | | `asset/map/vanilla-cache/ymap_versions.json` (`VanillaYmapVersionIndex`), then `asset/map/vanilla-cache/diff/{version}/ymap/{name}.diff.json` (`VanillaYmapDiff`) for each version after a YMAP's first |
-| Apply overwrites | `--pipeline`, or `--merge` then `--deploy` | `PipelineReport` (pipeline only) | `asset/map/merged/duplicates.json` (`DuplicateReport`) |
+| Apply overwrites | `--pipeline`, or `--merge` then `--deploy` | `PipelineReport` (pipeline only) | `asset/map/merged/report/index.json` (`MergeReportIndex`), then `asset/map/merged/report/vanilla/{version}/ymap/{file_name}.json` (`YmapMergeReport`); see [Merge Report](reference.md#merge-report) |
 | Check overwrites | `--generate-overwrite-cache`; also run by `--merge` and `--pipeline` | | `asset/map/overwrite-cache/warnings.json` (`OverwriteWarnings`), `asset/map/overwrite-cache/added_stream_files.json` (`AddedStreamFiles`) |
 
 ### Stream-File Bounds Indexes

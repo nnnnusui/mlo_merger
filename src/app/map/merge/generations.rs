@@ -100,19 +100,19 @@ struct CarrySource {
 /// Carries the changes of `sources`, the merge's source YMAPs, to newer loaded generations by
 /// the generation index of the vanilla cache at `vanilla_cache_dir`: writes the documents and
 /// the changes left behind into [`GENERATIONS_DIR`] of `staging`, and returns the documents as
-/// merge sources, newest origin first. Each source's diff is taken after its LOD light pair
+/// merge sources, newest origin first, with the changes left behind. Each source's diff is taken after its LOD light pair
 /// document's `skip` and its overwrite in `overwrites`.
 pub(super) fn carry_generations(
   vanilla_cache_dir: &Path,
   sources: &[MergeSourceFile],
   overwrites: &Overwrites,
   staging: &Path,
-) -> Result<Vec<MergeSourceFile>> {
+) -> Result<(Vec<MergeSourceFile>, Vec<LeftBehind>)> {
   let Some(index) = GenerationIndex::load(vanilla_cache_dir)? else {
     tracing::warn!(
       "The vanilla cache has no YMAP generation index; changes are not carried over to newer generations"
     );
-    return Ok(Vec::new());
+    return Ok((Vec::new(), Vec::new()));
   };
   let mut carry_sources = Vec::new();
   for source in sources.iter().filter(|source| !source.propagated) {
@@ -189,27 +189,26 @@ pub(super) fn carry_generations(
   documents.sort_by(|left, right| {
     right.origin_version.cmp(&left.origin_version).then_with(|| left.path.cmp(&right.path))
   });
-  Ok(
-    documents
-      .into_iter()
-      .map(|document| {
-        let path = target.join(&document.path);
-        MergeSourceFile {
-          resource: document.resource,
-          path: path.clone(),
-          stored_path: format!("{GENERATIONS_DIR}/{}", document.path),
-          moved: false,
-          original_path: PathBuf::new(),
-          source_path: String::new(),
-          file_name: document.file_name,
-          stream_path: String::new(),
-          diff_path: Some(path),
-          implied_path: None,
-          propagated: true,
-        }
-      })
-      .collect(),
-  )
+  let carried = documents
+    .into_iter()
+    .map(|document| {
+      let path = target.join(&document.path);
+      MergeSourceFile {
+        resource: document.resource,
+        path: path.clone(),
+        stored_path: format!("{GENERATIONS_DIR}/{}", document.path),
+        moved: false,
+        original_path: PathBuf::new(),
+        source_path: String::new(),
+        file_name: document.file_name,
+        stream_path: String::new(),
+        diff_path: Some(path),
+        implied_path: None,
+        propagated: true,
+      }
+    })
+    .collect();
+  Ok((carried, left_behind))
 }
 
 /// `diffs`, a LOD light pair document's removals of the vanilla other YMAP, but those of lights

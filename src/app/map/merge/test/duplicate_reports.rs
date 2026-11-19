@@ -3,7 +3,6 @@ use super::*;
 #[test]
 #[ignore = "requires local vanilla YMAP schemas"]
 fn incremental_merge_preserves_and_restores_duplicate_reports() {
-  use super::super::super::duplicates::DuplicateReport;
   use crate::core::format::gamefile::{
     meta::{MetaResource, MetaSchemaCatalog},
     rsc7::Rsc7Resource,
@@ -89,11 +88,20 @@ fn incremental_merge_preserves_and_restores_duplicate_reports() {
     .run_after_caches(&vanilla)
     .unwrap()
   };
+  // The reported entities of each reported YMAP.
   let read_report = || {
-    serde_json::from_reader::<_, DuplicateReport>(
-      fs::File::open(output.join("duplicates.json")).unwrap(),
-    )
-    .unwrap()
+    use super::super::super::report::{MergeReportIndex, YmapMergeReport};
+    let index: MergeReportIndex =
+      crate::common::json::read_json(output.join("report/index.json")).unwrap();
+    index
+      .files
+      .iter()
+      .map(|(name, file)| {
+        let report: YmapMergeReport =
+          crate::common::json::read_json(output.join(&file.report)).unwrap();
+        (name.clone(), report.entities)
+      })
+      .collect::<BTreeMap<_, _>>()
   };
   let read_cache = || {
     serde_json::from_reader::<_, super::super::super::incremental::MergeMetadata>(
@@ -103,23 +111,25 @@ fn incremental_merge_preserves_and_restores_duplicate_reports() {
   };
   run_merge();
   let report = read_report();
-  let duplicate = report.files[&name].iter().find(|entry| entry.guid == guid).unwrap();
+  let duplicate =
+    report[&name.to_ascii_lowercase()].iter().find(|entry| entry.guid == guid).unwrap();
   assert_eq!(duplicate.applied.resource, "resource_a");
-  assert_eq!(duplicate.ignored[0].source.resource, "resource_b");
-  assert_eq!(duplicate.ignored[0].reason, "first_change_wins");
-  assert_eq!(duplicate.applied.entity.as_ref().unwrap().guid, guid);
-  assert_eq!(duplicate.vanilla.as_ref().unwrap().guid, guid);
+  assert_eq!(duplicate.ignored[0].change.resource, "resource_b");
+  assert_eq!(
+    duplicate.ignored[0].reason,
+    super::super::super::duplicates::IgnoredReason::EarlierSourceWins
+  );
   let before = read_cache();
-  let modified = fs::metadata(output.join("duplicates.json")).unwrap().modified().unwrap();
+  let modified = fs::metadata(output.join("report/index.json")).unwrap().modified().unwrap();
   run_merge();
   assert_eq!(read_report(), report);
-  assert_eq!(fs::metadata(output.join("duplicates.json")).unwrap().modified().unwrap(), modified);
-  fs::remove_file(output.join("duplicates.json")).unwrap();
+  assert_eq!(fs::metadata(output.join("report/index.json")).unwrap().modified().unwrap(), modified);
+  fs::remove_dir_all(output.join("report")).unwrap();
   run_merge();
   assert_eq!(read_report(), report);
   assert_eq!(read_cache().files[&name].merged_at, before.files[&name].merged_at);
   fs::remove_dir_all(source.join("resource_b")).unwrap();
   run_merge();
-  assert!(read_report().files.is_empty());
+  assert!(read_report().is_empty());
   fs::remove_dir_all(root).unwrap();
 }

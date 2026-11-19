@@ -165,24 +165,15 @@ impl IncrementalMerge<'_> {
       );
     }
     let omit_text = omitted.into_iter().collect::<Vec<_>>().join("\n");
-    let duplicates = DuplicateReport {
-      format_version: 1,
-      files: files
-        .iter()
-        .filter(|(_, record)| !record.duplicates.is_empty())
-        .map(|(name, record)| (name.clone(), record.duplicates.clone()))
-        .collect(),
-    };
-    let duplicate_path = output_path(self.output, "duplicates.json")?;
-    let duplicate_current = crate::common::json::read_json::<DuplicateReport>(&duplicate_path)
-      .is_ok_and(|previous| previous == duplicates);
+    let report = self.report(&files, &baselines)?;
+    let report_current = super::super::report::is_current(self.output, &report)?;
     if rebuilt == 0
       && !self.force
       && previous.as_ref().is_some_and(|previous| previous.files == files)
       && previous.as_ref().is_some_and(|previous| {
         previous.algorithm_version.is_none() && previous.algorithm_versions == algorithm_versions()
       })
-      && duplicate_current
+      && report_current
       && fs::read_to_string(self.output.join("_omit.txt")).ok().as_deref() == Some(&omit_text)
     {
       tracing::info!("Merge output is current; nothing to do");
@@ -193,7 +184,11 @@ impl IncrementalMerge<'_> {
       retain_file(&from, &to)?;
     }
     fs::write(self.staging.join("_omit.txt"), omit_text)?;
-    write_json(&self.staging.join("duplicates.json"), &duplicates)?;
+    for (path, bytes) in &report {
+      let path = output_path(self.staging, path)?;
+      fs::create_dir_all(path.parent().ok_or("Report path has no parent")?)?;
+      fs::write(path, bytes)?;
+    }
     write_json(
       &self.staging.join(crate::app::map::merge::outputs::CACHE_INFO),
       &MergeMetadata {
@@ -335,6 +330,55 @@ impl IncrementalMerge<'_> {
 }
 
 impl IncrementalMerge<'_> {
+  /// The merge report of `files`, the records of this merge, and of the changes carried nowhere;
+  /// `baselines` are the latest vanilla files by name.
+  fn report(
+    &self,
+    files: &BTreeMap<String, FileRecord>,
+    baselines: &BTreeMap<String, &PathBuf>,
+  ) -> Result<BTreeMap<String, Vec<u8>>> {
+    use super::super::report::{ReportInput, ReportedOutput, build};
+    let stream_paths = self
+      .inputs
+      .ymap
+      .iter()
+      .map(|source| (source.stored_path.replace('\\', "/"), source.stream_path.clone()))
+      .collect::<BTreeMap<_, _>>();
+    let mut left_behind = BTreeMap::<String, Vec<_>>::new();
+    for change in self.left_behind {
+      left_behind.entry(change.file_name.to_ascii_lowercase()).or_default().push(change.clone());
+    }
+    let names = files.keys().cloned().chain(left_behind.keys().cloned()).collect::<BTreeSet<_>>();
+    let vanilla = names
+      .iter()
+      .map(|name| {
+        let path = baselines
+          .get(name)
+          .map(|path| self.stored_vanilla_path(path).to_string_lossy().replace('\\', "/"));
+        (name.clone(), path)
+      })
+      .collect::<BTreeMap<_, _>>();
+    let inputs = names
+      .iter()
+      .map(|name| {
+        let record = files.get(name);
+        ReportInput {
+          file_name: name,
+          vanilla: vanilla[name].as_deref(),
+          output: match record {
+            Some(record) if record.superseded_by.is_some() => ReportedOutput::Omitted,
+            Some(record) if record.output.is_some() => ReportedOutput::Written,
+            _ => ReportedOutput::Unchanged,
+          },
+          superseded_by: record.and_then(|record| record.superseded_by.as_deref()),
+          duplicates: record.map(|record| record.duplicates.as_slice()).unwrap_or_default(),
+          left_behind: left_behind.remove(name).unwrap_or_default(),
+        }
+      })
+      .collect();
+    build(inputs, &stream_paths)
+  }
+
   /// The record of `source` as a merge input, its fingerprint reused from `previous_inputs` when
   /// the file is unchanged.
   fn source_input(

@@ -120,7 +120,11 @@ impl MergeMetadata {
     if !fs::is_file(&path) {
       return Ok(None);
     }
-    let metadata: Self = crate::common::json::read_json(path)?;
+    // Records of another layout are merged again.
+    let Ok(metadata) = crate::common::json::read_json::<Self>(&path) else {
+      tracing::info!("{} is of another layout; merging every group again", path.display());
+      return Ok(None);
+    };
     Ok((metadata.format_version == 1).then_some(metadata))
   }
 
