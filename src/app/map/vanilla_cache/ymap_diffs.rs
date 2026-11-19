@@ -193,6 +193,7 @@ fn exact_diff(
     vanilla_parents: raw_entity_parents(previous),
     modded_parents: raw_entity_parents(current),
     record_moves: true,
+    guid_aliases: Default::default(),
   };
   let mut diffs = previous.diff(current, &ctx).unwrap_or_default();
   if let Some(grass) =

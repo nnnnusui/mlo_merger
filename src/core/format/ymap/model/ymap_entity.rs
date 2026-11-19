@@ -19,7 +19,11 @@ pub struct YmapEntity {
   pub guid: u32,
   #[diff(nested, context = ctx.ymap)]
   pub position: Position,
-  #[diff(nested, context = ctx.ymap)]
+  #[diff(
+    with = crate::common::rotation::turn,
+    context = ctx.ymap,
+    output = crate::common::rotation::RotationDiff
+  )]
   pub rotation: Rotation,
   #[diff(threshold = ctx.ymap)]
   pub scale_x_y: f32,

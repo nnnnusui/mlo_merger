@@ -271,6 +271,84 @@ fn external_parents_are_named_by_their_map_and_guid() {
   );
 }
 
+#[test]
+fn a_negated_rotation_is_the_same_turn() {
+  let mut vanilla = with_entities(vec![entity(1)]);
+  vanilla.entities[0].rotation = crate::common::rotation::Rotation {
+    x: 0.0,
+    y: 0.0,
+    z: -0.9396928,
+    w: 0.34201995,
+  };
+  let mut negated = vanilla.clone();
+  let rotation = &mut negated.entities[0].rotation;
+  (rotation.z, rotation.w) = (0.9396928, -0.34201995);
+  assert_eq!(json(&vanilla, &negated), json!({}));
+  // Exact comparisons, which rebuild the file, keep the sign.
+  let exact = vanilla.entities[0].diff(&negated.entities[0], &MatchTolerances::ymap_exact());
+  let rotation = exact.and_then(|changes| changes.rotation).unwrap();
+  assert_eq!((rotation.z, rotation.w), (Some(0.9396928), Some(-0.34201995)));
+  // A turn changed beyond the tolerance is recorded.
+  negated.entities[0].rotation.w = -0.5;
+  assert_eq!(
+    json(&vanilla, &negated)["entities"][0]["Modified"]["changes"]["rotation"]["w"],
+    json!(-0.5)
+  );
+}
+
+#[test]
+fn guids_rounded_through_a_float_pair_with_vanilla_and_keep_its_guid() {
+  let lod = "LODTYPES_DEPTH_LOD";
+  let hd = "LODTYPES_DEPTH_HD";
+  let vanilla =
+    with_entities(vec![linked(3_690_859_126, lod, -1, false), linked(923_442_616, hd, 0, false)]);
+  let mut rounded =
+    with_entities(vec![linked(3_690_859_008, lod, -1, false), linked(923_442_624, hd, 0, false)]);
+  let ctx = |modded: &Ymap| {
+    YmapDiffContext::new(MatchTolerances::default(), (&vanilla, None), (modded, None))
+  };
+  assert_eq!(compare::entities::diff(&vanilla.entities, &rounded.entities, &ctx(&rounded)), None);
+  // Other changes are still recorded, without the GUID.
+  rounded.entities[1].lod_dist = 250.0;
+  let diffs = compare::entities::diff(&vanilla.entities, &rounded.entities, &ctx(&rounded));
+  assert_eq!(
+    serde_json::to_value(diffs).unwrap(),
+    json!([{ "Modified": { "base_index": 1, "target_index": 1, "changes": { "lod_dist": 250.0 } } }])
+  );
+  // An entity placed elsewhere is another one, whatever its GUID rounds to.
+  rounded.entities[1].position.y += 5.0;
+  let diffs =
+    compare::entities::diff(&vanilla.entities, &rounded.entities, &ctx(&rounded)).unwrap();
+  assert!(
+    matches!(
+      diffs.as_slice(),
+      [
+        YmapEntityDiff::Removed {
+          base_index: 1,
+          ..
+        },
+        YmapEntityDiff::Added { .. }
+      ]
+    ),
+    "{diffs:?}"
+  );
+}
+
+#[test]
+fn parents_named_by_a_rounded_guid_are_named_by_the_vanilla_one() {
+  let mut vanilla = with_entities(vec![linked(1, "LODTYPES_DEPTH_HD", 1, true)]);
+  vanilla.parent = "parent_map".into();
+  let vanilla_parent = vec![entity(10), entity(3_690_859_126)];
+  let rounded_parent = vec![entity(10), entity(3_690_859_008)];
+  let ctx = YmapDiffContext::new(
+    MatchTolerances::default(),
+    (&vanilla, Some(&vanilla_parent)),
+    (&vanilla, Some(&rounded_parent)),
+  );
+  assert_eq!(ctx.modded_parents, ctx.vanilla_parents);
+  assert_eq!(compare::entities::diff(&vanilla.entities, &vanilla.entities, &ctx), None);
+}
+
 fn door(limit_angle: f32) -> YmapExtension {
   YmapExtension::Door(YmapDoor {
     name: "door".into(),

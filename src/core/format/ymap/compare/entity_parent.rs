@@ -6,6 +6,8 @@
 //! so an entity whose parent merely moved within its array is unchanged, and applying finds the
 //! parent again in the final arrays.
 
+use std::collections::{HashMap, HashSet};
+
 use serde::{Deserialize, Serialize};
 
 use crate::core::{
@@ -57,8 +59,12 @@ impl EntityParent {
 /// The parent of every entity of a YMAP, in entity order.
 pub type EntityParents = Vec<EntityParent>;
 
-/// What comparing two YMAPs depends on: the matching tolerances and the parents of both YMAPs'
-/// entities.
+/// GUIDs of modded entities that a tool rounded through a 32-bit float, by the vanilla GUID they
+/// were rounded from.
+pub type GuidAliases = HashMap<u32, u32>;
+
+/// What comparing two YMAPs depends on: the matching tolerances, the parents of both YMAPs'
+/// entities, and the GUIDs of the modded YMAP's entities that were rounded.
 #[derive(Debug, Clone, Default)]
 pub struct YmapDiffContext {
   pub tolerances: MatchTolerances,
@@ -70,6 +76,9 @@ pub struct YmapDiffContext {
   /// rebuilds their order (see [`super::entities`]). Merging would take them for deletions, so
   /// only diffs replayed onto the YMAP they were taken from record moves.
   pub record_moves: bool,
+  /// The modded YMAP's entity GUIDs rounded from vanilla ones (see [`rounded_guid_aliases`]);
+  /// those entities pair with vanilla's by the vanilla GUID, which they keep.
+  pub guid_aliases: GuidAliases,
 }
 
 impl YmapDiffContext {
@@ -80,13 +89,82 @@ impl YmapDiffContext {
     (vanilla, vanilla_parent): (&Ymap, Option<&[YmapEntity]>),
     (modded, modded_parent): (&Ymap, Option<&[YmapEntity]>),
   ) -> Self {
+    let tolerance = tolerances.ymap;
+    let guid_aliases = rounded_guid_aliases(&vanilla.entities, &modded.entities, tolerance);
+    let parent_aliases = match (vanilla_parent, modded_parent) {
+      (Some(vanilla), Some(modded)) => rounded_guid_aliases(vanilla, modded, tolerance),
+      _ => GuidAliases::new(),
+    };
+    let alias = |aliases: &GuidAliases, guid: u32| aliases.get(&guid).copied().unwrap_or(guid);
+    let modded_parents = entity_parents(modded, modded_parent)
+      .into_iter()
+      .map(|parent| match parent {
+        EntityParent::Own {
+          guid,
+        } => EntityParent::Own {
+          guid: alias(&guid_aliases, guid),
+        },
+        EntityParent::Parent {
+          map,
+          guid,
+        } => EntityParent::Parent {
+          map,
+          guid: alias(&parent_aliases, guid),
+        },
+        parent => parent,
+      })
+      .collect();
     Self {
       tolerances,
       vanilla_parents: entity_parents(vanilla, vanilla_parent),
-      modded_parents: entity_parents(modded, modded_parent),
+      modded_parents,
       record_moves: false,
+      guid_aliases,
     }
   }
+}
+
+/// The GUIDs of `modded` entities that a tool rounded through a 32-bit float, by the `vanilla`
+/// GUID each was rounded from.
+///
+/// A float holds integers exactly only up to 2^24, so such a tool writes most GUIDs with their
+/// low bits changed. A modded entity's GUID is taken for rounded from a vanilla entity's when
+/// neither GUID is on the other side, the modded one is unique and as a float equals the vanilla
+/// one, and the entity is [placed alike](super::added::placed_alike), within `tolerance`.
+pub fn rounded_guid_aliases(
+  vanilla: &[YmapEntity],
+  modded: &[YmapEntity],
+  tolerance: f32,
+) -> GuidAliases {
+  let guids =
+    |entities: &[YmapEntity]| entities.iter().map(|entity| entity.guid).collect::<HashSet<_>>();
+  let (vanilla_guids, modded_guids) = (guids(vanilla), guids(modded));
+  let mut candidates = HashMap::<u32, Vec<&YmapEntity>>::new();
+  for entity in
+    vanilla.iter().filter(|entity| entity.guid != 0 && !modded_guids.contains(&entity.guid))
+  {
+    candidates.entry((entity.guid as f32).to_bits()).or_default().push(entity);
+  }
+  let mut counts = HashMap::<u32, usize>::new();
+  for entity in modded {
+    *counts.entry(entity.guid).or_default() += 1;
+  }
+  let mut aliases = GuidAliases::new();
+  for entity in modded {
+    let guid = entity.guid;
+    if guid == 0 || vanilla_guids.contains(&guid) || counts[&guid] > 1 {
+      continue;
+    }
+    let Some(candidates) = candidates.get_mut(&(guid as f32).to_bits()) else {
+      continue;
+    };
+    if let Some(position) =
+      candidates.iter().position(|vanilla| super::added::placed_alike(entity, vanilla, tolerance))
+    {
+      aliases.insert(guid, candidates.remove(position).guid);
+    }
+  }
+  aliases
 }
 
 /// The parent of each entity of `ymap` as its raw `parentIndex` (see [`EntityParent::raw`]), for

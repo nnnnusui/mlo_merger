@@ -11,8 +11,8 @@
 use super::*;
 use crate::core::format::ymap::compare::lod_light_pairs::LightSide;
 
-/// The vanilla YMAP a source is diffed against: its path, model and entity parents.
-pub(super) type Baseline<'a> = (&'a Path, &'a Ymap, &'a EntityParents);
+/// The vanilla YMAP a source is diffed against: its path and model.
+pub(super) type Baseline<'a> = (&'a Path, &'a Ymap);
 
 /// Removals of LOD lights that resources make in one YMAP of a pair and that merging makes in
 /// the vanilla other one, keyed by that one's hash: each resource with its diff.
@@ -26,13 +26,14 @@ impl MergeYmap {
     &self,
     mod_info: &ModYmapReference,
     source: &OriginalMap,
-    (vanilla_ymap_path, vanilla_ymap, vanilla_parents): Baseline<'_>,
+    (vanilla_ymap_path, vanilla_ymap): Baseline<'_>,
     sources: &mut SourceMaps,
     references: &mut ParentReferences,
     registered_maps: &HashSet<(String, u32)>,
   ) -> Result<YmapDiffFields, Box<dyn std::error::Error>> {
     let ymap_name = mod_info.ymap_name.as_str();
     let tolerances = crate::core::config::matching::current();
+    let vanilla_parent = parent_map(sources, references, None, vanilla_ymap)?;
     let (mut ymap_diff, fingerprints) = match &mod_info.diff_path {
       Some(diff_path) => {
         let document = YmapComparisonDiff::read_current(
@@ -62,12 +63,13 @@ impl MergeYmap {
       }
       // Sources outside a source cache are compared here, against the latest vanilla.
       None => {
-        let ctx = YmapDiffContext {
+        let modded_parent =
+          parent_map(sources, references, Some(&mod_info.mod_name), &source.model)?;
+        let ctx = YmapDiffContext::new(
           tolerances,
-          vanilla_parents: vanilla_parents.clone(),
-          modded_parents: parents_of(sources, references, Some(&mod_info.mod_name), &source.model)?,
-          record_moves: false,
-        };
+          (vanilla_ymap, vanilla_parent.as_ref().map(|parent| parent.entities.as_slice())),
+          (&source.model, modded_parent.as_ref().map(|parent| parent.entities.as_slice())),
+        );
         let mut diff = vanilla_ymap.diff(&source.model, &ctx).unwrap_or_default();
         if let Some((side, partner_hash)) = pair_of(sources, ymap_name)?
           && registered_maps.contains(&(mod_info.mod_name.clone(), partner_hash))
@@ -115,7 +117,6 @@ impl MergeYmap {
       else {
         continue;
       };
-      let vanilla_parents = parents_of(sources, references, None, &original.model)?;
       for mod_info in mod_refs {
         if registered_maps.contains(&(mod_info.mod_name.clone(), partner_hash)) {
           continue;
@@ -126,7 +127,7 @@ impl MergeYmap {
         let diff = self.source_diff(
           mod_info,
           &source,
-          (vanilla_ymap_path, &original.model, &vanilla_parents),
+          (vanilla_ymap_path, &original.model),
           sources,
           references,
           registered_maps,

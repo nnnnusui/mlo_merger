@@ -112,6 +112,21 @@ fn log_diff_counts(diff: &YmapDiffFields) {
   );
 }
 
+/// The parent YMAP of `ymap`, `resource`'s or else vanilla's, registering its entities.
+fn parent_map(
+  sources: &mut SourceMaps,
+  references: &mut ParentReferences,
+  resource: Option<&str>,
+  ymap: &Ymap,
+) -> Result<Option<std::rc::Rc<OriginalMap>>, Box<dyn std::error::Error>> {
+  let parent_hash = reference_hash(&ymap.parent);
+  let parent = if parent_hash == 0 { None } else { sources.get(resource, parent_hash)? };
+  if let Some(parent) = &parent {
+    references.register_entities(parent_hash, &parent.entities);
+  }
+  Ok(parent)
+}
+
 /// The parent of each entity of `ymap`, read from `resource`'s or else vanilla's parent YMAP.
 fn parents_of(
   sources: &mut SourceMaps,
@@ -119,11 +134,7 @@ fn parents_of(
   resource: Option<&str>,
   ymap: &Ymap,
 ) -> Result<EntityParents, Box<dyn std::error::Error>> {
-  let parent_hash = reference_hash(&ymap.parent);
-  let parent = if parent_hash == 0 { None } else { sources.get(resource, parent_hash)? };
-  if let Some(parent) = &parent {
-    references.register_entities(parent_hash, &parent.entities);
-  }
+  let parent = parent_map(sources, references, resource, ymap)?;
   Ok(entity_parents(ymap, parent.as_ref().map(|parent| parent.entities.as_slice())))
 }
 

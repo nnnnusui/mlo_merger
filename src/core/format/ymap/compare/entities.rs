@@ -1,7 +1,9 @@
 //! Entity differences, the `#[diff(with)]` strategy of `Ymap::entities`.
 //!
 //! Entities sharing a GUID are paired one to one in entity order; when the counts differ, the
-//! unpaired ones are reported as removed or added. Paired entities are compared as `YmapEntity`
+//! unpaired ones are reported as removed or added. A modded entity whose GUID a tool rounded
+//! from a vanilla one (see [`YmapDiffContext::guid_aliases`]) pairs by the vanilla GUID and
+//! keeps it. Paired entities are compared as `YmapEntity`
 //! declares, and their `parentIndex` by the entity it points at (see [`EntityParent`]).
 //!
 //! Applying keeps paired entities in vanilla order, so a reordering is not recorded unless
@@ -16,7 +18,7 @@ use struct_diff::{ApplyError, Diff};
 use struct_diff::vec::{ItemChange, ItemDiff, anchors, apply_changes};
 
 use super::{
-  entity_parent::{EntityParent, YmapDiffContext},
+  entity_parent::{EntityParent, GuidAliases, YmapDiffContext},
   merged_items::MergedItems,
 };
 use crate::core::format::ymap::model::{YmapEntity, ymap_entity::YmapEntityFieldDiff};
@@ -69,13 +71,24 @@ type EntityChanges = (YmapEntityFieldDiff, Option<EntityParent>);
 /// An entity with the parent it points at.
 type Linked = (YmapEntity, EntityParent);
 
-/// Indices into `entities` keyed by GUID, in entity order.
-fn indices_by_guid(entities: &[YmapEntity]) -> HashMap<u32, Vec<usize>> {
+/// Indices into `entities` keyed by GUID, as `aliases` maps it, in entity order.
+fn indices_by_guid(
+  entities: &[YmapEntity],
+  aliases: &GuidAliases,
+) -> HashMap<u32, Vec<usize>> {
   let mut indices = HashMap::<u32, Vec<usize>>::new();
   for (index, entity) in entities.iter().enumerate() {
-    indices.entry(entity.guid).or_default().push(index);
+    indices.entry(aliased(aliases, entity.guid)).or_default().push(index);
   }
   indices
+}
+
+/// `guid` as `aliases` maps it.
+fn aliased(
+  aliases: &GuidAliases,
+  guid: u32,
+) -> u32 {
+  aliases.get(&guid).copied().unwrap_or(guid)
 }
 
 /// The parent of `entities[index]` from `parents`, or its raw index when `parents` does not
@@ -94,12 +107,14 @@ pub fn diff(
   modded: &[YmapEntity],
   ctx: &YmapDiffContext,
 ) -> Option<Vec<YmapEntityDiff>> {
-  let (vanilla_by_guid, modded_by_guid) = (indices_by_guid(vanilla), indices_by_guid(modded));
+  let aliases = &ctx.guid_aliases;
+  let (vanilla_by_guid, modded_by_guid) =
+    (indices_by_guid(vanilla, &GuidAliases::new()), indices_by_guid(modded, aliases));
   let mut seen = HashSet::new();
   let guids = vanilla
     .iter()
-    .chain(modded)
     .map(|entity| entity.guid)
+    .chain(modded.iter().map(|entity| aliased(aliases, entity.guid)))
     .filter(|guid| seen.insert(*guid))
     .map(|guid| {
       let indices =
@@ -134,7 +149,16 @@ pub fn diff(
         additions.push((after_index, added(after_index)));
         continue;
       }
-      let changes = vanilla[before_index].diff(&modded[after_index], &ctx.tolerances);
+      let changes = match &modded[after_index] {
+        entity if aliases.contains_key(&entity.guid) => vanilla[before_index].diff(
+          &YmapEntity {
+            guid: vanilla[before_index].guid,
+            ..entity.clone()
+          },
+          &ctx.tolerances,
+        ),
+        entity => vanilla[before_index].diff(entity, &ctx.tolerances),
+      };
       let parent = parent_of(&ctx.modded_parents, modded, after_index);
       let parent =
         (parent != parent_of(&ctx.vanilla_parents, vanilla, before_index)).then_some(parent);

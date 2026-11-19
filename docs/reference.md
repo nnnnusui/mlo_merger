@@ -554,11 +554,31 @@ ymap_grass_position = 0.01
 - Position tolerances end in `_position`. The former names `ybn`, `ymap_occlude_model` and
   `ymap_box_occluder` are still read.
 - YMAP comparisons are exclusive of the boundary; extents compare exactly.
+- An entity rotation within the `ymap` tolerance of the other's negation is unchanged: a
+  quaternion and its negation make the same turn.
 - All other values must be positive; floating values must also be finite. Unknown keys and
   invalid TOML are errors.
 - Effective settings are part of merge freshness, so changing them regenerates on the
   next merge without `-f`. Larger tolerances can treat intentionally different nearby
   shapes as identical.
+
+### Entity GUIDs Rounded Through A Float
+
+Some tools pass entity GUIDs through a 32-bit float when they save a YMAP. A float holds
+integers exactly only up to 2^24, so such a file stores most GUIDs with their low bits
+changed, such as `923442624` for vanilla's `923442616`, and every vanilla entity it keeps
+would otherwise compare as removed and added again.
+
+A modded entity pairs with a vanilla one by the vanilla GUID when:
+
+- neither GUID is in the other YMAP, and no other modded entity has the modded GUID;
+- both GUIDs are equal as 32-bit floats;
+- both entities have the same type, archetype and LOD level, at the same position within
+  the `ymap` tolerance.
+
+The pair compares as any other, the GUID aside: the merged entity keeps the vanilla GUID.
+Parents named by a rounded GUID, in the YMAP itself or in the resource's parent YMAP, are
+compared and merged as the vanilla entity's.
 
 ## Inspect Existing Data
 

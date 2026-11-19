@@ -69,7 +69,7 @@ impl<'a> MergeRun<'a> {
       let mut ymap_diff = self.merge.source_diff(
         mod_info,
         &source,
-        (&vanilla_ymap_path, vanilla_ymap, &vanilla_parents),
+        (&vanilla_ymap_path, vanilla_ymap),
         &mut self.sources,
         &mut self.references,
         &self.registered_maps,
