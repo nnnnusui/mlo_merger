@@ -207,7 +207,8 @@ pack's change sets (see [Newer DLC Generations](reference.md#newer-dlc-generatio
 - `files` keys every version of every vanilla YMAP by its path in the vanilla archive,
   `{version}/ymap/{file_name}`, the version `--read` reports, with the key of its archive in
   `archives` and whether it is the latest version of its name. The game reads a version
-  when it is the latest and its archive is loaded.
+  when it is the latest and its archive is loaded. Whether a version is loaded is decided by
+  its archive, so every YMAP an archive holds shares the archive's `unloaded`.
 - `packs` lists the packs applied, in stage order, with the change sets the game executes.
 
 ```typescript
@@ -225,6 +226,16 @@ const activity: DlcActivity = JSON.parse(
 export const unloaded = (path: string): Unloaded | null | undefined => {
   const file = activity.files[path];
   return file && (activity.archives[file.archive].unloaded ?? null);
+};
+
+/** The versions of the vanilla YMAP `fileName`, oldest first, such as `["0000-base"]` for
+ * `ap1_01_a.ymap`. */
+export const versionsOf = (fileName: string): string[] => {
+  const suffix = `/ymap/${fileName.toLowerCase()}`;
+  return Object.keys(activity.files)
+    .filter((path) => path.endsWith(suffix))
+    .map((path) => path.slice(0, -suffix.length))
+    .sort();
 };
 
 /** Whether the game reads the vanilla YMAP version `path`: the latest of its name, loaded. */
@@ -261,7 +272,7 @@ carried nowhere.
 ```typescript
 // server/generations.ts
 import { readFile } from "node:fs/promises";
-import type { GenerationIndex } from "../shared/gen_mlo_merger";
+import type { Generation, GenerationIndex } from "../shared/gen_mlo_merger";
 
 const index: GenerationIndex = JSON.parse(
   await readFile("asset/map/vanilla-cache/generations.json", "utf8"),
@@ -275,6 +286,26 @@ const partner = (name: string): string | undefined =>
       ? name.replace("lodlights_", "distlodlights_")
       : undefined;
 
+/** `name` as families list it: a LOD light pair by its `distlodlights_*` YMAP. */
+const listedName = (name: string): string =>
+  name.includes("distlodlights_") || !name.includes("lodlights_") ? name : partner(name)!;
+
+/** The generation of the vanilla YMAP `fileName`, such as `{ prefix: "hei", first_version:
+ * "0012-mpheist", … }` for `hei_ap1_01_a.ymap`, with its family's key; `undefined` when no
+ * family lists it. `position` is its index among the family's generations, oldest first. */
+export const generationOf = (
+  fileName: string,
+): { family: string; position: number; generation: Generation } | undefined => {
+  const listed = listedName(fileName.toLowerCase());
+  for (const [family, { generations }] of Object.entries(index.families)) {
+    const position = generations.findIndex((generation) => generation.files.includes(listed));
+    if (position >= 0) {
+      return { family, position, generation: generations[position] };
+    }
+  }
+  return undefined;
+};
+
 /** The vanilla YMAP the game loads in place of `fileName`, such as
  * `hei_lodlights_medium031.ymap`: itself when the game loads it, `null` when no loaded YMAP
  * holds its items. */
@@ -283,10 +314,7 @@ export const loadedInPlaceOf = (fileName: string): string | null => {
   if (!(name in (index.inactive ?? {}))) {
     return name;
   }
-  // Families list a LOD light pair by its distlodlights_* YMAP.
-  const listed = name.includes("distlodlights_") || !name.includes("lodlights_")
-    ? name
-    : partner(name)!;
+  const listed = listedName(name);
   for (const family of Object.values(index.families)) {
     const successor = family.successors[listed];
     if (successor) {
