@@ -6,11 +6,12 @@ use crate::platform::fs;
 use std::path::Path;
 
 /// Entries of the cache directory.
-const CACHE_ENTRIES: [&str; 7] = [
+const CACHE_ENTRIES: [&str; 8] = [
   "cache_info.json",
   "ymap_relationships.json",
   "stream_file_rtree.json",
   "generations.json",
+  "dlc_activity.json",
   // Units of every game build built so far, which the index of the selected one names some of.
   "generation-units",
   // Written once YMAP version diffs are generated again.

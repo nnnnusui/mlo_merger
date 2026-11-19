@@ -78,6 +78,7 @@ mod tests {
       "YmapPropagatedDiff",
       "YmapPropagationOrigin",
       "GenerationIndex",
+      "DlcActivity",
       "GenerationUnit",
       "VanillaYmapDiff",
       "VanillaYmapVersion",

@@ -50,29 +50,31 @@ Between carried modifications, the newer origin generation wins.
 
 ### 2. Vanilla Cache: Loaded YMAPs and Successors
 
-- [ ] Find the latest YMAPs the game does not load by applying the recorded change sets.
-- [ ] Pair entities of generations by GUID before position and archetype.
-- [ ] Record each YMAP not loaded with its loaded successor in `generations.json`.
+- [x] Find the archives the game does not load by applying the recorded change sets, and
+  write them with every YMAP version they hold to `dlc_activity.json` for tools to draw.
+- [x] Pair entities of generations by GUID before position and archetype.
+- [x] Record each YMAP not loaded with its loaded successor in `generations.json`.
 
-### 3. Source Cache: LOD Light Pairs
+### 3. Source Cache: Consistency of Each Source
 
-- [ ] Keep each resource's LOD light pair diffs in step: a light removed from either YMAP is
-  removed from both, and a light added to one YMAP is kept only when the other adds one at
-  the same index.
-- [ ] Write the removals resources shipping one YMAP of a pair imply for the vanilla other
-  one as documents of their own.
+- [ ] Write what keeps each resource's LOD light pairs in step to `implied/`, leaving the diff
+  documents as they are: the removals the other YMAP of a pair needs, as a diff, the
+  resource's own other YMAP or vanilla's, and the additions made to one YMAP only, as a
+  `skip`.
 
-### 4. Source Cache: Carrying Changes
+### 4. Merge: Carrying Changes
 
+- [ ] Resolve generations when merging, from the vanilla cache's generations and the source
+  cache's diff and `implied/` documents, leaving the source cache free of generations.
 - [ ] Carry removals, modifications and replacements, after step 3, to the paired items of
-  the newer loaded generations, including YMAPs the resource ships itself, split per origin
-  generation.
+  the newer loaded generations, including YMAPs the resource ships itself, newest origin
+  generation first.
 - [ ] Carry entity additions without a parent to the successor, with the physics
   dictionaries they add, and LOD light additions to both YMAPs of the successor pair.
 - [ ] Record each change carried, already met in the loaded generation (an item it lacks
   removed), or lost (a modification of an item it lacks, an addition that cannot be carried).
 
-### 5. Source Cache: Generations Newer Than the Game Build
+### 5. Generations Newer Than the Game Build
 
 - [ ] Pair and record the generations of the whole raw archive, not only those of the
   selected game build.
@@ -81,10 +83,8 @@ Between carried modifications, the newer origin generation wins.
 - [ ] Find whether streaming such a YMAP on an older build loads it, and deploy or omit it
   accordingly.
 
-### 6. Merge
+### 6. Merge: YMAPs Not Loaded
 
-- [ ] Merge the documents of steps 3 to 5 as resource diffs, newest origin first, after the
-  loaded YMAP's own diffs.
 - [ ] Plan no output for a YMAP with a successor; omit its sources.
 
 ### 7. Merge Report
@@ -101,6 +101,9 @@ Between carried modifications, the newer origin generation wins.
 
 ## Decisions
 
+- A LOD light added to one YMAP of a pair only is dropped, not completed in the other: a
+  distant light lacks the direction, falloff and flags of a LOD light, and a LOD light lacks
+  the position and colour of a distant light.
 - Additions to a YMAP with a successor that cannot be carried (entities with a parent, other
   arrays) are reported and dropped. Deploying that YMAP for them would load its generation
   again.

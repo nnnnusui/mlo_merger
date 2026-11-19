@@ -117,10 +117,13 @@ carries the other's removals, marked implied, so its document records the other 
 The source cache also records which vanilla YMAPs a
 merge must read: the parents and children related to changed files.
 
-DLCs ship vanilla YMAPs again under prefixes of their own, and the game loads every
-generation. The vanilla cache pairs the items of each family's generations, one unit per
-older and newer generation, stored by a digest of its YMAPs so that rebuilds and game build
-switches reuse them, and indexes the selected build's units in `generations.json`. After
+DLCs ship vanilla YMAPs again under prefixes of their own. The vanilla cache applies the
+change sets each DLC stage of the raw archive records in order to find the archives the
+game does not load, and lists them with every YMAP version they hold in
+`dlc_activity.json`. It pairs the items of each family's generations, one unit per older
+and newer generation, stored by a digest of its YMAPs so that rebuilds and game build
+switches reuse them, names the loaded successor of each YMAP the game does not load, and
+indexes the selected build's units in `generations.json`. After
 taking the diffs, the source cache carries each resource's removals and modifications of
 vanilla items over to the paired items of newer generations it does not ship, as
 `propagated/` documents whose items name their origin in `reason`; they are derived from the

@@ -242,24 +242,46 @@ For an added YMAP:
 ### Newer DLC Generations
 
 DLCs ship vanilla YMAPs again under a prefix of their own, such as `lodlights_medium031`,
-`hei_`, `apa_`, `vw_` and `m25_2_lodlights_medium031`, and the game loads every
-generation. A change a resource makes to one generation's item is therefore carried over
-to the same item of each newer generation, so a removed light or entity does not stay
-visible through another copy.
+`hei_`, `apa_`, `vw_` and `m25_2_lodlights_medium031`. The game loads the one each pack's
+change sets leave in place, and streaming another can load it beside that one. A change a
+resource makes to one generation's item is therefore carried over to the same item of each
+newer generation, so a removed light or entity does not stay visible through another copy.
 
+- Each DLC stage of the raw archive records its pack's device, data files and the change
+  sets the game executes without a script (`dlc` in `cache_info.json`), from the title
+  update's `dlc_patch/{pack}/setup2.xml` and `content.xml` where it has them.
+- The vanilla cache applies them in stage order. A base game archive is loaded unless a
+  change set invalidates its path. A pack's archive is loaded once a change set enables
+  it, or when its data file is mounted enabled. An archive a change set enables while
+  invalidating the base game path of the same name stands for that path: a later change
+  set invalidating the path unloads it, so of the packs replacing one archive in turn, the
+  last one's is loaded. An archive mounted over a valid path (`overlay`) stands for it as
+  well; one mounted over an invalidated path by a change set that does not invalidate it
+  is not loaded. A pack's archive that is no data file, such as a title update patch of an
+  archive the pack does not declare, is not loaded. Change sets only a script executes
+  count as enabling archives, not as invalidating any. `dlc_activity.json` lists the
+  archives with why the game does not load them, and every YMAP version with its archive;
+  `generations.json` lists the latest YMAPs not loaded in `inactive`. An archive built
+  without the change sets loads every YMAP.
 - The vanilla cache groups YMAPs into generations by prefix and into families of the
   same name apart from the prefix and a trailing number, such as every
   `*distlodlights_small###`, since newer generations move items between those blocks.
   Generations are ordered by the vanilla stage first shipping one of their YMAPs.
-- Items are the same when they are of one kind, within 0.01 of each other on every axis,
-  and identified alike: entities by archetype, LOD lights by color and LOD light hash, car
-  generators by model, box occluders by size and rotation, occlude models by flags,
-  triangle count and maximum corner, time cycle modifiers by name. An item is paired only
-  when exactly one item of the other generation fits, and no other item fits that one.
+- Entities are the same when their GUIDs are, wherever they are; of several entities of
+  one GUID, the one within 0.01 of the other on every axis with its archetype. Other items,
+  and entities whose GUID the other generation lacks, are the same when they are of one
+  kind, within 0.01 of each other on every axis, and identified alike: entities by
+  archetype, LOD lights by color and LOD light hash, car generators by model, box
+  occluders by size and rotation, occlude models by flags, triangle count and maximum
+  corner, time cycle modifiers by name. An item is paired only when exactly one item of
+  the other generation fits, and no other item fits that one.
 - Each pair of generations of a family is stored as a unit,
   `generation-units/{key}.json`, keyed by the contents of its YMAPs, and
   `generations.json` lists the units of the selected game build. Units are kept across
   rebuilds and game builds, so a rebuild pairs only the YMAPs that changed.
+- `generations.json` names, per family in `successors`, the YMAP loaded in place of each one
+  that is not: of the newest generation pairing its items, the loaded YMAP holding most of
+  them.
 - Source-cache generation writes `propagated/{resourceName}/{fileName}.diff.json`
   (`YmapPropagatedDiff`) for each vanilla YMAP of a newer generation that the resource's
   changes reach and that it does not ship. Each carried removal or modification names

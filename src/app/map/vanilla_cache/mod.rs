@@ -114,6 +114,7 @@ pub(crate) struct YmapRelationshipIndex {
   pub(crate) children_by_parent: BTreeMap<String, Vec<String>>,
 }
 
+mod activity;
 mod build;
 mod check;
 mod filesystem;

@@ -52,10 +52,15 @@ impl BuildVanillaCache {
       &current,
       &input_timestamps,
     )?;
+    let activity = super::activity::dlc_activity(&manifest, through_index, &current, &revision);
+    if let Some(activity) = &activity {
+      write_json(&staging.0.join(super::activity::DLC_ACTIVITY_FILE), activity)?;
+    }
     write_generations(
       &staging.0,
       &output_dir,
       &generation_sources(&vanilla_dir, &manifest, through_index, &current)?,
+      &super::activity::inactive_ymaps(activity.as_ref()),
       &manifest.versions.iter().map(|version| version.id.clone()).collect::<Vec<_>>(),
       &revision,
       &latest_version,

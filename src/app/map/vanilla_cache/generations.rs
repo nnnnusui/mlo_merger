@@ -141,14 +141,23 @@ pub struct GenerationIndex {
   pub vanilla_manifest_sha256: String,
   pub version: String,
   pub families: BTreeMap<String, Family>,
+  /// The latest YMAPs the game does not load, keyed by lowercase file name, with why (see
+  /// [`super::activity`]).
+  #[serde(default)]
+  pub inactive: BTreeMap<String, String>,
 }
 
-/// The generations of one family, oldest first, and the units pairing their items.
+/// The generations of one family, oldest first, the units pairing their items, and the YMAPs the
+/// game loads in place of those it does not.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "typescript", derive(specta::Type))]
 pub struct Family {
   pub generations: Vec<Generation>,
   pub units: Vec<UnitRef>,
+  /// Each YMAP the game does not load whose items a newer generation's loaded YMAP holds, with
+  /// its successor: the loaded YMAP of the newest generation pairing its items that holds most
+  /// of them.
+  pub successors: BTreeMap<String, String>,
 }
 
 /// One generation of a family: its prefix, the stage first shipping one of its YMAPs, and its
@@ -301,6 +310,7 @@ pub(super) fn write_generations(
   staging: &Path,
   previous: &Path,
   ymaps: &BTreeMap<String, SourceYmap>,
+  inactive: &BTreeMap<String, String>,
   stage_ids: &[String],
   revision: &str,
   version: &str,
@@ -318,6 +328,7 @@ pub(super) fn write_generations(
     vanilla_manifest_sha256: revision.to_owned(),
     version: version.to_owned(),
     families: BTreeMap::new(),
+    inactive: inactive.clone(),
   };
   for (name, generations) in families {
     let unit_files = |generation: &Generation| -> Vec<UnitFile> {
@@ -356,6 +367,7 @@ pub(super) fn write_generations(
       Family {
         generations,
         units,
+        successors: BTreeMap::new(),
       },
     );
   }
@@ -388,7 +400,51 @@ pub(super) fn write_generations(
       })
       .collect::<std::result::Result<Vec<_>, String>>()?;
   }
+  for family in index.families.values_mut() {
+    family.successors = successors(family, &units_dir, inactive)?;
+  }
   write_json(&staging.join(GENERATIONS_FILE), &index)
+}
+
+/// The successor of each YMAP of `family` whose items a newer generation holds, from the units
+/// in `units_dir`; see [`Family::successors`].
+fn successors(
+  family: &Family,
+  units_dir: &Path,
+  inactive: &BTreeMap<String, String>,
+) -> Result<BTreeMap<String, String>> {
+  // Per older YMAP, the newest generation pairing its items and how many each YMAP there holds.
+  let mut best = BTreeMap::<String, (usize, BTreeMap<String, usize>)>::new();
+  for unit_ref in &family.units {
+    let path = units_dir.join(format!("{}.json", unit_ref.key));
+    let unit: GenerationUnit = crate::common::json::read_json(&path)
+      .map_err(|error| format!("Cannot read {}: {error}", path.display()))?;
+    for &[older_file, _, newer_file, _] in unit.pairs.values().flatten() {
+      let older = &unit.older[older_file as usize].name;
+      let newer = &unit.newer[newer_file as usize].name;
+      if !inactive.contains_key(older) || inactive.contains_key(newer) {
+        continue;
+      }
+      let (generation, counts) = best.entry(older.clone()).or_default();
+      if unit_ref.newer > *generation {
+        *generation = unit_ref.newer;
+        counts.clear();
+      }
+      if unit_ref.newer == *generation {
+        *counts.entry(newer.clone()).or_default() += 1;
+      }
+    }
+  }
+  Ok(
+    best
+      .into_iter()
+      .filter_map(|(older, (_, counts))| {
+        // The most items, then the first name.
+        let successor = counts.into_iter().max_by(|(a, x), (b, y)| x.cmp(y).then(b.cmp(a)))?.0;
+        Some((older, successor))
+      })
+      .collect(),
+  )
 }
 
 /// Links (or else copies) every unit of `previous` into `staging`, used by this build or not, so

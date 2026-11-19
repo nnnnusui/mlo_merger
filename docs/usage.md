@@ -36,6 +36,7 @@ in `web/`, described under `web` in its `release.json`; see [Browser build](web.
 | Source-cache diff documents | `YmapComparisonDiff`, `YmapComparisonFile`, `YmapDiffFields`, `YmapEntityDiff`, `YmapEntityFieldDiff` |
 | Changes carried to newer DLC generations | `YmapPropagatedDiff`, `YmapPropagationOrigin` |
 | Vanilla YMAP generations | `GenerationIndex`, `GenerationUnit` |
+| Vanilla archives the game loads | `DlcActivity`, `ArchiveActivity`, `FileActivity`, `PackActivity`, `Unloaded`, `ChangeSetRef` |
 | Overwrite documents | `StreamFileOverwrite`, `OverwriteFingerprint`, `YmapDiffSkip`, `VanillaOverwrite` |
 | Overwrite cache | `AddedStreamFiles`, `AddedStreamFile`, `AddedStreamFileSource`, `LeftOutAddition`, `AddedItem`, `OverwriteWarnings`, `SourceUpdate`, `SourceVersion`, `SourceUpdateOutcome` |
 | Pipeline stdout | `PipelineReport`, `PipelineChanges`, `StoreChanges`, `OverwriteWarnings`, `IgnoredOverwrite`, `IgnoredOverwriteReason` |
@@ -152,6 +153,7 @@ source root.
 | Index file bounds | none; written by vanilla-cache, source-cache and merge runs | | `asset/{vanilla-cache,source-cache,merged}/stream_file_rtree.json` (`RTreeIndex`) |
 | Convert YMAPs to JSON | `--read FILE` | `ReadResult` | each `files[].output` (`YmapReadDocument`) |
 | Inspect differences | none; written by source-cache generation | | `asset/map/source-cache/diff/{resource}/{stream_path}.diff.json` (`YmapComparisonDiff`) |
+| Inspect which vanilla YMAPs the game loads | none; written by vanilla-cache generation | | `asset/map/vanilla-cache/dlc_activity.json` (`DlcActivity`); see [Loaded Vanilla YMAPs](#loaded-vanilla-ymaps) |
 | Inspect changes carried to newer DLC generations | none; written by source-cache generation | | `asset/map/source-cache/propagated/{resource}/{file_name}.diff.json` (`YmapPropagatedDiff`); each carried item's `reason` names the item it came from |
 | Inspect vanilla version differences | none; vanilla-cache generation would write them, but it is currently disabled | | `asset/map/vanilla-cache/ymap_versions.json` (`VanillaYmapVersionIndex`), then `asset/map/vanilla-cache/diff/{version}/ymap/{name}.diff.json` (`VanillaYmapDiff`) for each version after a YMAP's first |
 | Apply overwrites | `--pipeline`, or `--merge` then `--deploy` | `PipelineReport` (pipeline only) | `asset/map/merged/duplicates.json` (`DuplicateReport`) |
@@ -188,6 +190,50 @@ changes appear only after the source cache is updated. Files whose bounds cannot
 left out with a warning.
 
 Load the result into RBush, or filter it directly, to find the files at a position.
+
+### Loaded Vanilla YMAPs
+
+`asset/map/vanilla-cache/dlc_activity.json` (`DlcActivity`), written with the vanilla cache,
+tells which archives the game loads at the stage the cache was built for, after every DLC
+pack's change sets (see [Newer DLC Generations](reference.md#newer-dlc-generations)):
+
+- `archives` keys each archive holding vanilla YMAPs by its path as the packs' `content.xml`
+  spells it. `unloaded` says why the game does not load it, and is absent when it does;
+  `ymaps` lists the latest YMAPs it holds.
+- `files` keys every version of every vanilla YMAP by its path in the vanilla archive,
+  `{version}/ymap/{file_name}`, the version `--read` reports, with the key of its archive in
+  `archives` and whether it is the latest version of its name. The game reads a version
+  when it is the latest and its archive is loaded.
+- `packs` lists the packs applied, in stage order, with the change sets the game executes.
+
+```typescript
+// server/vanilla.ts
+import { readFile } from "node:fs/promises";
+import type { DlcActivity, Unloaded } from "../shared/gen_mlo_merger";
+
+const activity: DlcActivity = JSON.parse(
+  await readFile("asset/map/vanilla-cache/dlc_activity.json", "utf8"),
+);
+
+/** Why the game does not load the vanilla YMAP version `path`, such as
+ * `0000-base/ymap/sc1_18_strm_0.ymap`: `null` when it loads it, `undefined` when no stage
+ * applied holds it. */
+export const unloaded = (path: string): Unloaded | null | undefined => {
+  const file = activity.files[path];
+  return file && (activity.archives[file.archive].unloaded ?? null);
+};
+
+/** Whether the game reads the vanilla YMAP version `path`: the latest of its name, loaded. */
+export const isRead = (path: string): boolean =>
+  activity.files[path]?.latest === true && unloaded(path) === null;
+
+/** The YMAP versions of stage `version`, such as `0000-base`, the game does not load, with why. */
+export const unloadedInStage = (version: string): [string, Unloaded][] =>
+  Object.entries(activity.files).flatMap(([path, file]) => {
+    const why = activity.archives[file.archive].unloaded;
+    return path.startsWith(`${version}/`) && why ? [[path, why] as [string, Unloaded]] : [];
+  });
+```
 
 ### `--read`
 
