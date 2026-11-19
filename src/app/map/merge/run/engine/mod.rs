@@ -33,7 +33,7 @@ impl MergeYmap {
     latest_files: &[PathBuf],
     raw_sources: &[SourceYmap],
   ) -> Result<(), Box<dyn std::error::Error>> {
-    tracing::info!(
+    tracing::debug!(
       "Merging {} source YMAP files against {} into {}",
       raw_sources.len(),
       self.vanilla_dir.display(),

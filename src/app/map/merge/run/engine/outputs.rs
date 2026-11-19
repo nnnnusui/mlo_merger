@@ -33,7 +33,7 @@ impl<'a> MergeRun<'a> {
             && !(self.merge.added.contains(&name) && output.encodes_like_original()?));
       }
     }
-    tracing::info!(
+    tracing::debug!(
       "Repaired parent references; promoted {repaired} clone/vanilla child YMAPs for rebuild"
     );
     Ok(())

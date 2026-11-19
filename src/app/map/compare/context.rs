@@ -176,7 +176,7 @@ impl YmapComparisonContext {
             side.other().removed_between(&partner_vanilla, &partner_modded, &ctx.tolerances);
           let implied = side.imply_removals(&mut diffs, &partner_removed);
           if implied > 0 {
-            tracing::info!(
+            tracing::debug!(
               "{}: {implied} lights removed only from {} are removed here too",
               file.file_name,
               partner.file_name

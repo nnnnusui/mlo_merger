@@ -63,7 +63,7 @@ impl<'a> MergeRun<'a> {
       });
       !references.is_empty()
     });
-    tracing::info!("Found {} unique YMAP files across mods", by_name.len());
+    tracing::debug!("Found {} unique YMAP files across mods", by_name.len());
     Ok(by_name)
   }
 
@@ -117,7 +117,7 @@ impl<'a> MergeRun<'a> {
       let name = name.to_str().ok_or("non-UTF8 vanilla filename")?;
       self.sources.register(None, name, path.clone())?;
     }
-    tracing::info!("Registered {} vanilla YMAP files for merge", self.latest_files.len());
+    tracing::debug!("Registered {} vanilla YMAP files for merge", self.latest_files.len());
     for references in by_name.values() {
       for reference in references {
         self.sources.register(
