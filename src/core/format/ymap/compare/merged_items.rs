@@ -38,7 +38,7 @@ impl<T, C> MergedItems<T, C> {
     C: Clone + 'a,
   {
     Self::collect_with(changes, |index, _, _| {
-      tracing::info!(
+      tracing::debug!(
         "    {what}: vanilla item {index} is already modified; keeping the first change"
       );
     })
@@ -94,11 +94,13 @@ impl<T, C> MergedItems<T, C> {
           if let InPlace::Modified(earlier) = entry.get_mut() {
             combine(index, earlier, changes);
           } else {
-            tracing::info!("    vanilla item {index} is already replaced; keeping the replacement");
+            tracing::debug!(
+              "    vanilla item {index} is already replaced; keeping the replacement"
+            );
           }
         }
         (Entry::Occupied(_), InPlace::Replaced(_)) => {
-          tracing::info!("    vanilla item {index} is already changed; keeping the first change");
+          tracing::debug!("    vanilla item {index} is already changed; keeping the first change");
         }
       }
     }
@@ -106,7 +108,7 @@ impl<T, C> MergedItems<T, C> {
     merged.in_place.retain(|index, change| {
       let dropped = removed.contains(index);
       if dropped && matches!(change, InPlace::Replaced(_)) {
-        tracing::info!("    vanilla item {index} is removed; dropping its replacement");
+        tracing::debug!("    vanilla item {index} is removed; dropping its replacement");
       }
       !dropped
     });

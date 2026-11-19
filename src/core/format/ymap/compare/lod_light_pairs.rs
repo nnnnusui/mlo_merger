@@ -190,7 +190,7 @@ fn imply<T, C>(
   let rest = rest.into_iter().filter(|diff| {
     let dropped = changed(diff).is_some_and(|index| implied.contains(&index));
     if dropped {
-      tracing::info!(
+      tracing::debug!(
         "    Light {} is removed from the other array of its pair; dropping its change",
         changed(diff).unwrap_or_default()
       );

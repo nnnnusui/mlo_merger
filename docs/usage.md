@@ -69,9 +69,9 @@ Start the executable from server-side code with `spawn` (spawnProcess).
   on stdout name files as the command was given them.
 - stdout carries only the command's result; `--read` and the pipeline each print one
   line of JSON.
-- stderr carries progress logs, warnings and errors; detailed merge and YMAP comparison logs
-  are written only to `asset/log/mlo_merger_{timestamp}.log`. The log file is only created
-  when the run logs something. `--log-dir` sets its directory; `--no-log-file` disables it.
+- stderr carries progress logs, warnings and errors at `info` and above (`RUST_LOG` sets the
+  level). `asset/log/mlo_merger_{timestamp}.log` also holds `debug` logs, such as merge and
+  YMAP comparison details. The log file is only created when the run logs something. `--log-dir` sets its directory; `--no-log-file` disables it.
 - A failed command exits with code `1`; its last stderr line is the error.
 - Commands never prompt. Pipeline commands also accept `-y`.
 

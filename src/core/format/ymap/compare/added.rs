@@ -161,7 +161,7 @@ fn thin_entities(
         Some((other, _)) if other.guid == entity.guid || entity.guid == 0 => true,
         // Children may point at it by its GUID, so it is left out only for one that has one.
         Some((other, _)) if other.guid == 0 => {
-          tracing::info!(
+          tracing::debug!(
             "    entities: entity {} ({}) is placed as one an earlier source adds without a GUID; keeping it",
             entity.guid,
             entity.archetype_name
@@ -176,7 +176,7 @@ fn thin_entities(
       };
       match (left_out, same) {
         (true, Some((_, kept_at))) => {
-          tracing::info!(
+          tracing::debug!(
             "    entities: an earlier source adds entity {} ({}) already; leaving it out",
             entity.guid,
             entity.archetype_name
@@ -248,7 +248,7 @@ fn thin_items<T: Clone, C>(
   }
   let count = left_out.len() - before;
   if count > 0 {
-    tracing::info!("    {field}: {count} additions an earlier source makes too are left out");
+    tracing::debug!("    {field}: {count} additions an earlier source makes too are left out");
   }
 }
 

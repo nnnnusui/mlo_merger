@@ -301,7 +301,7 @@ impl IncrementalMerge<'_> {
       }
       tracing::debug!("Reusing {} merge group ({} files)", group.extension, group.names.len());
     } else {
-      tracing::info!("Updating {} merge group ({} files)", group.extension, group.names.len());
+      tracing::debug!("Updating {} merge group ({} files)", group.extension, group.names.len());
       let (duplicates, outputs) =
         self.merge_group(index, group, context.sources, context.baselines)?;
       for (name, entries) in duplicates.files {

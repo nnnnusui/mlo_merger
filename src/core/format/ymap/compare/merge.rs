@@ -118,7 +118,7 @@ pub fn leave_out(
     if !change.is_made_by(diff) {
       continue;
     }
-    tracing::info!("    skip changes: <{} />", change.field());
+    tracing::debug!("    skip changes: <{} />", change.field());
     match change {
       IgnoredChange::Name => diff.name = None,
       IgnoredChange::Flags => diff.flags = None,
@@ -309,7 +309,7 @@ fn merge_occlude_models<'a>(
 ) -> Option<Vec<YmapOccludeModelDiff>> {
   let sources = sources.flatten().map(Vec::as_slice).collect::<Vec<_>>();
   let merged = merged_with(&sources, |index, earlier, later| {
-    tracing::info!("    occlude_models: combining changes of vanilla model {index}");
+    tracing::debug!("    occlude_models: combining changes of vanilla model {index}");
     combine_occlude_model(&vanilla[index], earlier, later);
   });
   non_empty(merged.into_diffs(vanilla.len()))

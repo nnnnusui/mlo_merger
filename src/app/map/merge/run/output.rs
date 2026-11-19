@@ -34,7 +34,7 @@ impl MergeYmap {
         if fs::exists(&clone_path).unwrap_or(false) {
           fs::remove_file(&clone_path)?;
         }
-        tracing::info!(
+        tracing::debug!(
           "  [Success] Wrote merged/relinked YMAP binary to: {}",
           binary_path.display()
         );
@@ -42,7 +42,7 @@ impl MergeYmap {
         use std::io::Write;
         writeln!(copy_targets_file, "{}", target.mod_ymap_path.display())?;
         fs::copy(&target.mod_ymap_path, &clone_path)?;
-        tracing::info!(
+        tracing::debug!(
           "Copied single-mod YMAP to clone output (vanilla diff merge skipped): {}",
           output.name
         );

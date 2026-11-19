@@ -106,7 +106,7 @@ fn log_diff_counts(diff: &YmapDiffFields) {
     .filter(|(_, count)| *count > 0)
     .map(|(name, count)| format!("{name}={count}"))
     .collect::<Vec<_>>();
-  tracing::info!(
+  tracing::debug!(
     "    Changed items: {}",
     if changed.is_empty() { "none".into() } else { changed.join(", ") }
   );

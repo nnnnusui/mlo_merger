@@ -56,7 +56,7 @@ impl MergeYbnConflicts {
         omitted.push(path.strip_prefix(&self.source_dir)?.to_string_lossy().replace('\\', "/"));
       }
       merged_groups += 1;
-      tracing::info!("    Merged YBN conflict {} from {} source files", name, paths.len());
+      tracing::debug!("    Merged YBN conflict {} from {} source files", name, paths.len());
     }
     omitted.sort();
     omitted.dedup();

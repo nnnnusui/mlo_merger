@@ -24,7 +24,7 @@ impl<'a> MergeRun<'a> {
       .get(&hash)
       .cloned()
       .unwrap_or_else(|| self.merge.vanilla_dir.join(ymap_name));
-    tracing::info!("Processing YMAP: {}", vanilla_ymap_path.display());
+    tracing::debug!("Processing YMAP: {}", vanilla_ymap_path.display());
     // A YMAP of a LOD light pair may take removals from the other, so it is merged, as is one
     // taking changes carried over from an older generation.
     if !self.merge.rebuild_all
@@ -56,7 +56,7 @@ impl<'a> MergeRun<'a> {
     // The resource, file and origin generation of each of `ymap_diffs` recorded.
     let mut contributors = HashMap::<usize, Contributor>::new();
     for mod_info in mod_refs {
-      tracing::info!("  Mod: {} ({})", mod_info.mod_name, mod_info.mod_ymap_path.display());
+      tracing::debug!("  Mod: {} ({})", mod_info.mod_name, mod_info.mod_ymap_path.display());
       let Some(source) = self.sources.get(Some(&mod_info.mod_name), hash)? else {
         tracing::warn!(
           "Source YMAP is unavailable for resource {}; skipping {}",
@@ -86,7 +86,7 @@ impl<'a> MergeRun<'a> {
       ymap_diffs.push(ymap_diff);
     }
     for (resource, mut ymap_diff) in implied.remove(&hash).into_iter().flatten() {
-      tracing::info!(
+      tracing::debug!(
         "  LOD light removals {resource} makes only in the other YMAP of the pair (implied)"
       );
       log_diff_counts(&ymap_diff);
@@ -94,7 +94,7 @@ impl<'a> MergeRun<'a> {
       ymap_diffs.push(ymap_diff);
     }
     for (resource, path, mut ymap_diff) in propagated.remove(&hash).into_iter().flatten() {
-      tracing::info!(
+      tracing::debug!(
         "  Changes {resource} makes to the same items of an older generation (propagated)"
       );
       log_diff_counts(&ymap_diff);
@@ -114,7 +114,7 @@ impl<'a> MergeRun<'a> {
       && let Some(ymap_diff) =
         overwrite.diffs_for(&OverwriteFingerprint::read(&vanilla_ymap_path)?, ymap_name)
     {
-      tracing::info!("  Vanilla overwrite of {ymap_name}");
+      tracing::debug!("  Vanilla overwrite of {ymap_name}");
       log_diff_counts(ymap_diff);
       let mut ymap_diff = ymap_diff.clone();
       leave_out(&mut ymap_diff, IgnoredChange::DERIVED);
@@ -150,7 +150,7 @@ impl<'a> MergeRun<'a> {
         compare_added::thin_additions(&mut ymap_diffs, &crate::core::config::matching::current());
       record_thinned(&mut duplicates, &before, &thinned.left_out, &contributors);
       if !thinned.left_out.is_empty() {
-        tracing::info!(
+        tracing::debug!(
           "  Left out {} additions an earlier source makes already",
           thinned.left_out.len()
         );
@@ -171,7 +171,7 @@ impl<'a> MergeRun<'a> {
       let tolerances = crate::core::config::matching::current();
       let thinned = compare_added::thin_additions(&mut ymap_diffs, &tolerances);
       if !thinned.left_out.is_empty() {
-        tracing::info!(
+        tracing::debug!(
           "  Left out {} additions an earlier version makes already",
           thinned.left_out.len()
         );
@@ -231,7 +231,7 @@ impl<'a> MergeRun<'a> {
     hash: u32,
     mod_ref: &ModYmapReference,
   ) -> Result<(), Box<dyn std::error::Error>> {
-    tracing::info!("  Mod: {} ({})", mod_ref.mod_name, mod_ref.mod_ymap_path.display());
+    tracing::debug!("  Mod: {} ({})", mod_ref.mod_name, mod_ref.mod_ymap_path.display());
     let Some(original) = self.sources.get(Some(&mod_ref.mod_name), hash)? else {
       tracing::warn!(
         "Source YMAP is unavailable for resource {}; skipping {}",

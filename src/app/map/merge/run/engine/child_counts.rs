@@ -132,7 +132,7 @@ impl<'a> MergeRun<'a> {
         entity.num_children = u32::try_from((i64::from(entity.num_children) + change).max(0))?;
       }
     }
-    tracing::info!("  Child counts of {name} changed; writing it");
+    tracing::debug!("  Child counts of {name} changed; writing it");
     let mut model = original.model.clone();
     model.entities = entities.clone();
     self.planned.insert(
