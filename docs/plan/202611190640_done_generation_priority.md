@@ -29,6 +29,10 @@ merge cannot carry, or ignores in favour of another change, per vanilla YMAP for
   and `dlclist.xml` are those of the build's own title update, which FiveM mounts for it.
 - The latest title update's `lodlights.rpf` holds the `m25_2_` LOD lights; build 3570's holds
   the base game's.
+- YBNs behave as YMAPs do: on the latest build, streaming `hei_sc1_12_0.ybn` of the replaced
+  `hei_` generation loaded its collisions beside `lr_sc1_12_0.ybn`'s, while streaming the
+  invalidated base game `dt1_22_0.ybn` or `sc1_12_0.ybn` loaded nothing, and changing an
+  older generation's YBN alone changed nothing.
 - The successors found from the change sets match those found by pairing items for all but
   four YMAPs, LOD lights no generation of which is loaded.
 - Pairing entities by GUID first, then by archetype and position, leaves 1418 older entities
