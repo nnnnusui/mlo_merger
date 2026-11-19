@@ -79,7 +79,9 @@ Between carried modifications, the newer origin generation wins.
   entity by its GUID when it is not 0 and unique in its YMAP, else by type, archetype, LOD
   level and position within the matching tolerances, as `compare::added` thins the
   versions of an added YMAP; other items by equality within the tolerances. Additions only
-  the older generation makes are carried, and other resources' additions are not thinned.
+  the older generation makes are carried.
+- [x] Leave out, of all sources' entity additions to a vanilla YMAP, own and carried, those an
+  earlier source makes already, by the same matching, and report them.
 - [x] Record each change carried, already met in the loaded generation (an item it lacks
   removed), or lost (a modification of an item it lacks, an addition that cannot be carried).
 

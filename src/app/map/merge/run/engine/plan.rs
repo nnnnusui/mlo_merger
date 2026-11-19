@@ -1,6 +1,7 @@
 //! Planning each YMAP: merged from every diff of it, or kept from its single source.
 
 use super::*;
+use crate::app::map::merge::duplicates::IgnoredReason;
 
 /// The resource a vanilla overwrite's contributions are reported under in duplicate reports.
 const VANILLA_OVERWRITE_SOURCE: &str = "overwrite/vanilla";
@@ -44,10 +45,8 @@ impl<'a> MergeRun<'a> {
     let added = self.merge.added.contains(&ymap_name.to_ascii_lowercase());
     let mut duplicates = Collector::default();
     let mut ymap_diffs = Vec::new();
-    // Each resource's diffs among `ymap_diffs`, its own and those carried from other generations.
-    let mut by_resource = HashMap::<String, Vec<usize>>::new();
     // The resource, file and origin generation of each of `ymap_diffs` recorded.
-    let mut contributors = HashMap::<usize, (String, PathBuf, Option<String>)>::new();
+    let mut contributors = HashMap::<usize, Contributor>::new();
     for mod_info in mod_refs {
       tracing::info!("  Mod: {} ({})", mod_info.mod_name, mod_info.mod_ymap_path.display());
       let Some(source) = self.sources.get(Some(&mod_info.mod_name), hash)? else {
@@ -72,10 +71,10 @@ impl<'a> MergeRun<'a> {
       if !added {
         leave_out(&mut ymap_diff, IgnoredChange::MERGE);
       }
-      let contributor = (mod_info.mod_name.clone(), mod_info.mod_ymap_path.clone(), None);
-      record_entity_changes(&mut duplicates, &ymap_diff, &original.entities, &contributor);
-      by_resource.entry(mod_info.mod_name.clone()).or_default().push(ymap_diffs.len());
-      contributors.insert(ymap_diffs.len(), contributor);
+      contributors.insert(
+        ymap_diffs.len(),
+        (mod_info.mod_name.clone(), mod_info.mod_ymap_path.clone(), None),
+      );
       ymap_diffs.push(ymap_diff);
     }
     for (resource, mut ymap_diff) in implied.remove(&hash).into_iter().flatten() {
@@ -97,69 +96,7 @@ impl<'a> MergeRun<'a> {
         .parent()
         .and_then(Path::file_name)
         .map(|version| version.to_string_lossy().into_owned());
-      let contributor = (resource.clone(), path.clone(), origin);
-      // What the resource adds here already, itself or from a newer generation, is added once.
-      let earlier = by_resource.entry(resource.clone()).or_default().clone();
-      if !earlier.is_empty() {
-        let before = earlier
-          .iter()
-          .map(|&index| ymap_diffs[index].clone())
-          .chain([ymap_diff])
-          .collect::<Vec<_>>();
-        let mut diffs = before.clone();
-        let thinned =
-          compare_added::thin_additions(&mut diffs, &crate::core::config::matching::current());
-        ymap_diff = diffs.pop().ok_or("Thinned diffs lost the carried one")?;
-        let carried = before.len() - 1;
-        let added =
-          |(diff, change): (usize, usize)| match before[diff].entities.as_ref()?.get(change)? {
-            YmapEntityDiff::Added {
-              entity,
-              target_index,
-              ..
-            } => Some((entity.guid, *target_index)),
-            _ => None,
-          };
-        for left_out in thinned
-          .left_out
-          .iter()
-          .filter(|left_out| left_out.field == "entities" && left_out.at.0 == carried)
-        {
-          let (Some((guid, index)), Some((_, kept_index))) =
-            (added(left_out.at), added(left_out.kept))
-          else {
-            continue;
-          };
-          let Some(kept) = contributors.get(&earlier[left_out.kept.0]) else {
-            continue;
-          };
-          let contribution = |(resource, path, origin): &(String, PathBuf, Option<String>),
-                              index| Contribution {
-            resource: resource.clone(),
-            path: path.clone(),
-            change: Change::Added,
-            index,
-            origin: origin.clone(),
-          };
-          duplicates.add_thinned(
-            guid,
-            contribution(kept, kept_index),
-            contribution(&contributor, index),
-          );
-        }
-        if !thinned.left_out.is_empty() {
-          tracing::info!(
-            "    Left out {} additions {resource} makes to a newer generation too",
-            thinned.left_out.len()
-          );
-        }
-        for (left_out, kept) in thinned.aliases {
-          self.references.alias(hash, left_out, kept)?;
-        }
-      }
-      record_entity_changes(&mut duplicates, &ymap_diff, &original.entities, &contributor);
-      by_resource.entry(resource).or_default().push(ymap_diffs.len());
-      contributors.insert(ymap_diffs.len(), contributor);
+      contributors.insert(ymap_diffs.len(), (resource, path, origin));
       ymap_diffs.push(ymap_diff);
     }
     // Merged as the last source, so the merge policy weighs it against the resources'. The
@@ -187,16 +124,37 @@ impl<'a> MergeRun<'a> {
         })
         .collect::<Vec<_>>();
       self.references.register_entities(hash, &added_entities);
-      record_entity_changes(
-        &mut duplicates,
-        ymap_diff,
-        &original.entities,
-        &(VANILLA_OVERWRITE_SOURCE.to_owned(), vanilla_ymap_path.clone(), None),
+      contributors.insert(
+        ymap_diffs.len(),
+        (VANILLA_OVERWRITE_SOURCE.to_owned(), vanilla_ymap_path.clone(), None),
       );
       ymap_diffs.push(ymap_diff.clone());
     }
     if ymap_diffs.is_empty() {
       return Ok(());
+    }
+    // Sources adding the same entity, as a resource's patch shipping its YMAP again does, add it
+    // once: the additions an earlier source makes already are left out. The versions of an added
+    // YMAP are thinned below, as they are wholly additions.
+    if !added && ymap_diffs.len() > 1 {
+      let before = ymap_diffs.clone();
+      let thinned =
+        compare_added::thin_additions(&mut ymap_diffs, &crate::core::config::matching::current());
+      record_thinned(&mut duplicates, &before, &thinned.left_out, &contributors);
+      if !thinned.left_out.is_empty() {
+        tracing::info!(
+          "  Left out {} additions an earlier source makes already",
+          thinned.left_out.len()
+        );
+      }
+      for (left_out, kept) in thinned.aliases {
+        self.references.alias(hash, left_out, kept)?;
+      }
+    }
+    for (index, diff) in ymap_diffs.iter().enumerate() {
+      if let Some(contributor) = contributors.get(&index) {
+        record_entity_changes(&mut duplicates, diff, &original.entities, contributor);
+      }
     }
     // Several resources' versions of a YMAP they add are all additions to the empty YMAP:
     // those an earlier version makes already are left out, and the extents cover them all.
@@ -290,6 +248,69 @@ impl<'a> MergeRun<'a> {
   }
 }
 
+/// The resource, file and origin generation of a source's diff; the origin is that of a change
+/// carried from another generation.
+type Contributor = (String, PathBuf, Option<String>);
+
+/// Records in `duplicates` each entity addition of `left_out`, which [`compare_added::thin_additions`]
+/// left out of `diffs` (as they were before) for the same addition of an earlier diff: as
+/// [`IgnoredReason::SameAdditionNewer`] when the same resource makes that one in a newer
+/// generation, otherwise as an identical duplicate when the two are equal and for the earlier
+/// source's when they differ; `contributors` names each diff's source.
+fn record_thinned(
+  duplicates: &mut Collector,
+  diffs: &[YmapDiffFields],
+  left_out: &[compare_added::LeftOut],
+  contributors: &HashMap<usize, Contributor>,
+) {
+  let added = |(diff, change): (usize, usize)| match diffs[diff].entities.as_ref()?.get(change)? {
+    YmapEntityDiff::Added {
+      entity,
+      target_index,
+      ..
+    } => Some((entity, *target_index)),
+    _ => None,
+  };
+  let contribution = |(resource, path, origin): &Contributor, index| Contribution {
+    resource: resource.clone(),
+    path: path.clone(),
+    change: Change::Added,
+    index,
+    origin: origin.clone(),
+  };
+  for left_out in left_out.iter().filter(|left_out| left_out.field == "entities") {
+    let (Some((entity, index)), Some((kept_entity, kept_index))) =
+      (added(left_out.at), added(left_out.kept))
+    else {
+      continue;
+    };
+    let (Some(kept), Some(source)) =
+      (contributors.get(&left_out.kept.0), contributors.get(&left_out.at.0))
+    else {
+      continue;
+    };
+    // A YMAP's own sources come from the loaded generation, carried changes from their origin.
+    let newer = match (&kept.2, &source.2) {
+      (None, Some(_)) => true,
+      (Some(kept), Some(source)) => kept > source,
+      _ => false,
+    };
+    let reason = if kept.0 == source.0 && newer {
+      IgnoredReason::SameAdditionNewer
+    } else if entity == kept_entity {
+      IgnoredReason::IdenticalDuplicate
+    } else {
+      IgnoredReason::EarlierSourceWins
+    };
+    duplicates.add_ignored(
+      entity.guid,
+      contribution(kept, kept_index),
+      contribution(source, index),
+      reason,
+    );
+  }
+}
+
 /// Records in `duplicates` each entity change of `diff`, which `contributor` (its resource, file
 /// and origin generation) makes, with the GUID of the entity it adds or of the entity of
 /// `vanilla` it changes.
@@ -297,7 +318,7 @@ fn record_entity_changes(
   duplicates: &mut Collector,
   diff: &YmapDiffFields,
   vanilla: &[YmapEntity],
-  (resource, path, origin): &(String, PathBuf, Option<String>),
+  (resource, path, origin): &Contributor,
 ) {
   for change in diff.entities.iter().flatten() {
     let guid = change.guid(vanilla);

@@ -180,14 +180,18 @@ changes are among.
 
 `report/vanilla/{version}/ymap/{fileName}.json` (`YmapMergeReport`), `version` and the file
 name those of the latest vanilla YMAP, holds the entities competed for, each with the change
-applied and those not, with why:
+applied and those not, with why. Removals and modifications compete for a vanilla entity.
+Additions are new entities, whatever their GUID: one an earlier source makes already, an
+entity with the same GUID, not 0 and given to no other entity of its source, or of the same
+type, archetype and LOD level at the same position within the `ymap` matching tolerance, is
+left out and reported; the others are all applied.
 
 | Reason | The applied change |
 |---|---|
 | `identical_duplicate` | Is the same |
 | `removal_wins` | Removes the entity |
 | `newer_generation_wins` | Comes from a newer generation: the YMAP's own sources from the loaded one, carried changes from their origin |
-| `earlier_source_wins` | Comes from a source merged before |
+| `earlier_source_wins` | Comes from a source merged before; for an addition, one with the same GUID or placed alike, with other values |
 | `same_addition_newer` | Is the same resource's addition of the entity in a newer generation |
 
 A change names its resource and source: a stream file by its `stream_path`, whose
@@ -227,7 +231,7 @@ For an added YMAP:
 
 - The empty baseline has no name, flags, extents or block, so the source's are kept.
 - An addition an earlier version makes already is an entity with the same GUID, not 0 and
-  given to no other entity of either version, or of the same type, archetype and LOD level at
+  given to no other entity of its version, or of the same type, archetype and LOD level at
   the same position (within the `ymap`
   [matching tolerance](#matching-configuration)), its children then pointing at the kept
   one, or another item equal within the matching tolerances; LOD lights and distant LOD
@@ -334,7 +338,9 @@ generation and carry the changes resources make to the others over to it.
   the end of the same YMAP of the successor pair. Of the additions a resource carries to a
   YMAP, those it adds there already, in its own YMAP or carried from a newer generation, are
   left out, matched as the versions of an added YMAP are (see
-  [Added Stream Files](#added-stream-files)); other resources' additions are kept.
+  [Added Stream Files](#added-stream-files)). Of all sources' entity additions to a vanilla
+  YMAP, those an earlier source makes already are left out the same way and reported (see
+  [Merge Report](#merge-report)).
 - Entity parent changes and modifications of nested arrays such as occlude model
   triangles are not carried. When several changes of one generation reach one item, a
   removal wins and otherwise the first is kept. `generations/left_behind.json`

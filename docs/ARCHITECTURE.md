@@ -144,7 +144,8 @@ unchanged. Generations are resolved by the merge.
    removals of resources shipping only the other YMAP of a light pair, as their documents
    imply them and their overwrites keep them, and the changes carried over from other
    generations, newest origin first,
-   append the vanilla overwrite as the last source,
+   append the vanilla overwrite as the last source, leave out the entity additions an
+   earlier source makes already, matched as the versions of an added YMAP are below,
    combine the differences and apply them to the latest vanilla file. Combining keeps
    every change of its inputs; the merge stage first leaves name, flag, extent, block and
    distant LOD light count changes and physics dictionary removals out of each

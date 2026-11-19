@@ -1,5 +1,5 @@
 //! The changes several sources make to one vanilla entity, which the merge decides between, and
-//! the additions it leaves out because the same resource adds them in a newer generation.
+//! the additions it leaves out because a source merged before makes them already.
 
 use crate::core::format::ymap::compare::YmapEntityDiff;
 use serde::{Deserialize, Serialize};
@@ -75,7 +75,7 @@ pub(super) struct DuplicateReport {
 #[derive(Default)]
 pub(super) struct Collector {
   entries: BTreeMap<u32, Vec<Candidate>>,
-  /// Additions left out for the same resource's in a newer generation.
+  /// Additions left out for the same addition of a source merged before.
   thinned: Vec<EntityDuplicate>,
 }
 
@@ -86,13 +86,18 @@ struct Candidate {
 }
 
 impl Collector {
-  /// Records candidates before deletion filtering or identical-diff deduplication.
+  /// Records a removal or modification of the vanilla entity `guid`, before deletion filtering
+  /// or identical-diff deduplication. Additions are new entities, whatever their GUID: those
+  /// left out are recorded with [`Self::add_ignored`], and the others all applied.
   pub(super) fn add(
     &mut self,
     diff: &YmapEntityDiff,
     guid: u32,
     source: Contribution,
   ) {
+    if matches!(diff, YmapEntityDiff::Added { .. }) {
+      return;
+    }
     // Indices differ between sources, so identical changes are compared without them.
     let signature = match diff {
       YmapEntityDiff::Added {
@@ -115,19 +120,20 @@ impl Collector {
   }
 
   /// Records that the addition `left_out` of the entity `guid` was left out for `kept`, the same
-  /// resource's addition in a newer generation.
-  pub(super) fn add_thinned(
+  /// addition of a source merged before, for `reason`.
+  pub(super) fn add_ignored(
     &mut self,
     guid: u32,
     kept: Contribution,
     left_out: Contribution,
+    reason: IgnoredReason,
   ) {
     self.thinned.push(EntityDuplicate {
       guid,
       applied: kept,
       ignored: vec![IgnoredContribution {
         source: left_out,
-        reason: IgnoredReason::SameAdditionNewer,
+        reason,
       }],
     });
   }
@@ -195,16 +201,16 @@ mod tests {
   use super::*;
   #[test]
   fn duplicate_report_keeps_original_guids_and_deletion_decisions() {
-    let model: crate::core::format::ymap::model::Ymap =
-      crate::core::format::gamefile::test_support::sample_ymap("parent_refs/vanilla_parent.ymap");
-    let mut entity = model.entities.first().unwrap().clone();
-    let guid = entity.guid;
-    entity.guid = 1;
-    let added = YmapEntityDiff::Added {
-      anchor_base_index: None,
-      target_index: None,
-      entity,
-      parent: crate::core::format::ymap::compare::EntityParent::None,
+    let guid = 100;
+    let modified = YmapEntityDiff::Modified {
+      base_index: 0,
+      target_index: 0,
+      changes: crate::core::format::ymap::compare::YmapEntityFieldDiff {
+        flags: Some(1),
+        ..Default::default()
+      },
+      parent: None,
+      reason: None,
     };
     let removed = YmapEntityDiff::Removed {
       base_index: 0,
@@ -218,7 +224,7 @@ mod tests {
       origin: None,
     };
     let mut collector = Collector::default();
-    collector.add(&added, guid, source("resource_a", Change::Added));
+    collector.add(&modified, guid, source("resource_a", Change::Modified));
     collector.add(&removed, guid, source("resource_b", Change::Removed));
     collector.add(&removed, guid, source("resource_c", Change::Removed));
     let entries = collector.finish();

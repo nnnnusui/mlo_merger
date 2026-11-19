@@ -565,7 +565,7 @@ fn propagated_changes_merge_into_vanilla_ymaps_and_reject_stale_documents() {
 }
 
 #[test]
-fn additions_a_resource_carries_from_two_generations_are_added_once() {
+fn additions_several_sources_make_alike_are_added_once() {
   use crate::common::fingerprint::Fingerprint;
   use crate::core::format::gamefile::test_support::sample_ymap;
   use crate::core::format::ymap::compare::{YmapComparisonFile, YmapPropagatedDiff};
@@ -619,7 +619,7 @@ fn additions_a_resource_carries_from_two_generations_are_added_once() {
     added: Default::default(),
     replacing: Default::default(),
     // The resource adds the entity to a newer and an older generation; another resource adds
-    // one placed alike.
+    // one placed alike under another GUID.
     propagated: vec![
       document("newer.diff.json", "resource", 900),
       document("older.diff.json", "resource", 900),
@@ -631,6 +631,6 @@ fn additions_a_resource_carries_from_two_generations_are_added_once() {
   let parent = OriginalMap::load(&output.join("parent.ymap")).unwrap();
   let mut guids = parent.entities.iter().map(|entity| entity.guid).collect::<Vec<_>>();
   guids.sort_unstable();
-  assert_eq!(guids, [100, 200, 900, 901]);
+  assert_eq!(guids, [100, 200, 900]);
   fs::remove_dir_all(root).unwrap();
 }
