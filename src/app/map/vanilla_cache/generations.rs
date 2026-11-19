@@ -19,7 +19,11 @@
 //!   YMAPs. For each older and newer generation, a *unit* pairs the items of the older one's
 //!   YMAPs with those of the newer one's: items of one kind whose position is within
 //!   [`TOLERANCE`] of each other and whose identifying attributes are equal, when exactly one item
-//!   of either generation fits.
+//!   of either generation fits. An entity pairs first by its GUID, wherever the newer entity is,
+//!   as DLCs rename and move the entities they ship again under the same GUID, such as
+//!   `hei_cs6_04_mainrails2` for `cs6_04_mainrails2`; of several entities with its GUID, the one
+//!   at its position with its archetype fits. An entity with no GUID in the newer generation pairs
+//!   by position and archetype, as some DLCs give every entity of a YMAP a new GUID.
 //!
 //! Units are what takes time to build, as every YMAP of both generations is decoded, so each is
 //! stored by a digest of the YMAPs it pairs (`generation-units/{key}.json`) and kept across cache
@@ -39,7 +43,7 @@ pub(crate) const GENERATIONS_FILE: &str = "generations.json";
 /// Directory of the units in the vanilla cache.
 const UNITS_DIR: &str = "generation-units";
 /// Bump when how generations, families or units are formed, or the unit layout, change.
-pub(crate) const ALGORITHM_VERSION: u32 = 1;
+pub(crate) const ALGORITHM_VERSION: u32 = 2;
 /// Prefixes found for at least this many YMAPs apply to YMAPs without an unprefixed counterpart.
 const MIN_PREFIX_FILES: usize = 10;
 /// Per-axis distance within which two items of a unit are at the same place.
@@ -544,6 +548,8 @@ fn underscores(stem: &str) -> impl Iterator<Item = usize> + '_ {
 struct Item {
   position: [f32; 3],
   identity: u64,
+  /// An entity's non-zero GUID, which pairs it before its position and `identity` do.
+  guid: Option<u32>,
 }
 
 /// The items of one YMAP (with its LOD light partner) by kind.
@@ -572,6 +578,7 @@ impl FileItems {
         .map(|entity| Item {
           position: position(&entity.position),
           identity: identity(&|hasher| entity.archetype_name.to_ascii_lowercase().hash(hasher)),
+          guid: (entity.guid != 0).then_some(entity.guid),
         })
         .collect(),
     );
@@ -593,6 +600,7 @@ impl FileItems {
               lod_lights[index].hash.hash(hasher);
             }
           }),
+          guid: None,
         })
         .collect(),
     );
@@ -604,6 +612,7 @@ impl FileItems {
         .map(|generator| Item {
           position: position(&generator.position),
           identity: identity(&|hasher| generator.car_model.to_ascii_lowercase().hash(hasher)),
+          guid: None,
         })
         .collect(),
     );
@@ -628,6 +637,7 @@ impl FileItems {
             )
               .hash(hasher);
           }),
+          guid: None,
         })
         .collect(),
     );
@@ -644,6 +654,7 @@ impl FileItems {
               .map(|value| (value / TOLERANCE).round() as i64)
               .hash(hasher);
           }),
+          guid: None,
         })
         .collect(),
     );
@@ -655,6 +666,7 @@ impl FileItems {
         .map(|modifier| Item {
           position: position(&modifier.min_extents),
           identity: identity(&|hasher| modifier.name.to_ascii_lowercase().hash(hasher)),
+          guid: None,
         })
         .collect(),
     );
@@ -713,43 +725,65 @@ fn build_unit(
   unit
 }
 
-/// Pairs each item of `before` with the one item of `after` of its identity within
-/// [`TOLERANCE`], when no other item of `before` pairs with it too.
+/// Pairs each item of `before` with the one item of `after` that fits it, when no other item of
+/// `before` pairs with it too. An item with a GUID that items of `after` have fits the one of them,
+/// or else the one of them within [`TOLERANCE`] of its identity; any other item fits the one of
+/// `after` of its identity within [`TOLERANCE`].
 fn pair_items(
   before: &[(u32, u32, Item)],
   after: &[(u32, u32, Item)],
 ) -> (Vec<[u32; 4]>, UnpairedCounts) {
   let cell = |item: &Item| item.position.map(|value| value.floor() as i64);
+  let finite = |item: &Item| item.position.iter().all(|value| value.is_finite());
+  let near = |item: &Item, other: &Item| {
+    finite(other)
+      && (0..3).all(|axis| (item.position[axis] - other.position[axis]).abs() <= TOLERANCE)
+  };
   let mut grid = HashMap::<(u64, [i64; 3]), Vec<usize>>::new();
+  let mut by_guid = HashMap::<u32, Vec<usize>>::new();
   for (index, (.., item)) in after.iter().enumerate() {
-    if item.position.iter().all(|value| value.is_finite()) {
+    if finite(item) {
       grid.entry((item.identity, cell(item))).or_default().push(index);
+    }
+    if let Some(guid) = item.guid {
+      by_guid.entry(guid).or_default().push(index);
     }
   }
   let mut counts = UnpairedCounts::default();
   let mut chosen = Vec::new();
   let mut claims = HashMap::<usize, usize>::new();
   for (before_index, (.., item)) in before.iter().enumerate() {
-    if !item.position.iter().all(|value| value.is_finite()) {
-      counts.missing += 1;
-      continue;
-    }
-    let [x, y, z] = cell(item);
-    let mut found = Vec::new();
-    for dx in -1..=1 {
-      for dy in -1..=1 {
-        for dz in -1..=1 {
-          for &candidate in
-            grid.get(&(item.identity, [x + dx, y + dy, z + dz])).into_iter().flatten()
-          {
-            let other = &after[candidate].2;
-            if (0..3).all(|axis| (item.position[axis] - other.position[axis]).abs() <= TOLERANCE) {
-              found.push(candidate);
+    let same_guid = item.guid.and_then(|guid| by_guid.get(&guid));
+    let found = match same_guid.map(Vec::as_slice) {
+      Some(&[candidate]) => vec![candidate],
+      Some(candidates) => candidates
+        .iter()
+        .copied()
+        .filter(|&candidate| {
+          let other = &after[candidate].2;
+          other.identity == item.identity && finite(item) && near(item, other)
+        })
+        .collect(),
+      None if !finite(item) => Vec::new(),
+      None => {
+        let [x, y, z] = cell(item);
+        let mut found = Vec::new();
+        for dx in -1..=1 {
+          for dy in -1..=1 {
+            for dz in -1..=1 {
+              for &candidate in
+                grid.get(&(item.identity, [x + dx, y + dy, z + dz])).into_iter().flatten()
+              {
+                if near(item, &after[candidate].2) {
+                  found.push(candidate);
+                }
+              }
             }
           }
         }
+        found
       }
-    }
+    };
     match found[..] {
       [] => counts.missing += 1,
       [candidate] => {
@@ -829,6 +863,7 @@ mod tests {
     let item = |x: f32, identity: u64| Item {
       position: [x, 0.0, 0.0],
       identity,
+      guid: None,
     };
     let before = [
       (0, 0, item(1.0, 1)),
@@ -847,6 +882,44 @@ mod tests {
       UnpairedCounts {
         missing: 1,
         ambiguous: 2,
+      }
+    );
+  }
+
+  #[test]
+  fn entities_pair_by_guid_before_position_and_archetype() {
+    let entity = |x: f32, identity: u64, guid: u32| Item {
+      position: [x, 0.0, 0.0],
+      identity,
+      guid: Some(guid),
+    };
+    let before = [
+      (0, 0, entity(1.0, 1, 10)),
+      (0, 1, entity(5.0, 2, 11)),
+      (0, 2, entity(9.0, 3, 12)),
+      (0, 3, entity(13.0, 4, 13)),
+      (0, 4, entity(17.0, 5, 14)),
+    ];
+    let after = [
+      // Renamed under its GUID.
+      (0, 0, entity(1.0, 6, 10)),
+      // Moved under its GUID.
+      (0, 1, entity(50.0, 2, 11)),
+      // Two with its GUID: the one at its position with its archetype fits.
+      (0, 2, entity(9.0, 7, 12)),
+      (0, 3, entity(9.0, 3, 12)),
+      // A new GUID at its position with its archetype.
+      (0, 4, entity(13.0, 4, 99)),
+      // A new GUID at its position with another archetype.
+      (0, 5, entity(17.0, 8, 98)),
+    ];
+    let (pairs, counts) = pair_items(&before, &after);
+    assert_eq!(pairs, [[0, 0, 0, 0], [0, 1, 0, 1], [0, 2, 0, 3], [0, 3, 0, 4]]);
+    assert_eq!(
+      counts,
+      UnpairedCounts {
+        missing: 1,
+        ambiguous: 0,
       }
     );
   }
