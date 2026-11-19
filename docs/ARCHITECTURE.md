@@ -117,20 +117,36 @@ carries the other's removals, marked implied, so its document records the other 
 The source cache also records which vanilla YMAPs a
 merge must read: the parents and children related to changed files.
 
-DLCs ship vanilla YMAPs again under prefixes of their own. The vanilla cache applies the
-change sets each DLC stage of the raw archive records in order to find the archives the
-game does not load, and lists them with every YMAP version they hold in
-`dlc_activity.json`. It pairs the items of each family's generations, one unit per older
-and newer generation, stored by a digest of its YMAPs so that rebuilds and game build
-switches reuse them, names the loaded successor of each YMAP the game does not load, those
-first shipped after the selected build included, and indexes the selected build's units in
-`generations.json`; the YMAPs newer than the build with a successor are recorded in
-`cache_info.json` as `newer_files`, which source YMAPs of their names are diffed against. After taking the diffs, the
-source cache writes to `implied/` what keeps each resource's LOD light pairs in step: the
-lights a YMAP adds that the other YMAP of its pair does not, to leave out, and, for a
-resource shipping only one YMAP of a pair, the removals of the vanilla other one. They are
-derived from the diff record and the vanilla cache revision, and are kept while both are
-unchanged. Generations are resolved by the merge.
+After taking the diffs, the source cache writes to `implied/` what keeps each resource's
+LOD light pairs in step: the lights a YMAP adds that the other YMAP of its pair does not, to
+leave out, and, for a resource shipping only one YMAP of a pair, the removals of the vanilla
+other one. They are derived from the diff record and the vanilla cache revision, and are
+kept while both are unchanged. The source cache's diffs and `implied/` documents describe
+each source on its own; DLC generations are resolved by the merge (see
+[Generation Resolution](#generation-resolution)).
+
+## Generation Resolution
+
+DLCs ship vanilla YMAPs again under prefixes of their own (`hei_`, `apa_`, `vw_`, `m25_2_`),
+and the game loads one generation of each; a streamed YMAP of another loads beside it,
+placing its items twice. Resolution is split by what each stage owns:
+
+- The raw vanilla archive records what each DLC pack declares: its data files, the change
+  sets the game executes, and the islands its island hopper files define.
+- The vanilla cache applies those in stage order through the selected game build to find
+  the archives the game loads (`dlc_activity.json`, `app::map::vanilla_cache::activity`).
+  It pairs the items of each family's generations, over the whole archive so that YMAPs
+  first shipped after the build are paired too, one unit per older and newer generation,
+  stored by a digest of its YMAPs so that rebuilds and game build switches reuse them. It
+  names the loaded successor of each YMAP the game does not load in `generations.json`,
+  and records the YMAPs newer than the build with a successor as `newer_files`, so that
+  sources streaming them are diffed against them.
+- The merge carries each source's changes to the items they pair with in the loaded
+  generation, deploys only that generation, and reports the changes it does not apply or
+  cannot carry.
+
+The engine's loading rules are inferred from the packs' data and loads observed in game;
+the config's `[dlc_activity]` corrects them where they do not hold.
 
 ## Merge
 
@@ -194,8 +210,9 @@ are rebuilt; removed inputs and results that become no-ops disappear from the ne
 publication. Failed merges leave prior outputs intact; fully current runs do not
 republish. Algorithm versions are tracked separately for YMAP and YBN.
 
-YMAP duplicate diagnostics identify applied and ignored source edits with their
-resolution reason. They describe competing entity changes.
+The merge report names, for each entity and item of another array that several changes
+reach, the applied change and the ignored ones with their resolution reason, and the
+changes of YMAPs not deployed that are carried nowhere.
 
 ## Overwrites
 
@@ -315,7 +332,8 @@ independent format-specific policies.
 
 The outcome never depends on processing or filesystem order: a removal wins over
 every other change to the same vanilla item, and otherwise the first source in
-source order wins. YMAP parent
+source order wins. A YMAP's own sources come before changes carried to it from other
+generations, which come newest origin generation first. YMAP parent
 relationships are resolved before merging and repaired after the final entity layout
 is known, so files affected by those repairs are rebuilt even when their own data is
 unchanged; ambiguous references are rejected. YBN shapes are

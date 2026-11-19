@@ -4,6 +4,13 @@
 
 - [ ] Record source `.rpf` paths with their size and modification time in the archive manifest, and treat an existing archive as stale when they change. Currently an existing archive is reused unless it is explicitly regenerated.
 
+## DLC Generations
+
+Merges deploy only the generation of each vanilla YMAP the game loads and carry the changes resources make to the others over to it; see [Newer DLC Generations](reference.md#newer-dlc-generations).
+
+- [ ] Record each FiveM game build's own title update data (`dlc_patch/` replacements of packs' `content.xml` and `setup2.xml`, `dlclist.xml`, `lodlights.rpf`), which FiveM mounts for that build, and apply it when the vanilla cache targets the build; the installed title update's is applied to every build now.
+- [ ] Carry entity parent changes and modifications of nested arrays, such as occlude model triangles, to other generations, or list them in `left_behind.json`.
+
 ## Overwrites
 
 Resource overwrites (`overwrite/resources/{resourceName}/{stream_path}.diff.json`) leave selected differences of a source YMAP's diff out of the merge, or the file whole. The overwrite cache derives which resources' files each stream file that resources add is merged from, and the warnings. Vanilla overwrites (`overwrite/vanilla/{version}/ymap/*.diff.json`) add differences from the latest vanilla YMAP as the last merge source.

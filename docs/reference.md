@@ -300,30 +300,42 @@ pack's change sets leave in place. Streaming a YMAP the game does not load can l
 again beside the one it does, placing its items twice, so merges deploy only the loaded
 generation and carry the changes resources make to the others over to it.
 
+#### Which YMAPs The Game Loads
+
 - Each DLC stage of the raw archive records its pack's device, data files and the change
   sets the game executes without a script (`dlc` in `cache_info.json`), from the title
   update's `dlc_patch/{pack}/setup2.xml` and `content.xml` where it has them, and the
   islands its island hopper files (`ISLAND_HOPPER_FILE` data files in `common/data/`)
-  define, with their LOD lights YMAP.
-- The vanilla cache applies them in stage order. A base game archive is loaded unless a
-  change set invalidates its path. A pack's archive is loaded once a change set enables
-  it, or when its data file is mounted enabled. An archive a change set enables while
-  invalidating the base game path of the same name stands for that path: a later change
-  set invalidating the path unloads it, so of the packs replacing one archive in turn, the
-  last one's is loaded. An archive mounted over a valid path (`overlay`) stands for it as
-  well; one mounted over an invalidated path by a change set that does not invalidate it
-  is not loaded. A pack's archive that is no data file, such as a title update patch of an
-  archive the pack does not declare, is not loaded. An additive archive loads in addition
-  to those standing for the path it is enabled in place of: enabling it unloads none of
-  them, and no later change set unloads it. Additive are the archives holding an island's
-  LOD lights, which the game loads while a script enables the island, such as `mpheist4`'s
-  `island_lodlights`, and those `additive_archives` under `[dlc_activity]` in the config
-  file names, spelled as `dlc_activity.json` keys archives. `generations.json` lists the YMAPs not
-  loaded in `inactive`, with why. An archive built without this record loads every YMAP.
-- The vanilla cache groups YMAPs into generations by prefix and into families of the
-  same name apart from the prefix and a trailing number, such as every
-  `*distlodlights_small###`, since newer generations move items between those blocks.
-  Generations are ordered by the vanilla stage first shipping one of their YMAPs.
+  define, with their LOD lights YMAP. An archive built without this record loads every
+  YMAP.
+- The vanilla cache applies them in stage order, through the selected game build, and
+  writes the result to `dlc_activity.json` (see
+  [Loaded Vanilla YMAPs](usage.md#loaded-vanilla-ymaps)):
+  - A base game archive is loaded unless a change set invalidates its path.
+  - A pack's archive is loaded once a change set enables it, or when its data file is
+    mounted enabled. One that is no data file, such as a title update patch of an archive
+    the pack does not declare, is not loaded.
+  - An archive a change set enables while invalidating the base game path of the same name
+    stands for that path, and a later change set invalidating the path unloads it: of the
+    packs replacing one archive in turn, the last one's is loaded. An archive mounted over
+    a valid path (`overlay`) stands for it as well; one mounted over an invalidated path by
+    a change set that does not invalidate it is not loaded.
+  - An additive archive loads in addition to those standing for the path it is enabled in
+    place of: enabling it unloads none of them, and no later change set unloads it.
+    Additive are the archives holding an island's LOD lights, which the game loads while a
+    script enables the island, such as `mpheist4`'s `island_lodlights`, and those
+    `additive_archives` under `[dlc_activity]` in the config file names, spelled as
+    `dlc_activity.json` keys archives.
+- `generations.json` lists the YMAPs the game does not load in `inactive`, with why.
+
+#### Generations And Their Items
+
+- Generations are formed from the whole raw archive, so a cache built for an older game
+  build also takes in the YMAPs first shipped after it, listed in `newer_than_build`.
+  YMAPs are grouped into generations by prefix and into families of the same name apart
+  from the prefix and a trailing number, such as every `*distlodlights_small###`, since
+  newer generations move items between those blocks. Generations are ordered by the vanilla
+  stage first shipping one of their YMAPs.
 - Entities are the same when their GUIDs are, wherever they are; of several entities of
   one GUID, the one within 0.01 of the other on every axis with its archetype. Other items,
   and entities whose GUID the other generation lacks, are the same when they are of one
@@ -337,35 +349,34 @@ generation and carry the changes resources make to the others over to it.
   `generations.json` lists the units of the selected game build. Units are kept across
   rebuilds and game builds, so a rebuild pairs only the YMAPs that changed.
 - `generations.json` names, per family in `successors`, the YMAP loaded in place of each one
-  that is not: of the newest generation pairing its items, the loaded YMAP holding most of
-  them.
-- Generations are formed from the whole raw archive, so a cache built for an older game
-  build also pairs the YMAPs first shipped after it, which that build does not load and
-  `generations.json` lists in `newer_than_build`. Streaming one on that build loads it beside
-  the generation the build loads. Its successor is, of the newest older generation pairing
-  its items, the loaded YMAP holding most of them, and the cache records each with a
-  successor in `newer_files` of `cache_info.json`: the source cache diffs a resource's YMAP
-  of that name against it, and merge carries the changes back to the successor as it carries
-  an older generation's forward, and deploys the YMAP no more than other YMAPs with a
-  successor. A YMAP's own source wins over changes carried back to it.
+  that is not: of the newest newer generation pairing its items, or for a YMAP first shipped
+  after the build of the newest older one, the loaded YMAP holding most of them. YMAPs not
+  loaded that no loaded YMAP pairs with have no successor and are merged and deployed as
+  other vanilla YMAPs are.
+- Streaming a YMAP first shipped after the build loads it beside the generation the build
+  loads, as streaming an older one does. The cache records each with a successor in
+  `newer_files` of `cache_info.json`, with its latest version, and the source cache diffs a
+  resource's YMAP of that name against it, as against any vanilla YMAP.
+
+#### Carrying Changes
+
 - Merge carries each source YMAP's changes, after its LOD light pair document's skip and its
   overwrite, and the removals that document implies for a vanilla YMAP the resource does
-  not ship, to each item they pair with in a newer generation's loaded YMAP, YMAPs the
-  resource ships included. It writes them to
+  not ship, to each item they pair with in a loaded YMAP of another generation: newer ones,
+  or older ones for a YMAP first shipped after the build. YMAPs the resource ships are
+  included. It writes them to
   `generations/{resourceName}/{version}/{fileName}.diff.json` (`YmapPropagatedDiff`) of
   its output, `version` naming the stage first shipping the generation the changes come
   from. Each carried removal, modification or replacement names the item it came from in
   `reason`, such as
-  `"propagated from resourceName: vw_lodlights_medium031.ymap lod_lights[14]"`. A light
-  removed from either YMAP of a LOD light pair is removed from both YMAPs of the newer
-  pairs. Entities a resource adds with no parent to a YMAP with a successor are added to
-  the end of the successor, with the physics dictionaries it adds there, and LOD lights to
-  the end of the same YMAP of the successor pair. Of the additions a resource carries to a
-  YMAP, those it adds there already, in its own YMAP or carried from a newer generation, are
-  left out, matched as the versions of an added YMAP are (see
-  [Added Stream Files](#added-stream-files)). Of all sources' entity additions to a vanilla
-  YMAP, those an earlier source makes already are left out the same way and reported (see
-  [Merge Report](#merge-report)).
+  `"propagated from resourceName: vw_lodlights_medium031.ymap lod_lights[14]"`.
+- A light removed from either YMAP of a LOD light pair is removed from both YMAPs of the
+  pairs it reaches. Entities a resource adds with no parent to a YMAP with a successor are
+  added to the end of the successor, with the physics dictionaries it adds there, and LOD
+  lights to the end of the same YMAP of the successor pair. Of the additions a resource
+  carries to a YMAP, those it adds there already, in its own YMAP or carried from a newer
+  generation, are left out, matched as the versions of an added YMAP are (see
+  [Added Stream Files](#added-stream-files)).
 - Entity parent changes and modifications of nested arrays such as occlude model
   triangles are not carried. When several changes of one generation reach one item, a
   removal wins and otherwise the first is kept. `generations/left_behind.json`
@@ -373,11 +384,26 @@ generation and carry the changes resources make to the others over to it.
   items the loaded generation lacks already (`already_absent`), other changes of such
   items (`no_loaded_counterpart`), and additions of entities with a parent or of other
   arrays (`addition_not_carried`).
-- Merge deploys no YMAP with a successor: its sources are listed in `_omit.txt`, its
-  record in `cache_info.json` names the successor in `superseded_by`, and a vanilla
-  overwrite of it is not applied. It merges each carried document into its vanilla YMAP
-  like one more resource diff after that YMAP's own, newest origin first, under the same
-  policy, so a removal wins and otherwise the newer generation's change.
+- Each carried document is merged into its loaded YMAP like one more resource diff, after
+  that YMAP's own sources and before its vanilla overwrite, those of newer origin
+  generations first, under the same policy:
+
+  | Change to an item of a YMAP not loaded | Change to the item it pairs with in the loaded YMAP | Result |
+  |---|---|---|
+  | Removed | any | Removed |
+  | any | Removed | Removed |
+  | Modified or replaced | none | The carried change |
+  | none | Modified or replaced | The loaded YMAP's change |
+  | Modified or replaced | Modified or replaced | The loaded YMAP's change |
+
+  Between changes carried from several generations, that of the newer origin generation
+  wins. Of all sources' entity additions to the loaded YMAP, those an earlier source makes
+  already are left out. The [Merge Report](#merge-report) gives each change not applied
+  with why.
+- Merge deploys no YMAP with a successor: its sources are listed in `_omit.txt`, its record
+  in `cache_info.json` and its report name the successor in `superseded_by`, and a vanilla
+  overwrite of it is not applied. The successor is written when the changes carried to it
+  change it, so it is deployed in place of its vanilla file.
 
 ### Entity Parents
 
@@ -698,10 +724,12 @@ are arrays. File sizes and timestamps are JSON numbers, represented as TypeScrip
   versions up to patchday27ng, before GameBuild 2699), and it needs a way to track
   differences exactly. The code writing vanilla YMAP version-to-version diffs is kept but
   not called; see [vanillaDiff.md](vanillaDiff.md).
-- Changes carried over to [newer DLC generations](#newer-dlc-generations) are taken from
-  the source cache's diff documents, so a resource overwrite leaving a change out of a
-  resource's diff does not leave it out of the newer generations. Changes are carried
-  only to newer generations, not to older ones.
+- Which [DLC generations](#newer-dlc-generations) the game loads is worked out from the
+  installed game's files. For an older game build FiveM mounts that build's own title update,
+  with its `dlc_patch/` replacements of packs' `content.xml`, `dlclist.xml` and
+  `lodlights.rpf`, while the raw archive records the installed title update's for every
+  build. The engine's rules are inferred from the packs' data and observed loads, such as
+  island LOD lights loading beside the archives they would otherwise replace.
 - `--get-diff SOURCE` writes the source YMAP's differences from the latest vanilla cache
   in the source cache's diff form; `--get-diff SOURCE TARGET` only prints a mock
   invocation.

@@ -125,8 +125,8 @@ Between carried modifications, the newer origin generation wins.
 
 ### 8. Documentation
 
-- [ ] Describe generation resolution in `docs/ARCHITECTURE.md`, `docs/usage.md` and
-  `docs/reference.md`.
+- [x] Describe generation resolution in `docs/ARCHITECTURE.md`, `docs/usage.md` and
+  `docs/reference.md`, and the work left in `docs/TODO.md`.
 
 ## Decisions
 

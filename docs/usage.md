@@ -156,7 +156,8 @@ source root.
 | Inspect differences | none; written by source-cache generation | | `asset/map/source-cache/diff/{resource}/{stream_path}.diff.json` (`YmapComparisonDiff`) |
 | Inspect which vanilla YMAPs the game loads | none; written by vanilla-cache generation | | `asset/map/vanilla-cache/dlc_activity.json` (`DlcActivity`); see [Loaded Vanilla YMAPs](#loaded-vanilla-ymaps) |
 | Inspect what keeps a resource's LOD light pairs in step | none; written by source-cache generation | | `asset/map/source-cache/implied/{resource}/{stream_path}.json` (`YmapImplied`) |
-| Inspect changes carried to newer DLC generations | none; written by merge | | `asset/map/merged/generations/{resource}/{version}/{file_name}.diff.json` (`YmapPropagatedDiff`); each carried item's `reason` names the item it came from; `asset/map/merged/generations/left_behind.json` (`LeftBehind[]`) lists the changes carried nowhere |
+| Inspect which vanilla YMAP the game loads in place of another | none; written by vanilla-cache generation | | `asset/map/vanilla-cache/generations.json` (`GenerationIndex`), then `asset/map/vanilla-cache/generation-units/{key}.json` (`GenerationUnit`) for the items paired; see [DLC Generations](#dlc-generations) |
+| Inspect changes carried to other DLC generations | none; written by merge | | `asset/map/merged/generations/{resource}/{version}/{file_name}.diff.json` (`YmapPropagatedDiff`); each carried item's `reason` names the item it came from; `asset/map/merged/generations/left_behind.json` (`LeftBehind[]`) lists the changes carried nowhere |
 | Inspect vanilla version differences | none; vanilla-cache generation would write them, but it is currently disabled | | `asset/map/vanilla-cache/ymap_versions.json` (`VanillaYmapVersionIndex`), then `asset/map/vanilla-cache/diff/{version}/ymap/{name}.diff.json` (`VanillaYmapDiff`) for each version after a YMAP's first |
 | Apply overwrites | `--pipeline`, or `--merge` then `--deploy` | `PipelineReport` (pipeline only) | `asset/map/merged/report/index.json` (`MergeReportIndex`), then `asset/map/merged/report/vanilla/{version}/ymap/{file_name}.json` (`YmapMergeReport`); see [Merge Report](reference.md#merge-report) |
 | Check overwrites | `--generate-overwrite-cache`; also run by `--merge` and `--pipeline` | | `asset/map/overwrite-cache/warnings.json` (`OverwriteWarnings`), `asset/map/overwrite-cache/added_stream_files.json` (`AddedStreamFiles`) |
@@ -236,6 +237,68 @@ export const unloadedInStage = (version: string): [string, Unloaded][] =>
     const why = activity.archives[file.archive].unloaded;
     return path.startsWith(`${version}/`) && why ? [[path, why] as [string, Unloaded]] : [];
   });
+```
+
+### DLC Generations
+
+`asset/map/vanilla-cache/generations.json` (`GenerationIndex`) tells, for the game build the
+vanilla cache was built for, which vanilla YMAP the game loads in place of one it does not
+(see [Newer DLC Generations](reference.md#newer-dlc-generations)):
+
+- `inactive` lists the YMAPs the game does not load, by lowercase file name, with why;
+  `newer_than_build` those of them first shipped after the build.
+- `families` groups the YMAPs of all generations of one name. Each family lists its
+  `generations`, oldest first, each with its prefix, the stage first shipping it and its
+  YMAPs, a `distlodlights_*` YMAP standing for its LOD light pair. `successors` maps each
+  YMAP not loaded to the loaded YMAP holding its items, and `units` names the
+  `generation-units/{key}.json` pairing the items of an older and a newer generation by
+  their indices.
+
+A merge deploys no YMAP with a successor and carries the changes a resource makes to it to
+the successor: the merge report gives `superseded_by` for such a YMAP, and lists the changes
+carried nowhere.
+
+```typescript
+// server/generations.ts
+import { readFile } from "node:fs/promises";
+import type { GenerationIndex } from "../shared/gen_mlo_merger";
+
+const index: GenerationIndex = JSON.parse(
+  await readFile("asset/map/vanilla-cache/generations.json", "utf8"),
+);
+
+/** The `lodlights_*` name of the pair a `distlodlights_*` name stands for, and back. */
+const partner = (name: string): string | undefined =>
+  name.includes("distlodlights_")
+    ? name.replace("distlodlights_", "lodlights_")
+    : name.includes("lodlights_")
+      ? name.replace("lodlights_", "distlodlights_")
+      : undefined;
+
+/** The vanilla YMAP the game loads in place of `fileName`, such as
+ * `hei_lodlights_medium031.ymap`: itself when the game loads it, `null` when no loaded YMAP
+ * holds its items. */
+export const loadedInPlaceOf = (fileName: string): string | null => {
+  const name = fileName.toLowerCase();
+  if (!(name in (index.inactive ?? {}))) {
+    return name;
+  }
+  // Families list a LOD light pair by its distlodlights_* YMAP.
+  const listed = name.includes("distlodlights_") || !name.includes("lodlights_")
+    ? name
+    : partner(name)!;
+  for (const family of Object.values(index.families)) {
+    const successor = family.successors[listed];
+    if (successor) {
+      return listed === name ? successor : partner(successor)!;
+    }
+  }
+  return null;
+};
+
+/** Whether `fileName` is first shipped after the game build the cache was built for. */
+export const isNewerThanBuild = (fileName: string): boolean =>
+  (index.newer_than_build ?? []).includes(fileName.toLowerCase());
 ```
 
 ### `--read`
