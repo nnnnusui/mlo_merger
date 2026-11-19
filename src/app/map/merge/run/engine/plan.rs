@@ -1,7 +1,8 @@
 //! Planning each YMAP: merged from every diff of it, or kept from its single source.
 
 use super::*;
-use crate::app::map::merge::duplicates::IgnoredReason;
+use crate::app::map::merge::duplicates::{IgnoredReason, Target};
+use struct_diff::vec::ItemDiff;
 
 /// The resource a vanilla overwrite's contributions are reported under in duplicate reports.
 const VANILLA_OVERWRITE_SOURCE: &str = "overwrite/vanilla";
@@ -161,6 +162,7 @@ impl<'a> MergeRun<'a> {
     for (index, diff) in ymap_diffs.iter().enumerate() {
       if let Some(contributor) = contributors.get(&index) {
         record_entity_changes(&mut duplicates, diff, &original.entities, contributor);
+        record_item_changes(&mut duplicates, diff, contributor);
       }
     }
     // Several resources' versions of a YMAP they add are all additions to the empty YMAP:
@@ -259,25 +261,26 @@ impl<'a> MergeRun<'a> {
 /// carried from another generation.
 type Contributor = (String, PathBuf, Option<String>);
 
-/// Records in `duplicates` each entity addition of `left_out`, which [`compare_added::thin_additions`]
+/// Records in `duplicates` each addition of `left_out`, which [`compare_added::thin_additions`]
 /// left out of `diffs` (as they were before) for the same addition of an earlier diff: as
 /// [`IgnoredReason::SameAdditionNewer`] when the same resource makes that one in a newer
-/// generation, otherwise as an identical duplicate when the two are equal and for the earlier
-/// source's when they differ; `contributors` names each diff's source.
+/// generation, otherwise as an identical duplicate when the two are equal and, for an entity,
+/// for the earlier source's when they differ; `contributors` names each diff's source.
 fn record_thinned(
   duplicates: &mut Collector,
   diffs: &[YmapDiffFields],
   left_out: &[compare_added::LeftOut],
   contributors: &HashMap<usize, Contributor>,
 ) {
-  let added = |(diff, change): (usize, usize)| match diffs[diff].entities.as_ref()?.get(change)? {
-    YmapEntityDiff::Added {
-      entity,
-      target_index,
-      ..
-    } => Some((entity, *target_index)),
-    _ => None,
-  };
+  let added_entity =
+    |(diff, change): (usize, usize)| match diffs[diff].entities.as_ref()?.get(change)? {
+      YmapEntityDiff::Added {
+        entity,
+        target_index,
+        ..
+      } => Some((entity, *target_index)),
+      _ => None,
+    };
   let loaded_version = duplicates.loaded_version.clone();
   let contribution = |(resource, path, origin): &Contributor, index| Contribution {
     resource: resource.clone(),
@@ -286,16 +289,38 @@ fn record_thinned(
     index,
     origin: origin.clone(),
   };
-  for left_out in left_out.iter().filter(|left_out| left_out.field == "entities") {
-    let (Some((entity, index)), Some((kept_entity, kept_index))) =
-      (added(left_out.at), added(left_out.kept))
-    else {
-      continue;
-    };
+  for left_out in left_out {
     let (Some(kept), Some(source)) =
       (contributors.get(&left_out.kept.0), contributors.get(&left_out.at.0))
     else {
       continue;
+    };
+    let (target, identical, (index, kept_index)) = if left_out.field == "entities" {
+      let (Some((entity, index)), Some((kept_entity, kept_index))) =
+        (added_entity(left_out.at), added_entity(left_out.kept))
+      else {
+        continue;
+      };
+      (
+        Target::Entity {
+          guid: entity.guid,
+        },
+        entity == kept_entity,
+        (index, kept_index),
+      )
+    } else {
+      let (Some(index), Some(kept_index)) = (
+        added_item(&diffs[left_out.at.0], left_out.field, left_out.at.1),
+        added_item(&diffs[left_out.kept.0], left_out.field, left_out.kept.1),
+      ) else {
+        continue;
+      };
+      // Other items are left out only when they equal the kept one within the tolerances.
+      let target = Target::Item {
+        array: left_out.field.to_owned(),
+        base_index: None,
+      };
+      (target, true, (index, kept_index))
     };
     let (kept_contribution, left_contribution) =
       (contribution(kept, kept_index), contribution(source, index));
@@ -306,12 +331,116 @@ fn record_thinned(
     );
     let reason = if kept.0 == source.0 && newer {
       IgnoredReason::SameAdditionNewer
-    } else if entity == kept_entity {
+    } else if identical {
       IgnoredReason::IdenticalDuplicate
     } else {
       IgnoredReason::EarlierSourceWins
     };
-    duplicates.add_ignored(entity.guid, kept_contribution, left_contribution, reason);
+    duplicates.add_ignored(target, kept_contribution, left_contribution, reason);
+  }
+}
+
+/// The `target_index` of addition `change` of the array `field` of `diff`, as
+/// [`compare_added::LeftOut`] names arrays; `None` when it is no addition.
+fn added_item(
+  diff: &YmapDiffFields,
+  field: &str,
+  change: usize,
+) -> Option<Option<usize>> {
+  fn added<T, C>(
+    list: Option<&Vec<ItemDiff<T, C>>>,
+    change: usize,
+  ) -> Option<Option<usize>> {
+    match list?.get(change)? {
+      ItemDiff::Added {
+        target_index,
+        ..
+      } => Some(*target_index),
+      _ => None,
+    }
+  }
+  match field {
+    "box_occluders" => added(diff.box_occluders.as_ref(), change),
+    "occlude_models" => added(diff.occlude_models.as_ref(), change),
+    "time_cycle_modifiers" => added(diff.time_cycle_modifiers.as_ref(), change),
+    "car_generators" => added(diff.car_generators.as_ref(), change),
+    "instanced_data.grass_instance_list" => {
+      added(diff.instanced_data.as_ref().and_then(|data| data.grass_instance_list.as_ref()), change)
+    }
+    _ => None,
+  }
+}
+
+/// Records in `duplicates` each removal, modification or replacement of a vanilla item of the
+/// arrays of `diff` other than the entities, which `contributor` makes; arrays are named by
+/// their path in a diff.
+fn record_item_changes(
+  duplicates: &mut Collector,
+  diff: &YmapDiffFields,
+  contributor: &Contributor,
+) {
+  record_items(duplicates, "box_occluders", diff.box_occluders.as_ref(), contributor);
+  record_items(duplicates, "occlude_models", diff.occlude_models.as_ref(), contributor);
+  record_items(duplicates, "lod_lights", diff.lod_lights.as_ref(), contributor);
+  record_items(
+    duplicates,
+    "distant_lod_lights.items",
+    diff.distant_lod_lights.as_ref().and_then(|lights| lights.items.as_ref()),
+    contributor,
+  );
+  record_items(duplicates, "time_cycle_modifiers", diff.time_cycle_modifiers.as_ref(), contributor);
+  record_items(duplicates, "car_generators", diff.car_generators.as_ref(), contributor);
+  record_items(
+    duplicates,
+    "instanced_data.grass_instance_list",
+    diff.instanced_data.as_ref().and_then(|data| data.grass_instance_list.as_ref()),
+    contributor,
+  );
+}
+
+/// [`record_item_changes`] for the array `array`, with the changes `changes`.
+fn record_items<T: serde::Serialize, C: serde::Serialize>(
+  duplicates: &mut Collector,
+  array: &str,
+  changes: Option<&Vec<ItemDiff<T, C>>>,
+  (resource, path, origin): &Contributor,
+) {
+  // Indices differ between sources, so identical changes are compared without them.
+  fn json(value: &impl serde::Serialize) -> String {
+    serde_json::to_string(value).unwrap_or_default()
+  }
+  for change in changes.into_iter().flatten() {
+    let (kind, base_index, signature) = match change {
+      ItemDiff::Added {
+        ..
+      } => continue,
+      ItemDiff::Removed {
+        base_index,
+        ..
+      } => (Change::Removed, *base_index, "Removed".to_owned()),
+      ItemDiff::Modified {
+        base_index,
+        changes,
+        ..
+      } => (Change::Modified, *base_index, format!("Modified {}", json(changes))),
+      ItemDiff::Replaced {
+        base_index,
+        item,
+        ..
+      } => (Change::Replaced, *base_index, format!("Replaced {}", json(item))),
+    };
+    duplicates.add_item(
+      array,
+      base_index,
+      signature,
+      Contribution {
+        resource: resource.clone(),
+        path: path.clone(),
+        change: kind,
+        index: Some(base_index),
+        origin: origin.clone(),
+      },
+    );
   }
 }
 

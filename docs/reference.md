@@ -172,10 +172,10 @@ leave the prior output intact.
 ### Merge Report
 
 `report/index.json` (`MergeReportIndex`) lists each vanilla YMAP the merge has something to
-report of: sources competing for one of its entities, changes to it carried nowhere, or its
-not being deployed for a successor. For each it gives its report, what the output holds of
-it (`written`, `unchanged` or `omitted`), its successor, and how many entities are competed
-for and changes carried nowhere; `by_resource` lists the reported YMAPs each resource's
+report of: sources competing for one of its entities or items of another array, changes to
+it carried nowhere, or its not being deployed for a successor. For each it gives its report,
+what the output holds of it (`written`, `unchanged` or `omitted`), its successor, and how
+many entities and items are competed for and changes carried nowhere; `by_resource` lists the reported YMAPs each resource's
 changes are among.
 
 `report/vanilla/{version}/ymap/{fileName}.json` (`YmapMergeReport`), `version` and the file
@@ -186,18 +186,27 @@ entity with the same GUID, not 0 and given to no other entity of its source, or 
 type, archetype and LOD level at the same position within the `ymap` matching tolerance, is
 left out and reported; the others are all applied.
 
+`items` holds the items of the other arrays competed for alike, each by its array's path in
+a diff (`lod_lights`, `distant_lod_lights.items`, `box_occluders`, `occlude_models`,
+`car_generators`, `time_cycle_modifiers`, `instanced_data.grass_instance_list`) and the
+vanilla item's `base_index`. Removals, modifications and replacements compete for a vanilla
+item; an addition equal within the matching tolerances to one an earlier source makes is left
+out and reported without a `base_index`. LOD light additions are all applied.
+
 | Reason | The applied change |
 |---|---|
 | `identical_duplicate` | Is the same |
-| `removal_wins` | Removes the entity |
+| `removal_wins` | Removes the entity or item |
 | `newer_generation_wins` | Comes from a newer generation: the YMAP's own sources from the loaded one, carried changes from their origin |
 | `earlier_source_wins` | Comes from a source merged before; for an addition, one with the same GUID or placed alike, with other values |
-| `same_addition_newer` | Is the same resource's addition of the entity in a newer generation |
+| `same_addition_newer` | Is the same resource's addition of the entity or item in a newer generation |
+| `combined` | Modifies the same occlude model first: the reported change still applies to the fields the applied one leaves unchanged |
 
 A change names its resource and source: a stream file by its `stream_path`, whose
 source-cache diff document holds the change, a carried document of `generations/` with the
 stage of its origin generation, or a vanilla overwrite. Its `index` is where that diff names
-the entity: `base_index` for a removal or a modification, `target_index` for an addition.
+the entity or item: `base_index` for a removal, a modification or a replacement,
+`target_index` for an addition.
 The report also lists the changes to the YMAP carried nowhere (`left_behind`, see
 [Newer DLC Generations](#newer-dlc-generations)).
 

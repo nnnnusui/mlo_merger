@@ -211,7 +211,12 @@ fn merge_emits_only_edited_ymaps_when_rebuilding() {
   ))
   .unwrap();
   assert_eq!(duplicates.files["parent.ymap"].len(), 1);
-  assert_eq!(duplicates.files["parent.ymap"][0].guid, 100);
+  assert_eq!(
+    duplicates.files["parent.ymap"][0].target,
+    crate::app::map::merge::duplicates::Target::Entity {
+      guid: 100
+    }
+  );
   assert_eq!(
     duplicates.files["parent.ymap"][0].ignored[0].reason,
     crate::app::map::merge::duplicates::IgnoredReason::IdenticalDuplicate

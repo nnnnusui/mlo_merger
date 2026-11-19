@@ -3,7 +3,7 @@
 use super::light_pairs::ImpliedDiffs;
 use super::propagated::PropagatedDiffs;
 use super::*;
-use crate::app::map::merge::duplicates::EntityDuplicate;
+use crate::app::map::merge::duplicates::Competition;
 
 mod child_counts;
 mod outputs;
@@ -92,5 +92,5 @@ struct MergeRun<'a> {
   references: ParentReferences,
   /// The YMAPs to write or keep, by name hash.
   planned: BTreeMap<u32, PlannedMap>,
-  duplicate_files: BTreeMap<String, Vec<EntityDuplicate>>,
+  duplicate_files: BTreeMap<String, Vec<Competition>>,
 }

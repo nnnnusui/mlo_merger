@@ -1,25 +1,25 @@
 //! What the merge decided for each vanilla YMAP, for tools to draw: `report/index.json` and
 //! `report/vanilla/{version}/ymap/{file name}.json` in the merge output.
 //!
-//! A vanilla YMAP is reported when sources compete for one of its entities, when changes to it
-//! are carried nowhere (see [`super::generations`]), or when it is not deployed for a successor.
-//! Each change names its source by resource and stream path, or by the carried document and
-//! the stage of the generation it comes from, and the entity by its `index` in that source's
-//! diff, so that the diff and `--read` documents give the rest.
+//! A vanilla YMAP is reported when sources compete for one of its entities or items of another
+//! array, when changes to it are carried nowhere (see [`super::generations`]), or when it is not
+//! deployed for a successor. Each change names its source by resource and stream path, or by
+//! the carried document and the stage of the generation it comes from, and the entity or item
+//! by its `index` in that source's diff, so that the diff and `--read` documents give the rest.
 
 use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
 
 use super::{
-  duplicates::{Change, Contribution, EntityDuplicate, IgnoredReason},
+  duplicates::{Change, Competition, Contribution, IgnoredReason, Target},
   generations::{GENERATIONS_DIR, LeftBehind},
 };
 
 /// The directory of the report in the merge output.
 pub(super) const REPORT_DIR: &str = "report";
 /// Bump when the report's layout changes.
-const FORMAT_VERSION: u32 = 1;
+const FORMAT_VERSION: u32 = 2;
 /// The resource a vanilla overwrite's changes are recorded under.
 pub(super) const VANILLA_OVERWRITE_SOURCE: &str = "overwrite/vanilla";
 
@@ -43,7 +43,7 @@ pub struct ReportedFile {
   pub output: ReportedOutput,
   /// The YMAP the game loads in its place, when it is not deployed for it.
   pub superseded_by: Option<String>,
-  /// How many of its entities sources compete for.
+  /// How many of its entities and items sources compete for.
   pub conflicts: usize,
   /// How many changes to it are carried nowhere.
   pub left_behind: usize,
@@ -76,6 +76,8 @@ pub struct YmapMergeReport {
   pub superseded_by: Option<String>,
   /// The entities sources compete for, with the change applied and those not.
   pub entities: Vec<EntityReport>,
+  /// The items of other arrays sources compete for, likewise.
+  pub items: Vec<ItemReport>,
   /// The changes to it carried nowhere.
   pub left_behind: Vec<LeftBehind>,
 }
@@ -89,7 +91,20 @@ pub struct EntityReport {
   pub ignored: Vec<IgnoredChange>,
 }
 
-/// One source's change to an entity.
+/// The changes sources make to one item of an array other than the entities.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
+pub struct ItemReport {
+  /// The array by its path in a diff, such as `lod_lights`, `distant_lod_lights.items` or
+  /// `instanced_data.grass_instance_list`.
+  pub array: String,
+  /// The vanilla item's index; absent for an addition.
+  pub base_index: Option<usize>,
+  pub applied: ReportedChange,
+  pub ignored: Vec<IgnoredChange>,
+}
+
+/// One source's change to an entity or item.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "typescript", derive(specta::Type))]
 pub struct ReportedChange {
@@ -97,8 +112,8 @@ pub struct ReportedChange {
   pub resource: String,
   pub source: ChangeSource,
   pub change: ReportedKind,
-  /// Where the source's diff names the entity: `base_index` for a removal or a modification,
-  /// the addition's `target_index` for an addition.
+  /// Where the source's diff names the entity or item: `base_index` for a removal, a
+  /// modification or a replacement, the addition's `target_index` for an addition.
   pub index: Option<usize>,
 }
 
@@ -108,6 +123,8 @@ pub struct ReportedChange {
 pub enum ReportedKind {
   Added,
   Modified,
+  /// An item put in place of the vanilla one.
+  Replaced,
   Removed,
 }
 
@@ -146,7 +163,7 @@ pub(super) struct ReportInput<'a> {
   pub vanilla: Option<&'a str>,
   pub output: ReportedOutput,
   pub superseded_by: Option<&'a str>,
-  pub duplicates: &'a [EntityDuplicate],
+  pub duplicates: &'a [Competition],
   pub left_behind: Vec<LeftBehind>,
 }
 
@@ -182,6 +199,7 @@ pub(super) fn build(
       change: match contribution.change {
         Change::Added => ReportedKind::Added,
         Change::Modified => ReportedKind::Modified,
+        Change::Replaced => ReportedKind::Replaced,
         Change::Removed => ReportedKind::Removed,
       },
       index: contribution.index,
@@ -193,28 +211,47 @@ pub(super) fn build(
       continue;
     }
     let file_name = input.file_name.to_ascii_lowercase();
-    let entities = input
-      .duplicates
-      .iter()
-      .map(|duplicate| EntityReport {
-        guid: duplicate.guid,
-        applied: change(&duplicate.applied),
-        ignored: duplicate
-          .ignored
-          .iter()
-          .map(|ignored| IgnoredChange {
-            change: change(&ignored.source),
-            reason: ignored.reason,
-          })
-          .collect(),
-      })
-      .collect::<Vec<_>>();
+    let ignored = |duplicate: &Competition| {
+      duplicate
+        .ignored
+        .iter()
+        .map(|ignored| IgnoredChange {
+          change: change(&ignored.source),
+          reason: ignored.reason,
+        })
+        .collect::<Vec<_>>()
+    };
+    let (mut entities, mut items) = (Vec::new(), Vec::new());
+    for duplicate in input.duplicates {
+      match &duplicate.target {
+        Target::Entity {
+          guid,
+        } => entities.push(EntityReport {
+          guid: *guid,
+          applied: change(&duplicate.applied),
+          ignored: ignored(duplicate),
+        }),
+        Target::Item {
+          array,
+          base_index,
+        } => items.push(ItemReport {
+          array: array.clone(),
+          base_index: *base_index,
+          applied: change(&duplicate.applied),
+          ignored: ignored(duplicate),
+        }),
+      }
+    }
     let resources = entities
       .iter()
       .flat_map(|entity| {
         std::iter::once(&entity.applied.resource)
           .chain(entity.ignored.iter().map(|ignored| &ignored.change.resource))
       })
+      .chain(items.iter().flat_map(|item| {
+        std::iter::once(&item.applied.resource)
+          .chain(item.ignored.iter().map(|ignored| &ignored.change.resource))
+      }))
       .chain(input.left_behind.iter().map(|change| &change.resource))
       .filter(|resource| *resource != VANILLA_OVERWRITE_SOURCE)
       .cloned()
@@ -230,7 +267,7 @@ pub(super) fn build(
         report: report_path.clone(),
         output: input.output,
         superseded_by: input.superseded_by.map(str::to_owned),
-        conflicts: entities.len(),
+        conflicts: entities.len() + items.len(),
         left_behind: input.left_behind.len(),
       },
     );
@@ -241,6 +278,7 @@ pub(super) fn build(
       output: input.output,
       superseded_by: input.superseded_by.map(str::to_owned),
       entities,
+      items,
       left_behind: input.left_behind,
     };
     files.insert(report_path, serde_json::to_vec(&report)?);
@@ -287,18 +325,39 @@ mod tests {
       index: Some(4),
       origin: origin.map(str::to_owned),
     };
-    let duplicates = [EntityDuplicate {
-      guid: 9,
-      applied: contribution("res", "resources/res/x/lr_a.ymap", None),
-      ignored: vec![IgnoredContribution {
-        source: contribution(
-          "res",
-          "generations/res/0012-mpheist/lr_a.ymap.diff.json",
-          Some("0012-mpheist"),
-        ),
-        reason: IgnoredReason::NewerGenerationWins,
-      }],
-    }];
+    let duplicates = [
+      Competition {
+        target: Target::Entity {
+          guid: 9,
+        },
+        applied: contribution("res", "resources/res/x/lr_a.ymap", None),
+        ignored: vec![IgnoredContribution {
+          source: contribution(
+            "res",
+            "generations/res/0012-mpheist/lr_a.ymap.diff.json",
+            Some("0012-mpheist"),
+          ),
+          reason: IgnoredReason::NewerGenerationWins,
+        }],
+      },
+      Competition {
+        target: Target::Item {
+          array: "lod_lights".into(),
+          base_index: Some(2),
+        },
+        applied: Contribution {
+          change: Change::Replaced,
+          ..contribution("res", "resources/res/x/lr_a.ymap", None)
+        },
+        ignored: vec![IgnoredContribution {
+          source: Contribution {
+            change: Change::Removed,
+            ..contribution("other", "resources/other/lr_a.ymap", None)
+          },
+          reason: IgnoredReason::EarlierSourceWins,
+        }],
+      },
+    ];
     let files = build(
       vec![ReportInput {
         file_name: "lr_a.ymap",
@@ -326,8 +385,14 @@ mod tests {
         origin_version: "0012-mpheist".into(),
       }
     );
+    assert_eq!(
+      (report.items[0].array.as_str(), report.items[0].base_index),
+      ("lod_lights", Some(2))
+    );
+    assert_eq!(report.items[0].applied.change, ReportedKind::Replaced);
     let index: MergeReportIndex = serde_json::from_slice(&files["report/index.json"]).unwrap();
-    assert_eq!(index.files["lr_a.ymap"].conflicts, 1);
+    assert_eq!(index.files["lr_a.ymap"].conflicts, 2);
     assert_eq!(index.by_resource["res"], BTreeSet::from(["lr_a.ymap".into()]));
+    assert_eq!(index.by_resource["other"], BTreeSet::from(["lr_a.ymap".into()]));
   }
 }

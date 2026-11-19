@@ -120,7 +120,8 @@ Between carried modifications, the newer origin generation wins.
   a reason.
 - [x] Report each YMAP not deployed with its successor, and each change carried nowhere; the
   units pairing it with the successor are in `generations.json`.
-- [ ] Report the other arrays' competing changes as entities' are.
+- [x] Report the other arrays' competing changes as entities' are: removals, modifications
+  and replacements of vanilla items, and additions left out, by array and vanilla index.
 
 ### 8. Documentation
 

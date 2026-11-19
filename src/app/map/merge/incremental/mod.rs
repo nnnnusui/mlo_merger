@@ -5,7 +5,7 @@ use std::{
   path::{Component, Path, PathBuf},
 };
 
-use super::duplicates::{DuplicateReport, EntityDuplicate};
+use super::duplicates::{Competition, DuplicateReport};
 use super::operation::Result;
 use super::{run::MergeYmap, ybn_conflicts::MergeYbnConflicts};
 use crate::common::json::write_json;
@@ -20,7 +20,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 /// Bump when YMAP merge policy, encoding or cached reports change.
-const YMAP_ALGORITHM_VERSION: u32 = 14;
+const YMAP_ALGORITHM_VERSION: u32 = 15;
 /// Bump when YBN merge policy, encoding or cached reports change.
 const YBN_ALGORITHM_VERSION: u32 = 9;
 

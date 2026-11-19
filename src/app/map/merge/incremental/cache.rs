@@ -99,7 +99,7 @@ pub(in crate::app::map::merge) struct FileRecord {
   pub superseded_by: Option<String>,
   pub merged_at: String,
   #[serde(default)]
-  pub duplicates: Vec<EntityDuplicate>,
+  pub duplicates: Vec<Competition>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

@@ -1,5 +1,6 @@
-//! The changes several sources make to one vanilla entity, which the merge decides between, and
-//! the additions it leaves out because a source merged before makes them already.
+//! The changes several sources make to one vanilla entity or item of another array, which the
+//! merge decides between, and the additions it leaves out because a source merged before makes
+//! them already.
 
 use crate::core::format::ymap::compare::YmapEntityDiff;
 use serde::{Deserialize, Serialize};
@@ -13,8 +14,8 @@ pub(super) struct Contribution {
   /// The source's file: its stream file or carried document, relative to its store.
   pub path: PathBuf,
   pub change: Change,
-  /// Where its diff names the entity: the vanilla entity's `base_index` for a removal or a
-  /// modification, the addition's `target_index` for an addition.
+  /// Where its diff names the entity or item: the vanilla one's `base_index` for a removal, a
+  /// modification or a replacement, the addition's `target_index` for an addition.
   #[serde(default, skip_serializing_if = "Option::is_none")]
   #[cfg_attr(feature = "typescript", specta(optional))]
   pub index: Option<usize>,
@@ -29,6 +30,8 @@ pub(super) struct Contribution {
 pub(super) enum Change {
   Added,
   Modified,
+  /// An item put in place of the vanilla one.
+  Replaced,
   Removed,
 }
 
@@ -45,8 +48,11 @@ pub enum IgnoredReason {
   NewerGenerationWins,
   /// The applied change comes from a source merged before.
   EarlierSourceWins,
-  /// The same resource adds the same entity in a newer generation.
+  /// The same resource adds the same entity or item in a newer generation.
   SameAdditionNewer,
+  /// Its changes to the fields the applied modification leaves unchanged are applied with it,
+  /// as for occlude models.
+  Combined,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -56,11 +62,28 @@ pub(super) struct IgnoredContribution {
   pub reason: IgnoredReason,
 }
 
-/// The changes to one entity of which the merge applied one.
+/// What sources compete for.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+#[serde(rename_all = "snake_case", tag = "kind")]
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
+pub(super) enum Target {
+  /// An entity, by its GUID.
+  Entity {
+    guid: u32,
+  },
+  /// An item of another array, such as `lod_lights` or `distant_lod_lights.items`, by the
+  /// vanilla item's index; an addition has none.
+  Item {
+    array: String,
+    base_index: Option<usize>,
+  },
+}
+
+/// The changes to one entity or item of which the merge applied one.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[cfg_attr(feature = "typescript", derive(specta::Type))]
-pub(super) struct EntityDuplicate {
-  pub guid: u32,
+pub(super) struct Competition {
+  pub target: Target,
   pub applied: Contribution,
   pub ignored: Vec<IgnoredContribution>,
 }
@@ -69,20 +92,19 @@ pub(super) struct EntityDuplicate {
 #[cfg_attr(feature = "typescript", derive(specta::Type))]
 pub(super) struct DuplicateReport {
   pub format_version: u32,
-  pub files: BTreeMap<String, Vec<EntityDuplicate>>,
+  pub files: BTreeMap<String, Vec<Competition>>,
 }
 
 #[derive(Default)]
 pub(super) struct Collector {
   /// The stage of the vanilla YMAP the changes are merged into, as the archive names it.
   pub loaded_version: Option<String>,
-  entries: BTreeMap<u32, Vec<Candidate>>,
+  entries: BTreeMap<Target, Vec<Candidate>>,
   /// Additions left out for the same addition of a source merged before.
-  thinned: Vec<EntityDuplicate>,
+  thinned: Vec<Competition>,
 }
 
 struct Candidate {
-  guid: u32,
   source: Contribution,
   signature: String,
 }
@@ -114,24 +136,48 @@ impl Collector {
         ..
       } => format!("Modified {changes:?}"),
     };
-    self.entries.entry(guid).or_default().push(Candidate {
-      guid,
+    self
+      .entries
+      .entry(Target::Entity {
+        guid,
+      })
+      .or_default()
+      .push(Candidate {
+        source,
+        signature,
+      });
+  }
+
+  /// Records a removal, modification or replacement of item `base_index` of the vanilla array
+  /// `array`, `signature` telling the change apart from others without its indices.
+  pub(super) fn add_item(
+    &mut self,
+    array: &str,
+    base_index: usize,
+    signature: String,
+    source: Contribution,
+  ) {
+    let target = Target::Item {
+      array: array.to_owned(),
+      base_index: Some(base_index),
+    };
+    self.entries.entry(target).or_default().push(Candidate {
       source,
       signature,
     });
   }
 
-  /// Records that the addition `left_out` of the entity `guid` was left out for `kept`, the same
+  /// Records that the addition `left_out` of `target` was left out for `kept`, the same
   /// addition of a source merged before, for `reason`.
   pub(super) fn add_ignored(
     &mut self,
-    guid: u32,
+    target: Target,
     kept: Contribution,
     left_out: Contribution,
     reason: IgnoredReason,
   ) {
-    self.thinned.push(EntityDuplicate {
-      guid,
+    self.thinned.push(Competition {
+      target,
       applied: kept,
       ignored: vec![IgnoredContribution {
         source: left_out,
@@ -142,12 +188,12 @@ impl Collector {
 
   /// Mirrors the deletion-first, otherwise first-change-wins resolution of `compare::merge_diffs`,
   /// sources merged in order: a YMAP's own sources, then those carried from other generations,
-  /// newest first.
-  pub(super) fn finish(self) -> Vec<EntityDuplicate> {
+  /// newest first. Modifications of one occlude model combine.
+  pub(super) fn finish(self) -> Vec<Competition> {
     let mut entries = self
       .entries
-      .into_values()
-      .filter_map(|candidates| {
+      .into_iter()
+      .filter_map(|(target, candidates)| {
         if candidates.len() < 2 {
           return None;
         }
@@ -156,6 +202,7 @@ impl Collector {
           .position(|candidate| candidate.source.change == Change::Removed)
           .unwrap_or(0);
         let applied = &candidates[index];
+        let combines = matches!(&target, Target::Item { array, .. } if array == "occlude_models");
         let ignored = candidates
           .iter()
           .enumerate()
@@ -166,6 +213,11 @@ impl Collector {
               IgnoredReason::IdenticalDuplicate
             } else if applied.source.change == Change::Removed {
               IgnoredReason::RemovalWins
+            } else if combines
+              && applied.source.change == Change::Modified
+              && candidate.source.change == Change::Modified
+            {
+              IgnoredReason::Combined
             } else if newer(&applied.source, &candidate.source, self.loaded_version.as_deref()) {
               IgnoredReason::NewerGenerationWins
             } else {
@@ -173,8 +225,8 @@ impl Collector {
             },
           })
           .collect();
-        Some(EntityDuplicate {
-          guid: applied.guid,
+        Some(Competition {
+          target,
           applied: applied.source.clone(),
           ignored,
         })
@@ -233,7 +285,12 @@ mod tests {
     collector.add(&removed, guid, source("resource_c", Change::Removed));
     let entries = collector.finish();
     assert_eq!(entries.len(), 1);
-    assert_eq!(entries[0].guid, guid);
+    assert_eq!(
+      entries[0].target,
+      Target::Entity {
+        guid
+      }
+    );
     assert_eq!(entries[0].applied.resource, "resource_b");
     assert_eq!(entries[0].ignored[0].reason, IgnoredReason::RemovalWins);
     assert_eq!(entries[0].ignored[1].reason, IgnoredReason::IdenticalDuplicate);
@@ -269,5 +326,39 @@ mod tests {
     assert!(
       entries[0].ignored.iter().all(|ignored| ignored.reason == IgnoredReason::NewerGenerationWins)
     );
+  }
+
+  #[test]
+  fn items_of_other_arrays_compete_as_entities_do() {
+    let source = |resource: &str, change| Contribution {
+      resource: resource.into(),
+      path: format!("{resource}/map.ymap").into(),
+      change,
+      index: Some(3),
+      origin: None,
+    };
+    let mut collector = Collector::default();
+    collector.add_item("lod_lights", 3, "Replaced a".into(), source("first", Change::Replaced));
+    collector.add_item("lod_lights", 3, "Replaced b".into(), source("second", Change::Replaced));
+    collector.add_item("occlude_models", 3, "Modified a".into(), source("first", Change::Modified));
+    collector.add_item(
+      "occlude_models",
+      3,
+      "Modified b".into(),
+      source("second", Change::Modified),
+    );
+    collector.add_item("car_generators", 3, "Modified a".into(), source("first", Change::Modified));
+    collector.add_item("car_generators", 3, "Removed".into(), source("second", Change::Removed));
+    let entries = collector.finish();
+    let reason = |array: &str| {
+      let entry = entries
+        .iter()
+        .find(|entry| matches!(&entry.target, Target::Item { array: name, .. } if name == array))
+        .unwrap();
+      (entry.applied.resource.clone(), entry.ignored[0].reason)
+    };
+    assert_eq!(reason("lod_lights"), ("first".into(), IgnoredReason::EarlierSourceWins));
+    assert_eq!(reason("occlude_models"), ("first".into(), IgnoredReason::Combined));
+    assert_eq!(reason("car_generators"), ("second".into(), IgnoredReason::RemovalWins));
   }
 }
