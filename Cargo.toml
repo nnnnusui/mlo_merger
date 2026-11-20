@@ -6,7 +6,7 @@ default-run = "mlo_merger"
 publish = false
 
 [workspace]
-members = ["crates/struct-diff", "crates/struct-diff-derive", "crates/web"]
+members = ["crates/lines", "crates/struct-diff", "crates/struct-diff-derive", "crates/web"]
 
 [features]
 typescript = ["dep:specta", "struct-diff/specta"]

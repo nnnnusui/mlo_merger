@@ -1,0 +1,6 @@
+[package]
+name = "lines"
+version = "0.1.0"
+edition = "2024"
+description = "Counts the lines of the repository's tracked source files (`cargo lines`)"
+publish = false
