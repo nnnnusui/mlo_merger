@@ -483,7 +483,7 @@ Deploy writes from the existing merge and source-cache data:
 - `files.txt`: original source-relative paths of active moved files.
 
 Deploy skips unchanged copies, repairs missing or changed outputs, and removes stale
-managed files. Unrelated files are preserved; locally modified stale files are rejected.
+managed files, logging a warning for a locally modified one. Unrelated files are preserved.
 Empty managed stream directories are pruned. Deploy also creates `fxmanifest.lua` with the
 FiveM map declaration and `/assetpacks` dependency when absent.
 

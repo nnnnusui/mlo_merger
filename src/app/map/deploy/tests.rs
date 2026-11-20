@@ -146,8 +146,8 @@ fn deploy_copies_only_changed_files_and_removes_only_managed_stale_files() {
   fs::remove_file(cache.join("resources/resource_a/nested/collision.ybn")).unwrap();
   assert!(deploy.run().unwrap_err().to_string().contains("Recorded cached file is missing"));
   inventory(&["resources/resource_a/nested/MAP.YMAP", "resources/resource_a/nested/model.ytyp"]);
-  assert!(deploy.run().unwrap_err().to_string().contains("Refusing to remove modified"));
-  assert_eq!(fs::read(&cloned).unwrap(), b"user edit");
+  assert_eq!(deploy.run().unwrap().removed, 1, "a modified stale file is removed");
+  assert!(!cloned.exists());
   let mut overlapping = deploy.clone();
   overlapping.output_dir = merged;
   assert!(overlapping.run().is_err());

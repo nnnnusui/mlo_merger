@@ -132,9 +132,7 @@ impl Deploy {
         if fs::exists(&target).unwrap_or(false) {
           let actual = fingerprint(&target, Some(&old.output), false)?;
           if actual.sha256 != old.output.sha256 {
-            return Err(
-              format!("Refusing to remove modified deployment file: {}", target.display()).into(),
-            );
+            tracing::warn!("Removing modified deployment file: {}", target.display());
           }
           fs::remove_file(target)?;
           summary.removed += 1;

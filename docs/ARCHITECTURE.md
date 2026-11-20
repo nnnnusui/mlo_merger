@@ -295,7 +295,7 @@ basenames are rejected.
 
 Deployment freshness is tracked independently of merge freshness. Unchanged
 copies are skipped, and missing or altered outputs are repaired. Only managed
-files are removed when stale; modified stale files are rejected and unrelated
+files are removed when stale, with a warning for modified ones; unrelated
 files are preserved. Empty stream directories are pruned without following
 symlinks. Force affects copying, not cache generation or merging.
 
