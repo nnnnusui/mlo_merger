@@ -99,3 +99,11 @@ other operation) for its options.
 
 Release archives include the third-party license notices (`THIRD_PARTY_NOTICES.md`) and
 TypeScript types for the JSON files (`asset/gen_mlo_merger.ts`).
+
+## Acknowledgements
+
+Thanks to these projects, referenced while designing this tool:
+
+- [FiveM](https://github.com/citizenfx/fivem)
+- [CodeWalker](https://github.com/dexyfex/CodeWalker): extracting the needed data from the game and
+  the binary structure of its files

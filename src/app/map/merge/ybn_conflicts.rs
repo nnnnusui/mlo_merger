@@ -61,7 +61,7 @@ impl MergeYbnConflicts {
     omitted.sort();
     omitted.dedup();
     fs::write(&self.omitted_files_path, omitted.join("\n"))?;
-    tracing::info!("Merged {merged_groups} vanilla-backed YBN source groups");
+    tracing::debug!("Merged {merged_groups} vanilla-backed YBN source groups");
     Ok(())
   }
 }
