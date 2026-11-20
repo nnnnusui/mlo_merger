@@ -478,7 +478,8 @@ change are described in [usage.md](usage.md#overwrite-documents); complete examp
 Deploy writes from the existing merge and source-cache data:
 
 - Merged files: `stream/{extension}/merged/{filename}`.
-- Remaining cached files: `stream/{extension}/clone/{resourceName}/{stream-relative-path}`.
+- Remaining cached files: `stream/{extension}/clone/{resourceName}/{stream-relative-path}`,
+  except the sources of YMAPs with a successor (`superseded_by` in the merge's `cache_info.json`).
 - `files.txt`: original source-relative paths of active moved files.
 
 Deploy skips unchanged copies, repairs missing or changed outputs, and removes stale

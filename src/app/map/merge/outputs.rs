@@ -1,7 +1,10 @@
 //! The merged stream files a merge output records, for readers outside the merge.
 
 use crate::platform::fs;
-use std::path::{Path, PathBuf};
+use std::{
+  collections::BTreeSet,
+  path::{Path, PathBuf},
+};
 
 use super::incremental::{MergeMetadata, output_path};
 use super::operation::Result;
@@ -45,4 +48,26 @@ pub fn merged_files(merged_dir: &Path) -> Result<Vec<MergedFile>> {
       })
     })
     .collect()
+}
+
+/// The source paths, relative to the source root, of the YMAPs the merge left out for a newer
+/// generation (`superseded_by` in the merge output's metadata). Their YMAPs are not to be
+/// deployed. Without merge metadata, there are none.
+pub fn superseded_sources(merged_dir: &Path) -> Result<BTreeSet<String>> {
+  let path = cache_info_path(merged_dir);
+  if !fs::is_file(&path) {
+    return Ok(BTreeSet::new());
+  }
+  let metadata = MergeMetadata::load(merged_dir)?
+    .ok_or_else(|| format!("Unsupported merge metadata schema: {}", path.display()))?;
+  Ok(
+    metadata
+      .files
+      .into_values()
+      .filter(|record| record.superseded_by.is_some())
+      .flat_map(|record| record.merge_sources)
+      .filter_map(|input| input.original_path)
+      .map(|original| original.to_string_lossy().replace('\\', "/"))
+      .collect(),
+  )
 }

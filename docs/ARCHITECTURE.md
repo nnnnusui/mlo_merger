@@ -287,7 +287,8 @@ their fingerprints and marks absent matches. Changed inputs are rejected. The sa
 Deployment consumes existing merged output and the files the source-cache inventory
 records as moved; a recorded file that is missing is an error. Merged stream files go to
 `stream/{extension}/merged/{filename}`. Source-cache files not replaced by a
-merged basename go to
+merged basename, other than the sources of YMAPs whose `cache_info.json` record has
+`superseded_by`, go to
 `stream/{extension}/clone/{resourceName}/{stream-relative-path}`. Matching is
 case-insensitive; archive and report files are excluded. Duplicate merged
 basenames are rejected.

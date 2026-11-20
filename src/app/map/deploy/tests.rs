@@ -232,3 +232,75 @@ fn deploy_rejects_duplicate_merged_names_and_unsafe_cache_entries() {
   }
   fs::remove_dir_all(root).unwrap();
 }
+
+#[test]
+fn deploy_leaves_out_the_sources_of_superseded_ymaps() {
+  let root = std::env::temp_dir().join(format!("deploy_superseded_{}", std::process::id()));
+  let _ = fs::remove_dir_all(&root);
+  let merged = root.join("merged");
+  let cache = root.join("cache");
+  let output = root.join("merged_mlo");
+  fs::create_dir_all(merged.join("ymap")).unwrap();
+  fs::create_dir_all(cache.join("resources/resource_a/ymap")).unwrap();
+  fs::write(merged.join("ymap/hei_map.ymap"), b"merged successor").unwrap();
+  fs::write(cache.join("resources/resource_a/ymap/map.ymap"), b"older generation").unwrap();
+  fs::write(cache.join("resources/resource_a/ymap/hei_map.ymap"), b"merged source").unwrap();
+  fs::write(cache.join("resources/resource_a/ymap/other.ymap"), b"other").unwrap();
+  write_test_inventory(
+    &cache,
+    &[
+      "resources/resource_a/ymap/map.ymap",
+      "resources/resource_a/ymap/hei_map.ymap",
+      "resources/resource_a/ymap/other.ymap",
+    ],
+  );
+  let fingerprint = serde_json::json!({
+    "sha256": "", "size": 0, "modified_seconds": 0, "modified_nanos": 0
+  });
+  let record = |superseded_by: Option<&str>, source: &str| {
+    serde_json::json!({
+      "merge_sources": [{
+        "path": format!("resources/resource_a/ymap/{source}"),
+        "resource": "resource_a",
+        "original_path": format!("resource_a/stream/ymap/{source}"),
+        "fingerprint": fingerprint,
+      }],
+      "vanilla": null,
+      "dependencies": [],
+      "dependency_fingerprint": "",
+      "output": null,
+      "superseded_by": superseded_by,
+      "merged_at": "",
+    })
+  };
+  write_json(
+    &merged.join("cache_info.json"),
+    &serde_json::json!({
+      "format_version": 1,
+      "generated_at": "",
+      "files": {
+        "map.ymap": record(Some("hei_map.ymap"), "map.ymap"),
+        "hei_map.ymap": record(None, "hei_map.ymap"),
+      },
+    }),
+  )
+  .unwrap();
+  let deploy = Deploy {
+    merged_dir: merged,
+    source_cache_dir: cache,
+    output_dir: output.clone(),
+    force: false,
+  };
+  assert_eq!(deploy.run().unwrap().copied, 2);
+  assert_eq!(
+    fs::read(output.join("stream/ymap/merged/hei_map.ymap")).unwrap(),
+    b"merged successor"
+  );
+  assert_eq!(
+    fs::read(output.join("stream/ymap/clone/resource_a/ymap/other.ymap")).unwrap(),
+    b"other"
+  );
+  assert!(!output.join("stream/ymap/clone/resource_a/ymap/map.ymap").exists());
+  assert!(!output.join("stream/ymap/clone/resource_a/ymap/hei_map.ymap").exists());
+  fs::remove_dir_all(root).unwrap();
+}

@@ -11,7 +11,7 @@ use std::{
 
 /// The managed deployment files, each with its source and that source's path relative to its
 /// store: every merged YMAP/YBN, and each file the source cache moved out of its resource whose
-/// name no merged file takes.
+/// name no merged file takes and whose YMAP the merge did not leave out for a newer generation.
 pub(super) fn plan(
   merged: &Path,
   cache: &Path,
@@ -42,7 +42,11 @@ pub(super) fn plan(
       (path.to_path_buf(), path.strip_prefix(merged)?.to_path_buf()),
     );
   }
+  let superseded = crate::app::map::merge::superseded_sources(merged)?;
   for file in cached {
+    if superseded.contains(&file.source_path.replace('\\', "/")) {
+      continue;
+    }
     let path = cache.join(&file.cached_path);
     if fs::symlink_metadata(&path)?.file_type().is_symlink() {
       return Err("Symlink source-cache input is not supported".into());
