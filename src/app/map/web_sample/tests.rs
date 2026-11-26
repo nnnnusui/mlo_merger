@@ -380,8 +380,10 @@ fn pipeline_runs_on_the_web_sample() {
   assert!(
     workspace.asset("read-cache/vanilla/0003-smpl_patch_01/ymap/smpl_block_02.ymap.json").is_file()
   );
-  // Ten resource YMAPs, the custom maps included, and the eight vanilla YMAPs of build 100.
-  assert_eq!(read.files.len(), 18);
+  assert!(workspace.asset("read-cache/vanilla/0000-base/ybn/smpl_block_01.ybn.json").is_file());
+  // Ten resource YMAPs, the custom maps included, four resource YBNs, and the eight vanilla
+  // YMAPs and one vanilla YBN of build 100.
+  assert_eq!(read.files.len(), 23);
 }
 
 #[test]

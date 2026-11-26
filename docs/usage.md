@@ -32,7 +32,7 @@ in `web/`, described under `web` in its `release.json`; see [Browser build](web.
 |---|---|
 | Stream-file bounds index | `RTreeIndex`, `RTreeItem`, `RTreeInput` |
 | `--read` stdout | `ReadResult`, `ReadFileResult`, `ReadOrigin` |
-| `--read` JSON documents | `YmapReadDocument`, `ReadFingerprint`, `Ymap`, `YmapEntity`, `Position`, `Rotation` |
+| `--read` JSON documents | `YmapReadDocument`, `ReadFingerprint`, `Ymap`, `YmapEntity`, `Position`, `Rotation`, `YbnReadDocument`, `YbnReadBound`, `YbnReadChild`, `YbnReadGeometry`, `YbnReadMaterial`, `YbnReadPolygon`, `CollisionFlags`, `NamedFlags` |
 | Source-cache diff documents | `YmapComparisonDiff`, `YmapComparisonFile`, `YmapDiffFields`, `YmapEntityDiff`, `YmapEntityFieldDiff`, `YbnComparisonDiff`, `YbnDiffFields`, `YbnPolygonsDiff` |
 | Changes carried to newer DLC generations | `YmapPropagatedDiff`, `YmapPropagationOrigin`, `LeftBehind`, `LeftBehindReason` |
 | LOD light pair documents | `YmapImplied`, `YmapImpliedPartner` |
@@ -152,7 +152,7 @@ source root.
 | Step | Arguments | Result | Files to read afterwards |
 |---|---|---|---|
 | Index file bounds | none; written by vanilla-cache, source-cache and merge runs | | `asset/{vanilla-cache,source-cache,merged}/stream_file_rtree.json` (`RTreeIndex`) |
-| Convert YMAPs to JSON | `--read FILE` | `ReadResult` | each `files[].output` (`YmapReadDocument`) |
+| Convert YMAPs and YBNs to JSON | `--read FILE` | `ReadResult` | each `files[].output` (`YmapReadDocument`, or `YbnReadDocument` for a YBN) |
 | Inspect differences | none; written by source-cache generation | | `asset/map/source-cache/diff/{resource}/{stream_path}.diff.json` (`YmapComparisonDiff`) |
 | Inspect which vanilla YMAPs the game loads | none; written by vanilla-cache generation | | `asset/map/vanilla-cache/dlc_activity.json` (`DlcActivity`); see [Loaded Vanilla YMAPs](#loaded-vanilla-ymaps) |
 | Inspect what keeps a resource's LOD light pairs in step | none; written by source-cache generation | | `asset/map/source-cache/implied/{resource}/{stream_path}.json` (`YmapImplied`) |
@@ -379,8 +379,36 @@ vanilla. The last stdout line is a `ReadResult`:
 - `--read --resource NAME --version SHA256 FILE` reads the earlier version with that SHA-256
   of a resource's file, which the source cache keeps in its history, as
   `origin.History`, to `asset/map/read-cache/history/{resource}/{stream_path}/{sha256}.ymap.json`.
-- `--read --all` reads every YMAP of every resource and of vanilla, for
+- `--read --all` reads every YMAP and YBN of every resource and of vanilla, for
   tools that want all documents up front.
+
+A YBN's `output` is a `YbnReadDocument`; its `model` is the root bound:
+
+```json
+{"kind":"Composite","box_min":[-12.5,-8.0,-1.0],"box_max":[12.5,8.0,6.0],"children":[
+  {"flags":{"type":{"value":62,"names":["MAP_WEAPON","MAP_DYNAMIC","MAP_ANIMAL","MAP_COVER","MAP_VEHICLE"]},
+            "include":{"value":512,"names":["PED"]}},
+   "transform":[1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1],
+   "bound":{"kind":"GeometryBVH","box_min":[-12.5,-8.0,-1.0],"box_max":[12.5,8.0,6.0],
+     "geometry":{
+       "vertices":[[0,0,0],[1,0,0],[0,1,0]],
+       "materials":[{"kind":1,"procedural_id":0,"room_id":0,"ped_density":0,
+                     "flags":{"value":1,"names":["STAIRS"]},"colour":null,"unknown":0}],
+       "polygons":[{"type":"triangle","vertices":[0,1,2],"material":0}]}}}
+]}
+```
+
+- `children` lists a composite's slots in order; `bound` is `null` for an empty slot. Each
+  child's `flags` are the pair of collision flags the YBN diff groups polygons by: `type`,
+  what the child's collision is, and `include`, what it collides with. `value` holds the bits
+  and `names` the names of those set, after CodeWalker's `EBoundCompositeFlags`.
+- `transform` is the column-major matrix from the child's coordinates to the composite's.
+- A geometry's `vertices` are positions in its bound's coordinates. `polygons` index them and
+  `materials`: a `triangle` lists its corners in winding order (with `vertex_flags` when a
+  corner flag is set), a `box` four reference corners, a `sphere` its centre `vertex`, a
+  `capsule` or `cylinder` its axis endpoints; the last three carry a `radius`.
+- A material's `kind` is the index of its surface type in the game's `materials.dat`, and its
+  `flags` are named after CodeWalker's `EBoundMaterialFlags` without the `FLAG_` prefix.
 
 ### How Diff Documents Compose
 

@@ -149,6 +149,10 @@ mod tests {
       "ReadFileResult",
       "ReadOrigin",
       "YmapReadDocument",
+      "YbnReadDocument",
+      "CollisionFlags",
+      "NamedFlags",
+      "YbnReadPolygon",
       "ReadFingerprint",
       "Ymap",
     ] {

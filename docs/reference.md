@@ -688,12 +688,14 @@ mlo_merger --read apa_ch2_occl_05.ymap hei_ch1_11.ymap
 mlo_merger --read --all
 ```
 
-`--read` writes each YMAP's model as minified JSON (`YmapReadDocument`), with the path
+`--read` writes each YMAP's and YBN's model as minified JSON, with the path
 and fingerprint of the file it was read from, the vanilla `hash_names.json` that named its
 hashes, for a resource's file the source cache's `hash_names.json` that named those vanilla
-leaves unnamed, and the resolved `entity_lod_parents` (see [usage](usage.md#--read)). A resource's file is written to
+leaves unnamed, and the resolved `entity_lod_parents` for a YMAP (`YmapReadDocument`); and the
+bound tree with named collision and material flags for a YBN (`YbnReadDocument`); see
+[usage](usage.md#--read). A resource's file is written to
 `asset/map/read-cache/resources/{resourceName}/{stream-relative-path}.json` and a vanilla
-file to `asset/map/read-cache/vanilla/{version}/ymap/{fileName}.json`, where `{version}` is the
+file to `asset/map/read-cache/vanilla/{version}/{ymap,ybn}/{fileName}.json`, where `{version}` is the
 version folder holding the file in the vanilla archive: the last version, up to the stage
 read, that changed it. Versions holding the same file share its document. A JSON is
 written again when its file, hash names or resolved LOD parents change, or with `-f`.
@@ -706,14 +708,14 @@ game build instead, resolved as for the other commands (see [Game Builds](#game-
 `--gamebuild` also selects the vanilla stage used to resolve parent YMAPs.
 
 - `--resource NAME [FILE...]` reads one resource, by name or source-relative ID, from the
-  existing source cache. Without a file it reads all of the resource's YMAPs. A file name
+  existing source cache. Without a file it reads all of the resource's YMAPs and YBNs. A file name
   matching several of the resource's files is an error; give its stream-relative path
   instead.
 - `--vanilla [FILE...]` reads vanilla files only. Without a file it reads all of the
-  stage's YMAPs.
+  stage's YMAPs and YBNs.
 - Files alone are read from every resource holding them and from vanilla. If any resource
   holds several files of one name, nothing is written.
-- `--all` reads every YMAP of every resource and of vanilla; it takes no file names.
+- `--all` reads every YMAP and YBN of every resource and of vanilla; it takes no file names.
 - Several files are read together in the order given; a file named twice is read once.
   If any name matches no file, nothing is written.
 - Files are read and written in parallel; the result keeps the order above.

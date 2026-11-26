@@ -12,6 +12,7 @@ use std::{
 mod binary;
 pub mod diff;
 pub mod model;
+pub mod read;
 pub mod xml;
 
 use binary::*;

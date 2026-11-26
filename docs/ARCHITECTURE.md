@@ -263,7 +263,7 @@ overwrites apply to YBNs too; vanilla overwrites only to YMAPs.
 
 `--read` writes typed stream-file models as JSON under `asset/map/read-cache` for
 external tools such as overwrite editors. Each document records the fingerprints
-of its file and of the hash-name table used to name it, and is rewritten only when
+of its file and, for a YMAP, of the hash-name table used to name it, and is rewritten only when
 those change or when forced. Resources are read from the source cache; vanilla
 files from a version of the raw archive.
 

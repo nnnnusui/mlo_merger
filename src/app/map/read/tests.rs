@@ -1,4 +1,5 @@
 use super::*;
+use crate::core::format::ybn::read::YbnReadPolygon;
 use serde_json::json;
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
@@ -10,7 +11,8 @@ struct Fixture {
 impl Fixture {
   /// Two resources and a two-version vanilla archive, built from the `docs/sample` YMAPs.
   ///
-  /// `[maps]/alpha` holds `parent.ymap` twice (`a/` and `b/`) and a cached `child.ymap`;
+  /// `[maps]/alpha` holds `parent.ymap` twice (`a/` and `b/`), a cached `child.ymap` and a
+  /// `collision.ybn` from the web sample;
   /// `beta` holds `parent.ymap` once. Vanilla `0000-base` has `parent.ymap`, and `0001-update`
   /// adds `child.ymap`.
   fn new(name: &str) -> Self {
@@ -34,6 +36,14 @@ impl Fixture {
     write(&alpha.join("stream/b/parent.ymap"), &sample("resource_a_parent.ymap"));
     write(&root.join("source-cache/resources/alpha/child.ymap"), &child);
     write(&beta.join("stream/parent.ymap"), &sample("resource_b_parent.ymap"));
+    write(
+      &alpha.join("stream/collision.ybn"),
+      &fs::read(
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+          .join("web/sample/asset/map/source/smpl_custom_props/stream/smpl_custom_01.ybn"),
+      )
+      .unwrap(),
+    );
     let file = |path: &str, cached: Option<&str>| {
       json!({
         "path": path, "file_name": Path::new(path).file_name().unwrap().to_str().unwrap(),
@@ -192,12 +202,13 @@ fn resource_files_are_written_once_as_minified_models_with_their_source() {
 }
 
 #[test]
-fn a_resource_reads_every_ymap_and_rejects_ambiguous_names() {
+fn a_resource_reads_every_supported_file_and_rejects_ambiguous_names() {
   let fixture = Fixture::new("ambiguous");
   let all = fixture.read(ReadTarget::Resource("alpha".into()), &[]).unwrap();
   assert_eq!(
     Fixture::outputs(&all),
     [
+      "resources/alpha/collision.ybn.json",
       "resources/alpha/a/parent.ymap.json",
       "resources/alpha/b/parent.ymap.json",
       "resources/alpha/child.ymap.json"
@@ -209,7 +220,50 @@ fn a_resource_reads_every_ymap_and_rejects_ambiguous_names() {
   assert_eq!(Fixture::outputs(&by_path), ["resources/alpha/b/parent.ymap.json"]);
   assert!(fixture.read(ReadTarget::Resource("gamma".into()), &[]).is_err());
   assert!(fixture.read(ReadTarget::Resource("alpha".into()), &["missing.ymap"]).is_err());
-  assert!(fixture.read(ReadTarget::Resource("alpha".into()), &["collision.ybn"]).is_err());
+  assert!(fixture.read(ReadTarget::Resource("alpha".into()), &["collision.ytyp"]).is_err());
+}
+
+#[test]
+fn a_ybn_is_read_as_its_bound_tree_with_named_flags() {
+  let fixture = Fixture::new("ybn");
+  let result = fixture.read(ReadTarget::Resource("alpha".into()), &["collision.ybn"]).unwrap();
+  assert_eq!(Fixture::outputs(&result), ["resources/alpha/collision.ybn.json"]);
+  assert!(result.files[0].updated);
+  let document: YbnReadDocument =
+    serde_json::from_str(&fs::read_to_string(&result.files[0].output).unwrap()).unwrap();
+  assert_eq!(document.schema_version, YbnReadDocument::SCHEMA_VERSION);
+  assert_eq!(document.source.path, Path::new("[maps]/alpha/stream/collision.ybn"));
+  assert_eq!(document.model.kind, "Composite");
+  let child = &document.model.children[0];
+  // The web sample's children have no flags set.
+  assert_eq!(child.flags.kind.value, 0);
+  assert!(child.flags.kind.names.is_empty());
+  let geometry = child.bound.as_ref().unwrap().geometry.as_ref().unwrap();
+  assert!(!geometry.polygons.is_empty());
+  assert!(geometry.polygons.iter().all(|polygon| match polygon {
+    YbnReadPolygon::Triangle {
+      vertices,
+      material,
+      ..
+    } => {
+      vertices.iter().all(|vertex| usize::from(*vertex) < geometry.vertices.len())
+        && usize::from(*material) < geometry.materials.len()
+    }
+    YbnReadPolygon::Box {
+      vertices,
+      material,
+    } => {
+      vertices.iter().all(|vertex| usize::from(*vertex) < geometry.vertices.len())
+        && usize::from(*material) < geometry.materials.len()
+    }
+    _ => true,
+  }));
+  let json: serde_json::Value =
+    serde_json::from_str(&fs::read_to_string(&result.files[0].output).unwrap()).unwrap();
+  assert_eq!(json["model"]["children"][0]["flags"]["include"], json!({"value": 0, "names": []}));
+
+  let again = fixture.read(ReadTarget::Resource("alpha".into()), &["collision.ybn"]).unwrap();
+  assert!(!again.files[0].updated);
 }
 
 #[test]
@@ -286,6 +340,7 @@ fn all_reads_every_resource_and_the_latest_vanilla_once() {
       "resources/alpha/a/parent.ymap.json",
       "resources/alpha/b/parent.ymap.json",
       "resources/alpha/child.ymap.json",
+      "resources/alpha/collision.ybn.json",
       "resources/beta/parent.ymap.json",
       "vanilla/0000-base/ymap/parent.ymap.json",
       "vanilla/0001-update/ymap/child.ymap.json",

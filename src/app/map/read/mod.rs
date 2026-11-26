@@ -14,6 +14,10 @@ use crate::app::map::vanilla_cache::{built_version, target_version};
 use crate::common::{Result, fingerprint::Fingerprint};
 use crate::core::config::gamebuild::GameBuild;
 use crate::core::conversion::load_hash_names_or_empty;
+use crate::core::format::ybn::{
+  read::{YbnReadBound, read_model},
+  read_ybn,
+};
 use crate::core::format::ymap::{binary::ymap_to_model, model::ymap::Ymap};
 use crate::core::game_archive::{ArchiveContent, VanillaCacheManifest, load_content};
 use crate::platform::fs;
@@ -139,6 +143,22 @@ impl YmapReadDocument {
   pub const SCHEMA_VERSION: u32 = 3;
 }
 
+/// The JSON written for a YBN: its bound tree with named flags, and the file it was read from.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
+pub struct YbnReadDocument {
+  /// Version of the document layout; documents of another version are written again.
+  pub schema_version: u32,
+  /// The YBN read.
+  pub source: ReadFingerprint,
+  pub model: YbnReadBound,
+}
+
+impl YbnReadDocument {
+  /// The current [`Self::schema_version`].
+  pub const SCHEMA_VERSION: u32 = 1;
+}
+
 /// A file a document was read from, as it was then.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "typescript", derive(specta::Type))]
@@ -208,7 +228,7 @@ struct Selected {
 }
 
 /// The file types `--read` writes.
-const SUPPORTED_EXTENSIONS: [&str; 1] = ["ymap"];
+const SUPPORTED_EXTENSIONS: [&str; 2] = ["ymap", "ybn"];
 
 impl Read {
   /// Writes the JSON of each selected file whose JSON is missing or describes another file.
@@ -353,6 +373,9 @@ impl Read {
       .into_par_iter()
       .map(|(selected, previous, source)| {
         let _tick = progress.tick();
+        if extension(&selected.stored).eq_ignore_ascii_case("ybn") {
+          return self.read_ybn(selected, previous, source);
+        }
         let current = if stale(&selected, &previous, &source) {
           None
         } else {
@@ -399,6 +422,42 @@ impl Read {
     tracing::info!("Read {} stream files; wrote {written} JSON", files.len());
     Ok(ReadResult {
       files,
+    })
+  }
+
+  /// Writes the document of the YBN `selected` unless `previous` describes it as it is.
+  fn read_ybn(
+    &self,
+    selected: Selected,
+    previous: Option<Header>,
+    source: ReadFingerprint,
+  ) -> std::result::Result<ReadFileResult, String> {
+    let current = !self.force
+      && previous.is_some_and(|previous| {
+        previous.schema_version == YbnReadDocument::SCHEMA_VERSION
+          && previous.source.same_content(&source)
+      });
+    if !current {
+      let bytes = fs::read(&selected.input)
+        .map_err(|error| format!("Cannot open {}: {error}", selected.input.display()))?;
+      let model = read_ybn(&bytes)
+        .map(|bound| read_model(&bound))
+        .map_err(|error| format!("Cannot read {}: {error}", selected.input.display()))?;
+      write_minified(
+        &selected.output,
+        &YbnReadDocument {
+          schema_version: YbnReadDocument::SCHEMA_VERSION,
+          source,
+          model,
+        },
+      )
+      .map_err(|error| error.to_string())?;
+    }
+    Ok(ReadFileResult {
+      origin: selected.origin,
+      input: selected.input,
+      output: selected.output,
+      updated: !current,
     })
   }
 
