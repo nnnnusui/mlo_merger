@@ -9,50 +9,116 @@ use super::*;
 use crate::core::format::ymap::relation::is_local_parent;
 
 /// Children counted for each parent entity, by the parent's YMAP name hash and merge identity.
-type ChildCounts = HashMap<(u32, u32), u32>;
+pub(super) type ChildCounts = HashMap<(u32, u32), u32>;
+
+/// The children a parent entity has after the merge.
+#[derive(Debug, Clone, Copy)]
+pub(super) struct CountedChildren {
+  /// The children the merge gives it.
+  pub(super) total: u32,
+  /// Its vanilla `numChildren`.
+  pub(super) vanilla: u32,
+  /// The children the planned YMAPs give it less those their vanilla versions gave it.
+  pub(super) change: i64,
+}
+
+impl CountedChildren {
+  /// Whether the merge takes away the last of the children it has in vanilla.
+  pub(super) fn emptied(&self) -> bool {
+    self.total == 0 && self.vanilla > 0 && self.change < 0
+  }
+}
 
 impl<'a> MergeRun<'a> {
   /// Sets every planned entity's `num_children` to the children the merge gives it, and plans
   /// the vanilla YMAPs whose entities gain or lose children though no source changes them.
-  ///
-  /// A YMAP whose entities moved has all its vanilla children planned, so its entities take the
-  /// children counted in `child_counts` alone.
   pub(super) fn update_child_counts(
     &mut self,
     changed_layouts: &HashSet<u32>,
     child_counts: &ChildCounts,
   ) -> Result<(), Box<dyn std::error::Error>> {
-    let planned = self.planned.keys().copied().collect::<Vec<_>>();
-    let vanilla_counts = self.vanilla_child_counts(&planned)?;
-    let delta = |key: &(u32, u32)| {
-      i64::from(child_counts.get(key).copied().unwrap_or(0))
-        - i64::from(vanilla_counts.get(key).copied().unwrap_or(0))
-    };
-    for hash in planned {
-      let vanilla = self.vanilla_child_totals(hash)?;
-      let output = self.planned.get_mut(&hash).ok_or("planned YMAP missing")?;
+    let counted = self.counted_children(changed_layouts, child_counts)?;
+    for (hash, output) in &mut self.planned {
       for entity in output.entities_mut() {
-        let key = (hash, entity.guid);
-        entity.num_children = if changed_layouts.contains(&hash) {
-          child_counts.get(&key).copied().unwrap_or(0)
-        } else {
-          let total = i64::from(vanilla.get(&entity.guid).copied().unwrap_or(0)) + delta(&key);
-          u32::try_from(total.max(0))?
-        };
+        if let Some(counted) = counted.get(&(*hash, entity.guid)) {
+          entity.num_children = counted.total;
+        }
       }
     }
     // Parents in YMAPs the merge leaves as they are, by YMAP.
     let mut unplanned = BTreeMap::<u32, HashMap<u32, i64>>::new();
-    for key in child_counts.keys().chain(vanilla_counts.keys()) {
-      let change = delta(key);
-      if change != 0 && !self.planned.contains_key(&key.0) {
-        unplanned.entry(key.0).or_default().insert(key.1, change);
+    for (&(hash, id), counted) in &counted {
+      if !self.planned.contains_key(&hash) {
+        unplanned.entry(hash).or_default().insert(id, counted.change);
       }
     }
     for (hash, changes) in unplanned {
       self.plan_child_count_change(hash, &changes)?;
     }
     Ok(())
+  }
+
+  /// The children the merge gives every planned entity, and each entity of the other YMAPs whose
+  /// children it changes, by YMAP name hash and merge identity.
+  ///
+  /// A YMAP whose entities moved has all its vanilla children planned, so its entities take the
+  /// children counted in `child_counts` alone; the others take their vanilla count changed by
+  /// the difference between the children the planned YMAPs give them and those their vanilla
+  /// versions gave them.
+  pub(super) fn counted_children(
+    &mut self,
+    changed_layouts: &HashSet<u32>,
+    child_counts: &ChildCounts,
+  ) -> Result<HashMap<(u32, u32), CountedChildren>, Box<dyn std::error::Error>> {
+    let planned = self.planned.keys().copied().collect::<Vec<_>>();
+    let vanilla_counts = self.vanilla_child_counts(&planned)?;
+    let delta = |key: &(u32, u32)| {
+      i64::from(child_counts.get(key).copied().unwrap_or(0))
+        - i64::from(vanilla_counts.get(key).copied().unwrap_or(0))
+    };
+    let mut counted = HashMap::new();
+    for hash in planned {
+      let vanilla = self.vanilla_child_totals(hash)?;
+      for entity in self.planned[&hash].entities() {
+        let key = (hash, entity.guid);
+        let stated = vanilla.get(&entity.guid).copied().unwrap_or(0);
+        let change = delta(&key);
+        let total = if changed_layouts.contains(&hash) {
+          child_counts.get(&key).copied().unwrap_or(0)
+        } else {
+          u32::try_from((i64::from(stated) + change).max(0))?
+        };
+        counted.insert(
+          key,
+          CountedChildren {
+            total,
+            vanilla: stated,
+            change,
+          },
+        );
+      }
+    }
+    // The vanilla counts of each unplanned YMAP, read once however many of its entities change.
+    let mut totals = HashMap::<u32, HashMap<u32, u32>>::new();
+    for key in child_counts.keys().chain(vanilla_counts.keys()) {
+      let change = delta(key);
+      if change == 0 || self.planned.contains_key(&key.0) || counted.contains_key(key) {
+        continue;
+      }
+      if let std::collections::hash_map::Entry::Vacant(entry) = totals.entry(key.0) {
+        entry.insert(self.vanilla_child_totals(key.0)?);
+      }
+      let stated = totals[&key.0].get(&key.1).copied().unwrap_or(0);
+      counted.insert(
+        *key,
+        CountedChildren {
+          total: u32::try_from((i64::from(stated) + change).max(0))?,
+          vanilla: stated,
+          change,
+        },
+      );
+    }
+    Ok(counted)
   }
 
   /// The children the vanilla versions of the `planned` YMAPs give each parent.

@@ -465,9 +465,15 @@ generation and carry the changes resources make to the others over to it.
   and each parent takes its vanilla count changed by the children the merged YMAPs add or
   remove. A vanilla YMAP whose entities' counts change is written even when no source
   replaces it.
+- An entity whose vanilla version has children and which the merge leaves without any is
+  removed, and its parent loses a child in turn, so a parent left without children by that
+  is removed too, up the LOD hierarchy. A vanilla YMAP losing such an entity is written
+  even when no source replaces it.
 - An index into a parent YMAP the merge cannot read is kept as it is.
-- A parent without a unique, non-zero GUID is kept by index only while the array it
-  indexes is unchanged; otherwise that merge group fails.
+- A reference to a parent without a unique, non-zero GUID is kept by index, its entity
+  counted as a child of the entity at that index, while the array it indexes is unchanged
+  or has only lost the parents removed for having no children left; otherwise that merge
+  group fails.
 
 ### YBN
 

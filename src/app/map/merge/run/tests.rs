@@ -339,6 +339,209 @@ fn removing_a_child_counts_it_out_of_its_parent_in_an_unchanged_ymap() {
 }
 
 #[test]
+fn removing_the_last_child_removes_its_parents_in_turn() {
+  use crate::core::format::gamefile::test_support::sample_ymap;
+  let root = std::env::temp_dir().join(format!("ymap_childless_{}", std::process::id()));
+  let _ = fs::remove_dir_all(&root);
+  let output = root.join("output");
+  let vanilla =
+    ["grandparent.ymap", "parent.ymap", "child.ymap"].map(|name| root.join("vanilla").join(name));
+  // Entity 300 of `child.ymap` is the only child of entity 200 of `parent.ymap`, which is the
+  // only child of entity 500 of `grandparent.ymap`.
+  let mut grandparent = sample_ymap("parent_refs/vanilla_parent.ymap");
+  grandparent.name = "grandparent".into();
+  grandparent.entities[0].guid = 400;
+  grandparent.entities[1].guid = 500;
+  grandparent.entities[1].num_children = 1;
+  write_sample(&vanilla[0], &grandparent, &grandparent.entities);
+  let mut parent = sample_ymap("parent_refs/vanilla_parent.ymap");
+  parent.parent = "grandparent".into();
+  parent.entities[1].parent_index = 1;
+  parent.entities[1].flags |= 8;
+  parent.entities[1].num_children = 1;
+  write_sample(&vanilla[1], &parent, &parent.entities);
+  copy_sample("child.ymap", &vanilla[2]);
+  let mut child = sample_ymap("parent_refs/child.ymap");
+  child.entities.clear();
+  write_sample(&root.join("a/child.ymap"), &child, &[]);
+  write_sample(&root.join("a/parent.ymap"), &parent, &parent.entities);
+  let merge = MergeYmap {
+    vanilla_dir: root.join("vanilla"),
+    output_dir: output.clone(),
+    rebuild_all: false,
+    overwrites: Default::default(),
+    implied: Default::default(),
+    vanilla_overwrites: Default::default(),
+    added: Default::default(),
+    replacing: Default::default(),
+    propagated: Vec::new(),
+  };
+  let entities = |name: &str| -> Vec<(u32, u32)> {
+    let map = OriginalMap::load(&output.join(name)).unwrap();
+    map.entities.iter().map(|entity| (entity.guid, entity.num_children)).collect()
+  };
+
+  // The YMAPs of the parents no source changes are written without them.
+  merge
+    .run_with_latest_vanilla_files(&vanilla, &[("a".into(), root.join("a/child.ymap"), None)])
+    .unwrap();
+  assert_eq!(entities("parent.ymap"), [(100, 0)]);
+  assert_eq!(entities("grandparent.ymap"), [(400, 0)]);
+
+  // A source's YMAP kept as it ships is rebuilt without them instead.
+  merge
+    .run_with_latest_vanilla_files(
+      &vanilla,
+      &[
+        ("a".into(), root.join("a/child.ymap"), None),
+        ("a".into(), root.join("a/parent.ymap"), None),
+      ],
+    )
+    .unwrap();
+  assert_eq!(entities("parent.ymap"), [(100, 0)]);
+  assert_eq!(entities("grandparent.ymap"), [(400, 0)]);
+  assert!(!output.join("clone/parent.ymap").exists());
+
+  // A parent keeping another child stays, with one child fewer.
+  grandparent.entities[1].num_children = 2;
+  write_sample(&vanilla[0], &grandparent, &grandparent.entities);
+  merge
+    .run_with_latest_vanilla_files(&vanilla, &[("a".into(), root.join("a/child.ymap"), None)])
+    .unwrap();
+  assert_eq!(entities("parent.ymap"), [(100, 0)]);
+  assert_eq!(entities("grandparent.ymap"), [(400, 0), (500, 1)]);
+  fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn children_of_entities_after_a_removed_parent_follow_them() {
+  use crate::core::format::gamefile::test_support::sample_ymap;
+  let root = std::env::temp_dir().join(format!("ymap_childless_shift_{}", std::process::id()));
+  let _ = fs::remove_dir_all(&root);
+  let output = root.join("output");
+  let vanilla = ["grandparent.ymap", "parent.ymap", "child.ymap", "cousin.ymap"]
+    .map(|name| root.join("vanilla").join(name));
+  // Entity 500 of `grandparent.ymap` loses its only child, entity 200 of `parent.ymap`, and
+  // lies before entity 400, whose children are entity 100 of `parent.ymap` and the entity of
+  // `cousin.ymap`, which no source changes.
+  let mut grandparent = sample_ymap("parent_refs/vanilla_parent.ymap");
+  grandparent.name = "grandparent".into();
+  grandparent.entities[0].guid = 500;
+  grandparent.entities[0].lod_level = "LODTYPES_DEPTH_SLOD1".into();
+  grandparent.entities[0].num_children = 1;
+  grandparent.entities[1].guid = 400;
+  grandparent.entities[1].num_children = 2;
+  write_sample(&vanilla[0], &grandparent, &grandparent.entities);
+  let mut parent = sample_ymap("parent_refs/vanilla_parent.ymap");
+  parent.parent = "grandparent".into();
+  parent.entities[0].parent_index = 1;
+  parent.entities[0].flags |= 8;
+  parent.entities[1].parent_index = 0;
+  parent.entities[1].flags |= 8;
+  parent.entities[1].num_children = 1;
+  write_sample(&vanilla[1], &parent, &parent.entities);
+  copy_sample("child.ymap", &vanilla[2]);
+  let mut cousin = sample_ymap("parent_refs/child.ymap");
+  cousin.name = "cousin".into();
+  cousin.parent = "grandparent".into();
+  cousin.entities[0].guid = 301;
+  write_sample(&vanilla[3], &cousin, &cousin.entities);
+  let mut child = sample_ymap("parent_refs/child.ymap");
+  child.entities.clear();
+  write_sample(&root.join("a/child.ymap"), &child, &[]);
+  MergeYmap {
+    vanilla_dir: root.join("vanilla"),
+    output_dir: output.clone(),
+    rebuild_all: false,
+    overwrites: Default::default(),
+    implied: Default::default(),
+    vanilla_overwrites: Default::default(),
+    added: Default::default(),
+    replacing: Default::default(),
+    propagated: Vec::new(),
+  }
+  .run_with_latest_vanilla_files(&vanilla, &[("a".into(), root.join("a/child.ymap"), None)])
+  .unwrap();
+  let load = |name: &str| OriginalMap::load(&output.join(name)).unwrap();
+  let grandparent = load("grandparent.ymap");
+  let kept = grandparent.entities.iter().map(|entity| (entity.guid, entity.num_children));
+  assert_eq!(kept.collect::<Vec<_>>(), [(400, 2)]);
+  let parent = load("parent.ymap");
+  assert_eq!(parent.entities.len(), 1);
+  assert_eq!((parent.entities[0].guid, parent.entities[0].parent_index), (100, 0));
+  assert_eq!(load("cousin.ymap").entities[0].parent_index, 0);
+  fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn children_pointing_at_a_parent_by_index_count_and_follow_it_past_removals() {
+  use crate::core::format::gamefile::test_support::sample_ymap;
+  let root = std::env::temp_dir().join(format!("ymap_childless_index_{}", std::process::id()));
+  let _ = fs::remove_dir_all(&root);
+  let output = root.join("output");
+  let vanilla =
+    ["parent.ymap", "child.ymap", "sibling.ymap"].map(|name| root.join("vanilla").join(name));
+  // Entity 200 of the parent has the child of `child.ymap`; the one after it, without a GUID,
+  // has the child of `sibling.ymap`, which can point at it by index only.
+  let mut parent = sample_ymap("parent_refs/vanilla_parent.ymap");
+  parent.entities.remove(0);
+  parent.entities[0].num_children = 1;
+  let mut unnamed = parent.entities[0].clone();
+  unnamed.guid = 0;
+  unnamed.position.x += 10.0;
+  parent.entities.push(unnamed);
+  write_sample(&vanilla[0], &parent, &parent.entities);
+  let mut child = sample_ymap("parent_refs/child.ymap");
+  child.entities[0].parent_index = 0;
+  write_sample(&vanilla[1], &child, &child.entities);
+  let mut sibling = sample_ymap("parent_refs/child.ymap");
+  sibling.name = "sibling".into();
+  sibling.entities[0].guid = 301;
+  sibling.entities[0].parent_index = 1;
+  write_sample(&vanilla[2], &sibling, &sibling.entities);
+  write_sample(&root.join("a/sibling.ymap"), &sibling, &sibling.entities);
+  let mut removed = child.clone();
+  removed.entities.clear();
+  write_sample(&root.join("a/child.ymap"), &removed, &[]);
+  let merge = MergeYmap {
+    vanilla_dir: root.join("vanilla"),
+    output_dir: output.clone(),
+    rebuild_all: true,
+    overwrites: Default::default(),
+    implied: Default::default(),
+    vanilla_overwrites: Default::default(),
+    added: Default::default(),
+    replacing: Default::default(),
+    propagated: Vec::new(),
+  };
+
+  // Merged as it is, the sibling keeps its parent's child.
+  merge
+    .run_with_latest_vanilla_files(&vanilla, &[("a".into(), root.join("a/sibling.ymap"), None)])
+    .unwrap();
+  assert!(!output.join("parent.ymap").exists());
+
+  // Entity 200 loses its child and is removed; the sibling follows its parent to index 0.
+  merge
+    .run_with_latest_vanilla_files(
+      &vanilla,
+      &[
+        ("a".into(), root.join("a/child.ymap"), None),
+        ("a".into(), root.join("a/sibling.ymap"), None),
+      ],
+    )
+    .unwrap();
+  let merged = OriginalMap::load(&output.join("parent.ymap")).unwrap();
+  let merged =
+    merged.entities.iter().map(|entity| (entity.guid, entity.num_children)).collect::<Vec<_>>();
+  assert_eq!(merged, [(0, 1)]);
+  let sibling = OriginalMap::load(&output.join("sibling.ymap")).unwrap();
+  assert_eq!(sibling.entities[0].parent_index, 0);
+  assert_eq!(sibling.entities[0].lod_level, "LODTYPES_DEPTH_HD");
+  fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 #[ignore = "requires local vanilla YMAP schemas"]
 fn sources_with_a_diff_document_merge_through_it_and_reject_stale_ones() {
   use crate::common::fingerprint::Fingerprint;

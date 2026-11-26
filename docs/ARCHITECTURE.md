@@ -176,7 +176,8 @@ the config's `[dlc_activity]` corrects them where they do not hold.
    resource's diff, keeping vanilla's, but not out of the vanilla overwrite, through
    which they can still be set. Entities' child counts are left out of every diff,
    the vanilla overwrite's included: the merge counts each parent's children from the
-   final parent references. Diffs and their application stay complete, so other uses
+   final parent references, and removes the parents it leaves without children, up the
+   LOD hierarchy. Diffs and their application stay complete, so other uses
    replay every change. For YBNs, read each source's diff document, leave out the polygons
    its overwrite skips, add the changes carried over from other generations, combine them
    and apply them to the latest vanilla file, placing added polygons so connected ones share

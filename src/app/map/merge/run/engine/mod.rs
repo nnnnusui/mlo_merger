@@ -6,6 +6,7 @@ use super::*;
 use crate::app::map::merge::duplicates::Competition;
 
 mod child_counts;
+mod childless;
 mod outputs;
 mod parents;
 mod plan;
@@ -26,8 +27,9 @@ impl MergeYmap {
   }
 
   /// Merges in phases: grouping the sources by YMAP, registering them and their parents, merging
-  /// each YMAP's diffs, relinking the children of YMAPs whose entities moved, restoring parent
-  /// indices, counting each parent's children, and deciding which YMAPs are written.
+  /// each YMAP's diffs, removing the parents left without children and relinking the children of
+  /// YMAPs whose entities moved, restoring parent indices, counting each parent's children, and
+  /// deciding which YMAPs are written.
   fn run_configured_inner(
     &self,
     latest_files: &[PathBuf],
@@ -58,7 +60,7 @@ impl MergeYmap {
       let vanilla_overwrite = vanilla_overwrites.get(&hash).copied();
       run.plan_ymap(ymap_name, mod_refs, vanilla_overwrite, &mut implied, &mut propagated)?;
     }
-    let changed_layouts = run.relink_vanilla_children()?;
+    let changed_layouts = run.remove_childless_parents()?;
     let (child_counts, resolved_links) = run.restore_parent_indices()?;
     run.check_local_hierarchies(resolved_links)?;
     run.update_child_counts(&changed_layouts, &child_counts)?;

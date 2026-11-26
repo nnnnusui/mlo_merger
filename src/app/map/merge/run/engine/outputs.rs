@@ -5,7 +5,7 @@ use super::*;
 impl<'a> MergeRun<'a> {
   /// Restores the entities' GUIDs and decides which planned YMAPs are written: the merged ones
   /// that differ from what they replace, and the kept ones whose parent references or child
-  /// counts were repaired.
+  /// counts were repaired or whose childless parents were removed.
   pub(super) fn decide_outputs(&mut self) -> Result<(), Box<dyn std::error::Error>> {
     let mut repaired = 0usize;
     for output in self.planned.values_mut() {
@@ -13,12 +13,13 @@ impl<'a> MergeRun<'a> {
         entity.guid = self.references.original_guid(entity.guid)?;
       }
       if let Some(entities) = &output.clone_entities {
-        let changed = entities.iter().zip(&output.original.entities).any(|(after, before)| {
-          after.parent_index != before.parent_index
-            || after.flags != before.flags
-            || after.lod_level != before.lod_level
-            || after.num_children != before.num_children
-        });
+        let changed = entities.len() != output.original.entities.len()
+          || entities.iter().zip(&output.original.entities).any(|(after, before)| {
+            after.parent_index != before.parent_index
+              || after.flags != before.flags
+              || after.lod_level != before.lod_level
+              || after.num_children != before.num_children
+          });
         if changed {
           output.rebuild = true;
           repaired += 1;

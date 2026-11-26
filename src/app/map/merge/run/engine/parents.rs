@@ -1,5 +1,6 @@
 //! Linking the planned entities to their parents in the final entity orders.
 
+use super::child_counts::ChildCounts;
 use super::*;
 
 /// A parent reference a planned entity keeps: the YMAP holding the entity, by name hash, its
@@ -68,6 +69,41 @@ impl<'a> MergeRun<'a> {
     Ok(changed_layouts)
   }
 
+  /// The children each parent has in the planned YMAPs as they stand, counted as
+  /// [`Self::restore_parent_indices`] counts them, without restoring any parent index.
+  pub(super) fn count_children(&mut self) -> Result<ChildCounts, Box<dyn std::error::Error>> {
+    let mut layouts =
+      self.planned.iter().map(|(hash, output)| (*hash, output.guids())).collect::<HashMap<_, _>>();
+    let mut child_counts = ChildCounts::new();
+    for (hash, output) in &self.planned {
+      let parent_hash = reference_hash(&output.model.parent);
+      for entity in output.entities() {
+        let handle = entity.parent_index;
+        if handle == -1 {
+          continue;
+        }
+        let owner = self.references.map_for(handle).ok_or("missing normalized parent handle")?;
+        if owner != *hash && owner != parent_hash {
+          continue;
+        }
+        let index = restore_index(
+          &mut self.sources,
+          &mut self.references,
+          &mut layouts,
+          owner,
+          handle,
+          entity.guid,
+        )?;
+        if index >= 0
+          && let Some(target) = self.references.counted_target(handle)
+        {
+          *child_counts.entry((target.map, target.guid)).or_default() += 1;
+        }
+      }
+    }
+    Ok(child_counts)
+  }
+
   /// Restores every planned entity's parent index from the handle it was linked with, against
   /// the final entity order of the YMAP it points into, detaching those whose parent was removed
   /// or lies in a YMAP the merged one does not declare. Returns the children counted for each
@@ -102,24 +138,14 @@ impl<'a> MergeRun<'a> {
           detach(entity);
           continue;
         }
-        if let std::collections::hash_map::Entry::Vacant(entry) = layouts.entry(owner)
-          && let Some(vanilla) = self.sources.original(owner)?
-        {
-          self.references.register_entities(owner, &vanilla.entities);
-          let layout = self.references.runtime_entity_ids(owner, &vanilla.entities)?;
-          entry.insert(layout);
-        }
-        let index = if let Some(layout) = layouts.get(&owner) {
-          self
-            .references
-            .restore(handle, layout)
-            .map_err(|error| format!("entity {} parent map {owner:08X}: {error}", entity.guid))?
-        } else {
-          self
-            .references
-            .unavailable_index(handle)
-            .ok_or_else(|| format!("resolved parent map {owner:08X} has no final output"))?
-        };
+        let index = restore_index(
+          &mut self.sources,
+          &mut self.references,
+          &mut layouts,
+          owner,
+          handle,
+          entity.guid,
+        )?;
         if let Some(target) = self.references.target(handle) {
           if index >= 0 {
             *child_counts.entry((target.map, target.guid)).or_default() += 1;
@@ -138,6 +164,10 @@ impl<'a> MergeRun<'a> {
             );
             detach(entity);
           }
+        } else if index >= 0
+          && let Some(target) = self.references.unresolved_target(handle)
+        {
+          *child_counts.entry((target.map, target.guid)).or_default() += 1;
         }
         entity.parent_index = index;
       }
@@ -178,6 +208,35 @@ impl<'a> MergeRun<'a> {
     }
     Ok(())
   }
+}
+
+/// The index the parent `handle` of the entity with merge identity `guid` points at in the final
+/// entity order of the YMAP `owner`, -1 when the parent was removed; `layouts` holds the final
+/// orders by YMAP, and takes the vanilla one of a YMAP not planned.
+fn restore_index(
+  sources: &mut SourceMaps,
+  references: &mut ParentReferences,
+  layouts: &mut HashMap<u32, Vec<u32>>,
+  owner: u32,
+  handle: i32,
+  guid: u32,
+) -> Result<i32, Box<dyn std::error::Error>> {
+  if let std::collections::hash_map::Entry::Vacant(entry) = layouts.entry(owner)
+    && let Some(vanilla) = sources.original(owner)?
+  {
+    references.register_entities(owner, &vanilla.entities);
+    let layout = references.runtime_entity_ids(owner, &vanilla.entities)?;
+    entry.insert(layout);
+  }
+  Ok(if let Some(layout) = layouts.get(&owner) {
+    references
+      .restore(handle, layout)
+      .map_err(|error| format!("entity {guid} parent map {owner:08X}: {error}"))?
+  } else {
+    references
+      .unavailable_index(handle)
+      .ok_or_else(|| format!("resolved parent map {owner:08X} has no final output"))?
+  })
 }
 
 /// Detaches `entity` from its parent: it no longer points into its parent YMAP, and a

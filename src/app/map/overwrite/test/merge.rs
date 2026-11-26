@@ -741,6 +741,7 @@ fn added_ymaps_keep_parent_indices_into_added_parents() {
   let mut parent = sample.clone();
   parent.name = "added_lod".into();
   parent.entities[0].guid = 0;
+  parent.entities[0].num_children = 1;
   let mut child = sample.clone();
   child.name = "added_child".into();
   child.parent = "added_lod".into();

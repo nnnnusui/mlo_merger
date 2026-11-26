@@ -63,6 +63,25 @@ impl PlannedMap {
     entities.into_iter().map(|entity| entity.guid).collect()
   }
 
+  /// The entities, in array order.
+  pub(super) fn entities(&self) -> &[crate::core::format::ymap::model::YmapEntity] {
+    match &self.clone_entities {
+      Some(entities) => entities,
+      None => &self.model.entities,
+    }
+  }
+
+  /// Keeps the entities for which `keep` returns true.
+  pub(super) fn retain_entities(
+    &mut self,
+    keep: impl FnMut(&crate::core::format::ymap::model::YmapEntity) -> bool,
+  ) {
+    match &mut self.clone_entities {
+      Some(entities) => entities.retain(keep),
+      None => self.model.entities.retain(keep),
+    }
+  }
+
   pub(super) fn entities_mut(&mut self) -> Vec<&mut crate::core::format::ymap::model::YmapEntity> {
     match &mut self.clone_entities {
       Some(entities) => entities.iter_mut().collect(),

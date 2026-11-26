@@ -20,6 +20,9 @@ pub(in crate::app::map::merge) struct ParentReferences {
   original_guids: HashMap<u32, u32>,
   /// Entity identities that another entity stands in for; see [`Self::alias`].
   aliases: HashMap<u32, u32>,
+  /// Entity identities the merge removed from the arrays it took them from; see
+  /// [`Self::record_removed`].
+  removed: std::collections::HashSet<u32>,
 }
 
 struct UnresolvedReference {
@@ -211,6 +214,18 @@ impl ParentReferences {
       if reference.original_layout.as_deref() == Some(final_guids) {
         return Ok(reference.original_index);
       }
+      // An array that only lost entities the merge removed keeps the others in their order.
+      if let (Some(original), Some(target)) =
+        (&reference.original_layout, self.unresolved_target(handle))
+        && original.iter().filter(|id| !self.removed.contains(id)).eq(final_guids)
+      {
+        return match final_guids.iter().position(|id| *id == target.guid) {
+          Some(index) => {
+            i32::try_from(index).map_err(|_| invalid("final parent index exceeds i32"))
+          }
+          None => Ok(-1),
+        };
+      }
       return Err(invalid("cannot remap an unresolved parent after its entity array changed"));
     }
     let target =
@@ -256,6 +271,39 @@ impl ParentReferences {
     );
     self.unresolved_handles.insert(key, handle);
     Ok(handle)
+  }
+
+  /// The entity an unresolved `handle` points at by its index into the array it was captured
+  /// against; `None` for a resolved handle, or one whose array is unavailable.
+  pub(in crate::app::map::merge) fn unresolved_target(
+    &self,
+    handle: i32,
+  ) -> Option<ParentTarget> {
+    let reference = self.unresolved.get(&handle)?;
+    let guid =
+      *reference.original_layout.as_ref()?.get(usize::try_from(reference.original_index).ok()?)?;
+    Some(ParentTarget {
+      map: self.map_for(handle)?,
+      guid,
+    })
+  }
+
+  /// The entity `handle` points at, by its identity when resolved or else by its index.
+  pub(in crate::app::map::merge) fn counted_target(
+    &self,
+    handle: i32,
+  ) -> Option<ParentTarget> {
+    self.target(handle).or_else(|| self.unresolved_target(handle))
+  }
+
+  /// Records that the merge removed the entity with identity `id` from its array, leaving the
+  /// other entities in their order, so that unresolved references into that array follow the
+  /// entities they point at.
+  pub(in crate::app::map::merge) fn record_removed(
+    &mut self,
+    id: u32,
+  ) {
+    self.removed.insert(id);
   }
 
   /// Returns the owning map hash, even for unresolved references.
@@ -363,5 +411,27 @@ mod tests {
     let handle = references.capture_unresolved(Some("mod"), 123, Some(&[10, 20]), 1).unwrap();
     assert_eq!(references.restore(handle, &[10, 20]).unwrap(), 1);
     assert!(references.restore(handle, &[20, 10]).is_err());
+  }
+
+  #[test]
+  fn unresolved_parents_follow_their_entity_past_entities_the_merge_removed() {
+    let mut references = ParentReferences::default();
+    let handle = references.capture_unresolved(None, 123, Some(&[10, 20, 30]), 2).unwrap();
+    assert_eq!(
+      references.unresolved_target(handle),
+      Some(ParentTarget {
+        map: 123,
+        guid: 30,
+      })
+    );
+    assert!(references.restore(handle, &[20, 30]).is_err());
+    references.record_removed(10);
+    assert_eq!(references.restore(handle, &[20, 30]).unwrap(), 1);
+    assert!(references.restore(handle, &[30, 20]).is_err());
+    assert!(references.restore(handle, &[20, 30, 40]).is_err());
+    references.record_removed(30);
+    assert_eq!(references.restore(handle, &[20]).unwrap(), -1);
+    let unavailable = references.capture_unresolved(None, 456, None, 0).unwrap();
+    assert_eq!(references.unresolved_target(unavailable), None);
   }
 }
