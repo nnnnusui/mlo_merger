@@ -33,7 +33,7 @@ generation's parent YMAP:
 - [ ] Count the additions with a parent and the parent changes left behind in a merge of the
   sources, and how many of their parents pair with an entity of the loaded generation's
   parent YMAP.
-- [ ] Check that `generations.json` pairs the parent YMAPs (`*_lod`, `*_slod`) of the
+- [ ] Check that `ymap_generations.json` pairs the parent YMAPs (`*_lod`, `*_slod`) of the
   families carried, and what the successor's `parent` names for each.
 
 ### 2. Carry Additions With A Parent

@@ -14,7 +14,7 @@ Merges deploy only the generation of each vanilla stream file the game loads and
 
 ## Overwrites
 
-Resource overwrites (`overwrite/resources/{resourceName}/{stream_path}.diff.json`) leave selected differences of a source YMAP's diff out of the merge, or the file whole. The overwrite cache derives which resources' files each stream file that resources add is merged from, and the warnings. Vanilla overwrites (`overwrite/vanilla/{version}/ymap/*.diff.json`) add differences from the latest vanilla YMAP as the last merge source.
+Resource overwrites (`overwrite/resources/{resourceName}/{stream_path}.diff.json`) leave selected differences of a source stream file's diff out of the merge, or the file whole. The overwrite cache derives which resources' files each stream file that resources add is merged from, and the warnings. Vanilla overwrites (`overwrite/vanilla/{version}/ymap/*.diff.json`) add differences from the latest vanilla YMAP as the last merge source.
 
 - [ ] Let a vanilla overwrite take precedence over resources' changes to the same items, if the merge policy gains configured priorities.
 - [ ] Let a resource overwrite add differences of its own besides `skip`: `diffs` in a diff document's shape, adding or modifying items on top of the resource's diff, which is why resource overwrites are named `.diff.json`.
@@ -29,7 +29,7 @@ Resource overwrites (`overwrite/resources/{resourceName}/{stream_path}.diff.json
 ## Architecture
 
 - [ ] Give each data owner its own read and freshness-check APIs (`core::game_archive`, `app::map::vanilla_cache`, `app::map::source_cache`, …), so merge and other consumers stop walking those directories or reading their files directly.
-- [x] Migrate map and clothing workflows into `app/{map,clothing}`, extracting their shared RPF/DLC archive engine to `core/game_archive`; see the [module split plan](plan/202611160412_app_module_split.md).
+- [x] Migrate map and clothing workflows into `app/{map,clothing}`, extracting their shared RPF/DLC archive engine to `core/game_archive`; see the [module split plan](plan/202611160412_done_app_module_split.md).
 
 ## Merge Policy
 
