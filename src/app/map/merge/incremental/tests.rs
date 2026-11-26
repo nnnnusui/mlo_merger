@@ -83,9 +83,14 @@ fn ybn_version_change_reuses_current_ymap_groups() {
     },
   )
   .unwrap();
+  // Two sources of the YBN, so it is merged rather than deployed as its source has it.
+  let other_ybn = MergeSourceFile {
+    resource: "other".into(),
+    ..ybn.clone()
+  };
   let inputs = MergeInputs {
     ymap: vec![ymap],
-    ybn: vec![ybn],
+    ybn: vec![ybn, other_ybn],
     vanilla_ymaps_to_read: BTreeSet::new(),
     added_stream_files: BTreeSet::new(),
   };

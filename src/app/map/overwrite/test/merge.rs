@@ -182,7 +182,7 @@ fn overwrites_skip_source_diffs_written_against_the_current_files() {
   // file.
   fs::remove_file(overwrite_dir.join("resources/resource/maps/other.ymap.diff.json")).unwrap();
   write_json(
-    &overwrite_dir.join("resources/resource/maps/map.ybn.diff.json"),
+    &overwrite_dir.join("resources/resource/maps/map.ytyp.diff.json"),
     &StreamFileOverwrite {
       schema_version: StreamFileOverwrite::SCHEMA_VERSION,
       ignore: true,
@@ -196,7 +196,7 @@ fn overwrites_skip_source_diffs_written_against_the_current_files() {
     merge.run_after_caches(&vanilla).unwrap().warnings.ignored_overwrites,
     vec![IgnoredOverwrite {
       resource: Some("resource".into()),
-      file: "maps/map.ybn".into(),
+      file: "maps/map.ytyp".into(),
       reason: IgnoredOverwriteReason::UnsupportedFormat,
     }]
   );

@@ -19,7 +19,7 @@ Resource overwrites (`overwrite/resources/{resourceName}/{stream_path}.diff.json
 
 - [ ] Let a vanilla overwrite take precedence over resources' changes to the same items, if the merge policy gains configured priorities.
 - [ ] Let a resource overwrite add differences of its own besides `skip`: `diffs` in a diff document's shape, adding or modifying items on top of the resource's diff, which is why resource overwrites are named `.diff.json`.
-- [ ] Support YBN overwrites.
+- [ ] Follow YBN overwrites to a new source version, as YMAP overwrites are followed; one written against an earlier version is only listed as `source_changed` now.
 - [ ] Follow overwrites to a new vanilla version, as they are followed to a new source version: remap the vanilla indices their selectors name. Overwrites whose baseline changed are only listed in `ignored_overwrites` now.
 - [ ] Report selectors that match no difference, unsupported or ambiguous overwrite changes, and overwrite files that are not read (such as the earlier `resources/{resourceName}.json` layout), in the overwrite cache's `warnings.json`, as `ignored_overwrites` does for missing and stale overwrites; they are only logged now.
 
@@ -46,10 +46,9 @@ Resource overwrites (`overwrite/resources/{resourceName}/{stream_path}.diff.json
 
 ## Diff Documents
 
-Source-cache diff documents currently cover YMAPs against the latest vanilla only. Writing each vanilla YMAP's version-to-version diffs is implemented but disabled (see [Limitations](reference.md#limitations)).
+Source-cache diff documents currently cover YMAPs and YBNs against the latest vanilla only. Writing each vanilla YMAP's version-to-version diffs is implemented but disabled (see [Limitations](reference.md#limitations)).
 
 - [ ] Write source diffs against a selected or inferred vanilla version, not only the latest one.
-- [ ] Add YBN diff documents and their TypeScript types.
 - [ ] Implement `--get-diff SOURCE TARGET`; it currently only prints a mock invocation.
 
 ## Clothing Collection (`asset/vanilla`)

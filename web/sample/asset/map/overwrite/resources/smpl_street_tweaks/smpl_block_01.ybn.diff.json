@@ -1,4 +1,28 @@
 {
+  "base": {
+    "sha256": "f71d0a02241682ad13c93cfc691b601190b01e96206ca1c73d6cfb48582c57c3",
+    "size": 550
+  },
   "schema_version": 2,
-  "ignore": true
+  "skip": {
+    "polygons": [
+      {
+        "added": [
+          {
+            "shape": {
+              "type": "box"
+            }
+          }
+        ],
+        "flags": [
+          0,
+          0
+        ]
+      }
+    ]
+  },
+  "target": {
+    "sha256": "c895fcd4fed622331d2e147299111f2f8b984bcea01662ee72422e97d8e1c48b",
+    "size": 551
+  }
 }

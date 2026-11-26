@@ -29,7 +29,8 @@
 //!
 //! The overwrites name one ignored overwrite of every reason on the first pipeline run: some
 //! written against earlier versions of the resources' files (see [`earlier_versions`]), the
-//! others in [`ignored::overwrites`].
+//! others in [`ignored::overwrites`]. One more, [`collision_overwrite`], leaves the planter's
+//! collision of `smpl_street_tweaks` out.
 //!
 //! Every stream file covers [`EVERY_FILE_POSITION`].
 //!
@@ -503,6 +504,28 @@ fn vanilla_stages() -> Vec<(&'static str, StageFiles)> {
   ]
 }
 
+/// The overwrite of `smpl_street_tweaks`'s `smpl_block_01.ybn` leaving out the box it adds, the
+/// planter's collision, written against the collision `smpl_summer` ships.
+fn collision_overwrite() -> (String, Vec<u8>) {
+  let fingerprint =
+    |bytes: &[u8]| serde_json::json!({"sha256": sha256(bytes), "size": bytes.len()});
+  let source = street_tweaks(false)
+    .into_iter()
+    .find(|(path, _)| path.ends_with(".ybn"))
+    .map(|(_, bytes)| bytes)
+    .unwrap();
+  let overwrite = serde_json::json!({
+    "schema_version": crate::app::map::overwrite::StreamFileOverwrite::SCHEMA_VERSION,
+    "target": fingerprint(&source),
+    "base": fingerprint(&ybn_bytes(&block_01_collision(true))),
+    "skip": {"polygons": [{"flags": [0, 0], "added": [{"shape": {"type": "box"}}]}]},
+  });
+  (
+    "asset/map/overwrite/resources/smpl_street_tweaks/smpl_block_01.ybn.diff.json".into(),
+    serde_json::to_vec_pretty(&overwrite).unwrap(),
+  )
+}
+
 fn sha256(bytes: &[u8]) -> String {
   hex::encode(Sha256::digest(bytes))
 }
@@ -522,7 +545,8 @@ const CONFIG: &str = "\
 /// Every file of the sample workspace, with `files.json` listing them for the page.
 fn sample_files() -> Vec<SampleFile> {
   let mut files = workspace_files(false);
-  files.extend(earlier_versions().iter().chain(&ignored::overwrites()).map(|(path, bytes)| {
+  let overwrites = ignored::overwrites().into_iter().chain([collision_overwrite()]);
+  files.extend(earlier_versions().iter().cloned().chain(overwrites).map(|(path, bytes)| {
     SampleFile {
       path: path.clone(),
       bytes: bytes.clone(),

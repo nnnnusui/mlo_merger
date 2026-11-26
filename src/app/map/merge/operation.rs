@@ -83,9 +83,10 @@ impl Merge {
     // Logged on every run, as a merge reusing its previous output does not look at overwrites.
     warnings.log();
     // A stream file an overwrite ignores is left out of the merge whole.
-    merge_inputs
-      .ymap
-      .retain(|source| !overwrites.for_source(source).is_some_and(|overwrite| overwrite.ignore));
+    for sources in [&mut merge_inputs.ymap, &mut merge_inputs.ybn] {
+      sources
+        .retain(|source| !overwrites.for_source(source).is_some_and(|overwrite| overwrite.ignore));
+    }
     let latest = crate::app::map::vanilla_cache::latest_files(&vanilla_cache_dir)?;
     let vanilla_overwrites = overwrites.latest_vanilla_files(&latest);
     let latest_files = latest_vanilla_stream_files(latest);

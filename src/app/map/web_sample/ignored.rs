@@ -15,8 +15,8 @@ use serde::Serialize;
 /// - `missing_source`: one of `smpl_custom_old.ymap`, which an earlier version of
 ///   `smpl_custom_props` shipped and the current one does not.
 /// - `missing_vanilla`: one of `smpl_block_99.ymap`, which no stage of the vanilla archive has.
-/// - `unsupported_format`: one leaving out `smpl_street_tweaks`'s `smpl_block_01.ybn`, a format
-///   overwrites do not support.
+/// - `unsupported_format`: one leaving out a `smpl_street_tweaks` YTYP, a format overwrites do not
+///   support.
 pub(super) fn overwrites() -> Vec<(String, Vec<u8>)> {
   let fingerprint = |bytes: &[u8]| OverwriteFingerprint {
     sha256: sha256(bytes),
@@ -59,7 +59,7 @@ pub(super) fn overwrites() -> Vec<(String, Vec<u8>)> {
   );
 
   push(
-    "resources/smpl_street_tweaks/smpl_block_01.ybn",
+    "resources/smpl_street_tweaks/smpl_props.ytyp",
     json(&StreamFileOverwrite {
       schema_version: StreamFileOverwrite::SCHEMA_VERSION,
       ignore: true,

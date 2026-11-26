@@ -18,7 +18,6 @@ mod test;
 mod vanilla;
 
 use crate::common::Result;
-use crate::core::format::ymap::compare::YmapDiffFields;
 use crate::platform::fs;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -29,7 +28,7 @@ pub use skip::{selects, skip_diffs};
 pub use vanilla::VanillaOverwrite;
 
 /// The formats, by extension, whose stream files overwrites apply to.
-pub const SUPPORTED_FORMATS: &[&str] = &[".ymap"];
+pub const SUPPORTED_FORMATS: &[&str] = &[".ymap", ".ybn"];
 
 /// Whether overwrites apply to the stream file at `stream_path`, by its extension.
 pub fn supports(stream_path: &str) -> bool {
@@ -176,9 +175,9 @@ impl StreamFileOverwrite {
   /// from its baseline as they are now; does nothing when they are not the files it was written
   /// against, or when it leaves the file out whole, which the merge does instead. `label` names
   /// the stream file in the log.
-  pub fn apply(
+  pub fn apply<T: Serialize + serde::de::DeserializeOwned>(
     &self,
-    diff: &mut YmapDiffFields,
+    diff: &mut T,
     source: &OverwriteFingerprint,
     vanilla: &OverwriteFingerprint,
     label: &str,
@@ -383,8 +382,8 @@ impl specta::Type for YmapDiffSkip {
 /// The TypeScript definitions of [`YmapDiffSkip`], which Specta cannot derive.
 #[cfg(feature = "typescript")]
 pub(crate) const YMAP_DIFF_SKIP_TS: &str = r#"
-/** The differences of a `YmapDiffFields` document to leave out of a merge. */
-export type YmapDiffSkip = DiffSkip<YmapDiffFields>
+/** The differences of a `YmapDiffFields` or `YbnDiffFields` document to leave out of a merge. */
+export type YmapDiffSkip = DiffSkip<YmapDiffFields> | DiffSkip<YbnDiffFields>
 
 /**
  * In an object, `true` leaves out the whole difference and a nested selector only the parts it

@@ -461,6 +461,10 @@ generation and carry the changes resources make to the others over to it.
   materials, and the other pieces fill new children after the rest, a piece over the limits
   split breadth-first. Children left empty are dropped; changed children are rebuilt and the
   others kept as they are. The root's bounds keep vanilla's and cover every child.
+- The source cache writes each source YBN's differences from the latest vanilla YBN of its name
+  to a diff document, which merges read and overwrites skip within (see
+  [usage](usage.md#ybn-differences)). A YBN merges when several resources replace it or an
+  overwrite skips within it; one only one source replaces is deployed as that source has it.
 - Files without a vanilla baseline are skipped, or rejected when sources conflict.
 
 ## Overwrites
@@ -471,8 +475,8 @@ into the overwrite cache (`--overwrite-cache`, default `asset/map/overwrite-cach
 `--generate-overwrite-cache`, which `--merge` and `--pipeline` run first. The merge always
 reads it, even with no overwrites, since it also records which resources each added stream file is
 merged from; a missing one, or one older than the source and vanilla caches or the
-overwrites, fails the merge. Overwrites currently only apply to
-YMAPs; one of another format is reported as `unsupported_format` and not applied.
+overwrites, fails the merge. Overwrites apply to YMAPs and YBNs; one of another format is
+reported as `unsupported_format` and not applied.
 
 - `resources/{resourceName}/{stream_path}.diff.json` (`StreamFileOverwrite`), one per
   stream file, lists the differences of that file's diff document to leave out of the
@@ -490,7 +494,7 @@ YMAPs; one of another format is reported as `unsupported_format` and not applied
 An overwrite leaving out differences applies only while the files it was written against are current: its
 `target` and `base` fingerprints (`sha256` and `size`) must match. Otherwise it is
 left out whole with a warning, and the pipeline lists it in `ignored_overwrites` on every
-run until it is rewritten. A resource overwrite whose source alone changed is first
+run until it is rewritten. A resource YMAP overwrite whose source alone changed is first
 followed to the new version: the overwrite cache compares the diff document of the version it
 was written against, from the source cache's history, with the current one, and rewrites the
 overwrite in place when every difference it left out is still left out by the same selector

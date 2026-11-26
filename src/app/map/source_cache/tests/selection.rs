@@ -144,8 +144,12 @@ fn merge_input_selector_uses_format_conflicts_and_ymap_load_closure() {
     inputs.ymap.iter().map(|source| source.file_name.as_str()).collect::<Vec<_>>(),
     ["parent.ymap", "child.ymap"]
   );
-  assert_eq!(inputs.ybn.len(), 2);
-  assert!(inputs.ybn.iter().all(|source| source.file_name == "collision.ybn"));
+  // The conflicting YBNs, and the one differing from vanilla, which is merged when an overwrite
+  // calls for it.
+  assert_eq!(
+    inputs.ybn.iter().map(|source| source.file_name.as_str()).collect::<Vec<_>>(),
+    ["collision.ybn", "unique.ybn", "collision.ybn"]
+  );
   assert_eq!(
     inputs.vanilla_ymaps_to_read,
     BTreeSet::from(["parent.ymap".into(), "child.ymap".into()])

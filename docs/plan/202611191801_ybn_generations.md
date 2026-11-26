@@ -20,43 +20,59 @@ are resolved.
     replaced generation loads beside the loaded one.
   - Streaming the invalidated base game `dt1_22_0.ybn` or `sc1_12_0.ybn` loads nothing.
   - Clearing an older generation's collisions alone changes nothing.
-- The YBN merge matches shapes by geometry within the coordinate tolerance, not by index,
-  and merges only YBNs several resources ship; a YBN one resource ships is deployed as it is.
+- YBNs diff as the polygons of the whole file grouped by child collision flags, matched by
+  geometry within `ybn_position` ([plan](202611261136_done_ybn_polygon_diff.md)), so a change
+  needs no item pairing to reach another generation: a removed polygon is found in the
+  successor by its geometry, and an added one is added there.
+- A YBN merges when several resources replace it or an overwrite skips within it; one only
+  one source replaces is deployed as that source has it.
+
+## Design
+
+- **Loaded YBNs.** The vanilla cache applies the change sets to every archive holding YMAPs or
+  YBNs, as for YMAPs, and lists the YBNs each archive holds; `generations.json` records the
+  YBNs the game does not load in `inactive`.
+- **Families.** YBNs form generations and families by prefix and name, as YMAPs do, over
+  their own names. No units are built: polygons match by geometry.
+- **Successor.** A YBN the game does not load has as successor the loaded YBN of its stem in the
+  newest newer generation of its family, or, for one first shipped after the game build, the
+  newest older one.
+- **Carrying.** A source YBN of a generation not loaded is not deployed. Its diff, taken against
+  its own vanilla generation and after its overwrite, is carried to the successor: a removal of
+  a polygon the successor holds (by geometry, in the same flags group) is carried, the others
+  are left behind as `already_absent`; additions are all carried. The carried changes are
+  written to `generations/{resource}/{version}/{file name}.diff.json` and merged into the
+  successor as one more source, newest origin first, after its own sources.
 
 ## Phases
 
 ### 1. Vanilla Cache: Loaded YBNs
 
-- [ ] Apply the change sets to every archive holding YMAPs or YBNs, and list the YBNs of each
-  archive and every YBN version in `dlc_activity.json`.
-- [ ] Record the YBNs the game does not load in `generations.json`, with why.
+- [ ] List YBNs in `dlc_activity.json` beside YMAPs: each archive's latest YBNs, and every
+  YBN version in `files`.
+- [ ] Record the YBNs the game does not load in `generations.json` `inactive`.
+- [ ] Test: a YBN of an invalidated base game archive is inactive, the pack's replacing one is
+  not.
 
-### 2. Vanilla Cache: YBN Successors
+### 2. Vanilla Cache: YBN Families And Successors
 
-- [ ] Group YBNs into generations and families by prefix and name, as YMAPs are, over the
-  whole raw archive.
-- [ ] Name the successor of each YBN not loaded: the YBN of the same name without its prefix
-  in the loaded generation, or, when generations move shapes between files, the loaded YBN
-  holding most of its shapes by geometry. Measure how often the plain name differs.
-- [ ] Record the YBNs first shipped after the game build with a successor in `newer_files`.
+- [ ] Group YBNs into generations and families by prefix and name, as YMAPs are.
+- [ ] Name the successor of each YBN not loaded, as the design says. Measure on the local vanilla
+  archive how many have none.
+- [ ] Bump the generation and activity layouts.
 
 ### 3. Merge: Carrying Changes
 
-- [ ] Merge every source YBN of a generation not loaded, with one source or several.
-- [ ] Take each such source's removed and added shapes against its own vanilla generation, and
-  apply them to the successor by geometry: a removed shape removes the shape matching it
-  there, an added shape is added, a flag change applies to the matching shape.
-- [ ] Merge the carried changes into the successor after its own sources, newest origin first,
-  under the YBN policy, so a removal wins.
-- [ ] Omit the YBNs with a successor, listing their sources in `_omit.txt`.
+- [ ] Merge every source YBN of a generation not loaded, its changes carried to the successor:
+  write the carried documents (`YbnPropagatedDiff`), list the removals the successor lacks in
+  `left_behind.json`, and omit the source.
+- [ ] Merge the carried documents into the successor after its own sources, newest origin first.
+- [ ] Tests: a removal and an addition carried; a removal the successor lacks left behind; the
+  source omitted.
 
-### 4. Report
+### 4. Samples And Documentation
 
-- [ ] Report each YBN not deployed with its successor, and the removals that match no shape of
-  the successor, in the merge report.
-
-### 5. Documentation
-
+- [ ] Give the web sample a prefixed YBN generation whose changes carry over.
 - [ ] Describe YBN generations in `docs/reference.md`, `docs/ARCHITECTURE.md` and
   `docs/usage.md`, and the work left in `docs/TODO.md`.
 

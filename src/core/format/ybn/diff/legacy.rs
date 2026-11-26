@@ -3,12 +3,27 @@
 
 use super::super::*;
 
-/// Merges the changes of every YBN of `mods` from `vanilla`, as
-/// [`super::polygons`] compares, combines and applies them, filling geometry children within
-/// `limits`.
+/// Merges the changes of every YBN of `mods` from `vanilla`, as [`super::polygons`] compares,
+/// combines and applies them, filling geometry children within `limits`.
 pub fn merge_ybn_deltas(
   vanilla: &[u8],
   mods: &[&[u8]],
+  limits: super::polygons::GeometryLimits,
+) -> io::Result<Vec<u8>> {
+  crate::core::config::matching::with_config(|| {
+    let tolerance = crate::core::config::matching::current().ybn_position;
+    let baseline = read_ybn_root(vanilla)?;
+    let sources = mods.iter().map(|bytes| read_ybn_root(bytes)).collect::<io::Result<Vec<_>>>()?;
+    let diffs = super::polygons::diff_each(&baseline, &sources, tolerance)?;
+    merge_ybn_diffs(vanilla, &diffs, limits)
+  })?
+}
+
+/// Applies the changes `diffs` make to `vanilla`, combined in order as [`super::polygons::merge`]
+/// combines them, filling geometry children within `limits`.
+pub fn merge_ybn_diffs(
+  vanilla: &[u8],
+  diffs: &[super::polygons::YbnDiffFields],
   limits: super::polygons::GeometryLimits,
 ) -> io::Result<Vec<u8>> {
   crate::core::config::matching::with_config(|| {
@@ -17,8 +32,6 @@ pub fn merge_ybn_deltas(
     if merged.kind != "Composite" {
       return Err(invalid("YBN delta merge requires a Composite vanilla root"));
     }
-    let sources = mods.iter().map(|bytes| read_ybn_root(bytes)).collect::<io::Result<Vec<_>>>()?;
-    let diffs = super::polygons::diff_each(&merged, &sources, tolerance)?;
     let combined = super::polygons::merge(&diffs.iter().collect::<Vec<_>>(), tolerance)?;
     super::polygons::apply(&mut merged, &combined, tolerance, limits)?;
     encode_ybn_bound(&merged)

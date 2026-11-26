@@ -33,8 +33,7 @@ pub struct MergeSourceFile {
   /// Path below the resource's `stream` directory, such as `vanilla/hei_ch1_11.ymap`.
   #[serde(default)]
   pub stream_path: String,
-  /// The source cache's diff document of this YMAP against the latest vanilla; `None` for
-  /// other formats.
+  /// The source cache's diff document of this YMAP or YBN against the latest vanilla.
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub diff_path: Option<PathBuf>,
   /// The source cache's document keeping this YMAP's LOD light pair in step
@@ -431,11 +430,11 @@ pub fn load_merge_inputs(
         let differs = file.vanilla.as_ref().is_none_or(|vanilla| !vanilla.content_matches);
         let selected_for_merge = match extension.as_str() {
           ".ymap" => differs || conflict || required_child,
-          ".ybn" => conflict,
+          ".ybn" => differs || conflict,
           _ => false,
         };
         if selected_for_merge {
-          let diff_path = (extension == ".ymap")
+          let diff_path = (extension == ".ymap" || file.vanilla.is_some())
             .then(|| stream_file_diff_path(&resource.source, &file.path))
             .transpose()?
             .map(|path| cache_dir.join(DIFF_DIR).join(path));

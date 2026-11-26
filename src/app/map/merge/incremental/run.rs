@@ -26,6 +26,14 @@ impl IncrementalMerge<'_> {
     for source in self.inputs.ybn.iter().chain(&self.inputs.ymap) {
       sources.entry(source.file_name.to_ascii_lowercase()).or_default().push(source);
     }
+    // A YBN one source replaces without an overwrite is deployed as that source has it.
+    sources.retain(|name, files| {
+      !name.ends_with(".ybn")
+        || files.len() > 1
+        || files
+          .iter()
+          .any(|source| self.overwrite(source).is_some_and(|overwrite| overwrite.skip.is_some()))
+    });
     // Carried-over changes are merged like a source into the vanilla file they change.
     for source in self.carried {
       let name = source.file_name.to_ascii_lowercase();

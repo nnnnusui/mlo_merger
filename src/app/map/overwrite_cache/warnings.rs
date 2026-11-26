@@ -62,7 +62,8 @@ pub fn collect(
     .into_iter()
     .map(|file| (file.name.to_ascii_lowercase(), file))
     .collect::<BTreeMap<_, _>>();
-  let sources = inputs.ymap_by_key();
+  let mut sources = inputs.ymap_by_key();
+  sources.extend(inputs.ybn.iter().map(|source| (source.stream_key(), source)));
   for (resource, stream_path) in overwrites.keys() {
     let Some(overwrite) = overwrites.stream_file(resource, stream_path) else {
       continue;

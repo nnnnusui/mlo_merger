@@ -52,7 +52,12 @@ pub(crate) fn check(
           cached.insert(path.clone());
         }
         let added = super::added::is_added_stream_file(format, file) && file.cached_path.is_some();
-        if format == ".ymap" && (file.vanilla.is_some() || added) {
+        let documented = match format.as_str() {
+          ".ymap" => file.vanilla.is_some() || added,
+          ".ybn" => file.vanilla.is_some(),
+          _ => false,
+        };
+        if documented {
           let diff =
             Path::new(super::DIFF_DIR).join(stream_file_diff_path(&resource.source, &file.path)?);
           diffs.insert(diff.to_string_lossy().replace('\\', "/"));

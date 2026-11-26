@@ -1,14 +1,14 @@
 //! Leaves selected differences out of a diff document.
 
 use crate::common::Result;
-use crate::core::format::ymap::compare::YmapDiffFields;
+use serde::{Serialize, de::DeserializeOwned};
 use serde_json::{Map, Value};
 
 /// Leaves the differences `skip` selects out of `diff` (see
 /// [`super::StreamFileOverwrite::skip`]), dropping objects and arrays left empty. Returns the
 /// paths of the selectors that matched nothing.
-pub fn skip_diffs(
-  diff: &mut YmapDiffFields,
+pub fn skip_diffs<T: Serialize + DeserializeOwned>(
+  diff: &mut T,
   skip: &Value,
 ) -> Result<Vec<String>> {
   let mut value = serde_json::to_value(&*diff)?;
@@ -100,12 +100,12 @@ fn skip_item(
     };
     return Ok(Some(skip_value(target, changes, &path, unmatched)?));
   }
-  // A group of occlude model triangles, `{ "flags": 0, "removed": [...], "added": [...] }`: the
-  // fields of its own that are no arrays name it, and its arrays are selected within.
+  // A group of occlude model triangles or YBN polygons, `{ "flags": 0, "removed": [...],
+  // "added": [...] }`: its other fields name it, and its arrays of objects are selected within.
   if let (Value::Object(selector), Value::Object(fields)) = (selector, &mut *item)
-    && selector.keys().any(|name| fields.get(name).is_some_and(Value::is_array))
+    && selector.keys().any(|name| fields.get(name).is_some_and(is_object_list))
   {
-    let within = |name: &String| fields.get(name).is_some_and(Value::is_array);
+    let within = |name: &String| fields.get(name).is_some_and(is_object_list);
     let names_it = selector
       .iter()
       .filter(|(name, _)| !within(name))
@@ -121,9 +121,15 @@ fn skip_item(
         fields.remove(&name);
       }
     }
-    return Ok(Some(!fields.values().any(Value::is_array)));
+    return Ok(Some(!fields.values().any(is_object_list)));
   }
   Ok(matches(item, selector).then_some(true))
+}
+
+/// Whether `value` is an array of objects, such as the triangles of a group, rather than of
+/// numbers, such as its flags.
+fn is_object_list(value: &Value) -> bool {
+  value.as_array().is_some_and(|items| items.first().is_none_or(Value::is_object))
 }
 
 /// Whether array selector `selector` selects `item`, an item of a diff array, leaving aside the

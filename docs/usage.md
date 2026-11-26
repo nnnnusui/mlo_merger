@@ -33,7 +33,7 @@ in `web/`, described under `web` in its `release.json`; see [Browser build](web.
 | Stream-file bounds index | `RTreeIndex`, `RTreeItem`, `RTreeInput` |
 | `--read` stdout | `ReadResult`, `ReadFileResult`, `ReadOrigin` |
 | `--read` JSON documents | `YmapReadDocument`, `ReadFingerprint`, `Ymap`, `YmapEntity`, `Position`, `Rotation` |
-| Source-cache diff documents | `YmapComparisonDiff`, `YmapComparisonFile`, `YmapDiffFields`, `YmapEntityDiff`, `YmapEntityFieldDiff` |
+| Source-cache diff documents | `YmapComparisonDiff`, `YmapComparisonFile`, `YmapDiffFields`, `YmapEntityDiff`, `YmapEntityFieldDiff`, `YbnComparisonDiff`, `YbnDiffFields`, `YbnPolygonsDiff` |
 | Changes carried to newer DLC generations | `YmapPropagatedDiff`, `YmapPropagationOrigin`, `LeftBehind`, `LeftBehindReason` |
 | LOD light pair documents | `YmapImplied`, `YmapImpliedPartner` |
 | Vanilla YMAP generations | `GenerationIndex`, `GenerationUnit` |
@@ -409,7 +409,8 @@ its own base:
 
 Source-cache generation writes one diff document for every source YMAP: against the vanilla
 YMAP it replaces, or, for a YMAP the resource adds, against its baseline (see
-[Added Stream Files](reference.md#added-stream-files)):
+[Added Stream Files](reference.md#added-stream-files)); and one for every source YBN named after
+a vanilla YBN (see [YBN Differences](#ybn-differences)):
 
 ```text
 asset/map/source-cache/diff/{resource}/{stream_path}.diff.json
@@ -438,6 +439,43 @@ asset/map/source-cache/diff/{resource}/{stream_path}.diff.json
   as `missing_source`.
 - YMAPs without a diff document, such as those whose diff could not be taken, cannot be
   overwritten.
+
+#### YBN Differences
+
+A YBN's diff document (`YbnComparisonDiff`) has `target`, `base` and the `tolerance`
+(`ybn_position`) it was taken with, and its `diffs` list, per collision flags pair of the
+geometry children, the polygons `removed` from vanilla and `added` by the source (see
+[YBN](reference.md#ybn)). A polygon is written resolved: its `shape` (`type` and positions), its
+`material`, its `material_colour` and its `vertex_colours`.
+
+```json
+"diffs": {
+  "polygons": [
+    {
+      "flags": [62, 133414592],
+      "removed": [
+        {
+          "shape": { "type": "triangle", "vertices": [[1.0, 2.0, 30.0], [3.0, 2.0, 30.0], [1.0, 4.0, 30.0]], "vertex_flags": [false, false, false] },
+          "material": { "kind": 1, "procedural_id": 0, "room_id": 0, "ped_density": 0, "flags": 0, "colour_index": 0, "unknown": 0 },
+          "material_colour": null,
+          "vertex_colours": []
+        }
+      ],
+      "added": [
+        {
+          "shape": { "type": "box", "vertices": [[5.0, 5.0, 30.0], [6.0, 6.0, 30.0], [5.0, 6.0, 31.0], [6.0, 5.0, 31.0]] },
+          "material": { "kind": 1, "procedural_id": 0, "room_id": 0, "ped_density": 0, "flags": 0, "colour_index": 0, "unknown": 0 },
+          "material_colour": null,
+          "vertex_colours": []
+        }
+      ]
+    }
+  ]
+}
+```
+
+`removed_children` and `added_children` list the children compared whole, with their `flags`
+and `transform`.
 
 #### Occlude Model Differences
 
@@ -517,6 +555,10 @@ A resource overwrite cancels differences of the diff document at the same path (
 
   Copy triangles from the diff document as they are written there: selectors match corners
   in their written order.
+- In a YBN's `polygons` (see [YBN Differences](#ybn-differences)), a group's `flags` pair names
+  it, and its `removed` and `added` arrays select polygons within it the same way:
+  `{ "polygons": [{ "flags": [62, 133414592], "added": [{ "shape": { "type": "box" } }] }] }`
+  leaves out every box that group adds.
 - An overwrite whose `target` or `base` no longer matches the current files is not
   applied. The pipeline lists it in `ignored_overwrites` (see
   [Pipeline Output](#pipeline-output)) on every run until it is rewritten from the new diff

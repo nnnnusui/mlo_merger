@@ -1,4 +1,5 @@
-//! Writes each source YMAP's differences from vanilla as `diff/{resource}/{path}.diff.json`.
+//! Writes each source YMAP's differences from vanilla as `diff/{resource}/{path}.diff.json`,
+//! and each source YBN's named after a vanilla YBN ([`YbnComparisonDiff`]).
 //!
 //! A YMAP a resource adds, named after no vanilla YMAP, is compared with an empty YMAP instead
 //! (see [`crate::app::map::source_cache`]'s `added` module).
@@ -21,7 +22,10 @@ use crate::{
   core::config::matching::{self, MatchTolerances},
   core::{
     conversion::load_hash_names_or_empty,
-    format::ymap::compare::{YmapComparisonDiff, YmapComparisonFile, YmapComparisonPartner},
+    format::{
+      ybn::diff::polygons::{self, YbnComparisonDiff},
+      ymap::compare::{YmapComparisonDiff, YmapComparisonFile, YmapComparisonPartner},
+    },
   },
 };
 use rayon::prelude::*;
@@ -32,7 +36,7 @@ use std::{collections::BTreeMap, path::Path};
 /// File name of the record of what the diffs were taken under, in the `diff` directory.
 const INPUTS_FILE: &str = "inputs.json";
 /// Bump when [`DiffRecord`] or what its digests cover changes.
-const RECORD_VERSION: u32 = 2;
+const RECORD_VERSION: u32 = 3;
 
 /// What the diffs in a `diff` directory were taken under; see the module docs.
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
@@ -47,6 +51,7 @@ struct DiffRecord {
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 struct Prerequisites {
   diff_schema_version: u32,
+  ybn_diff_schema_version: u32,
   tolerances: MatchTolerances,
   vanilla_cache_revision: String,
 }
@@ -102,6 +107,7 @@ pub(in crate::app::map::source_cache) fn write_ymap_diffs(
   let tolerances = matching::current();
   let prerequisites = Prerequisites {
     diff_schema_version: YmapComparisonDiff::SCHEMA_VERSION,
+    ybn_diff_schema_version: YbnComparisonDiff::SCHEMA_VERSION,
     tolerances,
     vanilla_cache_revision: metadata.vanilla_cache_revision.clone(),
   };
@@ -110,6 +116,7 @@ pub(in crate::app::map::source_cache) fn write_ymap_diffs(
     .filter(|record| record.prerequisites == prerequisites);
   let mut digests = BTreeMap::new();
   let mut entries = Vec::new();
+  let mut ybn_entries = Vec::new();
   for (resource_id, resource) in &metadata.resources {
     let digest = resource_digest(resource)?;
     let vouched =
@@ -117,6 +124,28 @@ pub(in crate::app::map::source_cache) fn write_ymap_diffs(
     digests.insert(resource_id.clone(), digest);
     let resource_name =
       resource.source.file_name().ok_or("Resource has no name")?.to_string_lossy().into_owned();
+    for file in resource.files_by_format.get(".ybn").into_iter().flatten() {
+      if file.vanilla.is_none() {
+        continue;
+      }
+      let file_path = stream_file_diff_path(&resource.source, &file.path)?;
+      let (previous, path) = (target.join(&file_path), staging.join(&file_path));
+      ensure_safe_path(&target, &previous)?;
+      ensure_safe_path(&staging, &path)?;
+      let relative = resource.source.join(&file.path).to_string_lossy().replace('\\', "/");
+      let (source, stored) = match &file.cached_path {
+        Some(cached) => (output.join(cached), cached.clone()),
+        None => (source_dir.join(&relative), relative),
+      };
+      ybn_entries.push(YbnEntry {
+        source,
+        stored,
+        file_name: file.file_name.to_ascii_lowercase(),
+        previous,
+        path,
+        vouched,
+      });
+    }
     for file in resource.files_by_format.get(".ymap").into_iter().flatten() {
       // A YMAP a resource adds is compared with an empty one; only moved ones are merged.
       if file.vanilla.is_none() && file.cached_path.is_none() {
@@ -172,6 +201,8 @@ pub(in crate::app::map::source_cache) fn write_ymap_diffs(
     counts.written = take_diffs(&context, &stale, tolerances)?;
   }
 
+  let (ybn_written, ybn_kept) = write_ybn_diffs(&ybn_entries, vanilla_cache_dir, tolerances)?;
+
   fs::create_dir_all(&staging)?;
   write_json(
     &staging.join(INPUTS_FILE),
@@ -184,12 +215,108 @@ pub(in crate::app::map::source_cache) fn write_ymap_diffs(
   remove_dir_if_exists(&target)?;
   fs::rename(&staging, &target)?;
   tracing::info!(
-    "Wrote {} and kept {} YMAP diffs in {}",
+    "Wrote {} and kept {} YMAP diffs and {ybn_written} and {ybn_kept} YBN diffs in {}",
     counts.written,
     counts.reused,
     target.display()
   );
   Ok(counts)
+}
+
+/// A source YBN named after a vanilla YBN: where it is, as stored, and where its diff was and goes.
+struct YbnEntry {
+  source: std::path::PathBuf,
+  stored: String,
+  file_name: String,
+  previous: std::path::PathBuf,
+  path: std::path::PathBuf,
+  /// Whether the record vouches for its resource's diffs, so its diff is kept unread.
+  vouched: bool,
+}
+
+/// Writes the diff of each of `entries` to its staging path: the previous one moved there while
+/// it describes the files as they are now, otherwise a new one taken with `tolerances`. Returns
+/// how many were written and kept; a YBN whose diff cannot be taken is logged and skipped.
+fn write_ybn_diffs(
+  entries: &[YbnEntry],
+  vanilla_cache_dir: &Path,
+  tolerances: MatchTolerances,
+) -> Result<(usize, usize)> {
+  if entries.is_empty() {
+    return Ok((0, 0));
+  }
+  let vanilla = crate::app::map::vanilla_cache::latest_files(vanilla_cache_dir)?
+    .into_iter()
+    .map(|file| (file.name.to_ascii_lowercase(), (file.path, file.object)))
+    .collect::<std::collections::HashMap<_, _>>();
+  let results = entries
+    .par_iter()
+    .map(|entry| -> std::result::Result<Option<bool>, String> {
+      let Some((vanilla_path, object)) = vanilla.get(&entry.file_name) else {
+        return Ok(None);
+      };
+      let failed = |error: &dyn std::fmt::Display| format!("{}: {error}", entry.path.display());
+      let comparison = |path: &Path, stored: &str, previous: Option<&YmapComparisonFile>| {
+        let previous = previous.filter(|previous| previous.path == stored).map(|previous| {
+          crate::common::fingerprint::Fingerprint {
+            sha256: previous.sha256.clone(),
+            size: previous.size,
+            modified_seconds: previous.modified_seconds,
+            modified_nanos: previous.modified_nanos,
+          }
+        });
+        crate::common::fingerprint::Fingerprint::read(path, previous.as_ref(), false).map(
+          |fingerprint| YmapComparisonFile {
+            path: stored.to_owned(),
+            sha256: fingerprint.sha256,
+            size: fingerprint.size,
+            modified_seconds: fingerprint.modified_seconds,
+            modified_nanos: fingerprint.modified_nanos,
+          },
+        )
+      };
+      let previous = crate::common::json::read_json::<YbnComparisonDiff>(&entry.previous).ok();
+      let current = previous.as_ref().is_some_and(|previous| {
+        entry.vouched
+          || (previous.schema_version == YbnComparisonDiff::SCHEMA_VERSION
+            && previous.tolerance == tolerances.ybn_position
+            && comparison(&entry.source, &entry.stored, Some(&previous.target))
+              .is_ok_and(|target| target.same_content(&previous.target))
+            && comparison(vanilla_path, object, Some(&previous.base))
+              .is_ok_and(|base| base.same_content(&previous.base)))
+      });
+      fs::create_dir_all(entry.path.parent().ok_or("Diff path has no parent")?)
+        .map_err(|error| failed(&error))?;
+      if current {
+        fs::rename(&entry.previous, &entry.path).map_err(|error| failed(&error))?;
+        return Ok(Some(false));
+      }
+      let taken = (|| -> Result<YbnComparisonDiff> {
+        let source = crate::core::format::ybn::read_ybn(&fs::read(&entry.source)?)?;
+        let base = crate::core::format::ybn::read_ybn(&fs::read(vanilla_path)?)?;
+        Ok(YbnComparisonDiff {
+          schema_version: YbnComparisonDiff::SCHEMA_VERSION,
+          target: comparison(&entry.source, &entry.stored, None)?,
+          base: comparison(vanilla_path, object, None)?,
+          tolerance: tolerances.ybn_position,
+          diffs: polygons::diff(&base, &source, tolerances.ybn_position)?,
+        })
+      })();
+      match taken {
+        Ok(document) => {
+          write_json(&entry.path, &document).map_err(|error| failed(&error))?;
+          Ok(Some(true))
+        }
+        Err(error) => {
+          tracing::warn!("Skipping YBN diff {}: {error}", entry.source.display());
+          Ok(None)
+        }
+      }
+    })
+    .collect::<std::result::Result<Vec<_>, String>>()?;
+  let written = results.iter().filter(|result| **result == Some(true)).count();
+  let kept = results.iter().filter(|result| **result == Some(false)).count();
+  Ok((written, kept))
 }
 
 /// Takes the diff of each of `stale` in parallel and writes it to its staging path; returns how
@@ -223,15 +350,13 @@ fn read_record(path: &Path) -> Option<DiffRecord> {
   crate::common::json::read_json(path).ok()
 }
 
-/// A digest of what `resource`'s diffs are taken from in its inventory: each YMAP's path,
-/// content, cached location, vanilla match and parent. Modification times are left out, so a
-/// touched but unchanged YMAP keeps its diffs.
+/// A digest of what `resource`'s diffs are taken from in its inventory: each YMAP's and YBN's
+/// path, content, cached location, vanilla match and parent. Modification times are left out, so
+/// a touched but unchanged file keeps its diffs.
 fn resource_digest(resource: &ResourceInventory) -> Result<String> {
-  let ymaps = resource
-    .files_by_format
-    .get(".ymap")
-    .into_iter()
-    .flatten()
+  let ymaps = [".ymap", ".ybn"]
+    .iter()
+    .flat_map(|format| resource.files_by_format.get(*format).into_iter().flatten())
     .map(|file| {
       (
         &file.path,

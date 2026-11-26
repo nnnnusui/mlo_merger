@@ -1,9 +1,25 @@
-//! Merging same-named YBN overrides from several resources against their latest vanilla file.
+//! Merging the source YBNs named after a vanilla YBN against their latest vanilla file.
+//!
+//! Each source's differences are read from its source-cache diff document, or taken from the
+//! file when it has none, and its overwrite's skip is applied to them. A YBN only one source
+//! replaces, without an overwrite, is written as that source has it.
 
 use crate::platform::fs;
 use std::{collections::BTreeMap, io, path::PathBuf};
 
-use crate::core::format::ybn::merge_ybn_deltas;
+use crate::app::map::overwrite::{OverwriteFingerprint, StreamFileOverwrite};
+use crate::core::format::ybn::{
+  diff::polygons::{self, YbnComparisonDiff, YbnDiffFields},
+  merge_ybn_diffs, read_ybn,
+};
+
+/// A source YBN to merge: its file, its diff document and its overwrite.
+#[derive(Debug, Clone)]
+pub struct YbnSource {
+  pub path: PathBuf,
+  pub diff_path: Option<PathBuf>,
+  pub overwrite: Option<StreamFileOverwrite>,
+}
 
 /// Merges same-named YBN resource overrides against vanilla Bounds data.
 pub struct MergeYbnConflicts {
@@ -22,16 +38,33 @@ impl MergeYbnConflicts {
     vanilla_files: &[PathBuf],
     source_files: &[PathBuf],
   ) -> Result<(), Box<dyn std::error::Error>> {
-    crate::core::config::matching::with_config(|| self.run_configured(vanilla_files, source_files))?
+    let sources = source_files
+      .iter()
+      .map(|path| YbnSource {
+        path: path.clone(),
+        diff_path: None,
+        overwrite: None,
+      })
+      .collect::<Vec<_>>();
+    self.run_sources(vanilla_files, &sources)
+  }
+
+  /// [`Self::run`] for `sources` with their diff documents and overwrites.
+  pub fn run_sources(
+    &self,
+    vanilla_files: &[PathBuf],
+    sources: &[YbnSource],
+  ) -> Result<(), Box<dyn std::error::Error>> {
+    crate::core::config::matching::with_config(|| self.run_configured(vanilla_files, sources))?
   }
 
   fn run_configured(
     &self,
     vanilla_files: &[PathBuf],
-    source_files: &[PathBuf],
+    sources: &[YbnSource],
   ) -> Result<(), Box<dyn std::error::Error>> {
     let limits = crate::core::config::geometry_limits()?;
-    let groups = group_by_name(source_files);
+    let groups = group_by_name(sources);
     let vanilla = vanilla_by_name(vanilla_files)?;
     fs::create_dir_all(&self.output_dir)?;
     for entry in fs::read_dir(&self.output_dir)? {
@@ -42,22 +75,31 @@ impl MergeYbnConflicts {
     }
     let mut omitted = Vec::new();
     let mut merged_groups = 0;
-    for (name, paths) in &groups {
+    for (name, sources) in &groups {
       let Some(vanilla_path) = vanilla.get(name) else {
         tracing::warn!("Skipping YBN source group {name}: latest vanilla file is missing");
         continue;
       };
-      let vanilla_bytes = fs::read(vanilla_path)?;
-      let mod_bytes = paths.iter().map(fs::read).collect::<io::Result<Vec<_>>>()?;
-      let mod_refs = mod_bytes.iter().map(Vec::as_slice).collect::<Vec<_>>();
-      let merged = merge_ybn_deltas(&vanilla_bytes, &mod_refs, limits)?;
       let output_name = vanilla_path.file_name().ok_or("vanilla YBN filename missing")?;
+      let merged = match sources.as_slice() {
+        [source] if source.overwrite.as_ref().is_none_or(|overwrite| overwrite.skip.is_none()) => {
+          fs::read(&source.path)?
+        }
+        _ => {
+          let diffs = sources
+            .iter()
+            .map(|source| self.diff(vanilla_path, source))
+            .collect::<Result<Vec<_>, Box<dyn std::error::Error>>>()?;
+          merge_ybn_diffs(&fs::read(vanilla_path)?, &diffs, limits)?
+        }
+      };
       fs::write(self.output_dir.join(output_name), merged)?;
-      for path in paths {
-        omitted.push(path.strip_prefix(&self.source_dir)?.to_string_lossy().replace('\\', "/"));
+      for source in sources {
+        omitted
+          .push(source.path.strip_prefix(&self.source_dir)?.to_string_lossy().replace('\\', "/"));
       }
       merged_groups += 1;
-      tracing::debug!("    Merged YBN conflict {} from {} source files", name, paths.len());
+      tracing::debug!("    Merged YBN {name} from {} source files", sources.len());
     }
     omitted.sort();
     omitted.dedup();
@@ -65,19 +107,57 @@ impl MergeYbnConflicts {
     tracing::debug!("Merged {merged_groups} vanilla-backed YBN source groups");
     Ok(())
   }
+
+  /// `source`'s differences from the vanilla YBN at `vanilla_path`, after its overwrite: those
+  /// of its diff document when it was taken with the active tolerance, else taken from the files.
+  fn diff(
+    &self,
+    vanilla_path: &std::path::Path,
+    source: &YbnSource,
+  ) -> Result<YbnDiffFields, Box<dyn std::error::Error>> {
+    let tolerance = crate::core::config::matching::current().ybn_position;
+    let document = source
+      .diff_path
+      .as_ref()
+      .and_then(|path| crate::common::json::read_json::<YbnComparisonDiff>(path).ok())
+      .filter(|document| {
+        document.schema_version == YbnComparisonDiff::SCHEMA_VERSION
+          && document.tolerance == tolerance
+      });
+    let (mut diffs, target, base) = match document {
+      Some(document) => (
+        document.diffs,
+        OverwriteFingerprint::from(&document.target),
+        OverwriteFingerprint::from(&document.base),
+      ),
+      None => (
+        polygons::diff(
+          &read_ybn(&fs::read(vanilla_path)?)?,
+          &read_ybn(&fs::read(&source.path)?)?,
+          tolerance,
+        )?,
+        OverwriteFingerprint::read(&source.path)?,
+        OverwriteFingerprint::read(vanilla_path)?,
+      ),
+    };
+    if let Some(overwrite) = &source.overwrite {
+      overwrite.apply(&mut diffs, &target, &base, &source.path.display().to_string())?;
+    }
+    Ok(diffs)
+  }
 }
 
-/// `paths` grouped by lowercase file name, each group sorted.
-fn group_by_name(paths: &[PathBuf]) -> BTreeMap<String, Vec<PathBuf>> {
-  let mut groups = BTreeMap::<String, Vec<PathBuf>>::new();
-  for path in paths {
-    let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
+/// `sources` grouped by lowercase file name, each group sorted by path.
+fn group_by_name(sources: &[YbnSource]) -> BTreeMap<String, Vec<YbnSource>> {
+  let mut groups = BTreeMap::<String, Vec<YbnSource>>::new();
+  for source in sources {
+    let Some(name) = source.path.file_name().and_then(|name| name.to_str()) else {
       continue;
     };
-    groups.entry(name.to_ascii_lowercase()).or_default().push(path.clone());
+    groups.entry(name.to_ascii_lowercase()).or_default().push(source.clone());
   }
-  for paths in groups.values_mut() {
-    paths.sort();
+  for sources in groups.values_mut() {
+    sources.sort_by(|first, second| first.path.cmp(&second.path));
   }
   groups
 }
@@ -110,11 +190,16 @@ mod tests {
 
   #[test]
   fn groups_ybn_names_case_insensitively_and_keeps_hi_variants_separate() {
+    let source = |path: &str| YbnSource {
+      path: PathBuf::from(path),
+      diff_path: None,
+      overwrite: None,
+    };
     let groups = group_by_name(&[
-      PathBuf::from("resource_a/stream/sc1_18_0.ybn"),
-      PathBuf::from("resource_b/stream/sub/SC1_18_0.YBN"),
-      PathBuf::from("resource_a/stream/hi@sc1_18_0.ybn"),
-      PathBuf::from("resource_b/stream/sub/hi@sc1_18_0.ybn"),
+      source("resource_a/stream/sc1_18_0.ybn"),
+      source("resource_b/stream/sub/SC1_18_0.YBN"),
+      source("resource_a/stream/hi@sc1_18_0.ybn"),
+      source("resource_b/stream/sub/hi@sc1_18_0.ybn"),
     ]);
     assert_eq!(groups["sc1_18_0.ybn"].len(), 2);
     assert_eq!(groups["hi@sc1_18_0.ybn"].len(), 2);

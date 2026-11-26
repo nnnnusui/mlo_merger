@@ -93,9 +93,10 @@ placed so connected ones share a geometry child.
 
 ### 4. Documents And Merge
 
-- [ ] Write YBN diff documents in the source cache, with their TypeScript types.
-- [ ] Merge YBNs from the documents with the policy above, replacing `merge_ybn_deltas`.
-- [ ] Skip within YBN diff documents in overwrites, and drop the `UnsupportedFormat` reason
+- [x] Write YBN diff documents in the source cache, with their TypeScript types.
+- [x] Merge YBNs from the documents with the policy above. A YBN one source replaces merges only
+  when an overwrite skips within it, and is otherwise deployed as the source has it.
+- [x] Skip within YBN diff documents in overwrites, and drop the `UnsupportedFormat` reason
   for YBN overwrites.
 
 ### 5. Checking Against The Baseline
@@ -111,8 +112,9 @@ flags. The whole merge takes 15 s against the earlier 13.5 s.
 
 ### 6. Samples And Docs
 
-- [ ] Regenerate the web sample, whose resources change `smpl_block_01.ybn`.
-- [ ] Update `docs/reference.md` (YBN merge, diff and overwrite documents), `docs/usage.md`
+- [x] Regenerate the web sample, whose resources change `smpl_block_01.ybn`, with an overwrite
+  leaving out the planter's collision.
+- [x] Update `docs/reference.md` (YBN merge, diff and overwrite documents), `docs/usage.md`
   and `docs/TODO.md`.
 
 ## Decisions

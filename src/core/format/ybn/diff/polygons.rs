@@ -28,7 +28,10 @@ use super::{
   polygon::{ResolvedPolygon, ResolvedShape},
   resolve,
 };
-use crate::core::format::ybn::model::{Bound, Geometry, Material, Polygon, Triangle};
+use crate::core::format::{
+  ybn::model::{Bound, Geometry, Material, Polygon, Triangle},
+  ymap::compare::YmapComparisonFile,
+};
 
 const IDENTITY: [f32; 16] = [1., 0., 0., 0., 0., 1., 0., 0., 0., 0., 1., 0., 0., 0., 0., 1.];
 
@@ -113,6 +116,26 @@ impl YbnDiffFields {
   pub fn is_empty(&self) -> bool {
     self.polygons.is_empty() && self.removed_children.is_empty() && self.added_children.is_empty()
   }
+}
+
+/// Differences of one source YBN from the vanilla YBN of the same name.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
+pub struct YbnComparisonDiff {
+  /// Version of the document layout; documents of another version are regenerated.
+  pub schema_version: u32,
+  /// The YBN the differences lead to: the source YBN.
+  pub target: YmapComparisonFile,
+  /// The YBN the differences are taken from: the vanilla YBN of the same name.
+  pub base: YmapComparisonFile,
+  /// The `ybn_position` tolerance the differences were taken with.
+  pub tolerance: f32,
+  pub diffs: YbnDiffFields,
+}
+
+impl YbnComparisonDiff {
+  /// The current [`Self::schema_version`].
+  pub const SCHEMA_VERSION: u32 = 1;
 }
 
 /// Positions found so far, in layers, one per file compared: a position is the vertex of the

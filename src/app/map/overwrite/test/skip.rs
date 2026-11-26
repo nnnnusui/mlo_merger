@@ -1,4 +1,5 @@
 use super::*;
+use crate::core::format::ymap::compare::YmapDiffFields;
 use serde_json::json;
 
 fn diff() -> YmapDiffFields {
@@ -208,4 +209,32 @@ fn occlude_triangle_groups_are_named_by_flags_and_selected_within() {
   assert_eq!(groups(json!({"flags": 0, "removed": true})), [(0, 0, 1), (1, 0, 1)]);
   assert_eq!(groups(json!({"flags": 0})), [(1, 0, 1)]);
   assert_eq!(groups(json!({"flags": 1, "added": true})), [(0, 2, 1)]);
+}
+
+#[test]
+fn ybn_polygon_groups_are_named_by_their_flags_pair() {
+  let polygon = |x: f32| {
+    json!({
+      "shape": {"type": "sphere", "center": [x, 0.0, 0.0], "radius": 1.0},
+      "material": {"kind": 0, "procedural_id": 0, "room_id": 0, "ped_density": 0, "flags": 0,
+        "colour_index": 0, "unknown": 0},
+      "material_colour": null,
+      "vertex_colours": []
+    })
+  };
+  let mut diff: crate::core::format::ybn::diff::polygons::YbnDiffFields =
+    serde_json::from_value(json!({"polygons": [
+      {"flags": [62, 1], "removed": [polygon(1.0)], "added": [polygon(2.0)]},
+      {"flags": [2, 1], "added": [polygon(3.0)]}
+    ]}))
+    .unwrap();
+  let unmatched = skip_diffs(
+    &mut diff,
+    &json!({"polygons": [{"flags": [62, 1], "added": [{"shape": {"type": "sphere"}}]}]}),
+  )
+  .unwrap();
+  assert!(unmatched.is_empty(), "{unmatched:?}");
+  let groups =
+    diff.polygons.iter().map(|group| (group.flags, group.removed.len(), group.added.len()));
+  assert_eq!(groups.collect::<Vec<_>>(), [([62, 1], 1, 0), ([2, 1], 0, 1)]);
 }

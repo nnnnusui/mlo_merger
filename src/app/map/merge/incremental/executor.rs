@@ -1,4 +1,5 @@
 use super::*;
+use crate::app::map::merge::ybn_conflicts::YbnSource;
 use std::collections::HashMap;
 
 impl IncrementalMerge<'_> {
@@ -42,7 +43,17 @@ impl IncrementalMerge<'_> {
         output_dir: work.clone(),
         omitted_files_path: work.join(".ybn_omit.txt"),
       }
-      .run(&vanilla, &sources.iter().map(|source| source.path.clone()).collect::<Vec<_>>())?;
+      .run_sources(
+        &vanilla,
+        &sources
+          .iter()
+          .map(|source| YbnSource {
+            path: source.path.clone(),
+            diff_path: source.diff_path.clone(),
+            overwrite: self.overwrite(source).cloned(),
+          })
+          .collect::<Vec<_>>(),
+      )?;
       work.clone()
     } else {
       let vanilla_overwrites = group

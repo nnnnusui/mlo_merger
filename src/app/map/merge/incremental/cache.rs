@@ -191,7 +191,8 @@ pub(super) fn signature(
       (name, value)
     })
     .collect::<BTreeMap<_, _>>();
-  let (version, tolerances) = (algorithm_version(extension)?, crate::core::config::matching::current());
+  let (version, tolerances) =
+    (algorithm_version(extension)?, crate::core::config::matching::current());
   // YBN merges fill geometry children within the configured limits.
   let encoded = if extension == "ybn" {
     serde_json::to_vec(&(version, tolerances, crate::core::config::geometry_limits()?, inputs))?
