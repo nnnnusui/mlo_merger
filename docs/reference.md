@@ -303,11 +303,11 @@ For an added YMAP:
   one. Corners within `ymap_occlude_vertex_position` per axis are one vertex. Exact repeats
   count once.
 - Merging removes each removed triangle from the model holding it, dropping models left
-  empty, and places the added ones so connected triangles share a model: each connected
-  piece joins the model of its flags sharing most of its vertices that stays within 255
-  distinct vertices, and the others fill new models after the rest, a piece over 255
-  vertices split breadth-first. A changed model takes the exact bounds of its vertices;
-  the others are kept as they are.
+  empty; a removal of a triangle the YMAP lacks is skipped with a warning. It places the
+  added ones so connected triangles share a model: each connected piece joins the model of
+  its flags sharing most of its vertices that stays within 255 distinct vertices, and the
+  others fill new models after the rest, a piece over 255 vertices split breadth-first. A
+  changed model takes the exact bounds of its vertices; the others are kept as they are.
 
 ### Newer DLC Generations
 

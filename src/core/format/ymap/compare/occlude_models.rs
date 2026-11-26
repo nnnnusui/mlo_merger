@@ -9,7 +9,8 @@
 //! into other models changes nothing. Exact repeats count once.
 //!
 //! The diff holds, per flags value, the triangles removed and added. Applying removes each
-//! removed triangle from its model, dropping models left empty, and places the added ones so
+//! removed triangle from its model, warning about and skipping one the YMAP lacks, dropping
+//! models left empty, and places the added ones so
 //! connected triangles share a model: each connected piece of the additions joins the model of
 //! that flags sharing most of its vertices that stays within [`MAX_OCCLUDE_MODEL_VERTICES`], and
 //! the other pieces fill new models, a piece over the limit split in breadth-first order. Every
@@ -231,12 +232,13 @@ pub fn apply_with(
     let mut removals = vec![HashSet::new(); meshes.len()];
     for triangle in &diff.removed {
       let key = index.key(triangle);
-      let model = held.remove(&key).ok_or_else(|| {
-        ApplyError::new(format!(
-          "occlude triangle {triangle:?} of flags {} is not in the YMAP",
+      let Some(model) = held.remove(&key) else {
+        tracing::warn!(
+          "Occlude triangle {triangle:?} of flags {} to remove is not in the YMAP; skipping it",
           diff.flags
-        ))
-      })?;
+        );
+        continue;
+      };
       removals[model].insert(key);
       changed[model] = true;
     }

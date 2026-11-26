@@ -270,12 +270,11 @@ fn applying_a_sources_diff_holds_its_triangles() {
 }
 
 #[test]
-fn removing_a_missing_triangle_fails() {
+fn removing_a_missing_triangle_is_skipped() {
   let vanilla = ymap(vec![model(0, vec![triangle(0.0)])]);
   let diffs = diff(&vanilla, &ymap(vec![])).occlude_models.unwrap();
   let mut models = vec![model(0, vec![triangle(2.0)])];
-  assert!(
-    crate::core::format::ymap::compare::occlude_models::apply_with(&mut models, &diffs, 0.01)
-      .is_err()
-  );
+  crate::core::format::ymap::compare::occlude_models::apply_with(&mut models, &diffs, 0.01)
+    .unwrap();
+  assert_eq!(models, [model(0, vec![triangle(2.0)])]);
 }
