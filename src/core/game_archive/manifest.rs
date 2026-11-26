@@ -21,6 +21,32 @@ pub struct CachedFile {
   pub source: String,
 }
 
+impl CachedFile {
+  /// Where the file is in the vanilla archive at `archive`; see [`object_path`].
+  pub fn path(
+    &self,
+    archive: &Path,
+  ) -> Result<PathBuf> {
+    object_path(archive, &self.object)
+  }
+}
+
+/// Where the file the manifest records at `object` is in the vanilla archive at `archive`,
+/// rejecting a path that leaves the archive.
+pub fn object_path(
+  archive: &Path,
+  object: &str,
+) -> Result<PathBuf> {
+  let relative = Path::new(object);
+  if object.is_empty()
+    || object.contains(['\\', ':'])
+    || relative.components().any(|component| !matches!(component, std::path::Component::Normal(_)))
+  {
+    return Err(format!("Invalid vanilla artifact path: {object}").into());
+  }
+  Ok(archive.join(relative))
+}
+
 /// A raw file addition or replacement relative to the preceding stage.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[cfg_attr(feature = "typescript", derive(specta::Type))]

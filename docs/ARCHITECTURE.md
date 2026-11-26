@@ -78,7 +78,8 @@ freshness and exposes the data other stages need; consumers do not walk another
 stage's directories or parse its records. Overwrite application is likewise
 exposed by the overwrite module, and merge reads overwrite data only through it.
 The vanilla archive, vanilla cache, source cache and merge output each record their
-metadata in `cache_info.json`. Recorded paths are relative to the store holding each file
+metadata in `cache_info.json`, which changes with every update of the store: its owner
+exposes its path, and consumers fingerprint it to tell when what they derived is stale. Recorded paths are relative to the store holding each file
 (resources and their files to the source root), and freshness compares contents, with
 modification times only as a hint to skip hashing. Where the stores are, and how a command
 names them, does not affect any stage. The source cache identifies its source tree by its

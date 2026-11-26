@@ -59,7 +59,7 @@ pub(super) fn source_timestamps(
 ) -> Result<BTreeMap<String, SourceTimestamp>> {
   let mut paths = BTreeSet::from(["cache_info.json".to_owned()]);
   // YMAP version diffs are decoded with its names.
-  if fs::is_file(vanilla_dir.join("hash_names.json")) {
+  if fs::is_file(crate::core::game_archive::hash_names_path(vanilla_dir)) {
     paths.insert("hash_names.json".to_owned());
   }
   for (name, (_, file)) in current {
@@ -109,12 +109,5 @@ pub(super) fn checked_source_path(
   vanilla_dir: &Path,
   object: &str,
 ) -> Result<PathBuf> {
-  let relative = Path::new(object);
-  if object.is_empty()
-    || object.contains(['\\', ':'])
-    || relative.components().any(|component| !matches!(component, Component::Normal(_)))
-  {
-    return Err(format!("Invalid vanilla artifact path: {object}").into());
-  }
-  Ok(vanilla_dir.join(relative))
+  crate::core::game_archive::object_path(vanilla_dir, object)
 }

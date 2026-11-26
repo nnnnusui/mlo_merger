@@ -26,11 +26,6 @@ Resource overwrites (`overwrite/resources/{resourceName}/{stream_path}.diff.json
 
 - [ ] Deploy the merged files as a folder of resources split by area, file type and size, so that a change reloads only the resources holding it; merged files deployed for lighter collision (repeats left out of vanilla YBNs) make the single resource larger now. Choose with arguments between that folder, the single resource, or both, as use cases differ.
 
-## Architecture
-
-- [ ] Give each data owner its own read and freshness-check APIs (`core::game_archive`, `app::map::vanilla_cache`, `app::map::source_cache`, …), so merge and other consumers stop walking those directories or reading their files directly.
-- [x] Migrate map and clothing workflows into `app/{map,clothing}`, extracting their shared RPF/DLC archive engine to `core/game_archive`; see the [module split plan](plan/202611160412_done_app_module_split.md).
-
 ## Merge Policy
 
 - [ ] Define the resource-priority configuration format, resource matching rules, and behavior for equal or unspecified priorities. Currently the first source that modifies or replaces an item wins, in source order.

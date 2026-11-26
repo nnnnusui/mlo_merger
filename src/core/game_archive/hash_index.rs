@@ -3,7 +3,7 @@
 use crate::platform::fs;
 use std::{
   collections::{BTreeMap, BTreeSet},
-  path::{Component, Path, PathBuf},
+  path::{Path, PathBuf},
 };
 
 use rayon::prelude::*;
@@ -41,7 +41,7 @@ pub(crate) fn write_hash_index(
   manifest: &VanillaCacheManifest,
   rpf_names: &RpfNames,
 ) -> Result<()> {
-  let manifest_bytes = fs::read(vanilla_dir.join("cache_info.json"))?;
+  let manifest_bytes = fs::read(super::manifest_path(vanilla_dir))?;
   let latest_version = manifest.versions.last().ok_or("Vanilla archive has no stages")?.id.clone();
   let files = manifest.resolve_version(&latest_version)?;
   let revision = hex::encode(Sha256::digest(&manifest_bytes));
@@ -258,14 +258,7 @@ fn checked_artifact_path(
   vanilla_dir: &Path,
   object: &str,
 ) -> Result<PathBuf> {
-  let relative = Path::new(object);
-  if object.is_empty()
-    || object.contains(['\\', ':'])
-    || relative.components().any(|component| !matches!(component, Component::Normal(_)))
-  {
-    return Err(format!("Invalid vanilla artifact path: {object}").into());
-  }
-  let path = vanilla_dir.join(relative);
+  let path = super::object_path(vanilla_dir, object)?;
   if !fs::is_file(&path) {
     return Err(format!("Vanilla artifact is missing: {}", path.display()).into());
   }

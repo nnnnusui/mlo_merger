@@ -27,7 +27,7 @@
 
 use super::Result;
 use crate::app::map::overwrite::{OverwriteFingerprint, Overwrites, StreamFileOverwrite};
-use crate::app::map::source_cache::{MergeInputs, history};
+use crate::app::map::source_cache::{MergeInputs, history, stored_file, stored_path};
 use crate::common::json::{read_json, write_json};
 use crate::core::format::diff_skip::{selects, skip_diffs};
 use crate::core::format::ymap::compare::{YmapComparisonDiff, YmapDiffFields, added::placed_alike};
@@ -132,21 +132,15 @@ pub(super) fn review(
       continue;
     }
     let name = source.resource_name();
-    let stored =
-      |relative: String| fs::is_file(source_cache_dir.join(&relative)).then_some(relative);
     let before = SourceVersion {
       sha256: written.sha256.clone(),
-      source: stored(history::version_path(&name, &source.stream_path, &written.sha256)),
-      diff: stored(history::diff_path(&name, &source.stream_path, &written.sha256)),
+      source: history::kept_version(source_cache_dir, &name, &source.stream_path, &written.sha256),
+      diff: history::kept_diff(source_cache_dir, &name, &source.stream_path, &written.sha256),
     };
     let after = SourceVersion {
       sha256: current.sha256.clone(),
       source: Some(source.stored_path.clone()),
-      diff: source
-        .diff_path
-        .as_ref()
-        .and_then(|path| path.strip_prefix(source_cache_dir).ok())
-        .map(|path| path.to_string_lossy().replace('\\', "/")),
+      diff: source.diff_path.as_ref().and_then(|path| stored_path(source_cache_dir, path)),
     };
     let mut update = SourceUpdate {
       schema_version: SourceUpdate::SCHEMA_VERSION,
@@ -165,7 +159,7 @@ pub(super) fn review(
         .before
         .diff
         .as_ref()
-        .map(|path| read_json::<YmapComparisonDiff>(source_cache_dir.join(path))),
+        .map(|path| read_json::<YmapComparisonDiff>(stored_file(source_cache_dir, path))),
       source.diff_path.as_ref().map(read_json::<YmapComparisonDiff>),
     );
     match documents {

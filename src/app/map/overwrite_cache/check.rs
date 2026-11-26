@@ -82,7 +82,7 @@ pub(crate) fn check(
     };
     // History is never removed, so the earlier version stays; the current one may not.
     for path in [&update.before.source, &update.before.diff].into_iter().flatten() {
-      if !crate::platform::fs::is_file(source_cache_dir.join(path)) {
+      if !crate::app::map::source_cache::holds(source_cache_dir, path) {
         findings.add(
           CheckIssueKind::Missing,
           &record,

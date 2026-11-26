@@ -157,7 +157,7 @@ impl BuildClothingCache {
             .then_some((name, change))
         })
         .map(|(name, change)| {
-          let path = self.vanilla_dir.join(&change.file.object);
+          let path = change.file.path(&self.vanilla_dir).map_err(|error| error.to_string())?;
           let bytes = fs::read(&path).map_err(|error| format!("{}: {error}", path.display()))?;
           let counts = count_file(&bytes, &names)
             .map_err(|error| format!("{}: {error}", change.file.object))?;

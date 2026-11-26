@@ -14,9 +14,31 @@ use std::path::Path;
 /// The directory of the history below the source cache.
 pub const HISTORY_DIR: &str = "history";
 
+/// The version with `sha256` of the stream file at `stream_path` of the resource named
+/// `resource`, as the source cache at `cache_dir` stores it, when it keeps that version.
+pub fn kept_version(
+  cache_dir: &Path,
+  resource: &str,
+  stream_path: &str,
+  sha256: &str,
+) -> Option<String> {
+  Some(version_path(resource, stream_path, sha256)).filter(|stored| super::holds(cache_dir, stored))
+}
+
+/// The diff document of that version, as the source cache at `cache_dir` stores it, when it
+/// keeps one.
+pub fn kept_diff(
+  cache_dir: &Path,
+  resource: &str,
+  stream_path: &str,
+  sha256: &str,
+) -> Option<String> {
+  Some(diff_path(resource, stream_path, sha256)).filter(|stored| super::holds(cache_dir, stored))
+}
+
 /// Where the version with `sha256` of the stream file at `stream_path` of the resource named
 /// `resource` is kept, relative to the source cache.
-pub fn version_path(
+pub(crate) fn version_path(
   resource: &str,
   stream_path: &str,
   sha256: &str,
@@ -30,7 +52,7 @@ pub fn version_path(
 }
 
 /// Where the diff document of that version is kept, relative to the source cache.
-pub fn diff_path(
+pub(crate) fn diff_path(
   resource: &str,
   stream_path: &str,
   sha256: &str,

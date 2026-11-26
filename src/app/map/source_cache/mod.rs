@@ -28,10 +28,12 @@ pub use added::{
 pub(crate) use check::check;
 pub use generate::implied::{YmapImplied, YmapImpliedPartner};
 pub(crate) use names::HASH_NAMES;
+pub use names::hash_names_path;
 pub(crate) use read::{CACHE_INFO, SourceYmapIndex, load_source_ymap_index};
 pub use read::{
-  CachedFile, InventoriedFile, MergeInputs, MergeSourceFile, cache_info_path, cached_files,
-  inventoried_files, load_merge_inputs, resource_name, source_ymap_parents,
+  CachedFile, InventoriedFile, MergeInputs, MergeSourceFile, cache_info_path, cached_files, holds,
+  inventoried_files, load_merge_inputs, resource_name, source_ymap_parents, stored_file,
+  stored_path,
 };
 use read::{FORMAT_VERSION, read_metadata};
 #[cfg(test)]

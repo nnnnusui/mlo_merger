@@ -325,6 +325,31 @@ pub fn source_ymap_parents(cache_dir: &Path) -> Result<Vec<(String, u32)>> {
   )
 }
 
+/// The file the source cache at `cache_dir` stores at `stored`, a path it gave out relative to
+/// it.
+pub fn stored_file(
+  cache_dir: &Path,
+  stored: &str,
+) -> PathBuf {
+  cache_dir.join(stored)
+}
+
+/// The path relative to the source cache at `cache_dir` of `path`, a file it stores.
+pub fn stored_path(
+  cache_dir: &Path,
+  path: &Path,
+) -> Option<String> {
+  path.strip_prefix(cache_dir).ok().map(|path| path.to_string_lossy().replace('\\', "/"))
+}
+
+/// Whether the source cache at `cache_dir` holds a file at `stored`.
+pub fn holds(
+  cache_dir: &Path,
+  stored: &str,
+) -> bool {
+  crate::platform::fs::is_file(stored_file(cache_dir, stored))
+}
+
 /// File name of the source cache's inventory.
 pub(crate) const CACHE_INFO: &str = "cache_info.json";
 

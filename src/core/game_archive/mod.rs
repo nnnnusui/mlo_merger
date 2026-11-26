@@ -22,7 +22,9 @@ pub use hash_index::hash_names_path;
 pub(crate) use hash_index::{lod_name_candidates, write_hash_index};
 #[cfg(test)]
 pub(crate) use manifest::FORMAT_VERSION;
-pub use manifest::{CacheVersion, CachedFile, FileChange, VanillaCacheManifest, manifest_path};
+pub use manifest::{
+  CacheVersion, CachedFile, FileChange, VanillaCacheManifest, manifest_path, object_path,
+};
 pub(crate) use manifest::{load_content, load_manifest, missing_content};
 #[cfg(test)]
 pub(crate) use publication::Staging;

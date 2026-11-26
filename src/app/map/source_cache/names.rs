@@ -11,6 +11,11 @@ use crate::core::{format::gamefile::meta::jenk_hash, game_archive::lod_name_cand
 /// The source cache's hash-name table, in the layout of the vanilla `hash_names.json`.
 pub(crate) const HASH_NAMES: &str = "hash_names.json";
 
+/// The source cache's hash-name table at `cache_dir`.
+pub fn hash_names_path(cache_dir: &Path) -> std::path::PathBuf {
+  cache_dir.join(HASH_NAMES)
+}
+
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 struct HashNames {
   names: BTreeMap<String, String>,

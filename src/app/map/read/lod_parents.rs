@@ -80,7 +80,7 @@ impl<'a> ParentMaps<'a> {
       let (manifest, _) = load_content(&read.vanilla_dir, ArchiveContent::Map)?;
       let version = read.vanilla_version(&manifest)?;
       for (name, file) in manifest.resolve_version(&version)? {
-        insert(&mut vanilla, &name, read.vanilla_dir.join(file.object));
+        insert(&mut vanilla, &name, file.path(&read.vanilla_dir)?);
       }
     }
     Ok(Self {
