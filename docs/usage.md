@@ -423,10 +423,8 @@ asset/map/source-cache/diff/{resource}/{stream_path}.diff.json
   `resources/{resource}/{stream_path}` and `{version}/ymap/{file_name}` in the vanilla archive.
   For an added YMAP,
   `base.path` is empty: it is compared with an empty YMAP.
-- Array differences are `Added`, `Removed`, `Modified` (and `Replaced` for non-entity arrays).
-  `occlude_models` instead lists, per model `flags`, the triangles `removed` and `added` (see
-  [Occlude Model Triangles](reference.md#occlude-model-triangles)); select within one by its
-  `flags`, as in `{ "occlude_models": [{ "flags": 0, "removed": [<triangle>] }] }`.
+- Array differences are `Added`, `Removed`, `Modified` (and `Replaced` for non-entity arrays),
+  except `occlude_models` (see [Occlude Model Differences](#occlude-model-differences)).
   `base_index` indexes the baseline (vanilla) model and `target_index` the source model:
   `Removed` and `Replaced` name their item by `base_index`, `Modified` by both, and `Added`
   by `target_index`, with `anchor_base_index`, the baseline item it is placed after (`null`
@@ -440,6 +438,36 @@ asset/map/source-cache/diff/{resource}/{stream_path}.diff.json
   as `missing_source`.
 - YMAPs without a diff document, such as those whose diff could not be taken, cannot be
   overwritten.
+
+#### Occlude Model Differences
+
+`occlude_models` lists, per model `flags` value whose triangles change, the triangles
+`removed` from the baseline and `added` by the source, each as its three corners in winding
+order (see [Occlude Model Triangles](reference.md#occlude-model-triangles)). A list left
+empty is omitted. Overwrites select within a group as
+[Overwrite Documents](#overwrite-documents) describes.
+
+```json
+"occlude_models": [
+  {
+    "flags": 0,
+    "removed": [
+      {
+        "corner_1": { "x": 100.0, "y": 200.0, "z": 30.0 },
+        "corner_2": { "x": 108.0, "y": 200.0, "z": 30.0 },
+        "corner_3": { "x": 108.0, "y": 200.0, "z": 36.0 }
+      }
+    ],
+    "added": [
+      {
+        "corner_1": { "x": 108.0, "y": 200.0, "z": 30.0 },
+        "corner_2": { "x": 116.0, "y": 200.0, "z": 30.0 },
+        "corner_3": { "x": 116.0, "y": 200.0, "z": 36.0 }
+      }
+    ]
+  }
+]
+```
 
 ### Overwrite Documents
 
@@ -476,6 +504,19 @@ A resource overwrite cancels differences of the diff document at the same path (
   only the parts it names.
 - In an array, a selector leaves out the entries whose written fields all match. With
   `changes`, only the named changes are left out rather than the whole entry.
+- In `occlude_models` (see [Occlude Model Differences](#occlude-model-differences)), a
+  group's `flags` names it, and its `removed` and `added` arrays select triangles within it:
+
+  | `skip.occlude_models` entry | Leaves out |
+  |---|---|
+  | `{ "flags": 0, "removed": [<triangle>] }` | The removal of that triangle from the models with flags 0 |
+  | `{ "flags": 0, "added": [<triangle>, <triangle>] }` | The additions of those triangles |
+  | `{ "flags": 0, "removed": [{ "corner_1": { "x": 100.0, "y": 200.0, "z": 30.0 } }] }` | Every removal of a triangle with that first corner |
+  | `{ "flags": 0, "removed": true }` | Every removal in the group, keeping its additions |
+  | `{ "flags": 0 }` | The whole group |
+
+  Copy triangles from the diff document as they are written there: selectors match corners
+  in their written order.
 - An overwrite whose `target` or `base` no longer matches the current files is not
   applied. The pipeline lists it in `ignored_overwrites` (see
   [Pipeline Output](#pipeline-output)) on every run until it is rewritten from the new diff

@@ -181,3 +181,31 @@ fn loads_resource_files_keyed_case_insensitively() {
   assert!(Overwrites::load(&root).is_err());
   fs::remove_dir_all(root).unwrap();
 }
+
+#[test]
+fn occlude_triangle_groups_are_named_by_flags_and_selected_within() {
+  let triangle = |x: f32| json!({"corner_1": {"x": x, "y": 0.0, "z": 0.0}, "corner_2": {"x": x + 1.0, "y": 0.0, "z": 0.0}, "corner_3": {"x": x, "y": 1.0, "z": 0.0}});
+  let groups = |skip: serde_json::Value| {
+    let mut diff: YmapDiffFields = serde_json::from_value(json!({"occlude_models": [
+      {"flags": 0, "removed": [triangle(1.0), triangle(2.0)], "added": [triangle(3.0)]},
+      {"flags": 1, "added": [triangle(4.0)]}
+    ]}))
+    .unwrap();
+    let unmatched = skip_diffs(&mut diff, &json!({ "occlude_models": [skip] })).unwrap();
+    assert!(unmatched.is_empty(), "{unmatched:?}");
+    let counts = diff.occlude_models.unwrap_or_default();
+    counts
+      .iter()
+      .map(|group| (group.flags, group.removed.len(), group.added.len()))
+      .collect::<Vec<_>>()
+  };
+  assert_eq!(groups(json!({"flags": 0, "removed": [triangle(1.0)]})), [(0, 1, 1), (1, 0, 1)]);
+  assert_eq!(groups(json!({"flags": 0, "added": [triangle(3.0)]})), [(0, 2, 0), (1, 0, 1)]);
+  assert_eq!(
+    groups(json!({"flags": 0, "removed": [{"corner_1": {"x": 2.0, "y": 0.0, "z": 0.0}}]})),
+    [(0, 1, 1), (1, 0, 1)]
+  );
+  assert_eq!(groups(json!({"flags": 0, "removed": true})), [(0, 0, 1), (1, 0, 1)]);
+  assert_eq!(groups(json!({"flags": 0})), [(1, 0, 1)]);
+  assert_eq!(groups(json!({"flags": 1, "added": true})), [(0, 2, 1)]);
+}
