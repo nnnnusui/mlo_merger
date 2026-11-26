@@ -57,7 +57,7 @@ pub struct YmapImplied {
   pub base: ComparedFile,
   /// The additions to leave out of the diff document, in the shape of an overwrite's `skip`.
   #[serde(default, skip_serializing_if = "Option::is_none")]
-  #[cfg_attr(feature = "typescript", specta(optional, type = Option<crate::app::map::overwrite::YmapDiffSkip>))]
+  #[cfg_attr(feature = "typescript", specta(optional, type = Option<crate::core::format::diff_skip::YmapDiffSkip>))]
   pub skip: Option<Value>,
   /// The removals of the vanilla other YMAP of the pair, which the resource does not ship.
   #[serde(default, skip_serializing_if = "Option::is_none")]

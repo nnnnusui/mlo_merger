@@ -144,7 +144,7 @@ pub(super) fn carry_generations(
       .and_then(|path| crate::common::json::read_json::<YmapImplied>(path).ok())
       .filter(|implied| implied.target == origin.target && implied.base == origin.base);
     if let Some(skip) = implied.as_ref().and_then(|implied| implied.skip.as_ref()) {
-      crate::app::map::overwrite::skip_diffs(&mut diffs, skip)?;
+      crate::core::format::diff_skip::skip_diffs(&mut diffs, skip)?;
     }
     if let Some(overwrite) = overwrites.for_source(source) {
       let label = format!("{} ({})", source.file_name, source.resource);

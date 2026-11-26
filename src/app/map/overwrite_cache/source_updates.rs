@@ -26,11 +26,10 @@
 //! `warnings.json` as before.
 
 use super::Result;
-use crate::app::map::overwrite::{
-  OverwriteFingerprint, Overwrites, StreamFileOverwrite, selects, skip_diffs,
-};
+use crate::app::map::overwrite::{OverwriteFingerprint, Overwrites, StreamFileOverwrite};
 use crate::app::map::source_cache::{MergeInputs, history};
 use crate::common::json::{read_json, write_json};
+use crate::core::format::diff_skip::{selects, skip_diffs};
 use crate::core::format::ymap::compare::{YmapComparisonDiff, YmapDiffFields, added::placed_alike};
 use crate::core::format::ymap::model::YmapEntity;
 use crate::platform::fs;

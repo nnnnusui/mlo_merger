@@ -12,7 +12,6 @@
 //!
 //! What these call for is derived into the overwrite cache (see [`crate::app::map::overwrite_cache`]).
 
-mod skip;
 #[cfg(test)]
 mod test;
 mod vanilla;
@@ -24,7 +23,7 @@ use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 use std::path::Path;
 
-pub use skip::{selects, skip_diffs};
+use crate::core::format::diff_skip::skip_diffs;
 pub use vanilla::VanillaOverwrite;
 
 /// The formats, by extension, whose stream files overwrites apply to.
@@ -67,7 +66,7 @@ pub struct StreamFileOverwrite {
   /// variant matches when every field written equals the item's, and its `changes`, when given,
   /// leaves out only the changes it names instead of the whole item.
   #[serde(default, skip_serializing_if = "Option::is_none")]
-  #[cfg_attr(feature = "typescript", specta(optional, type = Option<YmapDiffSkip>))]
+  #[cfg_attr(feature = "typescript", specta(optional, type = Option<crate::core::format::diff_skip::YmapDiffSkip>))]
   pub skip: Option<serde_json::Value>,
 }
 
@@ -359,52 +358,3 @@ fn load_resources(directory: &Path) -> Result<ResourceOverwrites> {
 fn normalize(stream_path: &str) -> String {
   crate::common::path::stream_key(stream_path)
 }
-
-/// The TypeScript type of [`StreamFileOverwrite::skip`], written out by
-/// [`crate::typescript::export_types`] as [`YMAP_DIFF_SKIP_TS`].
-#[cfg(feature = "typescript")]
-pub(crate) struct YmapDiffSkip;
-
-#[cfg(feature = "typescript")]
-impl specta::Type for YmapDiffSkip {
-  fn inline(
-    _: specta::DefOpts,
-    _: &[specta::DataType],
-  ) -> std::result::Result<specta::DataType, specta::ExportError> {
-    Ok(specta::DataType::Reference(specta::DataTypeReference {
-      name: "YmapDiffSkip",
-      sid: specta::sid!(@with_specta_path; "YmapDiffSkip"; specta),
-      generics: Vec::new(),
-    }))
-  }
-}
-
-/// The TypeScript definitions of [`YmapDiffSkip`], which Specta cannot derive.
-#[cfg(feature = "typescript")]
-pub(crate) const YMAP_DIFF_SKIP_TS: &str = r#"
-/** The differences of a `YmapDiffFields` or `YbnDiffFields` document to leave out of a merge. */
-export type YmapDiffSkip = DiffSkip<YmapDiffFields> | DiffSkip<YbnDiffFields>
-
-/**
- * In an object, `true` leaves out the whole difference and a nested selector only the parts it
- * names; in an array, each selector leaves out the items it matches.
- */
-export type DiffSkip<T> =
-  | true
-  | (T extends (infer I)[] ? ItemSkip<I>[] : T extends object ? { [K in keyof T]?: DiffSkip<NonNullable<T[K]>> } : never)
-
-/**
- * Matches an array item: every field written must equal the item's, except `changes`, which
- * leaves out only the changes it names instead of the whole item.
- */
-export type ItemSkip<I> = I extends object
-  ? {
-      [V in keyof I]?: I[V] extends { changes: infer C }
-        ? DiffMatch<Omit<I[V], "changes">> & { changes?: DiffSkip<NonNullable<C>> }
-        : DiffMatch<I[V]>
-    }
-  : I
-
-/** A value an item's field must equal; objects match on the fields written. */
-export type DiffMatch<T> = T extends (infer I)[] ? I[] : T extends object ? { [K in keyof T]?: DiffMatch<T[K]> } : T
-"#;

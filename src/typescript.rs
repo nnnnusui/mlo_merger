@@ -37,7 +37,7 @@ pub fn export_types(output: &Path) -> Result<(), Box<dyn std::error::Error>> {
     }
     types = types.replace(required, optional);
   }
-  types += crate::app::map::overwrite::YMAP_DIFF_SKIP_TS;
+  types += crate::core::format::diff_skip::YMAP_DIFF_SKIP_TS;
   fs::write(output, types)?;
   Ok(())
 }
@@ -84,7 +84,7 @@ mod tests {
     let actual = fs::read_to_string(&path).unwrap();
     export_types(&path).unwrap();
     assert_eq!(fs::read_to_string(&path).unwrap(), actual);
-    let generated = actual.strip_suffix(crate::app::map::overwrite::YMAP_DIFF_SKIP_TS).unwrap();
+    let generated = actual.strip_suffix(crate::core::format::diff_skip::YMAP_DIFF_SKIP_TS).unwrap();
     let names = generated
       .lines()
       .filter_map(|line| line.strip_prefix("export type "))

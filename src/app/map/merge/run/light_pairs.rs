@@ -57,7 +57,7 @@ impl MergeYmap {
         if let Some(implied) = self.implied_document(mod_info, &document.target, &document.base)?
           && let Some(skip) = &implied.skip
         {
-          crate::app::map::overwrite::skip_diffs(&mut diffs, skip)?;
+          crate::core::format::diff_skip::skip_diffs(&mut diffs, skip)?;
         }
         (diffs, Some(fingerprints))
       }
