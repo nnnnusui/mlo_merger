@@ -1,7 +1,7 @@
-//! Which latest vanilla YMAPs the game loads, from what each DLC pack's `setup2.xml` and
+//! Which latest vanilla YMAPs and YBNs the game loads, from what each DLC pack's `setup2.xml` and
 //! `content.xml` declare (see [`crate::core::game_archive::dlc_content`]).
 //!
-//! A YMAP is loaded from the archive (`.rpf`) holding it. The stages are applied in order, each
+//! A YMAP or YBN is loaded from the archive (`.rpf`) holding it. The stages are applied in order, each
 //! DLC pack's data files mounted and its change sets executed:
 //!
 //! - An archive of the base game, its title update included, is loaded unless a change set
@@ -153,16 +153,16 @@ pub struct DlcActivity {
   pub packs: Vec<PackActivity>,
   /// The archives the config's `[dlc_activity] additive_archives` names.
   pub configured_additive: Vec<String>,
-  /// The archives holding YMAPs of the stages applied, keyed by their path as `content.xml`
+  /// The archives holding YMAPs or YBNs of the stages applied, keyed by their path as `content.xml`
   /// spells it, such as `platform:/levels/gta5/lodlights.rpf` or
   /// `dlcmpheist:/levels/gta5/lodlights.rpf`.
   pub archives: BTreeMap<String, ArchiveActivity>,
-  /// Every YMAP of the stages applied, each version keyed by its path in the vanilla archive,
+  /// Every YMAP and YBN of the stages applied, each version keyed by its path in the vanilla archive,
   /// such as `0000-base/ymap/sc1_18_strm_0.ymap`, with the archive holding it.
   pub files: BTreeMap<String, FileActivity>,
 }
 
-/// One version of a vanilla YMAP.
+/// One version of a vanilla YMAP or YBN.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "typescript", derive(specta::Type))]
 pub struct FileActivity {
@@ -185,7 +185,7 @@ pub struct PackActivity {
   pub on_demand: Vec<crate::core::game_archive::dlc_content::DlcChangeSet>,
 }
 
-/// One archive holding YMAPs.
+/// One archive holding YMAPs or YBNs.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "typescript", derive(specta::Type))]
 pub struct ArchiveActivity {
@@ -210,6 +210,10 @@ pub struct ArchiveActivity {
   pub additive: Option<Additive>,
   /// The latest YMAPs it holds, in lowercase.
   pub ymaps: Vec<String>,
+  /// The latest YBNs it holds, in lowercase.
+  #[serde(default, skip_serializing_if = "Vec::is_empty")]
+  #[cfg_attr(feature = "typescript", specta(optional))]
+  pub ybns: Vec<String>,
 }
 
 /// Why an archive is additive.
@@ -229,7 +233,7 @@ pub enum Additive {
 /// File name of [`DlcActivity`] in the vanilla cache.
 pub(crate) const DLC_ACTIVITY_FILE: &str = "dlc_activity.json";
 /// Bump when [`DlcActivity`] changes.
-pub(super) const FORMAT_VERSION: u32 = 2;
+pub(super) const FORMAT_VERSION: u32 = 3;
 
 /// The state of the archives after the stages are applied.
 #[derive(Default)]
@@ -478,7 +482,8 @@ pub(crate) fn dlc_activity(
   for version in manifest.versions.iter().take(through_index + 1) {
     for (name, change) in &version.changes {
       let name = name.to_ascii_lowercase();
-      if !name.ends_with(".ymap") {
+      let is_ybn = name.ends_with(".ybn");
+      if !name.ends_with(".ymap") && !is_ybn {
         continue;
       }
       let Some(archive) = archive_of(&change.file.source) else {
@@ -494,10 +499,11 @@ pub(crate) fn dlc_activity(
         on_demand: mounts.on_demand.contains(&path) && !mounts.enabled.contains(&path),
         additive: mounts.additive.get(&path).cloned(),
         ymaps: Vec::new(),
+        ybns: Vec::new(),
       });
       let is_latest = latest.get(&name) == Some(&change.file.object.as_str());
       if is_latest {
-        entry.ymaps.push(name);
+        if is_ybn { entry.ybns.push(name) } else { entry.ymaps.push(name) }
       }
       files.insert(
         change.file.object.clone(),
@@ -519,16 +525,16 @@ pub(crate) fn dlc_activity(
   })
 }
 
-/// The latest YMAPs `activity` names that the game does not load, keyed by lowercase file name,
-/// with why.
-pub(crate) fn inactive_ymaps(activity: Option<&DlcActivity>) -> BTreeMap<String, String> {
+/// The latest YMAPs and YBNs `activity` names that the game does not load, keyed by lowercase
+/// file name, with why.
+pub(crate) fn inactive_files(activity: Option<&DlcActivity>) -> BTreeMap<String, String> {
   activity
     .into_iter()
     .flat_map(|activity| &activity.archives)
-    .filter_map(|(path, archive)| Some((path, archive.unloaded.as_ref()?, &archive.ymaps)))
-    .flat_map(|(path, unloaded, ymaps)| {
+    .filter_map(|(path, archive)| Some((path, archive.unloaded.as_ref()?, archive)))
+    .flat_map(|(path, unloaded, archive)| {
       let why = unloaded.describe(path);
-      ymaps.iter().map(move |name| (name.clone(), why.clone()))
+      archive.ymaps.iter().chain(&archive.ybns).map(move |name| (name.clone(), why.clone()))
     })
     .collect()
 }
@@ -616,6 +622,7 @@ mod tests {
           None,
           &[
             ("a.ymap", "x64a.rpf/levels/gta5/a.rpf/a.ymap"),
+            ("a_0.ybn", "x64a.rpf/levels/gta5/a.rpf/a_0.ybn"),
             ("v.ymap", "x64a.rpf/levels/gta5/v.rpf/v.ymap"),
             ("l.ymap", "x64a.rpf/levels/gta5/l.rpf/l.ymap"),
           ],
@@ -660,6 +667,7 @@ mod tests {
           }),
           &[
             ("lr_a.ymap", "update/x64/dlcpacks/lowrider/dlc.rpf/x64/levels/gta5/a.rpf/lr_a.ymap"),
+            ("lr_a_0.ybn", "update/x64/dlcpacks/lowrider/dlc.rpf/x64/levels/gta5/a.rpf/lr_a_0.ybn"),
             ("lr_l.ymap", "update/x64/dlcpacks/lowrider/dlc.rpf/x64/levels/gta5/l.rpf/lr_l.ymap"),
             ("lr_x.ymap", "update/update.rpf/dlc_patch/lowrider/x64/levels/gta5/x.rpf/lr_x.ymap"),
           ],
@@ -721,7 +729,7 @@ mod tests {
     }
     let configured = ["dlcisland:/levels/gta5/v.rpf".to_owned()];
     let activity = dlc_activity(&manifest, 4, &current, &configured, "revision");
-    let inactive = inactive_ymaps(activity.as_ref());
+    let inactive = inactive_files(activity.as_ref());
     // The base game's version of the patched YMAP stays indexed, in its invalidated archive.
     let activity = activity.unwrap();
     let base = &activity.files["x64a.rpf/levels/gta5/v.rpf/v.ymap"];
@@ -729,8 +737,11 @@ mod tests {
     assert!(activity.archives[&base.archive].unloaded.is_some());
     assert_eq!(
       inactive.keys().map(String::as_str).collect::<Vec<_>>(),
-      ["a.ymap", "hei_a.ymap", "hei_l.ymap", "l.ymap", "lr_x.ymap", "v.ymap"]
+      ["a.ymap", "a_0.ybn", "hei_a.ymap", "hei_l.ymap", "l.ymap", "lr_x.ymap", "v.ymap"]
     );
+    // YBNs load from their archives as YMAPs do.
+    assert!(!inactive.contains_key("lr_a_0.ybn"));
+    assert_eq!(activity.archives["dlclow:/levels/gta5/a.rpf"].ybns, ["lr_a_0.ybn"]);
     // Lowrider's archives replace heist's, laid beside the base game's or mounted over it, and
     // stay loaded under the patch mounted over their path after them; heist's archive no later
     // pack replaces stays loaded.

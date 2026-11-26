@@ -151,6 +151,14 @@
           },
           "previous_sha256": "ab79abf1d1a61c1e62acbb6f243af02e902acdb5dcdb7201ecade06a14a8b974"
         },
+        "summer_smpl_block_01.ybn": {
+          "file": {
+            "object": "0004-smpl_summer/ybn/summer_smpl_block_01.ybn",
+            "sha256": "f71d0a02241682ad13c93cfc691b601190b01e96206ca1c73d6cfb48582c57c3",
+            "source": "smpl.rpf/summer_smpl_block_01.ybn"
+          },
+          "previous_sha256": null
+        },
         "summer_smpl_block_01.ymap": {
           "file": {
             "object": "0004-smpl_summer/ymap/summer_smpl_block_01.ymap",

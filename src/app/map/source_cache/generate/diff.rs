@@ -245,7 +245,8 @@ fn write_ybn_diffs(
   if entries.is_empty() {
     return Ok((0, 0));
   }
-  let vanilla = crate::app::map::vanilla_cache::latest_files(vanilla_cache_dir)?
+  // The latest YBNs, and those first shipped after the game build an older generation stands for.
+  let vanilla = crate::app::map::vanilla_cache::ybn_bases(vanilla_cache_dir)?
     .into_iter()
     .map(|file| (file.name.to_ascii_lowercase(), (file.path, file.object)))
     .collect::<std::collections::HashMap<_, _>>();

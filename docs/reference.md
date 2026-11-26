@@ -343,7 +343,8 @@ generation and carry the changes resources make to the others over to it.
     script enables the island, such as `mpheist4`'s `island_lodlights`, and those
     `additive_archives` under `[dlc_activity]` in the config file names, spelled as
     `dlc_activity.json` keys archives.
-- `generations.json` lists the YMAPs the game does not load in `inactive`, with why.
+- `generations.json` lists the YMAPs and YBNs the game does not load in `inactive`, with why;
+  YBNs load from their archives as YMAPs do.
 
 #### Generations And Their Items
 
@@ -423,6 +424,22 @@ generation and carry the changes resources make to the others over to it.
   in `cache_info.json` and its report name the successor in `superseded_by`, and a vanilla
   overwrite of it is not applied. The successor is written when the changes carried to it
   change it, so it is deployed in place of its vanilla file.
+
+#### YBN Generations
+
+- YBNs form generations and families by prefix and name as YMAPs do, among the YBNs of one
+  collision variant marker, such as `hi@` of `hi@hei_dt1_13_0.ybn`, in `ybn_families` of
+  `generations.json`. Their polygons match by geometry, so no units are built.
+- A YBN the game does not load has as successor the loaded YBN of its name without the prefix
+  in the newest newer generation of its family, or, for one first shipped after the build, the
+  newest older one.
+- Merge carries a source YBN's changes, after its overwrite, from a generation the game does
+  not load to the successor: the removals of polygons the successor holds within
+  `ybn_position`, in the same collision flags group, and every addition, written to
+  `generations/{resourceName}/{version}/{fileName}.diff.json` (`YbnPropagatedDiff`). The
+  removals the successor lacks are listed in `left_behind.json` with `array` `polygons` and no
+  `index`. The carried documents are merged into the successor after its own sources, those of
+  newer origin generations first, and the source YBN is not deployed.
 
 ### Entity Parents
 

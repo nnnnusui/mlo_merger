@@ -21,10 +21,13 @@ impl BuildVanillaCache {
     let through_index = resolve_through_version(&manifest, self.gamebuild.as_ref())?;
     let latest_version = manifest.versions[through_index].id.clone();
     let current = resolve_files(&manifest, through_index)?;
-    // YMAPs first shipped after the selected stage, of which the game loads an older generation.
+    // YMAPs and YBNs first shipped after the selected stage, of which the game may load an older
+    // generation.
     let newer = resolve_files(&manifest, manifest.versions.len() - 1)?
       .into_iter()
-      .filter(|(name, _)| name.ends_with(".ymap") && !current.contains_key(name))
+      .filter(|(name, _)| {
+        (name.ends_with(".ymap") || name.ends_with(".ybn")) && !current.contains_key(name)
+      })
       .collect::<BTreeMap<_, _>>();
     let input_timestamps = source_timestamps(
       &vanilla_dir,
@@ -65,14 +68,17 @@ impl BuildVanillaCache {
     if let Some(activity) = &activity {
       write_json(&staging.0.join(super::activity::DLC_ACTIVITY_FILE), activity)?;
     }
-    let mut inactive = super::activity::inactive_ymaps(activity.as_ref());
+    let mut inactive = super::activity::inactive_files(activity.as_ref());
     for (name, (version, _)) in &newer {
       inactive.insert(name.clone(), format!("first shipped in {version}, after {latest_version}"));
     }
     let generations = write_generations(
       &staging.0,
       &output_dir,
-      &generation_sources(&vanilla_dir, &manifest, &current, &newer)?,
+      (
+        &generation_sources(&vanilla_dir, &manifest, &current, &newer, ".ymap")?,
+        &generation_sources(&vanilla_dir, &manifest, &current, &newer, ".ybn")?,
+      ),
       &inactive,
       &newer.keys().cloned().collect(),
       &manifest.versions.iter().map(|version| version.id.clone()).collect::<Vec<_>>(),
@@ -213,6 +219,7 @@ fn generation_sources(
   manifest: &VanillaCacheManifest,
   current: &BTreeMap<String, (String, CachedFile)>,
   newer: &BTreeMap<String, (String, CachedFile)>,
+  extension: &str,
 ) -> Result<BTreeMap<String, generations::SourceYmap>> {
   let mut first_stages = BTreeMap::new();
   for (stage, version) in manifest.versions.iter().enumerate() {
@@ -223,7 +230,7 @@ fn generation_sources(
   current
     .iter()
     .chain(newer)
-    .filter(|(name, _)| name.ends_with(".ymap"))
+    .filter(|(name, _)| name.ends_with(extension))
     .map(|(name, (_, file))| {
       let source = generations::SourceYmap {
         sha256: file.sha256.clone(),

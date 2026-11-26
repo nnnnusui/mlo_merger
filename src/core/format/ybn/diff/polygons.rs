@@ -31,7 +31,7 @@ use super::{
 use crate::common::mesh::{self, VertexIndex};
 use crate::core::format::{
   ybn::model::{Bound, Geometry, Material, Polygon, Triangle},
-  ymap::compare::YmapComparisonFile,
+  ymap::compare::{YmapComparisonFile, YmapPropagationOrigin},
 };
 
 const IDENTITY: [f32; 16] = [1., 0., 0., 0., 0., 1., 0., 0., 0., 0., 1., 0., 0., 0., 0., 1.];
@@ -137,6 +137,79 @@ pub struct YbnComparisonDiff {
 impl YbnComparisonDiff {
   /// The current [`Self::schema_version`].
   pub const SCHEMA_VERSION: u32 = 1;
+}
+
+/// Changes a resource makes to a vanilla YBN of a generation the game does not load, carried
+/// over to the YBN loaded in its place, which the resource does not ship.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
+pub struct YbnPropagatedDiff {
+  /// Version of the document layout.
+  pub schema_version: u32,
+  /// The resource whose YBN the changes come from.
+  pub resource: String,
+  /// The YBN the changes are carried to.
+  pub base: YmapComparisonFile,
+  /// The resource's YBN and the vanilla YBN its changes were taken from.
+  pub origins: Vec<YmapPropagationOrigin>,
+  pub diffs: YbnDiffFields,
+}
+
+impl YbnPropagatedDiff {
+  /// The current [`Self::schema_version`].
+  pub const SCHEMA_VERSION: u32 = 1;
+}
+
+/// The changes of `diff` that reach `successor`, another generation of the YBN `diff` was taken
+/// from: the removals of polygons it holds within `tolerance`, in the same flags group, and of
+/// children compared whole it has, and every addition. Returns them and how many removals it
+/// lacks.
+pub fn carried_to(
+  diff: &YbnDiffFields,
+  successor: &Bound,
+  tolerance: f32,
+) -> io::Result<(YbnDiffFields, usize)> {
+  let (groups, whole) = groups(successor)?;
+  let mut absent = 0;
+  let mut polygons = Vec::new();
+  for group in &diff.polygons {
+    let mut held = Lookup::new(tolerance);
+    for entry in groups.get(&group.flags).into_iter().flatten() {
+      held.insert(entry.identity.clone());
+    }
+    let removed = group
+      .removed
+      .iter()
+      .filter(|polygon| held.contains(&Identity::of(polygon)))
+      .cloned()
+      .collect::<Vec<_>>();
+    absent += group.removed.len() - removed.len();
+    if !removed.is_empty() || !group.added.is_empty() {
+      polygons.push(YbnPolygonsDiff {
+        flags: group.flags,
+        removed,
+        added: group.added.clone(),
+      });
+    }
+  }
+  let present =
+    whole.iter().map(|child| bound_identity(&child.bound)).collect::<io::Result<HashSet<_>>>()?;
+  let mut removed_children = Vec::new();
+  for child in &diff.removed_children {
+    if present.contains(&bound_identity(&child.bound)?) {
+      removed_children.push(child.clone());
+    } else {
+      absent += 1;
+    }
+  }
+  Ok((
+    YbnDiffFields {
+      polygons,
+      removed_children,
+      added_children: diff.added_children.clone(),
+    },
+    absent,
+  ))
 }
 
 /// What a polygon is: its kind, material but for its colour, the corner flags of a triangle,

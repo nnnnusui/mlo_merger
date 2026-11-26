@@ -58,7 +58,7 @@ placed so connected ones share a geometry child.
   material or corner-flag changes, as now.
 - **Documents.** The source cache writes `diff/{resource}/{stream_path}.diff.json` for YBNs
   as for YMAPs; overwrites skip within a group named by its flags, as for occlude model
-  triangles. YBN generations ([plan](202611191801_ybn_generations.md)) build on these
+  triangles. YBN generations ([plan](202611191801_done_ybn_generations.md)) build on these
   documents.
 
 ## Phases

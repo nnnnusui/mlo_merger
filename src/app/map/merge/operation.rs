@@ -93,12 +93,23 @@ impl Merge {
     let vanilla_archive = crate::app::map::vanilla_cache::archive_dir(&vanilla_cache_dir)?;
     let output_dir = prepare_output_path(&self.output_dir)?;
     let staging = Staging(create_staging_directory(&output_dir)?);
-    let (carried, left_behind) = super::generations::carry_generations(
+    let (mut carried, mut left_behind) = super::generations::carry_generations(
       &vanilla_cache_dir,
       &merge_inputs.ymap,
       &overwrites,
       &staging.0,
     )?;
+    let (carried_ybns, left_behind_ybns) = super::generations::carry_ybn_generations(
+      &vanilla_cache_dir,
+      &merge_inputs.ybn,
+      &overwrites,
+      &staging.0,
+    )?;
+    if !left_behind_ybns.is_empty() {
+      left_behind.extend(left_behind_ybns);
+      super::generations::write_left_behind(&staging.0, &left_behind)?;
+    }
+    carried.extend(carried_ybns);
     let staged = IncrementalMerge {
       vanilla_cache: &vanilla_cache_dir,
       vanilla_archive: &vanilla_archive,

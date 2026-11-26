@@ -96,9 +96,21 @@ pub fn newer_files(cache_dir: &Path) -> Result<Vec<VanillaLatestFile>> {
 
 /// The vanilla YMAPs source YMAPs are diffed against: the latest ones and [`newer_files`].
 pub(crate) fn ymap_bases(cache_dir: &Path) -> Result<Vec<VanillaLatestFile>> {
+  bases(cache_dir, ".ymap")
+}
+
+/// The vanilla YBNs source YBNs are diffed against: the latest ones and [`newer_files`].
+pub(crate) fn ybn_bases(cache_dir: &Path) -> Result<Vec<VanillaLatestFile>> {
+  bases(cache_dir, ".ybn")
+}
+
+fn bases(
+  cache_dir: &Path,
+  extension: &str,
+) -> Result<Vec<VanillaLatestFile>> {
   let mut files = latest_files(cache_dir)?;
-  files.retain(|file| file.name.to_ascii_lowercase().ends_with(".ymap"));
   files.extend(newer_files(cache_dir)?);
+  files.retain(|file| file.name.to_ascii_lowercase().ends_with(extension));
   Ok(files)
 }
 

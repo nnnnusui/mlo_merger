@@ -48,9 +48,11 @@ impl IncrementalMerge<'_> {
         &sources
           .iter()
           .map(|source| YbnSource {
+            file_name: source.file_name.clone(),
             path: source.path.clone(),
             diff_path: source.diff_path.clone(),
             overwrite: self.overwrite(source).cloned(),
+            propagated: source.propagated,
           })
           .collect::<Vec<_>>(),
       )?;

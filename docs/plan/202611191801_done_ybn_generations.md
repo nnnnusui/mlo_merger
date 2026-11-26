@@ -26,6 +26,12 @@ are resolved.
   successor by its geometry, and an added one is added there.
 - A YBN merges when several resources replace it or an overwrite skips within it; one only
   one source replaces is deployed as that source has it.
+- On the local vanilla archive, 3314 of 5103 YBNs are not loaded. 2702 of them belong to a
+  family (327 families), and 2586 of those have a successor. Of the 728 without one:
+  - 612 belong to no family: IPL variants with their own names (`{name}_1`, `{area}_day_1`).
+  - 104 are in a family whose newest generation is not loaded either.
+  - 12 are in a family whose newer generation numbers the files differently, so no file of
+    the same name follows them.
 
 ## Design
 
@@ -48,35 +54,40 @@ are resolved.
 
 ### 1. Vanilla Cache: Loaded YBNs
 
-- [ ] List YBNs in `dlc_activity.json` beside YMAPs: each archive's latest YBNs, and every
+- [x] List YBNs in `dlc_activity.json` beside YMAPs: each archive's latest YBNs, and every
   YBN version in `files`.
-- [ ] Record the YBNs the game does not load in `generations.json` `inactive`.
-- [ ] Test: a YBN of an invalidated base game archive is inactive, the pack's replacing one is
+- [x] Record the YBNs the game does not load in `generations.json` `inactive`.
+- [x] Test: a YBN of an invalidated base game archive is inactive, the pack's replacing one is
   not.
 
 ### 2. Vanilla Cache: YBN Families And Successors
 
-- [ ] Group YBNs into generations and families by prefix and name, as YMAPs are.
-- [ ] Name the successor of each YBN not loaded, as the design says. Measure on the local vanilla
+- [x] Group YBNs into generations and families by prefix and name, as YMAPs are.
+- [x] Name the successor of each YBN not loaded, as the design says. Measure on the local vanilla
   archive how many have none.
-- [ ] Bump the generation and activity layouts.
+- [x] Bump the generation and activity layouts.
 
 ### 3. Merge: Carrying Changes
 
-- [ ] Merge every source YBN of a generation not loaded, its changes carried to the successor:
+- [x] Merge every source YBN of a generation not loaded, its changes carried to the successor:
   write the carried documents (`YbnPropagatedDiff`), list the removals the successor lacks in
   `left_behind.json`, and omit the source.
-- [ ] Merge the carried documents into the successor after its own sources, newest origin first.
-- [ ] Tests: a removal and an addition carried; a removal the successor lacks left behind; the
+- [x] Merge the carried documents into the successor after its own sources, newest origin first.
+- [x] Tests: a removal and an addition carried; a removal the successor lacks left behind; the
   source omitted.
 
 ### 4. Samples And Documentation
 
-- [ ] Give the web sample a prefixed YBN generation whose changes carry over.
-- [ ] Describe YBN generations in `docs/reference.md`, `docs/ARCHITECTURE.md` and
+- [x] Give the web sample a prefixed YBN generation whose changes carry over.
+- [x] Describe YBN generations in `docs/reference.md`, `docs/ARCHITECTURE.md` and
   `docs/usage.md`, and the work left in `docs/TODO.md`.
 
 ## Decisions
+
+- The successor is the loaded YBN of the same name without its prefix; one of a newer generation
+  that numbers files differently is not looked for (see `docs/TODO.md`).
+- Placement of polygons into geometries shares the connected-piece algorithm of occlude models,
+  in `src/common/mesh.rs`.
 
 - A streamed YBN of an invalidated base game archive loads nothing, but its changes are
   carried all the same, as a resource means them for the loaded generation.

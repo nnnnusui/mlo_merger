@@ -256,14 +256,16 @@ export const unloadedInStage = (version: string): [string, Unloaded][] =>
 vanilla cache was built for, which vanilla YMAP the game loads in place of one it does not
 (see [Newer DLC Generations](reference.md#newer-dlc-generations)):
 
-- `inactive` lists the YMAPs the game does not load, by lowercase file name, with why;
-  `newer_than_build` those of them first shipped after the build.
+- `inactive` lists the YMAPs and YBNs the game does not load, by lowercase file name, with
+  why; `newer_than_build` those of them first shipped after the build.
 - `families` groups the YMAPs of all generations of one name. Each family lists its
   `generations`, oldest first, each with its prefix, the stage first shipping it and its
   YMAPs, a `distlodlights_*` YMAP standing for its LOD light pair. `successors` maps each
   YMAP not loaded to the loaded YMAP holding its items, and `units` names the
   `generation-units/{key}.json` pairing the items of an older and a newer generation by
   their indices.
+- `ybn_families` groups YBNs alike, keyed with their collision variant marker such as `hi@`,
+  with `successors` and no `units`.
 
 A merge deploys no YMAP with a successor and carries the changes a resource makes to it to
 the successor: the merge report gives `superseded_by` for such a YMAP, and lists the changes

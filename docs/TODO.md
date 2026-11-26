@@ -6,12 +6,12 @@
 
 ## DLC Generations
 
-Merges deploy only the generation of each vanilla YMAP the game loads and carry the changes resources make to the others over to it; see [Newer DLC Generations](reference.md#newer-dlc-generations).
+Merges deploy only the generation of each vanilla YMAP and YBN the game loads and carry the changes resources make to the others over to it; see [Newer DLC Generations](reference.md#newer-dlc-generations).
 
 - [ ] Record each FiveM game build's own title update data (`dlc_patch/` replacements of packs' `content.xml` and `setup2.xml`, `dlclist.xml`, `lodlights.rpf`), which FiveM mounts for that build, and apply it when the vanilla cache targets the build; the installed title update's is applied to every build now.
 - [ ] Carry entity parent changes and additions with a parent to other generations; see the [plan](plan/202611191800_generation_entity_parents.md).
 - [ ] Carry modifications of nested arrays to other generations, or list them in `left_behind.json`.
-- [ ] Resolve YBN generations as YMAP generations are; see the [plan](plan/202611191801_ybn_generations.md).
+- [ ] Name a successor for an inactive YBN whose newer generation numbers its files differently (`{area}_4` replaced by `hei_{area}_0`), by the overlap of their bounds; such a YBN has no successor and its changes are not carried now.
 
 ## Overwrites
 

@@ -15,7 +15,8 @@
 //! - `lodlights_small001.ymap` and `distlodlights_small001.ymap` are a LOD light pair, shipped
 //!   again as `winter_*` with one more light.
 //! - `smpl_block_02.ymap` changes in the title update, the patch and `smpl_summer`.
-//! - `smpl_block_01.ybn` is the block's collision, changed in `smpl_summer`.
+//! - `smpl_block_01.ybn` is the block's collision, changed in `smpl_summer`, which also ships it
+//!   again as `summer_smpl_block_01.ybn`: a YBN generation.
 //!
 //! The resources edit those files: two resources change `smpl_block_01.ymap` and its collision,
 //! one removes a LOD entity from the parent so the children's parent indices are repaired, one
@@ -345,7 +346,9 @@ fn custom_01() -> Ymap {
 }
 
 /// Resource `smpl_custom_props`: its own map, a child map whose label points at the map's crate,
-/// the map's collision, and a birch in the park as `smpl_summer` left it.
+/// the map's collision, a birch in the park as `smpl_summer` left it, and `smpl_summer`'s
+/// generation of the block's collision with the kiosk's taken out and a bench's put in. Under
+/// a game build before `smpl_summer`, those changes are carried to `smpl_block_01.ybn`.
 fn custom_props() -> Vec<(&'static str, Vec<u8>)> {
   let custom = custom_01();
   let mut detail = ymap("smpl_custom_02", "smpl_custom_01", 0, 1);
@@ -364,7 +367,18 @@ fn custom_props() -> Vec<(&'static str, Vec<u8>)> {
     ("stream/smpl_custom_02.ymap", ymap_bytes(&detail)),
     ("stream/smpl_custom_01.ybn", ybn_bytes(&[Child::Geometry(collision)])),
     ("stream/smpl_block_02.ymap", ymap_bytes(&park)),
+    ("stream/summer_smpl_block_01.ybn", ybn_bytes(&summer_collision_with_bench())),
   ]
+}
+
+/// The collision `smpl_summer` ships as `summer_smpl_block_01.ybn`, without the kiosk's box and
+/// with a bench's.
+fn summer_collision_with_bench() -> Vec<Child> {
+  let mut collision = block_01_collision(false);
+  if let Child::Geometry(ground) = &mut collision[0] {
+    ground.add_box([-7082.0, 7087.0, 19.9], [-7080.0, 7088.0, 20.5]);
+  }
+  collision
 }
 
 /// Resource `smpl_custom_props_v2`, a later version of `smpl_custom_props` loaded after it: the
@@ -499,6 +513,7 @@ fn vanilla_stages() -> Vec<(&'static str, StageFiles)> {
         ("summer_smpl_block_01.ymap", ymap_bytes(&summer_block_01())),
         ("smpl_block_02.ymap", ymap_bytes(&block_02(3))),
         ("smpl_block_01.ybn", ybn_bytes(&block_01_collision(true))),
+        ("summer_smpl_block_01.ybn", ybn_bytes(&block_01_collision(true))),
       ],
     ),
   ]

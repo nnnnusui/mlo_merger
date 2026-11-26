@@ -26,13 +26,15 @@ impl IncrementalMerge<'_> {
     for source in self.inputs.ybn.iter().chain(&self.inputs.ymap) {
       sources.entry(source.file_name.to_ascii_lowercase()).or_default().push(source);
     }
-    // A YBN one source replaces without an overwrite is deployed as that source has it.
+    // A YBN one source replaces is deployed as that source has it, unless an overwrite skips
+    // within it or changes are carried to it.
     sources.retain(|name, files| {
       !name.ends_with(".ybn")
         || files.len() > 1
         || files
           .iter()
           .any(|source| self.overwrite(source).is_some_and(|overwrite| overwrite.skip.is_some()))
+        || self.carried.iter().any(|carried| carried.file_name.eq_ignore_ascii_case(name))
     });
     // Carried-over changes are merged like a source into the vanilla file they change.
     for source in self.carried {
@@ -54,14 +56,17 @@ impl IncrementalMerge<'_> {
         tracing::debug!("Vanilla overwrite of {name} names no latest vanilla YMAP; not applied");
       }
     }
-    // A YMAP of a superseded generation is not merged: the source cache carries its changes to the
+    // A YMAP or YBN of a superseded generation is not merged: its changes are carried to the
     // latest generation, its sources are omitted and the vanilla file stays.
     let mut superseded = BTreeMap::<String, (String, Vec<&MergeSourceFile>)>::new();
     if let Some(generations) =
       crate::app::map::vanilla_cache::generations::GenerationIndex::load(self.vanilla_cache)?
     {
-      let names =
-        sources.keys().filter(|name| name.ends_with(".ymap")).cloned().collect::<Vec<_>>();
+      let names = sources
+        .keys()
+        .filter(|name| name.ends_with(".ymap") || name.ends_with(".ybn"))
+        .cloned()
+        .collect::<Vec<_>>();
       for name in names {
         let Some(successor) = generations.successor(&name) else {
           continue;

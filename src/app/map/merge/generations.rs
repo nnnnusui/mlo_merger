@@ -44,6 +44,7 @@ use crate::{
   },
   common::triangle::Triangle,
   common::{json::write_json, path::ensure_safe_path},
+  core::format::ybn::diff::polygons::{self, YbnComparisonDiff, YbnPropagatedDiff},
   core::format::ymap::{
     compare::{
       ItemDiff, YmapComparisonDiff, YmapComparisonFile, YmapDiffFields, YmapPropagatedDiff,
@@ -212,6 +213,144 @@ pub(super) fn carry_generations(
         original_path: PathBuf::new(),
         source_path: String::new(),
         file_name: document.file_name,
+        stream_path: String::new(),
+        diff_path: Some(path),
+        implied_path: None,
+        propagated: true,
+      }
+    })
+    .collect();
+  Ok((carried, left_behind))
+}
+
+/// Writes `left_behind` as the changes left behind in [`GENERATIONS_DIR`] of `staging`.
+pub(super) fn write_left_behind(
+  staging: &Path,
+  left_behind: &[LeftBehind],
+) -> Result<()> {
+  let target = staging.join(GENERATIONS_DIR);
+  fs::create_dir_all(&target)?;
+  write_json(&target.join(LEFT_BEHIND_FILE), &left_behind)?;
+  Ok(())
+}
+
+/// Carries the changes of `sources`, the merge's source YBNs, from a generation the game does
+/// not load to the YBN loaded in its place, as the vanilla cache at `vanilla_cache_dir` names it:
+/// writes the documents ([`YbnPropagatedDiff`]) into [`GENERATIONS_DIR`] of `staging`, and
+/// returns them as merge sources, newest origin first, with the removals the successor lacks
+/// left behind. Each source's diff is taken after its overwrite in `overwrites`.
+pub(super) fn carry_ybn_generations(
+  vanilla_cache_dir: &Path,
+  sources: &[MergeSourceFile],
+  overwrites: &Overwrites,
+  staging: &Path,
+) -> Result<(Vec<MergeSourceFile>, Vec<LeftBehind>)> {
+  let Some(index) = GenerationIndex::load(vanilla_cache_dir)? else {
+    return Ok((Vec::new(), Vec::new()));
+  };
+  let tolerance = crate::core::config::matching::current().ybn_position;
+  let vanilla_files = crate::app::map::vanilla_cache::ybn_bases(vanilla_cache_dir)?
+    .into_iter()
+    .map(|file| (file.name.to_ascii_lowercase(), (file.path, file.object)))
+    .collect::<HashMap<_, _>>();
+  let target = staging.join(GENERATIONS_DIR);
+  ensure_safe_path(staging, &target)?;
+  let mut documents = Vec::new();
+  let mut left_behind = Vec::new();
+  for source in sources.iter().filter(|source| !source.propagated) {
+    let file_name = source.file_name.to_ascii_lowercase();
+    let (Some(located), Some(successor)) = (index.locate(&file_name), index.successor(&file_name))
+    else {
+      continue;
+    };
+    if index.loads(&file_name) && !index.newer_than_build.contains(&file_name) {
+      continue;
+    }
+    let Some(diff_path) = &source.diff_path else {
+      continue;
+    };
+    let Ok(document) = crate::common::json::read_json::<YbnComparisonDiff>(diff_path) else {
+      continue;
+    };
+    let mut diffs = document.diffs;
+    if let Some(overwrite) = overwrites.for_source(source) {
+      let label = format!("{} ({})", source.file_name, source.resource);
+      overwrite.apply(
+        &mut diffs,
+        &OverwriteFingerprint::from(&document.target),
+        &OverwriteFingerprint::from(&document.base),
+        &label,
+      )?;
+    }
+    let (path, object) = vanilla_files
+      .get(&successor)
+      .ok_or_else(|| format!("No latest vanilla YBN named {successor}"))?;
+    let successor_root = crate::core::format::ybn::read_ybn(&fs::read(path)?)?;
+    let (carried, absent) = polygons::carried_to(&diffs, &successor_root, tolerance)?;
+    for _ in 0..absent {
+      left_behind.push(LeftBehind {
+        resource: source.resource.clone(),
+        stream_path: source.stream_path.clone(),
+        file_name: file_name.clone(),
+        array: "polygons".into(),
+        index: None,
+        change: "Removed".into(),
+        reason: LeftBehindReason::AlreadyAbsent,
+      });
+    }
+    if carried.is_empty() {
+      continue;
+    }
+    let fingerprint = crate::common::fingerprint::Fingerprint::read(path, None, false)?;
+    let origin_version = located.family.generations[located.generation].first_version.clone();
+    let relative = Path::new(&resource_name(&source.resource))
+      .join(&origin_version)
+      .join(format!("{successor}.diff.json"));
+    let document_path = target.join(&relative);
+    ensure_safe_path(&target, &document_path)?;
+    fs::create_dir_all(document_path.parent().ok_or("Carried diff path has no parent")?)?;
+    write_json(
+      &document_path,
+      &YbnPropagatedDiff {
+        schema_version: YbnPropagatedDiff::SCHEMA_VERSION,
+        resource: source.resource.clone(),
+        base: YmapComparisonFile {
+          path: object.clone(),
+          sha256: fingerprint.sha256,
+          size: fingerprint.size,
+          modified_seconds: fingerprint.modified_seconds,
+          modified_nanos: fingerprint.modified_nanos,
+        },
+        origins: vec![YmapPropagationOrigin {
+          target: document.target,
+          base: document.base,
+        }],
+        diffs: carried,
+      },
+    )?;
+    documents.push((origin_version, relative, source.resource.clone(), successor));
+  }
+  if !left_behind.is_empty() {
+    tracing::info!(
+      "{} removals of vanilla YBNs that merges do not deploy reach no YBN the game loads",
+      left_behind.len()
+    );
+  }
+  // Changes carried from a newer generation come first, so that they win over an older one's.
+  documents.sort_by(|left, right| right.0.cmp(&left.0).then_with(|| left.1.cmp(&right.1)));
+  let carried = documents
+    .into_iter()
+    .map(|(_, relative, resource, file_name)| {
+      let path = target.join(&relative);
+      let relative = relative.to_string_lossy().replace('\\', "/");
+      MergeSourceFile {
+        resource,
+        path: path.clone(),
+        stored_path: format!("{GENERATIONS_DIR}/{relative}"),
+        moved: false,
+        original_path: PathBuf::new(),
+        source_path: String::new(),
+        file_name,
         stream_path: String::new(),
         diff_path: Some(path),
         implied_path: None,

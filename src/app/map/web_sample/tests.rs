@@ -135,8 +135,9 @@ fn parent_indices(map: &Ymap) -> Vec<i32> {
 fn pipeline_runs_on_the_web_sample() {
   let workspace = Workspace::new("pipeline");
   let latest = workspace.pipeline(None);
-  // Nine stream files merged or cloned, and the custom maps, which the source cache collects too.
-  assert_eq!(latest.deploy.copied, 12);
+  // Nine stream files merged or cloned, the custom maps, which the source cache collects too,
+  // and the summer collision its one resource ships.
+  assert_eq!(latest.deploy.copied, 13);
 
   // Both versions of the custom map merge, the later first: the shared sign once, and the crate
   // once, as placed again under another GUID; the label's parent index follows it.
@@ -336,6 +337,7 @@ fn pipeline_runs_on_the_web_sample() {
     build.changes.vanilla_cache.removed,
     [
       vanilla("0004-smpl_summer/ybn/smpl_block_01.ybn"),
+      vanilla("0004-smpl_summer/ybn/summer_smpl_block_01.ybn"),
       vanilla("0004-smpl_summer/ymap/smpl_block_02.ymap"),
       vanilla("0004-smpl_summer/ymap/summer_smpl_block_01.ymap"),
     ]
@@ -343,7 +345,17 @@ fn pipeline_runs_on_the_web_sample() {
   );
   assert!(build.changes.vanilla_cache.modified.is_empty());
   assert!(!workspace.map("merged/ymap/summer_smpl_block_01.ymap").exists());
-  assert_eq!(workspace.merged_polygons("smpl_block_01.ybn"), 4);
+  // The summer collision's bench carries over to the generation the build loads, as the planter
+  // does without the overwrite written against the summer collision; the kiosk it takes out is
+  // not there, so its removal is left behind.
+  assert_eq!(workspace.merged_polygons("smpl_block_01.ybn"), 5);
+  let left_behind = workspace.json("merged/generations/left_behind.json");
+  let polygons =
+    left_behind.as_array().unwrap().iter().filter(|change| change["array"] == "polygons");
+  assert_eq!(
+    polygons.map(|change| change["file_name"].as_str().unwrap()).collect::<Vec<_>>(),
+    ["summer_smpl_block_01.ybn"]
+  );
   assert_ne!(
     fs::read(workspace.map("source-cache/diff/smpl_custom_props/smpl_block_02.ymap.diff.json"))
       .unwrap(),
@@ -399,5 +411,5 @@ fn every_stream_file_covers_the_shared_position() {
     checked += 1;
   }
   // The earlier versions kept in the source cache's history included.
-  assert_eq!(checked, 30);
+  assert_eq!(checked, 32);
 }

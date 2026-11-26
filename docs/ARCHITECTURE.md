@@ -127,23 +127,24 @@ each source on its own; DLC generations are resolved by the merge (see
 
 ## Generation Resolution
 
-DLCs ship vanilla YMAPs again under prefixes of their own (`hei_`, `apa_`, `vw_`, `m25_2_`),
-and the game loads one generation of each; a streamed YMAP of another loads beside it,
-placing its items twice. Resolution is split by what each stage owns:
+DLCs ship vanilla YMAPs and YBNs again under prefixes of their own (`hei_`, `apa_`, `vw_`,
+`m25_2_`), and the game loads one generation of each; a streamed file of another loads beside
+it, placing its items or collision twice. Resolution is split by what each stage owns:
 
 - The raw vanilla archive records what each DLC pack declares: its data files, the change
   sets the game executes, and the islands its island hopper files define.
 - The vanilla cache applies those in stage order through the selected game build to find
   the archives the game loads (`dlc_activity.json`, `app::map::vanilla_cache::activity`).
-  It pairs the items of each family's generations, over the whole archive so that YMAPs
+  It groups YBNs into families without pairing anything, as their polygons match by geometry,
+  and pairs the items of each YMAP family's generations, over the whole archive so that YMAPs
   first shipped after the build are paired too, one unit per older and newer generation,
   stored by a digest of its YMAPs so that rebuilds and game build switches reuse them. It
   names the loaded successor of each YMAP the game does not load in `generations.json`,
   and records the YMAPs newer than the build with a successor as `newer_files`, so that
   sources streaming them are diffed against them.
 - The merge carries each source's changes to the items they pair with in the loaded
-  generation, deploys only that generation, and reports the changes it does not apply or
-  cannot carry.
+  generation, and a source YBN's polygon changes to the loaded YBN by geometry, deploys only
+  that generation, and reports the changes it does not apply or cannot carry.
 
 The engine's loading rules are inferred from the packs' data and loads observed in game;
 the config's `[dlc_activity]` corrects them where they do not hold.
@@ -154,7 +155,8 @@ the config's `[dlc_activity]` corrects them where they do not hold.
 2. Carry each source YMAP's changes, after its LOD light pair document's skip and its
    overwrite, over to the paired items of the newer generations the game loads, or of the
    older ones for a YMAP first shipped after the build (`app::map::merge::generations`),
-   writing them to `generations/`.
+   and each source YBN's changes of a generation not loaded to its successor, writing them
+   to `generations/`.
 3. Leave out the YMAPs with a successor, omitting their sources, and dispatch the other
    latest vanilla `.ybn` and `.ymap` files, and the YMAPs resources add, to separate merge
    handlers.
@@ -172,7 +174,11 @@ the config's `[dlc_activity]` corrects them where they do not hold.
    which they can still be set. Entities' child counts are left out of every diff,
    the vanilla overwrite's included: the merge counts each parent's children from the
    final parent references. Diffs and their application stay complete, so other uses
-   replay every change. YBNs apply supported source changes directly.
+   replay every change. For YBNs, read each source's diff document, leave out the polygons
+   its overwrite skips, add the changes carried over from other generations, combine them
+   and apply them to the latest vanilla file, placing added polygons so connected ones share
+   a geometry child (`common::mesh`). A YBN one source replaces, without an overwrite or
+   carried changes, is deployed as that source has it.
 5. Write merged native stream files under extension subdirectories (`ymap/`, `ybn/`),
    `_omit.txt` and the merge report (`report/`, `app::map::merge::report`) at the selected
    output root.
@@ -248,8 +254,8 @@ while that file is the latest one of its name, selected by the game build, and
 matches its fingerprint; once a newer stage replaces the file, it is left out with a
 warning until it is written for the new version. The differences join the merge as
 the last source rather than overriding its result, so the merge policy applies to
-them unchanged; a file with one is merged even when no resource replaces it. YBN
-overwrites are not yet supported.
+them unchanged; a file with one is merged even when no resource replaces it. Resource
+overwrites apply to YBNs too; vanilla overwrites only to YMAPs.
 
 ## Inspection
 
@@ -338,7 +344,8 @@ generations, which come newest origin generation first. YMAP parent
 relationships are resolved before merging and repaired after the final entity layout
 is known, so files affected by those repairs are rebuilt even when their own data is
 unchanged; ambiguous references are rejected. YBN shapes are
-matched by geometry within the configured tolerance, not by polygon or vertex index.
+matched by geometry within the configured tolerance, not by polygon or vertex index, and
+grouped by the collision flags of the geometry child holding them.
 The exact rules are in the [command reference](reference.md#merge).
 
 Matching tolerances are validated from configuration before each operation and
