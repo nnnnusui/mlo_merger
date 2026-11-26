@@ -100,7 +100,7 @@ With the two above, the first pipeline run lists one entry of every reason in
 
 ## A Position Every File Covers
 
-Every stream file here, YMAP or YBN, of every stage and resource and in the history, covers
+Every stream file here, of every stage and resource and in the history, covers
 **(-7090, 7092, 20.5)**: it lies inside each YMAP's entity extents (the sample takes each
 archetype to reach 10 m from its entity) and each YBN's bounds. A file-from-position search
 there lists every file the stores hold:

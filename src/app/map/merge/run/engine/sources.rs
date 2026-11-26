@@ -7,7 +7,7 @@ impl<'a> MergeRun<'a> {
   /// missing, and a resource's second YMAP of one name.
   pub(super) fn group_sources(
     &mut self,
-    raw_sources: &[SourceYmap],
+    raw_sources: &[SourceStreamFile],
   ) -> Result<SourcesByName, Box<dyn std::error::Error>> {
     let mut by_name = SourcesByName::new();
     for (resource, path, diff_path) in raw_sources {

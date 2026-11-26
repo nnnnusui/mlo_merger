@@ -144,10 +144,10 @@ pub struct GenerationIndex {
   pub algorithm_version: u32,
   pub vanilla_manifest_sha256: String,
   pub version: String,
-  /// The YMAPs and YBNs the game does not load, keyed by lowercase file name, with why: latest
+  /// The stream files the game does not load, keyed by lowercase file name, with why: latest
   /// ones (see [`super::activity`]), and those first shipped after [`Self::version`].
   pub inactive: BTreeMap<String, String>,
-  /// The YMAPs and YBNs first shipped after [`Self::version`], in lowercase.
+  /// The stream files first shipped after [`Self::version`], in lowercase.
   pub newer_than_build: BTreeSet<String>,
 }
 
@@ -494,9 +494,9 @@ pub(super) fn index_is_current(
   })
 }
 
-/// One latest vanilla YMAP or YBN the generations are formed from.
+/// One latest vanilla stream file the generations are formed from.
 #[derive(Clone)]
-pub(super) struct SourceYmap {
+pub(super) struct SourceStreamFile {
   /// Its sha256.
   pub sha256: String,
   /// Its file in the vanilla archive.
@@ -512,7 +512,7 @@ pub(super) struct SourceYmap {
 pub(super) fn write_generations(
   staging: &Path,
   previous: &Path,
-  (ymaps, ybns): (&BTreeMap<String, SourceYmap>, &BTreeMap<String, SourceYmap>),
+  (ymaps, ybns): (&BTreeMap<String, SourceStreamFile>, &BTreeMap<String, SourceStreamFile>),
   activity: Option<&super::activity::DlcActivity>,
   inactive: &BTreeMap<String, String>,
   newer: &BTreeSet<String>,
@@ -735,7 +735,7 @@ fn unit_key(
 /// The families of `ymaps` with more than one generation, each generation's YMAPs sorted and the
 /// generations ordered by the stage first shipping one of their YMAPs; see the module docs.
 fn families(
-  ymaps: &BTreeMap<String, SourceYmap>,
+  ymaps: &BTreeMap<String, SourceStreamFile>,
   stage_ids: &[String],
 ) -> BTreeMap<String, Vec<Generation>> {
   let stems = ymaps.keys().map(|name| stem(name)).collect::<BTreeSet<_>>();
@@ -782,7 +782,7 @@ fn families(
 /// stands for both.
 fn partner_of_lod(
   name: &str,
-  ymaps: &BTreeMap<String, SourceYmap>,
+  ymaps: &BTreeMap<String, SourceStreamFile>,
 ) -> bool {
   LightSide::partner_name(name).is_some_and(|partner| ymaps.contains_key(&partner))
 }
@@ -804,10 +804,10 @@ pub(super) fn ybn_marker(name: &str) -> (&str, &str) {
 /// without successors: YBNs carry their changes to candidates
 /// ([`super::ybn_candidates`]).
 fn ybn_families(
-  ybns: &BTreeMap<String, SourceYmap>,
+  ybns: &BTreeMap<String, SourceStreamFile>,
   stage_ids: &[String],
 ) -> BTreeMap<String, Family> {
-  let mut by_marker = BTreeMap::<&str, BTreeMap<String, SourceYmap>>::new();
+  let mut by_marker = BTreeMap::<&str, BTreeMap<String, SourceStreamFile>>::new();
   for (name, source) in ybns {
     let (marker, rest) = ybn_marker(name);
     by_marker.entry(marker).or_default().insert(rest.to_owned(), source.clone());
@@ -1129,8 +1129,8 @@ fn pair_items(
 mod tests {
   use super::*;
 
-  fn source(first_stage: usize) -> SourceYmap {
-    SourceYmap {
+  fn source(first_stage: usize) -> SourceStreamFile {
+    SourceStreamFile {
       sha256: String::new(),
       path: PathBuf::new(),
       first_stage,

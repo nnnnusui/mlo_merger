@@ -7,7 +7,7 @@ use crate::platform::fs::WalkDir;
 
 use crate::core::format::stream_file::{FileType, StreamFile};
 
-/// Collects every YMAP and YBN file below `asset/<directory>`, following symlinks.
+/// Collects every stream file with a typed model below `asset/<directory>`, following symlinks.
 fn stream_files(directory: &str) -> Vec<PathBuf> {
   let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("asset").join(directory);
   assert!(root.is_dir(), "missing {}", root.display());
@@ -23,7 +23,8 @@ fn stream_files(directory: &str) -> Vec<PathBuf> {
   paths
 }
 
-/// Reads every YMAP and YBN file below `asset/<directory>`; see [`assert_readable`].
+/// Reads every stream file with a typed model below `asset/<directory>`; see
+/// [`assert_readable`].
 fn assert_all_readable(directory: &str) {
   assert_readable(&format!("asset/{directory}"), &stream_files(directory));
 }

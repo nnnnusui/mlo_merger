@@ -12,7 +12,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use rayon::prelude::*;
 
 use super::activity::{DlcActivity, Unloaded};
-use super::generations::{SourceYmap, ybn_marker};
+use super::generations::{SourceStreamFile, ybn_marker};
 use super::*;
 use crate::core::format::ybn::read_ybn_bound_tree;
 
@@ -43,7 +43,7 @@ type Box3 = ([f32; 3], [f32; 3]);
 /// The candidates of each YBN of `ybns` that is `inactive`, of which `newer` were first shipped
 /// after the game build; see the module docs.
 pub(super) fn candidates(
-  ybns: &BTreeMap<String, SourceYmap>,
+  ybns: &BTreeMap<String, SourceStreamFile>,
   activity: Option<&DlcActivity>,
   inactive: &BTreeMap<String, String>,
   newer: &BTreeSet<String>,

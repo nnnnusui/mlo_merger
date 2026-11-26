@@ -24,7 +24,7 @@ type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 pub struct FindEntity {
   /// Validated GUID or three-dimensional position condition.
   pub query: EntityQuery,
-  /// Directory containing merged YMAPs and YBNs.
+  /// Directory containing merged stream files.
   pub merged_dir: PathBuf,
   /// Where the inputs `--all` reads are.
   pub stores: InputStores,

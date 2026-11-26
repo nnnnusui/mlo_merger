@@ -36,7 +36,7 @@ in `web/`, described under `web` in its `release.json`; see [Browser build](web.
 | Source-cache diff documents | `YmapComparisonDiff`, `YmapComparisonFile`, `YmapDiffFields`, `YmapEntityDiff`, `YmapEntityFieldDiff`, `YbnComparisonDiff`, `YbnDiffFields`, `YbnPolygonsDiff` |
 | Changes carried to newer DLC generations | `YmapPropagatedDiff`, `YmapPropagationOrigin`, `LeftBehind`, `LeftBehindReason` |
 | LOD light pair documents | `YmapImplied`, `YmapImpliedPartner` |
-| Vanilla YMAP and YBN generations | `GenerationIndex`, `YmapGenerationIndex`, `YbnGenerationIndex`, `Family`, `Generation`, `UnitRef`, `GenerationUnit`, `YbnCandidates`, `YbnCandidate` |
+| Vanilla generations | `GenerationIndex`, `YmapGenerationIndex`, `YbnGenerationIndex`, `Family`, `Generation`, `UnitRef`, `GenerationUnit`, `YbnCandidates`, `YbnCandidate` |
 | Repeated YBN polygons | `YbnRepeatIndex`, `YbnRepeatCount`, `YbnRepeatsReport` |
 | Vanilla archives the game loads | `DlcActivity`, `ArchiveActivity`, `FileActivity`, `PackActivity`, `Unloaded`, `ChangeSetRef` |
 | Overwrite documents | `StreamFileOverwrite`, `OverwriteFingerprint`, `YmapDiffSkip`, `VanillaOverwrite` |
@@ -140,8 +140,8 @@ archive, which is absolute when the two are on different drives.
 | The source cache (`asset/map/source-cache`) | Source files moved into the cache: `resources/{resource}/{stream path}`; and `hash_names.json` |
 | The source root (`asset/map/source`) | Resources (their IDs), source files left in them, and each source's original path |
 | The vanilla cache (`asset/map/vanilla-cache`) | The vanilla archive the cache was built from (`vanilla_dir` in its `cache_info.json`, absolute only when the two share no root) |
-| The vanilla archive (`asset/vanilla`) | Latest vanilla files and vanilla versions read by `--read`: `{version}/{ymap,ybn}/{file name}`; and `hash_names.json` |
-| The merge output (`asset/map/merged`) | Merged files: `{ymap,ybn}/{file name}` |
+| The vanilla archive (`asset/vanilla`) | Latest vanilla files and vanilla versions read by `--read`: `{version}/{extension}/{file name}`; and `hash_names.json` |
+| The merge output (`asset/map/merged`) | Merged files: `{extension}/{file name}` |
 
 A bounds index's `path` and a merge input's `path` name the file relative to its own store:
 a latest vanilla file relative to the vanilla archive, a source file moved into the cache
@@ -153,7 +153,7 @@ source root.
 | Step | Arguments | Result | Files to read afterwards |
 |---|---|---|---|
 | Index file bounds | none; written by vanilla-cache, source-cache and merge runs | | `asset/{vanilla-cache,source-cache,merged}/stream_file_rtree.json` (`RTreeIndex`) |
-| Convert YMAPs and YBNs to JSON | `--read FILE` | `ReadResult` | each `files[].output` (`YmapReadDocument`, or `YbnReadDocument` for a YBN) |
+| Convert stream files to JSON | `--read FILE` | `ReadResult` | each `files[].output` (`YmapReadDocument`, or `YbnReadDocument` for a YBN) |
 | Inspect differences | none; written by source-cache generation | | `asset/map/source-cache/diff/{resource}/{stream_path}.diff.json` (`YmapComparisonDiff`) |
 | Inspect which vanilla YMAPs the game loads | none; written by vanilla-cache generation | | `asset/map/vanilla-cache/dlc_activity.json` (`DlcActivity`); see [Loaded Vanilla YMAPs](#loaded-vanilla-ymaps) |
 | Inspect what keeps a resource's LOD light pairs in step | none; written by source-cache generation | | `asset/map/source-cache/implied/{resource}/{stream_path}.json` (`YmapImplied`) |
@@ -258,7 +258,7 @@ Three files of `asset/map/vanilla-cache` tell, for the game build the vanilla ca
 for, which vanilla files the game loads, and which it loads in place of one it does not (see
 [Newer DLC Generations](reference.md#newer-dlc-generations)):
 
-- `generations.json` (`GenerationIndex`): `inactive` lists the YMAPs and YBNs the game does
+- `generations.json` (`GenerationIndex`): `inactive` lists the stream files the game does
   not load, by lowercase file name, with why; `newer_than_build` those of them first shipped
   after the build.
 - `ymap_generations.json` (`YmapGenerationIndex`): `families` groups the YMAPs of all
@@ -391,7 +391,7 @@ vanilla. The last stdout line is a `ReadResult`:
 - `--read --resource NAME --version SHA256 FILE` reads the earlier version with that SHA-256
   of a resource's file, which the source cache keeps in its history, as
   `origin.History`, to `asset/map/read-cache/history/{resource}/{stream_path}/{sha256}.ymap.json`.
-- `--read --all` reads every YMAP and YBN of every resource and of vanilla, for
+- `--read --all` reads every stream file it supports of every resource and of vanilla, for
   tools that want all documents up front.
 
 A YBN's `output` is a `YbnReadDocument`; its `model` is the root bound:
@@ -792,7 +792,7 @@ or removed (`PipelineChanges`), and the [overwrite warnings](#overwrite-warnings
 
 - Each path is placed below the directory the pipeline used for that store (`--vanilla-cache`,
   `--source-cache`, `--merged`), so with the defaults it is relative to the working directory.
-- `vanilla_cache` lists the latest vanilla YMAP/YBN files, placed below the vanilla archive
+- `vanilla_cache` lists the latest vanilla stream files, placed below the vanilla archive
   (`--vanilla`) since the vanilla cache names them there; a file a newer stage replaces is
   listed as removed and the newer stage's file as added. `source_cache` lists the stream files
   moved into the cache, and `merged` the merged stream files.

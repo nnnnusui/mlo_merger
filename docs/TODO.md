@@ -6,7 +6,7 @@
 
 ## DLC Generations
 
-Merges deploy only the generation of each vanilla YMAP and YBN the game loads and carry the changes resources make to the others over to it; see [Newer DLC Generations](reference.md#newer-dlc-generations).
+Merges deploy only the generation of each vanilla stream file the game loads and carry the changes resources make to the others over to it; see [Newer DLC Generations](reference.md#newer-dlc-generations).
 
 - [ ] Record each FiveM game build's own title update data (`dlc_patch/` replacements of packs' `content.xml` and `setup2.xml`, `dlclist.xml`, `lodlights.rpf`), which FiveM mounts for that build, and apply it when the vanilla cache targets the build; the installed title update's is applied to every build now. A pack's archive the title update patches without the pack declaring it (`not_declared` in `dlc_activity.json`) is taken as not loaded meanwhile, and stands for no path, so the YBNs whose latest version it holds have no candidates to carry their changes to (93 on the local vanilla archive that a same-name successor used to take).
 - [ ] Carry entity parent changes and additions with a parent to other generations; see the [plan](plan/202611191800_generation_entity_parents.md).
@@ -53,7 +53,7 @@ Resource overwrites (`overwrite/resources/{resourceName}/{stream_path}.diff.json
 
 ## Diff Documents
 
-Source-cache diff documents currently cover YMAPs and YBNs against the latest vanilla only. Writing each vanilla YMAP's version-to-version diffs is implemented but disabled (see [Limitations](reference.md#limitations)).
+Source-cache diff documents currently cover stream files against the latest vanilla only. Writing each vanilla YMAP's version-to-version diffs is implemented but disabled (see [Limitations](reference.md#limitations)).
 
 - [ ] Write source diffs against a selected or inferred vanilla version, not only the latest one.
 - [ ] Implement `--get-diff SOURCE TARGET`; it currently only prints a mock invocation.

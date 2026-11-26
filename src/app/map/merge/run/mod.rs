@@ -20,7 +20,7 @@ use std::rc::Rc;
 use struct_diff::Diff;
 
 /// A source YMAP to merge: its resource, path and source-cache diff document, if any.
-pub type SourceYmap = (String, PathBuf, Option<PathBuf>);
+pub type SourceStreamFile = (String, PathBuf, Option<PathBuf>);
 
 /// Changes a resource's YMAPs make, carried over to a newer generation of a vanilla YMAP the
 /// resource does not ship: the resource, the vanilla YMAP's file name and the source cache's
@@ -64,7 +64,7 @@ impl MergeYmap {
   pub fn run_with_latest_vanilla_files(
     &self,
     vanilla_files: &[PathBuf],
-    source_files: &[SourceYmap],
+    source_files: &[SourceStreamFile],
   ) -> Result<(), Box<dyn std::error::Error>> {
     self.run_inner(vanilla_files, source_files)
   }

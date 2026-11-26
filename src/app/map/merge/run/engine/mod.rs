@@ -18,7 +18,7 @@ impl MergeYmap {
   pub(super) fn run_inner(
     &self,
     latest_files: &[PathBuf],
-    raw_sources: &[SourceYmap],
+    raw_sources: &[SourceStreamFile],
   ) -> Result<(), Box<dyn std::error::Error>> {
     crate::core::config::matching::with_config(|| {
       self.run_configured_inner(latest_files, raw_sources)
@@ -31,7 +31,7 @@ impl MergeYmap {
   fn run_configured_inner(
     &self,
     latest_files: &[PathBuf],
-    raw_sources: &[SourceYmap],
+    raw_sources: &[SourceStreamFile],
   ) -> Result<(), Box<dyn std::error::Error>> {
     tracing::debug!(
       "Merging {} source YMAP files against {} into {}",

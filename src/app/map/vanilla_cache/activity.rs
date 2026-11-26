@@ -1,7 +1,7 @@
-//! Which latest vanilla YMAPs and YBNs the game loads, from what each DLC pack's `setup2.xml` and
+//! Which latest vanilla stream files the game loads, from what each DLC pack's `setup2.xml` and
 //! `content.xml` declare (see [`crate::core::game_archive::dlc_content`]).
 //!
-//! A YMAP or YBN is loaded from the archive (`.rpf`) holding it. The stages are applied in order, each
+//! A stream file is loaded from the archive (`.rpf`) holding it. The stages are applied in order, each
 //! DLC pack's data files mounted and its change sets executed:
 //!
 //! - An archive of the base game, its title update included, is loaded unless a change set
@@ -153,16 +153,16 @@ pub struct DlcActivity {
   pub packs: Vec<PackActivity>,
   /// The archives the config's `[dlc_activity] additive_archives` names.
   pub configured_additive: Vec<String>,
-  /// The archives holding YMAPs or YBNs of the stages applied, keyed by their path as `content.xml`
+  /// The archives holding stream files of the stages applied, keyed by their path as `content.xml`
   /// spells it, such as `platform:/levels/gta5/lodlights.rpf` or
   /// `dlcmpheist:/levels/gta5/lodlights.rpf`.
   pub archives: BTreeMap<String, ArchiveActivity>,
-  /// Every YMAP and YBN of the stages applied, each version keyed by its path in the vanilla archive,
+  /// Every stream file of the stages applied, each version keyed by its path in the vanilla archive,
   /// such as `0000-base/ymap/sc1_18_strm_0.ymap`, with the archive holding it.
   pub files: BTreeMap<String, FileActivity>,
 }
 
-/// One version of a vanilla YMAP or YBN.
+/// One version of a vanilla stream file.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "typescript", derive(specta::Type))]
 pub struct FileActivity {
@@ -185,7 +185,7 @@ pub struct PackActivity {
   pub on_demand: Vec<crate::core::game_archive::dlc_content::DlcChangeSet>,
 }
 
-/// One archive holding YMAPs or YBNs.
+/// One archive holding stream files.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "typescript", derive(specta::Type))]
 pub struct ArchiveActivity {
@@ -525,7 +525,7 @@ pub(crate) fn dlc_activity(
   })
 }
 
-/// The latest YMAPs and YBNs `activity` names that the game does not load, keyed by lowercase
+/// The latest stream files `activity` names that the game does not load, keyed by lowercase
 /// file name, with why.
 pub(crate) fn inactive_files(activity: Option<&DlcActivity>) -> BTreeMap<String, String> {
   activity

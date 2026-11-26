@@ -21,7 +21,7 @@ impl BuildVanillaCache {
     let through_index = resolve_through_version(&manifest, self.gamebuild.as_ref())?;
     let latest_version = manifest.versions[through_index].id.clone();
     let current = resolve_files(&manifest, through_index)?;
-    // YMAPs and YBNs first shipped after the selected stage, of which the game may load an older
+    // Stream files first shipped after the selected stage, of which the game may load an older
     // generation.
     let newer = resolve_files(&manifest, manifest.versions.len() - 1)?
       .into_iter()
@@ -220,7 +220,7 @@ fn generation_sources(
   current: &BTreeMap<String, (String, CachedFile)>,
   newer: &BTreeMap<String, (String, CachedFile)>,
   extension: &str,
-) -> Result<BTreeMap<String, generations::SourceYmap>> {
+) -> Result<BTreeMap<String, generations::SourceStreamFile>> {
   let mut first_stages = BTreeMap::new();
   for (stage, version) in manifest.versions.iter().enumerate() {
     for name in version.changes.keys() {
@@ -232,7 +232,7 @@ fn generation_sources(
     .chain(newer)
     .filter(|(name, _)| name.ends_with(extension))
     .map(|(name, (_, file))| {
-      let source = generations::SourceYmap {
+      let source = generations::SourceStreamFile {
         sha256: file.sha256.clone(),
         path: existing_artifact_path(vanilla_dir, file)?,
         first_stage: first_stages[name],

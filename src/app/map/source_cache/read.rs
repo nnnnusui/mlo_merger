@@ -33,7 +33,7 @@ pub struct MergeSourceFile {
   /// Path below the resource's `stream` directory, such as `vanilla/hei_ch1_11.ymap`.
   #[serde(default)]
   pub stream_path: String,
-  /// The source cache's diff document of this YMAP or YBN against the latest vanilla.
+  /// The source cache's diff document of this stream file against the latest vanilla.
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub diff_path: Option<PathBuf>,
   /// The source cache's document keeping this YMAP's LOD light pair in step

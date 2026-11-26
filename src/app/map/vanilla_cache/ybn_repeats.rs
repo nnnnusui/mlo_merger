@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 
 use rayon::prelude::*;
 
-use super::generations::SourceYmap;
+use super::generations::SourceStreamFile;
 use super::*;
 use crate::core::format::ybn::{diff::polygons, read_ybn};
 
@@ -56,7 +56,7 @@ impl YbnRepeatIndex {
 /// index into `staging`.
 pub(super) fn write_repeats(
   staging: &Path,
-  ybns: &BTreeMap<String, SourceYmap>,
+  ybns: &BTreeMap<String, SourceStreamFile>,
   inactive: &BTreeMap<String, String>,
   revision: &str,
   version: &str,

@@ -79,7 +79,7 @@ impl IncrementalMerge<'_> {
         tracing::debug!("Vanilla overwrite of {name} names no latest vanilla YMAP; not applied");
       }
     }
-    // A YMAP or YBN of a superseded generation is not merged: its changes are carried to the
+    // A stream file of a superseded generation is not merged: its changes are carried to the
     // latest generation, its sources are omitted and the vanilla file stays.
     let mut superseded = BTreeMap::<String, (String, Vec<&MergeSourceFile>)>::new();
     if let Some(generations) =

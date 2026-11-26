@@ -189,7 +189,7 @@ fn merge_emits_only_edited_ymaps_when_rebuilding() {
     replacing: Default::default(),
     propagated: Vec::new(),
   };
-  let run = |sources: &[SourceYmap]| {
+  let run = |sources: &[SourceStreamFile]| {
     merge.run_with_latest_vanilla_files(std::slice::from_ref(&vanilla), sources).unwrap()
   };
   let a = ("resource_a".to_string(), resource_a.clone(), None);

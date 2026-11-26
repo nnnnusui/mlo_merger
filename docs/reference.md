@@ -343,7 +343,7 @@ generation and carry the changes resources make to the others over to it.
     script enables the island, such as `mpheist4`'s `island_lodlights`, and those
     `additive_archives` under `[dlc_activity]` in the config file names, spelled as
     `dlc_activity.json` keys archives.
-- `generations.json` lists the YMAPs and YBNs the game does not load in `inactive`, with why;
+- `generations.json` lists the stream files the game does not load in `inactive`, with why;
   YBNs load from their archives as YMAPs do.
 
 #### Generations And Their Items
@@ -511,8 +511,8 @@ into the overwrite cache (`--overwrite-cache`, default `asset/map/overwrite-cach
 `--generate-overwrite-cache`, which `--merge` and `--pipeline` run first. The merge always
 reads it, even with no overwrites, since it also records which resources each added stream file is
 merged from; a missing one, or one older than the source and vanilla caches or the
-overwrites, fails the merge. Overwrites apply to YMAPs and YBNs; one of another format is
-reported as `unsupported_format` and not applied.
+overwrites, fails the merge. Overwrites apply to the stream files merges take diffs of; one of
+another format is reported as `unsupported_format` and not applied.
 
 - `resources/{resourceName}/{stream_path}.diff.json` (`StreamFileOverwrite`), one per
   stream file, lists the differences of that file's diff document to leave out of the
@@ -724,7 +724,7 @@ leaves unnamed, and the resolved `entity_lod_parents` for a YMAP (`YmapReadDocum
 bound tree with named collision and material flags for a YBN (`YbnReadDocument`); see
 [usage](usage.md#--read). A resource's file is written to
 `asset/map/read-cache/resources/{resourceName}/{stream-relative-path}.json` and a vanilla
-file to `asset/map/read-cache/vanilla/{version}/{ymap,ybn}/{fileName}.json`, where `{version}` is the
+file to `asset/map/read-cache/vanilla/{version}/{extension}/{fileName}.json`, where `{version}` is the
 version folder holding the file in the vanilla archive: the last version, up to the stage
 read, that changed it. Versions holding the same file share its document. A JSON is
 written again when its file, hash names or resolved LOD parents change, or with `-f`.
@@ -737,14 +737,15 @@ game build instead, resolved as for the other commands (see [Game Builds](#game-
 `--gamebuild` also selects the vanilla stage used to resolve parent YMAPs.
 
 - `--resource NAME [FILE...]` reads one resource, by name or source-relative ID, from the
-  existing source cache. Without a file it reads all of the resource's YMAPs and YBNs. A file name
+  existing source cache. Without a file it reads all of the resource's stream files it supports. A file name
   matching several of the resource's files is an error; give its stream-relative path
   instead.
 - `--vanilla [FILE...]` reads vanilla files only. Without a file it reads all of the
-  stage's YMAPs and YBNs.
+  stage's stream files it supports.
 - Files alone are read from every resource holding them and from vanilla. If any resource
   holds several files of one name, nothing is written.
-- `--all` reads every YMAP and YBN of every resource and of vanilla; it takes no file names.
+- `--all` reads every stream file it supports of every resource and of vanilla; it takes no
+  file names.
 - Several files are read together in the order given; a file named twice is read once.
   If any name matches no file, nothing is written.
 - Files are read and written in parallel; the result keeps the order above.

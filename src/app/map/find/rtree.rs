@@ -136,7 +136,7 @@ impl Store<'_> {
     }
   }
 
-  /// The YMAP and YBN files of the store at `directory`, as its metadata lists them, each with
+  /// The stream files of the store at `directory`, as its metadata lists them, each with
   /// its path relative to the store holding it.
   fn candidates(
     self,

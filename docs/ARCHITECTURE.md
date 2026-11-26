@@ -127,7 +127,7 @@ each source on its own; DLC generations are resolved by the merge (see
 
 ## Generation Resolution
 
-DLCs ship vanilla YMAPs and YBNs again under prefixes of their own (`hei_`, `apa_`, `vw_`,
+DLCs ship vanilla stream files again under prefixes of their own (`hei_`, `apa_`, `vw_`,
 `m25_2_`), and the game loads one generation of each; a streamed file of another loads beside
 it, placing its items or collision twice. Resolution is split by what each stage owns:
 
@@ -219,7 +219,7 @@ related changes cannot reuse stale outputs. Diff documents, overwrite digests an
 effective tolerances participate in group signatures. Missing or changed outputs
 are rebuilt; removed inputs and results that become no-ops disappear from the next
 publication. Failed merges leave prior outputs intact; fully current runs do not
-republish. Algorithm versions are tracked separately for YMAP and YBN.
+republish. Algorithm versions are tracked separately per stream file type.
 
 The merge report names, for each entity and item of another array that several changes
 reach, the applied change and the ignored ones with their resolution reason, and the
@@ -339,8 +339,8 @@ does not automatically restore archived files.
 
 ## Merge Policy
 
-Sources are compared with the latest selected vanilla files. YMAP and YBN use
-independent format-specific policies.
+Sources are compared with the latest selected vanilla files. Each stream file type has
+policies of its own.
 
 The outcome never depends on processing or filesystem order: a removal wins over
 every other change to the same vanilla item, and otherwise the first source in

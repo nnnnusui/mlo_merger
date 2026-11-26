@@ -152,7 +152,7 @@ pub struct MergeSummary {
   pub warnings: OverwriteWarnings,
 }
 
-/// The YMAPs and YBNs of `latest`, the latest vanilla files.
+/// The stream files of `latest`, the latest vanilla files.
 fn latest_vanilla_stream_files(
   latest: Vec<crate::app::map::vanilla_cache::VanillaLatestFile>
 ) -> VanillaStreamFiles {

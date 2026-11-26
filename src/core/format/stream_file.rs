@@ -104,7 +104,7 @@ impl StreamFile {
 
   /// Decodes native stream file bytes as the given file type.
   ///
-  /// Only YMAP and YBN have typed models; other types are rejected.
+  /// Types without a typed model ([`StreamFile`]) are rejected.
   pub fn decode(
     file_type: FileType,
     bytes: &[u8],

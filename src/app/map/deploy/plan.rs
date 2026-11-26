@@ -10,7 +10,7 @@ use std::{
 };
 
 /// The managed deployment files, each with its source and that source's path relative to its
-/// store: every merged YMAP/YBN, and each file the source cache moved out of its resource whose
+/// store: every merged stream file, and each file the source cache moved out of its resource whose
 /// name no merged file takes and whose YMAP the merge did not leave out for a newer generation.
 pub(super) fn plan(
   merged: &Path,
