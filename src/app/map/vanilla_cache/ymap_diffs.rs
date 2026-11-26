@@ -290,7 +290,7 @@ fn rewrite_inexact_arrays(
 
 /// The SHA-256 of the raw archive's `hash_names.json`, or `None` when it has none.
 fn hash_names_sha256(vanilla_dir: &Path) -> Result<Option<String>> {
-  match fs::read(vanilla_dir.join("hash_names.json")) {
+  match fs::read(crate::core::game_archive::hash_names_path(vanilla_dir)) {
     Ok(bytes) => Ok(Some(hex::encode(Sha256::digest(&bytes)))),
     Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
     Err(error) => Err(error.into()),
@@ -360,7 +360,8 @@ pub(super) fn write_ymap_diffs(
     }
   }
   if !pending.is_empty() {
-    let hash_names = load_hash_names_or_empty(&vanilla_dir.join("hash_names.json"));
+    let hash_names =
+      load_hash_names_or_empty(&crate::core::game_archive::hash_names_path(vanilla_dir));
     // Boxed errors cannot cross threads, so each is reported as text.
     pending.par_iter().try_for_each(|(object, previous, current)| {
       let write = || -> Result<()> {

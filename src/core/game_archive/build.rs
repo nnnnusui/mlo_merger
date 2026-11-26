@@ -246,7 +246,7 @@ impl BuildGameArchive {
     obsolete_files: &[&str],
     write_metadata: impl FnOnce(&Path, &VanillaCacheManifest, &RpfNames) -> Result<()>,
   ) -> Result<()> {
-    write_json(&build.join("cache_info.json"), manifest)?;
+    write_json(&super::manifest_path(build), manifest)?;
     write_metadata(build, manifest, rpf_names)?;
     tracing::info!("Publishing {} vanilla stages", manifest.versions.len());
     publish_cache(build, output_dir, manifest, metadata_files, obsolete_files)?;

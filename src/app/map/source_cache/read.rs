@@ -308,6 +308,23 @@ pub struct InventoriedFile {
   pub source_path: String,
 }
 
+/// The file name of each YMAP the resources ship, lowercase, with the name hash of the parent
+/// YMAP it declares, when it declares one.
+pub fn source_ymap_parents(cache_dir: &Path) -> Result<Vec<(String, u32)>> {
+  let metadata = read_metadata(cache_dir)?;
+  Ok(
+    metadata
+      .resources
+      .values()
+      .flat_map(|resource| resource.files_by_format.get(".ymap").into_iter().flatten())
+      .filter_map(|file| {
+        let hash = u32::from_str_radix(file.ymap_parent_hash.as_ref()?, 16).ok()?;
+        Some((file.file_name.to_ascii_lowercase(), hash))
+      })
+      .collect(),
+  )
+}
+
 /// File name of the source cache's inventory.
 pub(crate) const CACHE_INFO: &str = "cache_info.json";
 

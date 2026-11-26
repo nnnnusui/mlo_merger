@@ -192,8 +192,13 @@ pub(crate) fn missing_content(content: ArchiveContent) -> Box<dyn std::error::Er
   .into()
 }
 
+/// The vanilla archive's manifest, `cache_info.json`.
+pub fn manifest_path(cache: &Path) -> PathBuf {
+  cache.join("cache_info.json")
+}
+
 fn load(cache: &Path) -> Result<Arc<LoadedManifest>> {
-  let root = cache.join("cache_info.json");
+  let root = manifest_path(cache);
   if !fs::is_file(&root) {
     return Err(format!("No vanilla cache manifest found in {}", cache.display()).into());
   }

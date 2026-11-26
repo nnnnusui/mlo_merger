@@ -40,7 +40,8 @@ pub fn to_xml(
 ) -> Result<(usize, usize), Box<dyn Error>> {
   let inputs = collect_inputs(input, &|path| FileType::from_path(path).is_ok())?;
   fs::create_dir_all(output_dir)?;
-  let mut shared_names = load_hash_names_or_empty(&vanilla_dir.join("hash_names.json"));
+  let mut shared_names =
+    load_hash_names_or_empty(&crate::core::game_archive::hash_names_path(vanilla_dir));
   for source in &inputs {
     if !matches!(FileType::from_path(source), Ok(FileType::Ymap | FileType::Ytyp | FileType::Ymt)) {
       continue;

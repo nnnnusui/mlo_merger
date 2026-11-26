@@ -174,7 +174,7 @@ fn inputs_digest(
   digest.update(serde_json::to_vec(&matching::current())?);
   for path in [
     crate::app::map::source_cache::cache_info_path(source_cache_dir),
-    vanilla_cache_dir.join("cache_info.json"),
+    crate::app::map::vanilla_cache::cache_info_path(vanilla_cache_dir),
   ] {
     digest.update(Sha256::digest(fs::read(&path)?));
   }

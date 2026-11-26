@@ -74,7 +74,7 @@ fn run_with_generation(
   if contents.is_empty() {
     return Err("No vanilla archive content selected".into());
   }
-  let existing = fs::is_file(output_dir.join("cache_info.json"));
+  let existing = fs::is_file(crate::core::game_archive::manifest_path(output_dir));
   if reuse_existing {
     if existing {
       let manifest = load_manifest(output_dir)?;

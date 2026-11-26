@@ -138,7 +138,10 @@ use freshness::{cache_is_current, previous_manifest};
 use generations::write_generations;
 pub(crate) use read::archive_dir;
 pub(crate) use read::{DerivedVanillaFile, LoadedCache, load_cache};
-pub use read::{VanillaLatestFile, cache_info_path, latest_files, newer_files};
+pub use read::{
+  VanillaLatestFile, cache_info_path, latest_files, latest_version, newer_files,
+  ymap_children_by_parent,
+};
 pub(crate) use read::{ybn_bases, ymap_bases};
 use relationships::children_by_parent;
 pub(crate) use relationships::ymap_parent_hash;
@@ -219,6 +222,18 @@ pub(crate) mod test_support {
     };
     crate::platform::fs::create_dir_all(cache_dir).unwrap();
     super::write_json(&super::cache_info_path(cache_dir), &manifest).unwrap();
+  }
+
+  /// Writes the YMAP relationship index of a vanilla cache at `cache_dir`, relating no YMAPs.
+  pub(crate) fn write_empty_relationships(cache_dir: &Path) {
+    let index = super::YmapRelationshipIndex {
+      format_version: super::CACHE_SCHEMA,
+      vanilla_manifest_sha256: String::new(),
+      version: String::new(),
+      children_by_parent: Default::default(),
+    };
+    crate::platform::fs::create_dir_all(cache_dir).unwrap();
+    super::write_json(&cache_dir.join("ymap_relationships.json"), &index).unwrap();
   }
 
   /// The latest file named `name`.

@@ -88,7 +88,7 @@ pub(crate) fn write_hash_index(
   names.extend(entity_archetype_names(&archetypes, &names, &rpf_names.drawables));
 
   write_json(
-    &vanilla_dir.join("hash_names.json"),
+    &hash_names_path(vanilla_dir),
     &HashIndex {
       format_version: 1,
       latest_version,
@@ -357,6 +357,11 @@ pub(crate) fn lod_name_candidates(file_name: &str) -> Vec<String> {
     }
   }
   candidates
+}
+
+/// The vanilla archive's index of the names its hashes spell, `hash_names.json`.
+pub fn hash_names_path(vanilla_dir: &Path) -> PathBuf {
+  vanilla_dir.join("hash_names.json")
 }
 
 #[cfg(test)]

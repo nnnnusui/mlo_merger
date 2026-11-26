@@ -42,6 +42,19 @@ pub fn cache_info_path(cache_dir: &Path) -> PathBuf {
   cache_dir.join("cache_info.json")
 }
 
+/// The vanilla version whose files the cache in `cache_dir` names as the latest.
+pub fn latest_version(cache_dir: &Path) -> Result<String> {
+  Ok(read_derived(cache_dir)?.manifest.latest_version.clone())
+}
+
+/// The child YMAP names of each latest vanilla YMAP, keyed by the parent's file name
+/// (`hash_XXXXXXXX` when unresolved).
+pub fn ymap_children_by_parent(cache_dir: &Path) -> Result<BTreeMap<String, Vec<String>>> {
+  let index: YmapRelationshipIndex =
+    crate::common::json::read_json(cache_dir.join("ymap_relationships.json"))?;
+  Ok(index.children_by_parent)
+}
+
 /// The vanilla archive the cache in `cache_dir` names its latest files in.
 pub(crate) fn archive_dir(cache_dir: &Path) -> Result<PathBuf> {
   Ok(archive_dir_of(cache_dir, &read_derived(cache_dir)?.manifest))

@@ -328,7 +328,7 @@ impl Read {
       let previous = checked.iter().find_map(|(_, previous, _)| recorded(previous.as_ref()?));
       ReadFingerprint::read(path, stored, previous).map(Some)
     };
-    let names_path = self.vanilla_dir.join("hash_names.json");
+    let names_path = crate::core::game_archive::hash_names_path(&self.vanilla_dir);
     let hash_names =
       fingerprint(&names_path, "hash_names.json", |header| header.hash_names.as_ref())?;
     let source_names_path = self.source_cache_dir.join(HASH_NAMES);

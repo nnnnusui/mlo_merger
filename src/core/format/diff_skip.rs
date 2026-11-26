@@ -1,12 +1,14 @@
-//! Leaves selected differences out of a diff document.
+//! Leaves selected differences out of a diff document: the skip selectors overwrites and the
+//! source cache's LOD light pair documents write.
 
 use crate::common::Result;
 use serde::{Serialize, de::DeserializeOwned};
 use serde_json::{Map, Value};
 
-/// Leaves the differences `skip` selects out of `diff` (see
-/// [`super::StreamFileOverwrite::skip`]), dropping objects and arrays left empty. Returns the
-/// paths of the selectors that matched nothing.
+/// Leaves the differences `skip` selects out of `diff`, dropping objects and arrays left empty.
+/// In an object, `true` leaves out the whole difference and a nested selector only the parts it
+/// names; in an array, each selector leaves out the items it matches (see [`selects`]). Returns
+/// the paths of the selectors that matched nothing.
 pub fn skip_diffs<T: Serialize + DeserializeOwned>(
   diff: &mut T,
   skip: &Value,
@@ -189,3 +191,52 @@ fn join(
 ) -> String {
   if path.is_empty() { name.to_string() } else { format!("{path}.{name}") }
 }
+
+/// The TypeScript type of a skip selector, written out by [`crate::typescript::export_types`] as
+/// [`YMAP_DIFF_SKIP_TS`].
+#[cfg(feature = "typescript")]
+pub(crate) struct YmapDiffSkip;
+
+#[cfg(feature = "typescript")]
+impl specta::Type for YmapDiffSkip {
+  fn inline(
+    _: specta::DefOpts,
+    _: &[specta::DataType],
+  ) -> std::result::Result<specta::DataType, specta::ExportError> {
+    Ok(specta::DataType::Reference(specta::DataTypeReference {
+      name: "YmapDiffSkip",
+      sid: specta::sid!(@with_specta_path; "YmapDiffSkip"; specta),
+      generics: Vec::new(),
+    }))
+  }
+}
+
+/// The TypeScript definitions of [`YmapDiffSkip`], which Specta cannot derive.
+#[cfg(feature = "typescript")]
+pub(crate) const YMAP_DIFF_SKIP_TS: &str = r#"
+/** The differences of a `YmapDiffFields` or `YbnDiffFields` document to leave out of a merge. */
+export type YmapDiffSkip = DiffSkip<YmapDiffFields> | DiffSkip<YbnDiffFields>
+
+/**
+ * In an object, `true` leaves out the whole difference and a nested selector only the parts it
+ * names; in an array, each selector leaves out the items it matches.
+ */
+export type DiffSkip<T> =
+  | true
+  | (T extends (infer I)[] ? ItemSkip<I>[] : T extends object ? { [K in keyof T]?: DiffSkip<NonNullable<T[K]>> } : never)
+
+/**
+ * Matches an array item: every field written must equal the item's, except `changes`, which
+ * leaves out only the changes it names instead of the whole item.
+ */
+export type ItemSkip<I> = I extends object
+  ? {
+      [V in keyof I]?: I[V] extends { changes: infer C }
+        ? DiffMatch<Omit<I[V], "changes">> & { changes?: DiffSkip<NonNullable<C>> }
+        : DiffMatch<I[V]>
+    }
+  : I
+
+/** A value an item's field must equal; objects match on the fields written. */
+export type DiffMatch<T> = T extends (infer I)[] ? I[] : T extends object ? { [K in keyof T]?: DiffMatch<T[K]> } : T
+"#;

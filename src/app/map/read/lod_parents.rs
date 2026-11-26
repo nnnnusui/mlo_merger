@@ -76,7 +76,7 @@ impl<'a> ParentMaps<'a> {
       }
     }
     let mut vanilla = Candidates::new();
-    if fs::is_file(read.vanilla_dir.join("cache_info.json")) {
+    if fs::is_file(crate::core::game_archive::manifest_path(&read.vanilla_dir)) {
       let (manifest, _) = load_content(&read.vanilla_dir, ArchiveContent::Map)?;
       let version = read.vanilla_version(&manifest)?;
       for (name, file) in manifest.resolve_version(&version)? {

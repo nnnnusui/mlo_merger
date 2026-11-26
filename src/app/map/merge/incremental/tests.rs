@@ -12,20 +12,8 @@ fn ybn_version_change_reuses_current_ymap_groups() {
   for path in [&source, &cache, &vanilla, &output, &staging] {
     fs::create_dir_all(path).unwrap();
   }
-  write_json(
-    &vanilla.join("ymap_relationships.json"),
-    &serde_json::json!({
-      "children_by_parent": {}
-    }),
-  )
-  .unwrap();
-  write_json(
-    &cache.join("cache_info.json"),
-    &serde_json::json!({
-      "resources": {}
-    }),
-  )
-  .unwrap();
+  crate::app::map::vanilla_cache::test_support::write_empty_relationships(&vanilla);
+  crate::app::map::source_cache::write_test_inventory(&cache, &[]);
   let make_source = |extension: &str| {
     let name = format!("map.{extension}");
     let path = cache.join(&name);

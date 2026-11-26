@@ -31,7 +31,7 @@ pub(crate) use names::HASH_NAMES;
 pub(crate) use read::{CACHE_INFO, SourceYmapIndex, load_source_ymap_index};
 pub use read::{
   CachedFile, InventoriedFile, MergeInputs, MergeSourceFile, cache_info_path, cached_files,
-  inventoried_files, load_merge_inputs, resource_name,
+  inventoried_files, load_merge_inputs, resource_name, source_ymap_parents,
 };
 use read::{FORMAT_VERSION, read_metadata};
 #[cfg(test)]

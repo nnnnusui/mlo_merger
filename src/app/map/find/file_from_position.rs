@@ -366,7 +366,7 @@ fn collect_vanilla_candidates(
   filter: Option<&globset::GlobMatcher>,
   progress: &ProgressBar,
 ) -> Result<()> {
-  let manifest_path = cache_root.join("cache_info.json");
+  let manifest_path = crate::app::map::vanilla_cache::cache_info_path(cache_root);
   if !fs::is_file(&manifest_path) {
     progress
       .println(format!("Warning: vanilla-cache manifest is missing: {}", manifest_path.display()));

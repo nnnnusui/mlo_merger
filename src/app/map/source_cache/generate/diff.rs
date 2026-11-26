@@ -197,7 +197,8 @@ pub(in crate::app::map::source_cache) fn write_ymap_diffs(
     .map(|((stream_file, file_path, _, path, _), _)| (stream_file, file_path, path))
     .collect::<Vec<_>>();
   if !stale.is_empty() {
-    let hash_names = load_hash_names_or_empty(&vanilla_dir.join("hash_names.json"));
+    let hash_names =
+      load_hash_names_or_empty(&crate::core::game_archive::hash_names_path(vanilla_dir));
     let context = YmapComparisonContext::new(source_dir, output, vanilla_cache_dir, hash_names)?;
     counts.written = take_diffs(&context, &stale, tolerances)?;
   }

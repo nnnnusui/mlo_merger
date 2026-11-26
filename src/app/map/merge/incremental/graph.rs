@@ -5,27 +5,6 @@ pub(super) struct Group {
   pub(super) names: BTreeSet<String>,
 }
 
-#[derive(Deserialize)]
-struct Relationships {
-  children_by_parent: BTreeMap<String, Vec<String>>,
-}
-
-#[derive(Deserialize)]
-struct SourceParents {
-  resources: BTreeMap<String, ParentResource>,
-}
-
-#[derive(Deserialize)]
-struct ParentResource {
-  files_by_format: BTreeMap<String, Vec<ParentFile>>,
-}
-
-#[derive(Deserialize)]
-struct ParentFile {
-  file_name: String,
-  ymap_parent_hash: Option<String>,
-}
-
 impl IncrementalMerge<'_> {
   pub(super) fn ymap_graph(&self) -> Result<BTreeMap<String, BTreeSet<String>>> {
     if self.inputs.ymap.is_empty() && self.carried.is_empty() && self.vanilla_overwrites.is_empty()
@@ -42,9 +21,9 @@ impl IncrementalMerge<'_> {
       }
       graph.insert(name, BTreeSet::new());
     }
-    let relationships: Relationships =
-      crate::common::json::read_json(self.vanilla_cache.join("ymap_relationships.json"))?;
-    for (parent, children) in relationships.children_by_parent {
+    let relationships =
+      crate::app::map::vanilla_cache::ymap_children_by_parent(self.vanilla_cache)?;
+    for (parent, children) in relationships {
       let parent = parent.to_ascii_lowercase();
       for child in children {
         connect(&mut graph, &parent, &child.to_ascii_lowercase());
@@ -62,17 +41,10 @@ impl IncrementalMerge<'_> {
     for (parent, child) in added.children_by_file_name() {
       connect(&mut graph, &parent.to_ascii_lowercase(), &child.to_ascii_lowercase());
     }
-    let metadata: SourceParents = crate::common::json::read_json(
-      crate::app::map::source_cache::cache_info_path(self.source_cache),
-    )?;
-    for resource in metadata.resources.values() {
-      for source in resource.files_by_format.get(".ymap").into_iter().flatten() {
-        if let Some(hash) = &source.ymap_parent_hash
-          && let Ok(hash) = u32::from_str_radix(hash, 16)
-          && let Some(parent) = hashes.get(&hash)
-        {
-          connect(&mut graph, parent, &source.file_name.to_ascii_lowercase());
-        }
+    for (file_name, hash) in crate::app::map::source_cache::source_ymap_parents(self.source_cache)?
+    {
+      if let Some(parent) = hashes.get(&hash) {
+        connect(&mut graph, parent, &file_name);
       }
     }
     Ok(graph)

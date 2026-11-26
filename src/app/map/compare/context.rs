@@ -40,11 +40,6 @@ pub struct StreamFileRef {
   pub file_name: String,
 }
 
-#[derive(serde::Deserialize)]
-struct VanillaCacheInfo {
-  latest_version: String,
-}
-
 /// Reads YMAPs from the vanilla and source caches on first use and keeps them for reuse.
 ///
 /// Shared between threads: diffs of several files can be taken at once, and a YMAP two of them
@@ -73,8 +68,7 @@ impl YmapComparisonContext {
     vanilla_cache_dir: &Path,
     hash_names: HashMap<u32, String>,
   ) -> Result<Self> {
-    let info: VanillaCacheInfo =
-      serde_json::from_slice(&fs::read(vanilla_cache_dir.join("cache_info.json"))?)?;
+    let vanilla_version = crate::app::map::vanilla_cache::latest_version(vanilla_cache_dir)?;
     let source_index = load_source_ymap_index(source_cache_dir, source_dir)?;
     let mut file_names_by_hash = HashMap::<u32, BTreeSet<String>>::new();
     let vanilla_files = crate::app::map::vanilla_cache::ymap_bases(vanilla_cache_dir)?
@@ -90,7 +84,7 @@ impl YmapComparisonContext {
     Ok(Self {
       vanilla_files,
       stores: [source_cache_dir.to_path_buf(), source_dir.to_path_buf()],
-      vanilla_version: info.latest_version,
+      vanilla_version,
       source_index,
       file_names_by_hash,
       hash_names,
