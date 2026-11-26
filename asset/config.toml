@@ -9,8 +9,8 @@ ybn_position = 0.05
 # YMAP float values: entity positions, rotations, scales and LOD distances, and car generator,
 # time-cycle modifier and distant LOD light values.
 ymap = 0.001
-# XY extents of occlude models, in metres, when pairing them.
-ymap_occlude_model_position = 0.01
+# Occlude model triangle corners, per axis, in metres: corners this close are one vertex.
+ymap_occlude_vertex_position = 0.01
 # Box occluder centers, in stored units (a quarter metre).
 ymap_box_occluder_position = 1
 # Box occluder rotation (iCosZ/iSinZ), in stored units.

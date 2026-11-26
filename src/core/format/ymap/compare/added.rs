@@ -11,12 +11,13 @@
 //!   earlier one is kept. A left-out entity with another non-zero GUID is listed in
 //!   [`Thinned::aliases`], so that children pointing at it, in its YMAP or another, point at the
 //!   kept one; one the kept entity cannot stand in for, as it has no GUID, is kept.
-//! - A box occluder, an occlude model, a grass batch, a time-cycle modifier or a car generator
-//!   is left out when it equals one an earlier source adds within the matching tolerances
+//! - A box occluder, a grass batch, a time-cycle modifier or a car generator is left out when
+//!   it equals one an earlier source adds within the matching tolerances
 //!   ([`struct_diff::Diff::same_as`]).
 //! - LOD lights and distant LOD lights are kept: they pair up by index across the two YMAPs of
 //!   a LOD light pair, which one YMAP alone cannot keep in step. Physics dictionaries and prop
-//!   instances skip names already present when merged anyway.
+//!   instances skip names already present when merged anyway, as do occlude model triangles
+//!   ([`super::occlude_models::merge`]).
 //!
 //! [`union_extents`] gives the merged YMAP extents covering every version's.
 
@@ -60,13 +61,6 @@ pub fn thin_additions(
     "box_occluders",
     sources,
     |diff| Some(&mut diff.box_occluders),
-    |a, b| a.same_as(b, tolerances),
-    left_out,
-  );
-  thin_items(
-    "occlude_models",
-    sources,
-    |diff| Some(&mut diff.occlude_models),
     |a, b| a.same_as(b, tolerances),
     left_out,
   );

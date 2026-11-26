@@ -21,7 +21,8 @@ triangle 11:
 - `{"Modified": {"base_index": 0, "changes": {"position": true}}}` drops only
   the position change of vanilla entity 0.
 - `{"Removed": {"base_index": 0}}` drops the removal of vanilla box occluder 0.
-- `changes.triangles` drops one nested triangle removal and keeps the other.
+- `{"flags": 0, "removed": [...]}` drops the removal of the occlude model triangle it lists,
+  in the triangles of models with flags 0, and keeps the other.
 
 `sample_resource_b` adds an entity and removes triangle 20. Its overwrite drops
 the added entity by its index in the source (`{"Added": {"target_index": 1}}`).

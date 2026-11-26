@@ -4,11 +4,8 @@
 //! Array changes combine as [`MergedItems`] describes: a removal wins over every other change of
 //! the vanilla item, including another source's replacement of it; otherwise the first source to
 //! modify or replace a vanilla item wins, and additions keep their place after the vanilla item
-//! they follow, in source order. Occlude
-//! models modified by several sources take each field from the first source changing it and
-//! every source's triangle removals and additions, so cut-outs of every source survive; the
-//! merge stage then fits them with [`YmapOccludeModel::fit_all`]. `content_flags`
-//! are OR-ed into vanilla's, other fields keep the first change, each extent axis and block field
+//! they follow, in source order. Occlude model triangles combine as [`occlude_models::merge`]
+//! describes, so cut-outs of every source survive. `content_flags` are OR-ed into vanilla's, other fields keep the first change, each extent axis and block field
 //! on its own, and added physics dictionaries and prop instances skip names already present.
 //!
 //! Every change of `sources` is combined; [`leave_out`] removes changes from one source's diff
@@ -19,14 +16,11 @@ use std::collections::HashSet;
 
 use super::{
   ItemDiff, PositionDiff, YmapBlockDiff, YmapDiffFields, YmapDistantLodLightsDiff,
-  YmapInstancedDataDiff, YmapOccludeModelDiff, YmapOccludeModelFieldDiff, YmapPropInstanceDiff,
-  entities,
-  merged_items::{MergedItems, merged, merged_with},
+  YmapInstancedDataDiff, YmapPropInstanceDiff, entities,
+  merged_items::{MergedItems, merged},
+  occlude_models,
 };
-use crate::core::format::ymap::{
-  model::{Ymap, YmapOccludeModel},
-  reference_hash,
-};
+use crate::core::format::ymap::{model::Ymap, reference_hash};
 
 /// A kind of change that [`leave_out`] removes from a source's diff, keeping vanilla's value.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -221,9 +215,9 @@ pub fn merge_diffs(
       vanilla.box_occluders.len(),
       sources.iter().map(|diff| diff.box_occluders.as_ref()),
     ),
-    occlude_models: merge_occlude_models(
+    occlude_models: occlude_models::merge(
       &vanilla.occlude_models,
-      sources.iter().map(|diff| diff.occlude_models.as_ref()),
+      &sources.iter().filter_map(|diff| diff.occlude_models.as_deref()).collect::<Vec<_>>(),
     ),
     lod_lights: merge_items(
       "lod_lights",
@@ -300,38 +294,6 @@ fn merge_items<'a, T: Clone + 'a, C: Clone + 'a>(
   let sources = sources.flatten().map(Vec::as_slice).collect::<Vec<_>>();
   let merged: MergedItems<T, C> = merged(what, &sources);
   non_empty(merged.into_diffs(vanilla_len))
-}
-
-/// [`merge_items`] for occlude models, combining the changes of a model that several sources
-/// modify; see the module docs.
-fn merge_occlude_models<'a>(
-  vanilla: &[YmapOccludeModel],
-  sources: impl Iterator<Item = Option<&'a Vec<YmapOccludeModelDiff>>>,
-) -> Option<Vec<YmapOccludeModelDiff>> {
-  let sources = sources.flatten().map(Vec::as_slice).collect::<Vec<_>>();
-  let merged = merged_with(&sources, |index, earlier, later| {
-    tracing::debug!("    occlude_models: combining changes of vanilla model {index}");
-    combine_occlude_model(&vanilla[index], earlier, later);
-  });
-  non_empty(merged.into_diffs(vanilla.len()))
-}
-
-/// Folds the `later` changes of `vanilla` into the `earlier` ones: each field keeps its earlier
-/// change, and triangle changes combine as [`MergedItems`] describes.
-fn combine_occlude_model(
-  vanilla: &YmapOccludeModel,
-  earlier: &mut YmapOccludeModelFieldDiff,
-  later: &YmapOccludeModelFieldDiff,
-) {
-  combine_position(&mut earlier.bmin, &later.bmin);
-  combine_position(&mut earlier.bmax, &later.bmax);
-  earlier.flags = earlier.flags.or(later.flags);
-  let triangles = [&earlier.triangles, &later.triangles]
-    .into_iter()
-    .filter_map(Option::as_deref)
-    .collect::<Vec<_>>();
-  let triangles = merged("triangles", &triangles);
-  earlier.triangles = non_empty(triangles.into_diffs(vanilla.triangles.len()));
 }
 
 /// The first change of `changes`, warning about later ones to another value.

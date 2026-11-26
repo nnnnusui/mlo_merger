@@ -36,7 +36,11 @@ pub struct Ymap {
   pub entities: Vec<YmapEntity>,
   #[diff(nested, context = ctx.tolerances)]
   pub box_occluders: Vec<YmapBoxOccluder>,
-  #[diff(nested, context = ctx.tolerances)]
+  #[diff(
+    with = compare::occlude_models,
+    context = ctx.tolerances,
+    output = Vec<compare::YmapOccludeTrianglesDiff>
+  )]
   pub occlude_models: Vec<YmapOccludeModel>,
   #[diff(nested, context = ())]
   pub lod_lights: Vec<YmapLodLight>,

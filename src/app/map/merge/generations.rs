@@ -21,7 +21,9 @@
 //!
 //! Entity parent changes are left out of the modifications carried, as are changes of items of a
 //! nested array. When several changes of one generation reach one item, a removal wins, and
-//! otherwise the first is kept. The changes of a YMAP with a successor that reach no loaded item,
+//! otherwise the first is kept. Occlude model triangles are compared by their corners rather than
+//! paired: a removal is carried to each newer loaded YMAP holding the triangle, and additions to
+//! the successor, as entities are. The changes of a YMAP with a successor that reach no loaded item or triangle,
 //! and its other additions, are listed in `generations/left_behind.json` as left behind.
 
 use crate::platform::fs;
@@ -40,10 +42,16 @@ use crate::{
     source_cache::{MergeSourceFile, YmapImplied, resource_name},
     vanilla_cache::generations::{Counterparts, GenerationIndex, ItemKind},
   },
+  common::triangle::Triangle,
   common::{json::write_json, path::ensure_safe_path},
-  core::format::ymap::compare::{
-    ItemDiff, YmapComparisonDiff, YmapComparisonFile, YmapDiffFields, YmapPropagatedDiff,
-    YmapPropagationOrigin, lod_light_pairs::LightSide,
+  core::format::ymap::{
+    compare::{
+      ItemDiff, YmapComparisonDiff, YmapComparisonFile, YmapDiffFields, YmapPropagatedDiff,
+      YmapPropagationOrigin,
+      lod_light_pairs::LightSide,
+      occlude_models::{TriangleKey, VertexIndex},
+    },
+    model::YmapOccludeModel,
   },
 };
 
@@ -62,9 +70,11 @@ pub struct LeftBehind {
   pub stream_path: String,
   /// The vanilla YMAP the change is made to, in lowercase.
   pub file_name: String,
-  /// The array, as its path in the diff JSON, such as `entities` or `distant_lod_lights.items`.
+  /// The array, as its path in the diff JSON, such as `entities`, `distant_lod_lights.items` or
+  /// `occlude_models`.
   pub array: String,
-  /// The changed item's `base_index`, or an addition's `target_index`.
+  /// The changed item's `base_index`, or an addition's `target_index`; none for an occlude model
+  /// triangle.
   pub index: Option<usize>,
   /// `Removed`, `Modified` or `Added`.
   pub change: String,
@@ -78,8 +88,8 @@ pub struct LeftBehind {
 pub enum LeftBehindReason {
   /// No newer generation the game loads has an item standing for the changed one.
   NoLoadedCounterpart,
-  /// The change removes an item no newer generation the game loads has: the loaded generation
-  /// lacks it already.
+  /// The change removes an item or occlude model triangle no newer generation the game loads
+  /// has: the loaded generation lacks it already.
   AlreadyAbsent,
   /// The addition is an entity with a parent, or an item of another array than entities and LOD
   /// lights.
@@ -171,6 +181,7 @@ pub(super) fn carry_generations(
     index: &index,
     counterparts: Counterparts::new(&index, vanilla_cache_dir),
     item_counts: HashMap::new(),
+    occluders: HashMap::new(),
     left_behind: Vec::new(),
   };
   let target = staging.join(GENERATIONS_DIR);
@@ -257,18 +268,16 @@ enum Array {
   DistantLodLights,
   CarGenerators,
   BoxOccluders,
-  OccludeModels,
   TimeCycleModifiers,
 }
 
 impl Array {
-  const ALL: [Self; 7] = [
+  const ALL: [Self; 6] = [
     Self::Entities,
     Self::LodLights,
     Self::DistantLodLights,
     Self::CarGenerators,
     Self::BoxOccluders,
-    Self::OccludeModels,
     Self::TimeCycleModifiers,
   ];
 
@@ -279,7 +288,6 @@ impl Array {
       Self::DistantLodLights => &["distant_lod_lights", "items"],
       Self::CarGenerators => &["car_generators"],
       Self::BoxOccluders => &["box_occluders"],
-      Self::OccludeModels => &["occlude_models"],
       Self::TimeCycleModifiers => &["time_cycle_modifiers"],
     }
   }
@@ -295,7 +303,6 @@ impl Array {
       Self::LodLights | Self::DistantLodLights => ItemKind::Lights,
       Self::CarGenerators => ItemKind::CarGenerators,
       Self::BoxOccluders => ItemKind::BoxOccluders,
-      Self::OccludeModels => ItemKind::OccludeModels,
       Self::TimeCycleModifiers => ItemKind::TimeCycleModifiers,
     }
   }
@@ -319,10 +326,12 @@ enum Carried {
 }
 
 /// The changes carried to one vanilla YMAP from one generation of one resource, by array and
-/// item index, and the items and physics dictionaries added to the end of its arrays.
+/// item index, the items and physics dictionaries added to the end of its arrays, and the
+/// occlude model triangles removed and added, by flags.
 #[derive(Default)]
 struct Target {
   items: BTreeMap<Array, BTreeMap<usize, Carried>>,
+  triangles: BTreeMap<u32, (Vec<Triangle>, Vec<Triangle>)>,
   /// Per array, the vanilla YMAP's item count, after which items are added, and each addition
   /// as the diff JSON holds it but for its anchor and target index.
   added: BTreeMap<Array, (usize, Vec<Map<String, Value>>)>,
@@ -358,7 +367,7 @@ impl Target {
   }
 
   fn is_empty(&self) -> bool {
-    self.items.is_empty() && self.added.is_empty()
+    self.items.is_empty() && self.added.is_empty() && self.triangles.is_empty()
   }
 
   /// The diff JSON of the carried changes.
@@ -409,6 +418,16 @@ impl Target {
           .expect("diff arrays are nested in objects");
       }
       parent.insert(path[path.len() - 1].to_owned(), Value::Array(diffs));
+    }
+    if !self.triangles.is_empty() {
+      let groups = self
+        .triangles
+        .iter()
+        .map(|(flags, (removed, added))| {
+          serde_json::json!({ "flags": flags, "removed": removed, "added": added })
+        })
+        .collect();
+      root.insert("occlude_models".into(), Value::Array(groups));
     }
     if self.added.contains_key(&Array::Entities) && !self.added_dictionaries.is_empty() {
       root.insert(
@@ -473,6 +492,9 @@ struct Propagation<'a> {
   counterparts: Counterparts<'a>,
   /// The item count of each array of each latest vanilla YMAP read so far.
   item_counts: HashMap<(String, Array), usize>,
+  /// The occlude model triangle keys of each latest vanilla YMAP read so far, by flags, with the
+  /// index their corners were taken by.
+  occluders: HashMap<String, (VertexIndex, BTreeSet<(u32, TriangleKey)>)>,
   left_behind: Vec<LeftBehind>,
 }
 
@@ -563,6 +585,7 @@ impl Propagation<'_> {
     let generation = &located.family.generations[located.generation];
     let listed = generation.files[located.file].clone();
     let origin_version = generation.first_version.clone();
+    let diffs_typed = diffs;
     let diffs = serde_json::to_value(diffs)?;
     for change in changes(&diffs) {
       let counterparts =
@@ -635,10 +658,49 @@ impl Propagation<'_> {
         }
       }
     }
+    if let Some(groups) = &diffs_typed.occlude_models {
+      let destinations = newer_loaded(index, &listed);
+      for group in groups {
+        for triangle in &group.removed {
+          let mut held = false;
+          for destination in &destinations {
+            let (vertices, triangles) = self.occluders(destination)?;
+            if triangles.contains(&(group.flags, vertices.key(triangle))) {
+              held = true;
+              let key = (destination.clone(), origin_version.clone());
+              let target = targets.entry(key.clone()).or_default();
+              target.triangles.entry(group.flags).or_default().0.push(triangle.clone());
+              reached.insert(key);
+            }
+          }
+          if !held && !index.loads(&listed) && index.successor(&file_label).is_some() {
+            self.left_behind.push(LeftBehind {
+              resource: source.resource_id.to_owned(),
+              stream_path: source.stream_path.to_owned(),
+              file_name: file_label.clone(),
+              array: "occlude_models".into(),
+              index: None,
+              change: "Removed".into(),
+              reason: LeftBehindReason::AlreadyAbsent,
+            });
+          }
+        }
+      }
+    }
     // Additions to a YMAP the game loads stay there.
     let Some(successor) = index.successor(&file_label) else {
       return Ok(reached);
     };
+    if !index.loads(&listed)
+      && let Some(groups) = &diffs_typed.occlude_models
+    {
+      let key = (successor.clone(), origin_version.clone());
+      let target = targets.entry(key.clone()).or_default();
+      for group in groups.iter().filter(|group| !group.added.is_empty()) {
+        target.triangles.entry(group.flags).or_default().1.extend(group.added.iter().cloned());
+        reached.insert(key.clone());
+      }
+    }
     let additions = additions(&diffs);
     let dictionaries = added_dictionaries(&diffs);
     // Lights a resource adds to one YMAP of a pair only are left out of its diff before.
@@ -715,11 +777,30 @@ impl Propagation<'_> {
       Array::DistantLodLights => ymap.distant_lod_lights.items.len(),
       Array::CarGenerators => ymap.car_generators.len(),
       Array::BoxOccluders => ymap.box_occluders.len(),
-      Array::OccludeModels => ymap.occlude_models.len(),
       Array::TimeCycleModifiers => ymap.time_cycle_modifiers.len(),
     };
     self.item_counts.insert(key, count);
     Ok(count)
+  }
+
+  /// The occlude model triangles of the latest vanilla YMAP `file_name`, as [`Self::occluders`]
+  /// keeps them.
+  fn occluders(
+    &mut self,
+    file_name: &str,
+  ) -> Result<&mut (VertexIndex, BTreeSet<(u32, TriangleKey)>)> {
+    if !self.occluders.contains_key(file_name) {
+      let (path, _) = self
+        .vanilla_files
+        .get(file_name)
+        .ok_or_else(|| format!("No latest vanilla YMAP named {file_name}"))?;
+      let ymap = crate::app::map::vanilla::read_ymap(path)?;
+      let mut vertices =
+        VertexIndex::new(crate::core::config::matching::current().ymap_occlude_vertex_position);
+      let held = held_triangles(&ymap.occlude_models, &mut vertices);
+      self.occluders.insert(file_name.to_owned(), (vertices, held));
+    }
+    Ok(self.occluders.get_mut(file_name).expect("inserted above"))
   }
 
   /// The latest vanilla YMAP `file_name` as documents record it.
@@ -742,6 +823,44 @@ impl Propagation<'_> {
   }
 }
 
+/// The YMAPs the game loads of the generations whose items those of the vanilla YMAP `listed`
+/// stand for: the newer ones, or the older ones for a YMAP first shipped after the game build.
+fn newer_loaded(
+  index: &GenerationIndex,
+  listed: &str,
+) -> Vec<String> {
+  let Some(located) = index.locate(listed) else {
+    return Vec::new();
+  };
+  let backward = index.newer_than_build.contains(listed);
+  let mut files = located
+    .family
+    .units
+    .iter()
+    .filter(|unit| located.generation == if backward { unit.newer } else { unit.older })
+    .flat_map(|unit| {
+      &located.family.generations[if backward { unit.older } else { unit.newer }].files
+    })
+    .filter(|file| LightSide::of(file).is_none() && index.loads(file))
+    .cloned()
+    .collect::<Vec<_>>();
+  files.sort();
+  files.dedup();
+  files
+}
+
+/// The keys of the triangles of `models`, with their flags.
+fn held_triangles(
+  models: &[YmapOccludeModel],
+  vertices: &mut VertexIndex,
+) -> BTreeSet<(u32, TriangleKey)> {
+  models
+    .iter()
+    .flat_map(|model| model.triangles.iter().map(move |triangle| (model.flags, triangle)))
+    .map(|(flags, triangle)| (flags, vertices.key(triangle)))
+    .collect()
+}
+
 /// The resource YMAP changes are carried from.
 struct Source<'a> {
   resource_id: &'a str,
@@ -752,8 +871,8 @@ struct Source<'a> {
 
 /// The removals, modifications and replacements of vanilla items in the diff JSON `diffs`, in
 /// array order; entity parent changes are left out of modifications, and modifications left with
-/// no change are dropped, as are those changing items of a nested array, such as the triangles of
-/// an occlude model, whose indices need not hold in another generation's item.
+/// no change are dropped, as are those changing items of a nested array, whose indices need not
+/// hold in another generation's item.
 fn changes(diffs: &Value) -> Vec<Change> {
   let mut changes = Vec::new();
   for array in Array::ALL {

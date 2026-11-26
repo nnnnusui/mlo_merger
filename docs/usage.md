@@ -424,6 +424,9 @@ asset/map/source-cache/diff/{resource}/{stream_path}.diff.json
   For an added YMAP,
   `base.path` is empty: it is compared with an empty YMAP.
 - Array differences are `Added`, `Removed`, `Modified` (and `Replaced` for non-entity arrays).
+  `occlude_models` instead lists, per model `flags`, the triangles `removed` and `added` (see
+  [Occlude Model Triangles](reference.md#occlude-model-triangles)); select within one by its
+  `flags`, as in `{ "occlude_models": [{ "flags": 0, "removed": [<triangle>] }] }`.
   `base_index` indexes the baseline (vanilla) model and `target_index` the source model:
   `Removed` and `Replaced` name their item by `base_index`, `Modified` by both, and `Added`
   by `target_index`, with `anchor_base_index`, the baseline item it is placed after (`null`
@@ -537,7 +540,8 @@ one, every version is merged (YMAPs only, so far):
   | Item | Left out when an earlier version adds |
   |---|---|
   | Entity | An entity with the same GUID, not 0 and given to no other entity of either version, even with other values; or one of the same type, archetype and LOD level at the same position, within the `ymap` [matching tolerance](reference.md#matching-configuration), whatever its rotation, scale and GUID. Children pointing at it, in its YMAP or another, point at the kept one. One with a GUID is kept when the earlier entity has none, which children could not point at |
-  | Box occluder, occlude model, grass batch, time-cycle modifier, car generator | An equal item, within the [matching tolerances](reference.md#matching-configuration) |
+  | Box occluder, grass batch, time-cycle modifier, car generator | An equal item, within the [matching tolerances](reference.md#matching-configuration) |
+  | Occlude model triangle | The same triangle (as for every merge) |
   | Physics dictionary, prop instance name | The same name (as for every merge) |
   | LOD light, distant LOD light | Never: they pair by index across the two YMAPs of a LOD light pair |
 

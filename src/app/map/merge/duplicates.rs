@@ -50,9 +50,6 @@ pub enum IgnoredReason {
   EarlierSourceWins,
   /// The same resource adds the same entity or item in a newer generation.
   SameAdditionNewer,
-  /// Its changes to the fields the applied modification leaves unchanged are applied with it,
-  /// as for occlude models.
-  Combined,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -188,7 +185,7 @@ impl Collector {
 
   /// Mirrors the deletion-first, otherwise first-change-wins resolution of `compare::merge_diffs`,
   /// sources merged in order: a YMAP's own sources, then those carried from other generations,
-  /// newest first. Modifications of one occlude model combine.
+  /// newest first.
   pub(super) fn finish(self) -> Vec<Competition> {
     let mut entries = self
       .entries
@@ -202,7 +199,6 @@ impl Collector {
           .position(|candidate| candidate.source.change == Change::Removed)
           .unwrap_or(0);
         let applied = &candidates[index];
-        let combines = matches!(&target, Target::Item { array, .. } if array == "occlude_models");
         let ignored = candidates
           .iter()
           .enumerate()
@@ -213,11 +209,6 @@ impl Collector {
               IgnoredReason::IdenticalDuplicate
             } else if applied.source.change == Change::Removed {
               IgnoredReason::RemovalWins
-            } else if combines
-              && applied.source.change == Change::Modified
-              && candidate.source.change == Change::Modified
-            {
-              IgnoredReason::Combined
             } else if newer(&applied.source, &candidate.source, self.loaded_version.as_deref()) {
               IgnoredReason::NewerGenerationWins
             } else {
@@ -340,13 +331,6 @@ mod tests {
     let mut collector = Collector::default();
     collector.add_item("lod_lights", 3, "Replaced a".into(), source("first", Change::Replaced));
     collector.add_item("lod_lights", 3, "Replaced b".into(), source("second", Change::Replaced));
-    collector.add_item("occlude_models", 3, "Modified a".into(), source("first", Change::Modified));
-    collector.add_item(
-      "occlude_models",
-      3,
-      "Modified b".into(),
-      source("second", Change::Modified),
-    );
     collector.add_item("car_generators", 3, "Modified a".into(), source("first", Change::Modified));
     collector.add_item("car_generators", 3, "Removed".into(), source("second", Change::Removed));
     let entries = collector.finish();
@@ -358,7 +342,6 @@ mod tests {
       (entry.applied.resource.clone(), entry.ignored[0].reason)
     };
     assert_eq!(reason("lod_lights"), ("first".into(), IgnoredReason::EarlierSourceWins));
-    assert_eq!(reason("occlude_models"), ("first".into(), IgnoredReason::Combined));
     assert_eq!(reason("car_generators"), ("second".into(), IgnoredReason::RemovalWins));
   }
 }

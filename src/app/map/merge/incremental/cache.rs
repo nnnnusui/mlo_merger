@@ -292,7 +292,7 @@ mod tests {
         ..defaults
       },
       MatchTolerances {
-        ymap_occlude_model_position: 0.02,
+        ymap_occlude_vertex_position: 0.02,
         ..defaults
       },
       MatchTolerances {

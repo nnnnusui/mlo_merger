@@ -187,8 +187,7 @@ type, archetype and LOD level at the same position within the `ymap` matching to
 left out and reported; the others are all applied.
 
 `items` holds the items of the other arrays competed for alike, each by its array's path in
-a diff (`lod_lights`, `distant_lod_lights.items`, `box_occluders`, `occlude_models`,
-`car_generators`, `time_cycle_modifiers`, `instanced_data.grass_instance_list`) and the
+a diff (`lod_lights`, `distant_lod_lights.items`, `box_occluders`, `car_generators`, `time_cycle_modifiers`, `instanced_data.grass_instance_list`) and the
 vanilla item's `base_index`. Removals, modifications and replacements compete for a vanilla
 item; an addition equal within the matching tolerances to one an earlier source makes is left
 out and reported without a `base_index`. LOD light additions are all applied.
@@ -200,7 +199,6 @@ out and reported without a `base_index`. LOD light additions are all applied.
 | `newer_generation_wins` | Comes from a newer generation: the YMAP's own sources from the loaded one, carried changes from their origin |
 | `earlier_source_wins` | Comes from a source merged before; for an addition, one with the same GUID or placed alike, with other values |
 | `same_addition_newer` | Is the same resource's addition of the entity or item in a newer generation |
-| `combined` | Modifies the same occlude model first: the reported change still applies to the fields the applied one leaves unchanged |
 
 A change names its resource and source: a stream file by its `stream_path`, whose
 source-cache diff document holds the change, a carried document of `generations/` with the
@@ -254,11 +252,10 @@ For an added YMAP:
 - A removal wins over every other change of that vanilla item, including another source's
   replacement of it, whatever the source order. An added entity equal to a removed vanilla
   entity is dropped too, so deleting wins over re-adding.
-- Otherwise the first source to modify or replace an item wins. Occlude models are the exception: each field comes from the first source
-  changing it, and every source's triangle changes are applied. A merged occlude model with a
-  vertex outside its bounds takes the exact bounds of its vertices, and one indexing more than
-  255 distinct vertices is split, its triangles in order, into consecutive models within that
-  limit, each with the exact bounds of its vertices and the model's flags.
+- Otherwise the first source to modify or replace an item wins.
+- Occlude models combine as triangles (see [Occlude Model Triangles](#occlude-model-triangles)):
+  every source's removals apply, and every source's additions once each in source order, but
+  those re-adding a removed triangle.
 - Removed and modified items are named by their vanilla index. An unpaired source item
   takes the place of an unpaired vanilla item between the same kept items (a
   replacement), or is added right after the vanilla item preceding it; additions keep
@@ -294,6 +291,23 @@ For an added YMAP:
   YMAP of a pair, holds the removals of the vanilla other one. Merge applies the skip before
   the resource's overwrite, and merges the removals into the other vanilla YMAP as far as
   the overwrite keeps the removals they follow from.
+
+### Occlude Model Triangles
+
+- Occlude models are compared as the triangles of the whole YMAP, per model `flags`, not by
+  model: a diff lists, per `flags` value, the triangles `removed` and `added`, and the bounds
+  follow from the triangles. A source regrouping triangles into other models, or changing
+  only bounds, changes nothing.
+- A triangle is its corners in winding order, starting at any of them: the game culls the
+  side its normal `(b - a) x (c - a)` faces away from, so the reversed triangle is another
+  one. Corners within `ymap_occlude_vertex_position` per axis are one vertex. Exact repeats
+  count once.
+- Merging removes each removed triangle from the model holding it, dropping models left
+  empty, and places the added ones so connected triangles share a model: each connected
+  piece joins the model of its flags sharing most of its vertices that stays within 255
+  distinct vertices, and the others fill new models after the rest, a piece over 255
+  vertices split breadth-first. A changed model takes the exact bounds of its vertices;
+  the others are kept as they are.
 
 ### Newer DLC Generations
 
@@ -344,8 +358,8 @@ generation and carry the changes resources make to the others over to it.
   and entities whose GUID the other generation lacks, are the same when they are of one
   kind, within 0.01 of each other on every axis, and identified alike: entities by
   archetype, LOD lights by color and LOD light hash, car generators by model, box
-  occluders by size and rotation, occlude models by flags, triangle count and maximum
-  corner, time cycle modifiers by name. An item is paired only when exactly one item of
+  occluders by size and rotation, time cycle modifiers by name. Occlude model triangles are
+  not paired; they are the same by their corners. An item is paired only when exactly one item of
   the other generation fits, and no other item fits that one.
 - Each pair of generations of a family is stored as a unit,
   `generation-units/{key}.json`, keyed by the contents of its YMAPs, and
@@ -380,11 +394,13 @@ generation and carry the changes resources make to the others over to it.
   carries to a YMAP, those it adds there already, in its own YMAP or carried from a newer
   generation, are left out, matched as the versions of an added YMAP are (see
   [Added Stream Files](#added-stream-files)).
-- Entity parent changes and modifications of nested arrays such as occlude model
-  triangles are not carried. When several changes of one generation reach one item, a
-  removal wins and otherwise the first is kept. `generations/left_behind.json`
-  (`LeftBehind`) lists the changes of YMAPs with a successor carried nowhere: removals of
-  items the loaded generation lacks already (`already_absent`), other changes of such
+- Occlude model triangle removals are carried to each loaded YMAP of those generations
+  holding the triangle, and additions to a YMAP with a successor to the successor.
+- Entity parent changes and modifications of other nested arrays are not carried. When
+  several changes of one generation reach one item, a removal wins and otherwise the first is
+  kept. `generations/left_behind.json` (`LeftBehind`) lists the changes of YMAPs with a
+  successor carried nowhere: removals of items or occlude model triangles (`array`
+  `occlude_models`, with no `index`) the loaded generation lacks already (`already_absent`), other changes of such
   items (`no_loaded_counterpart`), and additions of entities with a parent or of other
   arrays (`addition_not_carried`).
 - Each carried document is merged into its loaded YMAP like one more resource diff, after
@@ -536,7 +552,7 @@ Missing files or omitted keys use these defaults:
 [tolerance]
 ybn_position = 0.05
 ymap = 0.001
-ymap_occlude_model_position = 0.01
+ymap_occlude_vertex_position = 0.01
 ymap_box_occluder_position = 1
 ymap_box_occluder_rotation = 1
 ymap_car_generator_position_decimals = 3
@@ -548,15 +564,15 @@ ymap_grass_position = 0.01
 |---|---|
 | `ybn_position` | Inclusive per-axis polygon coordinate and radius matching, for every supported polygon type |
 | `ymap` | Smallest change of a YMAP float field that counts: entity positions, rotations, scales and LOD distances, car generator, time cycle modifier and distant LOD light values |
-| `ymap_occlude_model_position` | Occlude model XY extent tolerance; corners compare exactly |
+| `ymap_occlude_vertex_position` | Per-axis distance, in metres, within which occlude model triangle corners are one vertex |
 | `ymap_box_occluder_position` | Box occluder center tolerance, in integer stored-coordinate units (a quarter metre) |
 | `ymap_box_occluder_rotation` | `iCosZ`/`iSinZ` changes up to and including this many stored units are ignored (0 compares exactly) |
 | `ymap_car_generator_position_decimals` | Decimal places (0 to 6) car generator positions are rounded to when pairing |
 | `ymap_lod_light_position_decimals` | The same for distant LOD light positions |
 | `ymap_grass_position` | Per-axis world-space distance, in metres, within which grass instances are the same one |
 
-- Position tolerances end in `_position`. The former names `ybn`, `ymap_occlude_model` and
-  `ymap_box_occluder` are still read.
+- Position tolerances end in `_position`. The former names `ybn` and `ymap_box_occluder` are
+  still read.
 - YMAP comparisons are exclusive of the boundary; extents compare exactly.
 - An entity rotation within the `ymap` tolerance of the other's negation is unchanged: a
   quaternion and its negation make the same turn.

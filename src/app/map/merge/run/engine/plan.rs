@@ -2,7 +2,6 @@
 
 use super::*;
 use crate::app::map::merge::duplicates::{IgnoredReason, Target};
-use crate::core::format::ymap::model::YmapOccludeModel;
 use struct_diff::vec::ItemDiff;
 
 /// The resource a vanilla overwrite's contributions are reported under in duplicate reports.
@@ -202,7 +201,6 @@ impl<'a> MergeRun<'a> {
     };
     let mut model = vanilla_ymap.clone();
     model.apply(&merged_diff).map_err(failed)?;
-    fit_occlude_models(ymap_name, &mut model);
     let (entities, parents) = entities::apply_linked(
       &vanilla_ymap.entities,
       &vanilla_parents,
@@ -363,7 +361,6 @@ fn added_item(
   }
   match field {
     "box_occluders" => added(diff.box_occluders.as_ref(), change),
-    "occlude_models" => added(diff.occlude_models.as_ref(), change),
     "time_cycle_modifiers" => added(diff.time_cycle_modifiers.as_ref(), change),
     "car_generators" => added(diff.car_generators.as_ref(), change),
     "instanced_data.grass_instance_list" => {
@@ -382,7 +379,6 @@ fn record_item_changes(
   contributor: &Contributor,
 ) {
   record_items(duplicates, "box_occluders", diff.box_occluders.as_ref(), contributor);
-  record_items(duplicates, "occlude_models", diff.occlude_models.as_ref(), contributor);
   record_items(duplicates, "lod_lights", diff.lod_lights.as_ref(), contributor);
   record_items(
     duplicates,
@@ -482,23 +478,5 @@ fn record_entity_changes(
         origin: origin.clone(),
       },
     );
-  }
-}
-
-/// Fits the occlude models of `model`, the merged YMAP named `ymap_name`, as
-/// [`YmapOccludeModel::fit`] describes, so combined triangle changes stay in their model's
-/// bounds and vertex limit.
-fn fit_occlude_models(
-  ymap_name: &str,
-  model: &mut Ymap,
-) {
-  for (index, parts) in YmapOccludeModel::fit_all(&mut model.occlude_models) {
-    if parts > 1 {
-      tracing::info!(
-        "{ymap_name}: split occlude model {index} into {parts} within the vertex limit"
-      );
-    } else {
-      tracing::debug!("  occlude_models: refit the bounds of model {index}");
-    }
   }
 }

@@ -211,40 +211,71 @@ fn without_ignored_changes_metadata_keeps_the_first_change() {
   assert_eq!(merged_with(&vanilla, &[&second], &[]), second);
 }
 
-#[test]
-fn occlude_models_keep_the_cut_outs_and_fields_of_every_source() {
-  let triangle = |offset: f32| crate::common::triangle::Triangle {
-    corner_1: at(offset, 0.0, 0.0),
-    corner_2: at(offset + 1.0, 0.0, 0.0),
-    corner_3: at(offset, 1.0, 0.0),
-  };
-  let model = YmapOccludeModel {
+/// A triangle at `x`, sharing its corner at `x + 1` with the next one.
+fn triangle(x: f32) -> crate::common::triangle::Triangle {
+  crate::common::triangle::Triangle {
+    corner_1: at(x, 0.0, 0.0),
+    corner_2: at(x + 1.0, 0.0, 0.0),
+    corner_3: at(x, 1.0, 0.0),
+  }
+}
+
+/// An occlude model of `triangles` with their exact bounds.
+fn occlude_model(triangles: Vec<crate::common::triangle::Triangle>) -> YmapOccludeModel {
+  let mut model = YmapOccludeModel {
     bmin: at(0.0, 0.0, 0.0),
-    bmax: at(10.0, 10.0, 10.0),
-    triangles: (0..4).map(|offset| triangle(offset as f32)).collect(),
+    bmax: at(0.0, 0.0, 0.0),
+    triangles,
     flags: 0,
   };
+  model.fit_bounds();
+  model
+}
+
+#[test]
+fn occlude_triangles_of_every_source_are_removed_and_added() {
   let vanilla = Ymap {
-    occlude_models: vec![model.clone()],
+    occlude_models: vec![occlude_model((0..4).map(|x| triangle(x as f32)).collect())],
     ..base()
   };
   let mut first = vanilla.clone();
   first.occlude_models[0].triangles.remove(1);
-  first.occlude_models[0].bmin.z = -5.0;
   let mut second = vanilla.clone();
   second.occlude_models[0].triangles.remove(3);
-  second.occlude_models[0].triangles.push(triangle(9.0));
-  second.occlude_models[0].bmin.z = -9.0;
-  second.occlude_models[0].bmax.x = 20.0;
-  let merged = merged(&vanilla, &[&first, &second]);
+  second.occlude_models[0].triangles.push(triangle(-1.0));
+  // Both add the same unlinked triangle, which is placed once.
+  first.occlude_models.push(occlude_model(vec![triangle(40.0)]));
+  second.occlude_models.push(occlude_model(vec![triangle(40.0)]));
   assert_eq!(
-    merged.occlude_models,
-    vec![YmapOccludeModel {
-      bmin: at(0.0, 0.0, -5.0),
-      bmax: at(20.0, 10.0, 10.0),
-      triangles: vec![triangle(0.0), triangle(2.0), triangle(9.0)],
+    merged(&vanilla, &[&first, &second]).occlude_models,
+    [
+      occlude_model(vec![triangle(0.0), triangle(2.0), triangle(-1.0)]),
+      occlude_model(vec![triangle(40.0)]),
+    ]
+  );
+}
+
+#[test]
+fn a_removed_occlude_triangle_is_not_added_again() {
+  use crate::core::format::ymap::compare::{YmapOccludeTrianglesDiff, occlude_models};
+  let vanilla = vec![occlude_model(vec![triangle(0.0), triangle(1.0)])];
+  let removing = [YmapOccludeTrianglesDiff {
+    flags: 0,
+    removed: vec![triangle(1.0)],
+    added: Vec::new(),
+  }];
+  let adding = [YmapOccludeTrianglesDiff {
+    flags: 0,
+    removed: Vec::new(),
+    added: vec![triangle(1.0), triangle(5.0)],
+  }];
+  assert_eq!(
+    occlude_models::merge(&vanilla, &[&adding, &removing]),
+    Some(vec![YmapOccludeTrianglesDiff {
       flags: 0,
-    }]
+      removed: vec![triangle(1.0)],
+      added: vec![triangle(5.0)],
+    }])
   );
 }
 
@@ -262,85 +293,4 @@ fn a_removal_by_another_source_drops_a_replacement() {
   for sources in [[&moved, &removed], [&removed, &moved]] {
     assert_eq!(merged(&vanilla, &sources).box_occluders, [0, 200].map(occluder));
   }
-}
-
-#[test]
-fn a_replacing_occlude_model_takes_the_vanilla_models_place() {
-  let model = |x: f32| YmapOccludeModel {
-    bmin: at(x, 0.0, 0.0),
-    bmax: at(x + 10.0, 10.0, 10.0),
-    triangles: Vec::new(),
-    flags: 0,
-  };
-  let vanilla = Ymap {
-    occlude_models: vec![model(0.0), model(100.0)],
-    ..base()
-  };
-  let modded = Ymap {
-    occlude_models: vec![model(0.0), model(300.0)],
-    ..base()
-  };
-  assert_eq!(merged(&vanilla, &[&modded]).occlude_models, vec![model(0.0), model(300.0)]);
-}
-
-#[test]
-fn fitting_merged_occlude_models_covers_the_triangles_of_every_source() {
-  let triangle = |x: f32, y: f32| crate::common::triangle::Triangle {
-    corner_1: at(x, y, 0.0),
-    corner_2: at(x + 1.0, y, 0.0),
-    corner_3: at(x, y + 1.0, 0.0),
-  };
-  let vanilla = Ymap {
-    occlude_models: vec![YmapOccludeModel {
-      bmin: at(0.0, 0.0, 0.0),
-      bmax: at(10.0, 10.0, 10.0),
-      triangles: vec![triangle(0.0, 0.0), triangle(5.0, 5.0)],
-      flags: 0,
-    }],
-    ..base()
-  };
-  // Each source grows the maximum X to its own added triangle; the first one's is kept.
-  let mut first = vanilla.clone();
-  first.occlude_models[0].triangles.push(triangle(20.0, 0.0));
-  first.occlude_models[0].bmax.x = 21.0;
-  let mut second = vanilla.clone();
-  second.occlude_models[0].triangles.push(triangle(30.0, 0.0));
-  second.occlude_models[0].bmax.x = 31.0;
-  let mut merged = merged(&vanilla, &[&first, &second]);
-  assert_eq!(merged.occlude_models[0].bmax.x, 21.0);
-  assert_eq!(YmapOccludeModel::fit_all(&mut merged.occlude_models), vec![(0, 1)]);
-  assert_eq!(
-    (merged.occlude_models[0].bmin.clone(), merged.occlude_models[0].bmax.clone()),
-    (at(0.0, 0.0, 0.0), at(31.0, 6.0, 0.0))
-  );
-}
-
-#[test]
-fn fitting_merged_occlude_models_splits_additions_past_the_vertex_limit() {
-  // Triangles of three vertices of their own, 85 of which fill one model.
-  let triangle = |index: usize| crate::common::triangle::Triangle {
-    corner_1: at(index as f32, 0.0, 0.0),
-    corner_2: at(index as f32, 1.0, 0.0),
-    corner_3: at(index as f32, 0.0, 1.0),
-  };
-  let vanilla = Ymap {
-    occlude_models: vec![YmapOccludeModel {
-      bmin: at(0.0, 0.0, 0.0),
-      bmax: at(200.0, 1.0, 1.0),
-      triangles: (0..40).map(triangle).collect(),
-      flags: 3,
-    }],
-    ..base()
-  };
-  let mut first = vanilla.clone();
-  first.occlude_models[0].triangles.extend((40..80).map(triangle));
-  let mut second = vanilla.clone();
-  second.occlude_models[0].triangles.extend((80..120).map(triangle));
-  let mut merged = merged(&vanilla, &[&first, &second]);
-  assert_eq!(merged.occlude_models[0].triangles.len(), 120);
-  assert_eq!(YmapOccludeModel::fit_all(&mut merged.occlude_models), vec![(0, 2)]);
-  let parts = &merged.occlude_models;
-  assert_eq!(parts[0].triangles, (0..85).map(triangle).collect::<Vec<_>>());
-  assert_eq!(parts[1].triangles, (85..120).map(triangle).collect::<Vec<_>>());
-  assert_eq!((parts[1].bmin.x, parts[1].bmax.x, parts[1].flags), (85.0, 119.0, 3));
 }

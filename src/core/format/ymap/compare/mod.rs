@@ -17,6 +17,7 @@ pub mod instanced_data;
 pub mod lod_light_pairs;
 mod merge;
 mod merged_items;
+pub mod occlude_models;
 #[cfg(test)]
 mod test;
 
@@ -34,14 +35,11 @@ pub use instanced_data::{
 };
 pub use merge::{IgnoredChange, leave_out, merge_diffs};
 pub use merged_items::NoFieldDiff;
+pub use occlude_models::YmapOccludeTrianglesDiff;
 pub use struct_diff::vec::ItemDiff;
 
 pub use crate::{
-  common::{
-    position::PositionDiff,
-    rotation::RotationDiff,
-    triangle::{Triangle, TriangleDiff},
-  },
+  common::{position::PositionDiff, rotation::RotationDiff, triangle::Triangle},
   core::format::ymap::model::{
     YmapBoxOccluder, YmapCarGenerator, YmapDistantLodLight, YmapLodLight, YmapOccludeModel,
     YmapTimeCycleModifier,
@@ -53,7 +51,6 @@ pub use crate::{
     ymap_entity::YmapEntityFieldDiff,
     ymap_instanced_data::{YmapGrassInstanceFieldDiff, YmapInstancedDataDiff},
     ymap_lod_light::YmapLodLightFieldDiff,
-    ymap_occlude_model::YmapOccludeModelFieldDiff,
     ymap_time_cycle_modifier::YmapTimeCycleModifierFieldDiff,
   },
 };
@@ -66,12 +63,8 @@ pub type YmapCarGeneratorDiff = ItemDiff<YmapCarGenerator, YmapCarGeneratorField
 pub type YmapDistantLodLightDiff = ItemDiff<YmapDistantLodLight, YmapDistantLodLightFieldDiff>;
 /// How one LOD light of a modded YMAP differs from vanilla.
 pub type YmapLodLightDiff = ItemDiff<YmapLodLight, YmapLodLightFieldDiff>;
-/// How one occlude model of a modded YMAP differs from vanilla.
-pub type YmapOccludeModelDiff = ItemDiff<YmapOccludeModel, YmapOccludeModelFieldDiff>;
 /// How one time cycle modifier of a modded YMAP differs from vanilla.
 pub type YmapTimeCycleModifierDiff =
   ItemDiff<YmapTimeCycleModifier, YmapTimeCycleModifierFieldDiff>;
 /// How one physics dictionary name of a modded YMAP differs from vanilla.
 pub type YmapPhysicsDictionaryDiff = ItemDiff<String, NoFieldDiff>;
-/// How one occlude model triangle of a modded YMAP differs from vanilla.
-pub type YmapTriangleDiff = ItemDiff<Triangle, TriangleDiff>;

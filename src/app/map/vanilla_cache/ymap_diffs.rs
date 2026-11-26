@@ -7,7 +7,8 @@
 //! file rebuilds each later version ([`VanillaYmapHistory::rebuild`]). Grass batches whose
 //! instance changes would not rebuild them exactly are replaced whole, and any other array whose
 //! diff would not, such as one whose kept items are reordered, is rewritten: every item removed
-//! and the new ones added in order. The documents are written compactly, as they are read by
+//! and the new ones added in order. Occlude models, diffed as triangles, rebuild with their
+//! triangles regrouped only as applying places them. The documents are written compactly, as they are read by
 //! tools and can be large.
 //!
 //! A rebuild of the cache keeps the previous cache's diffs between unchanged files while the
@@ -247,10 +248,6 @@ fn rewrite_inexact_arrays(
   rewrite(
     &mut diffs.box_occluders,
     [&previous.box_occluders, &rebuilt.box_occluders, &current.box_occluders],
-  );
-  rewrite(
-    &mut diffs.occlude_models,
-    [&previous.occlude_models, &rebuilt.occlude_models, &current.occlude_models],
   );
   rewrite(&mut diffs.lod_lights, [&previous.lod_lights, &rebuilt.lod_lights, &current.lod_lights]);
   rewrite(

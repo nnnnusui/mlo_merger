@@ -100,6 +100,30 @@ fn skip_item(
     };
     return Ok(Some(skip_value(target, changes, &path, unmatched)?));
   }
+  // A group of occlude model triangles, `{ "flags": 0, "removed": [...], "added": [...] }`: its
+  // other fields name the group, and its arrays select within it.
+  if let (Value::Object(selector), Value::Object(fields)) = (selector, &mut *item)
+    && selector.values().any(Value::is_array)
+  {
+    let names_it = selector
+      .iter()
+      .filter(|(_, expected)| !expected.is_array())
+      .all(|(name, expected)| fields.get(name).is_some_and(|actual| matches(actual, expected)));
+    if !names_it {
+      return Ok(None);
+    }
+    for (name, skip) in selector.iter().filter(|(_, skip)| skip.is_array()) {
+      let path = join(path, name);
+      let Some(target) = fields.get_mut(name) else {
+        unmatched.push(path);
+        continue;
+      };
+      if skip_value(target, skip, &path, unmatched)? {
+        fields.remove(name);
+      }
+    }
+    return Ok(Some(!fields.values().any(Value::is_array)));
+  }
   Ok(matches(item, selector).then_some(true))
 }
 

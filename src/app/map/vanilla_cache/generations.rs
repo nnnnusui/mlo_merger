@@ -43,7 +43,7 @@ pub(crate) const GENERATIONS_FILE: &str = "generations.json";
 /// Directory of the units in the vanilla cache.
 const UNITS_DIR: &str = "generation-units";
 /// Bump when how generations, families or units are formed, or the unit layout, change.
-pub(crate) const ALGORITHM_VERSION: u32 = 3;
+pub(crate) const ALGORITHM_VERSION: u32 = 4;
 /// Prefixes found for at least this many YMAPs apply to YMAPs without an unprefixed counterpart.
 const MIN_PREFIX_FILES: usize = 10;
 /// Per-axis distance within which two items of a unit are at the same place.
@@ -59,17 +59,15 @@ pub enum ItemKind {
   Lights,
   CarGenerators,
   BoxOccluders,
-  OccludeModels,
   TimeCycleModifiers,
 }
 
 impl ItemKind {
-  const ALL: [Self; 6] = [
+  const ALL: [Self; 5] = [
     Self::Entities,
     Self::Lights,
     Self::CarGenerators,
     Self::BoxOccluders,
-    Self::OccludeModels,
     Self::TimeCycleModifiers,
   ];
 }
@@ -829,23 +827,6 @@ impl FileItems {
               occluder.i_width,
               occluder.i_height,
             )
-              .hash(hasher);
-          }),
-          guid: None,
-        })
-        .collect(),
-    );
-    items.insert(
-      ItemKind::OccludeModels,
-      ymap
-        .occlude_models
-        .iter()
-        .map(|model| Item {
-          position: position(&model.bmin),
-          identity: identity(&|hasher| {
-            (model.flags, model.triangles.len()).hash(hasher);
-            [model.bmax.x, model.bmax.y, model.bmax.z]
-              .map(|value| (value / TOLERANCE).round() as i64)
               .hash(hasher);
           }),
           guid: None,

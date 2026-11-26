@@ -40,13 +40,12 @@ fn sample_sources() -> Vec<SampleSource> {
   a.box_occluders.clear();
   a.occlude_models[0].triangles.remove(11);
   a.occlude_models[0].triangles.remove(10);
+  let occluder = &vanilla.occlude_models[0];
   let a_skip = json!({
     "content_flags": true,
     "entities": [{"Modified": {"base_index": 0, "changes": {"position": true}}}],
     "box_occluders": [{"Removed": {"base_index": 0}}],
-    "occlude_models": [
-      {"Modified": {"base_index": 0, "changes": {"triangles": [{"Removed": {"base_index": 10}}]}}}
-    ],
+    "occlude_models": [{"flags": occluder.flags, "removed": [occluder.triangles[10]]}],
   });
 
   // Resource B adds a copy of the first entity and removes triangle 20; its overwrite leaves the

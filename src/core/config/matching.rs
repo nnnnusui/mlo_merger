@@ -12,7 +12,7 @@ use std::{cell::Cell, io, path::Path};
 /// merged, as changes. Differences within these tolerances are treated as no change.
 ///
 /// Position tolerances are named `*_position`. The names before that suffix was added (`ybn`,
-/// `ymap_occlude_model`, `ymap_box_occluder`) are still read.
+/// `ymap_box_occluder`) are still read.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[serde(default, deny_unknown_fields)]
@@ -25,10 +25,10 @@ pub struct MatchTolerances {
   /// distances, and car generator, time-cycle modifier and distant LOD light values.
   #[cfg_attr(feature = "typescript", specta(optional))]
   pub ymap: f32,
-  /// Exclusive tolerance for the XY extents of YMAP occlude models when pairing them.
-  #[serde(alias = "ymap_occlude_model")]
+  /// Exclusive per-axis tolerance within which YMAP occlude model triangle corners are one
+  /// vertex when comparing triangles.
   #[cfg_attr(feature = "typescript", specta(optional))]
-  pub ymap_occlude_model_position: f32,
+  pub ymap_occlude_vertex_position: f32,
   /// Exclusive tolerance for YMAP box occluder centers, in stored units (a quarter metre).
   #[serde(alias = "ymap_box_occluder")]
   #[cfg_attr(feature = "typescript", specta(optional))]
@@ -52,7 +52,7 @@ impl Default for MatchTolerances {
     Self {
       ybn_position: 0.05,
       ymap: 0.001,
-      ymap_occlude_model_position: 0.01,
+      ymap_occlude_vertex_position: 0.01,
       ymap_box_occluder_position: 1,
       ymap_box_occluder_rotation: 1,
       ymap_car_generator_position_decimals: 3,
@@ -64,12 +64,12 @@ impl Default for MatchTolerances {
 
 impl MatchTolerances {
   /// [`Self::default`] recording every YMAP change however small, for diffs replayed to rebuild
-  /// the YMAP they were taken to. Items still pair as by default, except occlude models, which
-  /// never pair, since the reordering of their triangles is not recorded.
+  /// the YMAP they were taken to. Items still pair as by default, and occlude model triangle
+  /// corners compare exactly.
   pub fn ymap_exact() -> Self {
     Self {
       ymap: 0.0,
-      ymap_occlude_model_position: 0.0,
+      ymap_occlude_vertex_position: 0.0,
       ymap_box_occluder_rotation: 0,
       ymap_grass_position: 0.0,
       ..Self::default()
@@ -100,7 +100,7 @@ impl MatchTolerances {
     for (name, tolerance) in [
       ("ybn_position", value.ybn_position),
       ("ymap", value.ymap),
-      ("ymap_occlude_model_position", value.ymap_occlude_model_position),
+      ("ymap_occlude_vertex_position", value.ymap_occlude_vertex_position),
       ("ymap_grass_position", value.ymap_grass_position),
     ] {
       if !tolerance.is_finite() || tolerance <= 0.0 {
@@ -182,7 +182,7 @@ mod tests {
       MatchTolerances::parse("[tolerance]\nybn_position = 0.025\nymap = 0.002").unwrap();
     assert_eq!(configured.ybn_position, 0.025);
     assert_eq!(configured.ymap, 0.002);
-    assert_eq!(configured.ymap_occlude_model_position, 0.01);
+    assert_eq!(configured.ymap_occlude_vertex_position, 0.01);
     assert_eq!(configured.ymap_box_occluder_rotation, 1);
     assert_eq!(configured.ymap_car_generator_position_decimals, 3);
     assert_eq!(configured.ymap_lod_light_position_decimals, 3);
@@ -197,7 +197,7 @@ mod tests {
       "[tolerance]\nybn_position = 0",
       "[tolerance]\nybn_position = nan",
       "[tolerance]\nymap = inf",
-      "[tolerance]\nymap_occlude_model_position = -0.01",
+      "[tolerance]\nymap_occlude_vertex_position = -0.01",
       "[tolerance]\nymap_box_occluder_position = 0",
       "[tolerance]\nymap_box_occluder_rotation = -1",
       "[tolerance]\nymap_car_generator_position_decimals = 7",
@@ -215,12 +215,8 @@ mod tests {
 
   #[test]
   fn position_tolerances_are_read_under_their_former_names_too() {
-    let former = MatchTolerances::parse(
-      "[tolerance]\nybn = 0.025\nymap_occlude_model = 0.02\nymap_box_occluder = 2",
-    )
-    .unwrap();
+    let former = MatchTolerances::parse("[tolerance]\nybn = 0.025\nymap_box_occluder = 2").unwrap();
     assert_eq!(former.ybn_position, 0.025);
-    assert_eq!(former.ymap_occlude_model_position, 0.02);
     assert_eq!(former.ymap_box_occluder_position, 2);
     assert!(MatchTolerances::parse("[tolerance]\nybn = 0").is_err());
     assert!(MatchTolerances::parse("[tolerance]\nybn = 0.1\nybn_position = 0.1").is_err());
@@ -234,7 +230,7 @@ mod tests {
     let loaded = MatchTolerances::load(&path).unwrap();
     assert_eq!(loaded.ybn_position, 0.025);
     assert_eq!(loaded.ymap, 0.002);
-    assert_eq!(loaded.ymap_occlude_model_position, 0.01);
+    assert_eq!(loaded.ymap_occlude_vertex_position, 0.01);
     fs::write(&path, "[tolerance]\nybn_position = 0.0").unwrap();
     assert!(MatchTolerances::load(&path).unwrap_err().to_string().contains(path.to_str().unwrap()));
     fs::remove_file(path).unwrap();

@@ -58,7 +58,7 @@
       "y": 6962.0
     }
   },
-  "schema_version": 13,
+  "schema_version": 14,
   "target": {
     "modified_nanos": 0,
     "modified_seconds": 0,
@@ -74,6 +74,6 @@
     "ymap_car_generator_position_decimals": 3,
     "ymap_grass_position": 0.01,
     "ymap_lod_light_position_decimals": 3,
-    "ymap_occlude_model_position": 0.01
+    "ymap_occlude_vertex_position": 0.01
   }
 }

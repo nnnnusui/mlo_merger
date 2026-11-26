@@ -4,7 +4,7 @@
 use struct_diff::ApplyError;
 
 use super::*;
-use crate::common::{rotation::Rotation, triangle::Triangle};
+use crate::common::rotation::Rotation;
 use crate::core::format::ymap::compare::*;
 use crate::core::format::ymap::model::{
   BoundingBox, GrassInstance, GrassInstanceBatch, Vector3, Vector4, YmapBoxOccluder,
@@ -139,57 +139,6 @@ fn box_occluders_are_applied() {
   };
   modded.box_occluders[1].i_sin_z = 5;
   modded.box_occluders[1].i_width = 8;
-  assert_round_trip(&vanilla, &modded);
-}
-
-fn triangle(offset: f32) -> Triangle {
-  Triangle {
-    corner_1: at(offset, 0.0, 0.0),
-    corner_2: at(offset + 1.0, 0.0, 0.0),
-    corner_3: at(offset, 1.0, 0.0),
-  }
-}
-
-fn model(
-  x: f32,
-  triangles: Vec<Triangle>,
-) -> YmapOccludeModel {
-  YmapOccludeModel {
-    bmin: at(x, 0.0, 0.0),
-    bmax: at(x + 10.0, 10.0, 10.0),
-    triangles,
-    flags: 0,
-  }
-}
-
-#[test]
-fn occlude_models_drop_listed_triangles_and_append_added_ones() {
-  let vanilla = Ymap {
-    occlude_models: vec![
-      model(0.0, vec![triangle(0.0), triangle(2.0), triangle(4.0)]),
-      model(100.0, vec![]),
-    ],
-    ..base()
-  };
-  let mut modded = Ymap {
-    occlude_models: vec![model(0.0, vec![triangle(0.0), triangle(4.0), triangle(8.0)])],
-    ..base()
-  };
-  modded.occlude_models[0].bmax.z = 12.5;
-  modded.occlude_models[0].flags = 1;
-  assert_round_trip(&vanilla, &modded);
-}
-
-#[test]
-fn added_triangles_keep_their_position_among_kept_ones() {
-  let vanilla = Ymap {
-    occlude_models: vec![model(0.0, vec![triangle(0.0), triangle(2.0)])],
-    ..base()
-  };
-  let modded = Ymap {
-    occlude_models: vec![model(0.0, vec![triangle(8.0), triangle(0.0), triangle(2.0)])],
-    ..base()
-  };
   assert_round_trip(&vanilla, &modded);
 }
 
@@ -475,7 +424,18 @@ fn every_kind_of_change_applies_together() {
   modded.entities[0].position.z += 3.0;
   modded.entities.push(entity(0xDEAD_BEEF));
   modded.box_occluders.push(occluder(1000));
-  modded.occlude_models.push(model(1000.0, vec![triangle(0.0)]));
+  let mut occluder_model = YmapOccludeModel {
+    bmin: at(0.0, 0.0, 0.0),
+    bmax: at(0.0, 0.0, 0.0),
+    triangles: vec![crate::common::triangle::Triangle {
+      corner_1: at(1000.0, 0.0, 0.0),
+      corner_2: at(1001.0, 0.0, 0.0),
+      corner_3: at(1000.0, 1.0, 0.0),
+    }],
+    flags: 0,
+  };
+  occluder_model.fit_bounds();
+  modded.occlude_models.push(occluder_model);
   modded.lod_lights.push(lod_light(42.0));
   modded.physics_dictionaries.push("added_dictionary".into());
   modded.time_cycle_modifiers.push(modifier(1000.0));

@@ -294,14 +294,17 @@ fn pipeline_runs_on_the_web_sample() {
   assert!(block.car_generators.is_empty());
   assert_eq!(block.time_cycle_modifiers[0].percentage, 80.0);
   assert_eq!(parent_indices(&block), [0, 1]);
-  // The wall without its roof and both resources' wall strips, split where the next triangle
-  // would pass 255 vertices.
+  // The wall without its roof and the first resource's wall strip; the other strip joins the
+  // wall too, but would pass 255 vertices, so it makes a model of its own.
   let triangles = block.occlude_models.iter().map(|model| model.triangles.len());
-  assert_eq!(triangles.collect::<Vec<_>>(), [250, 32]);
-  assert_eq!(250 + 32, 2 + 4 * WALL_PANELS);
+  assert_eq!(triangles.collect::<Vec<_>>(), [2 + 2 * WALL_PANELS, 2 * WALL_PANELS]);
   assert_eq!(workspace.merged_ymap("smpl_block_01_lod.ymap").entities.len(), 2);
   let winter = workspace.merged_ymap("winter_smpl_block_01.ymap");
   assert!(!guids(&winter).contains(&guid::BIN));
+  // The roof's removal carries over to the generation; the wall strips stay added to the block,
+  // which the game loads too.
+  let triangles = winter.occlude_models.iter().map(|model| model.triangles.len());
+  assert_eq!(triangles.collect::<Vec<_>>(), [2]);
   assert!(guids(&winter).contains(&guid::XMAS_TREE));
   assert_eq!(parent_indices(&winter), [0, 1]);
   assert_eq!(workspace.merged_ymap("lodlights_small001.ymap").lod_lights.len(), 2);

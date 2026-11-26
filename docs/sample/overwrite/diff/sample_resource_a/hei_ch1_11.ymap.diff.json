@@ -1,5 +1,5 @@
 {
-  "schema_version": 13,
+  "schema_version": 14,
   "target": {
     "path": "docs/sample/source/[maps]/sample_resource_a/stream/hei_ch1_11.ymap",
     "sha256": "d45690f28a8badf34e63f87c7f23ef918d69ba55a7d4dd0ede3905c08dce0d79",
@@ -17,7 +17,7 @@
   "tolerances": {
     "ybn_position": 0.05,
     "ymap": 0.001,
-    "ymap_occlude_model_position": 0.01,
+    "ymap_occlude_vertex_position": 0.01,
     "ymap_box_occluder_position": 1,
     "ymap_box_occluder_rotation": 1,
     "ymap_car_generator_position_decimals": 3,
@@ -49,24 +49,43 @@
     ],
     "occlude_models": [
       {
-        "Modified": {
-          "base_index": 0,
-          "target_index": 0,
-          "changes": {
-            "triangles": [
-              {
-                "Removed": {
-                  "base_index": 10
-                }
-              },
-              {
-                "Removed": {
-                  "base_index": 11
-                }
-              }
-            ]
+        "flags": 0,
+        "removed": [
+          {
+            "corner_1": {
+              "x": 1253.8462,
+              "y": -498.69678,
+              "z": 29.483887
+            },
+            "corner_2": {
+              "x": 1258.1484,
+              "y": -695.60986,
+              "z": 38.64209
+            },
+            "corner_3": {
+              "x": 1424.396,
+              "y": -563.3384,
+              "z": 16.54004
+            }
+          },
+          {
+            "corner_1": {
+              "x": 1077.9175,
+              "y": -600.0254,
+              "z": 14.717773
+            },
+            "corner_2": {
+              "x": 996.8291,
+              "y": -752.39453,
+              "z": -17.101074
+            },
+            "corner_3": {
+              "x": 1258.1484,
+              "y": -695.60986,
+              "z": 38.64209
+            }
           }
-        }
+        ]
       }
     ]
   }

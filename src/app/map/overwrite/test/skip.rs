@@ -12,10 +12,7 @@ fn diff() -> YmapDiffFields {
     ],
     "box_occluders": [{"Removed": {"base_index": 236}}, {"Removed": {"base_index": 237}}],
     "occlude_models": [
-      {"Modified": {"base_index": 2, "target_index": 2, "changes": {
-        "bmin": {"z": 1.2192383},
-        "triangles": [{"Removed": {"base_index": 10}}, {"Removed": {"base_index": 11}}]
-      }}}
+      {"flags": 0, "removed": [{"corner_1": {"x": 10.0, "y": 0.0, "z": 0.0}, "corner_2": {"x": 11.0, "y": 0.0, "z": 0.0}, "corner_3": {"x": 10.0, "y": 1.0, "z": 0.0}}, {"corner_1": {"x": 11.0, "y": 0.0, "z": 0.0}, "corner_2": {"x": 12.0, "y": 0.0, "z": 0.0}, "corner_3": {"x": 11.0, "y": 1.0, "z": 0.0}}], "added": [{"corner_1": {"x": 20.0, "y": 0.0, "z": 0.0}, "corner_2": {"x": 21.0, "y": 0.0, "z": 0.0}, "corner_3": {"x": 20.0, "y": 1.0, "z": 0.0}}]}
     ]
   }))
   .unwrap()
@@ -34,9 +31,7 @@ fn skips_fields_items_and_nested_items_selected_by_content() {
         {"Removed": {"base_index": 1}}
       ],
       "box_occluders": [{"Removed": {"base_index": 236}}],
-      "occlude_models": [
-        {"Modified": {"base_index": 2, "changes": {"triangles": [{"Removed": {"base_index": 10}}]}}}
-      ]
+      "occlude_models": [{"flags": 0, "removed": [{"corner_1": {"x": 10.0, "y": 0.0, "z": 0.0}, "corner_2": {"x": 11.0, "y": 0.0, "z": 0.0}, "corner_3": {"x": 10.0, "y": 1.0, "z": 0.0}}]}]
     }),
   )
   .unwrap();
@@ -50,12 +45,7 @@ fn skips_fields_items_and_nested_items_selected_by_content() {
         {"Modified": {"base_index": 0, "target_index": 0, "changes": {"flags": 8}}}
       ],
       "box_occluders": [{"Removed": {"base_index": 237}}],
-      "occlude_models": [
-        {"Modified": {"base_index": 2, "target_index": 2, "changes": {
-          "bmin": {"z": 1.2192383},
-          "triangles": [{"Removed": {"base_index": 11}}]
-        }}}
-      ]
+      "occlude_models": [{"flags": 0, "removed": [{"corner_1": {"x": 11.0, "y": 0.0, "z": 0.0}, "corner_2": {"x": 12.0, "y": 0.0, "z": 0.0}, "corner_3": {"x": 11.0, "y": 1.0, "z": 0.0}}], "added": [{"corner_1": {"x": 20.0, "y": 0.0, "z": 0.0}, "corner_2": {"x": 21.0, "y": 0.0, "z": 0.0}, "corner_3": {"x": 20.0, "y": 1.0, "z": 0.0}}]}]
     })
   );
 }
@@ -73,17 +63,17 @@ fn drops_items_and_fields_left_empty_and_reports_unmatched_selectors() {
       "box_occluders": [{"Removed": {"base_index": 1}}],
       "streaming_extents_min": {"x": true, "z": true},
       "car_generators": true,
-      "occlude_models": [{"Modified": {"base_index": 2, "changes": {"bmax": true}}}]
+      "occlude_models": [{"flags": 1, "added": [{"corner_1": {"x": 20.0, "y": 0.0, "z": 0.0}, "corner_2": {"x": 21.0, "y": 0.0, "z": 0.0}, "corner_3": {"x": 20.0, "y": 1.0, "z": 0.0}}]}, {"flags": 0, "added": [{"corner_1": {"x": 20.0, "y": 0.0, "z": 0.0}, "corner_2": {"x": 21.0, "y": 0.0, "z": 0.0}, "corner_3": {"x": 20.0, "y": 1.0, "z": 0.0}}]}]
     }),
   )
   .unwrap();
-  assert_eq!(
-    unmatched,
-    ["box_occluders[0]", "car_generators", "occlude_models[0].Modified.changes.bmax"]
-  );
+  assert_eq!(unmatched, ["box_occluders[0]", "car_generators", "occlude_models[0]"]);
   assert!(diff.entities.is_none());
   assert!(diff.streaming_extents_min.is_none());
   assert_eq!(diff.box_occluders.unwrap().len(), 2);
+  // The group keeps its removals when its additions are left out.
+  let groups = diff.occlude_models.unwrap();
+  assert_eq!((groups[0].removed.len(), groups[0].added.len()), (2, 0));
 }
 
 #[test]

@@ -18,8 +18,7 @@ enum InPlace<T, C> {
 
 /// The changes several sources make to one vanilla array, combined: a removal wins over every
 /// other change of the vanilla item, including a replacement; other changes of one vanilla item
-/// keep the first source's, except modifications, which combine as [`Self::collect_with`] is
-/// told; additions after one vanilla item are kept in source order.
+/// keep the first source's; additions after one vanilla item are kept in source order.
 pub(super) struct MergedItems<T, C> {
   removed: BTreeSet<usize>,
   in_place: BTreeMap<usize, InPlace<T, C>>,
@@ -32,23 +31,6 @@ impl<T, C> MergedItems<T, C> {
   pub(super) fn collect<'a>(
     what: &str,
     changes: impl IntoIterator<Item = ItemChange<'a, T, C>>,
-  ) -> Self
-  where
-    T: Clone + 'a,
-    C: Clone + 'a,
-  {
-    Self::collect_with(changes, |index, _, _| {
-      tracing::debug!(
-        "    {what}: vanilla item {index} is already modified; keeping the first change"
-      );
-    })
-  }
-
-  /// Collects `changes` in source order, letting `combine(vanilla_index, earlier, later)` fold a
-  /// later modification of a vanilla item into the earlier ones.
-  pub(super) fn collect_with<'a>(
-    changes: impl IntoIterator<Item = ItemChange<'a, T, C>>,
-    mut combine: impl FnMut(usize, &mut C, &C),
   ) -> Self
   where
     T: Clone + 'a,
@@ -90,17 +72,10 @@ impl<T, C> MergedItems<T, C> {
         (Entry::Vacant(entry), InPlace::Replaced(item)) => {
           entry.insert(InPlace::Replaced(item.clone()));
         }
-        (Entry::Occupied(mut entry), InPlace::Modified(changes)) => {
-          if let InPlace::Modified(earlier) = entry.get_mut() {
-            combine(index, earlier, changes);
-          } else {
-            tracing::debug!(
-              "    vanilla item {index} is already replaced; keeping the replacement"
-            );
-          }
-        }
-        (Entry::Occupied(_), InPlace::Replaced(_)) => {
-          tracing::debug!("    vanilla item {index} is already changed; keeping the first change");
+        (Entry::Occupied(_), _) => {
+          tracing::debug!(
+            "    {what}: vanilla item {index} is already changed; keeping the first change"
+          );
         }
       }
     }
@@ -207,16 +182,4 @@ pub(super) fn merged<T: Clone, C: Clone>(
   sources: &[&[ItemDiff<T, C>]],
 ) -> MergedItems<T, C> {
   MergedItems::collect(what, sources.iter().flat_map(|diffs| diffs.iter().map(ItemDiff::change)))
-}
-
-/// [`merged`], folding later modifications of a vanilla item in with `combine`; see
-/// [`MergedItems::collect_with`].
-pub(super) fn merged_with<T: Clone, C: Clone>(
-  sources: &[&[ItemDiff<T, C>]],
-  combine: impl FnMut(usize, &mut C, &C),
-) -> MergedItems<T, C> {
-  MergedItems::collect_with(
-    sources.iter().flat_map(|diffs| diffs.iter().map(ItemDiff::change)),
-    combine,
-  )
 }
