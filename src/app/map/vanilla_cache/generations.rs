@@ -28,8 +28,9 @@
 //! Units are what takes time to build, as every YMAP of both generations is decoded, so each is
 //! stored by a digest of the YMAPs it pairs (`generation-units/{key}.json`) and kept across cache
 //! rebuilds: a unit is built again only when a YMAP of it changes, and switching game builds
-//! reuses those built before. `generations.json` lists the families and units of the selected
-//! build.
+//! reuses those built before. `ymap_generations.json` lists the YMAP families and units of the
+//! selected build, `ybn_generations.json` its YBN families, and `generations.json` the files the
+//! game does not load.
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
@@ -38,12 +39,16 @@ use rayon::prelude::*;
 use super::*;
 use crate::core::format::ymap::{compare::lod_light_pairs::LightSide, model::ymap::Ymap};
 
-/// File name of the generation index in the vanilla cache.
+/// File name of the index of the files the game does not load in the vanilla cache.
 pub(crate) const GENERATIONS_FILE: &str = "generations.json";
+/// File name of the YMAP generation index in the vanilla cache.
+pub(crate) const YMAP_GENERATIONS_FILE: &str = "ymap_generations.json";
+/// File name of the YBN generation index in the vanilla cache.
+pub(crate) const YBN_GENERATIONS_FILE: &str = "ybn_generations.json";
 /// Directory of the units in the vanilla cache.
 const UNITS_DIR: &str = "generation-units";
 /// Bump when how generations, families or units are formed, or the unit layout, change.
-pub(crate) const ALGORITHM_VERSION: u32 = 5;
+pub(crate) const ALGORITHM_VERSION: u32 = 6;
 /// Prefixes found for at least this many YMAPs apply to YMAPs without an unprefixed counterpart.
 const MIN_PREFIX_FILES: usize = 10;
 /// Per-axis distance within which two items of a unit are at the same place.
@@ -130,8 +135,8 @@ impl<V: specta::Type> specta::Type for ByKind<V> {
   }
 }
 
-/// The generations and units of the selected game build, with those first shipped after it; see
-/// the module docs.
+/// The vanilla files of the selected game build the game does not load, and those first shipped
+/// after it, whatever their type: `generations.json`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "typescript", derive(specta::Type))]
 pub struct GenerationIndex {
@@ -139,18 +144,47 @@ pub struct GenerationIndex {
   pub algorithm_version: u32,
   pub vanilla_manifest_sha256: String,
   pub version: String,
-  pub families: BTreeMap<String, Family>,
-  /// The families of YBNs, without units, as their polygons match by geometry; keyed by their
-  /// name with the marker of a high-detail or other collision variant, such as `hi@`.
-  #[serde(default)]
-  pub ybn_families: BTreeMap<String, Family>,
   /// The YMAPs and YBNs the game does not load, keyed by lowercase file name, with why: latest
   /// ones (see [`super::activity`]), and those first shipped after [`Self::version`].
-  #[serde(default)]
   pub inactive: BTreeMap<String, String>,
   /// The YMAPs and YBNs first shipped after [`Self::version`], in lowercase.
-  #[serde(default)]
   pub newer_than_build: BTreeSet<String>,
+}
+
+/// The YMAP generations and units of the selected game build; see the module docs:
+/// `ymap_generations.json`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
+pub struct YmapGenerationIndex {
+  pub format_version: u32,
+  pub algorithm_version: u32,
+  pub vanilla_manifest_sha256: String,
+  pub version: String,
+  pub families: BTreeMap<String, Family>,
+}
+
+/// The YBN generations of the selected game build: `ybn_generations.json`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
+pub struct YbnGenerationIndex {
+  pub format_version: u32,
+  pub algorithm_version: u32,
+  pub vanilla_manifest_sha256: String,
+  pub version: String,
+  /// The families of YBNs, without units, as their polygons match by geometry; keyed by their
+  /// name with the marker of a kind of collision, such as `hi@`.
+  pub families: BTreeMap<String, Family>,
+  /// The loaded YBNs that may hold the polygons of each YBN the game does not load, keyed by
+  /// its lowercase file name; see [`super::ybn_candidates`].
+  pub candidates: BTreeMap<String, super::ybn_candidates::YbnCandidates>,
+}
+
+/// The generation indices of a vanilla cache, read together.
+#[derive(Debug, Clone)]
+pub(crate) struct Generations {
+  pub files: GenerationIndex,
+  pub ymaps: YmapGenerationIndex,
+  pub ybns: YbnGenerationIndex,
 }
 
 /// The generations of one family, oldest first, the units pairing their items, and the YMAPs the
@@ -220,16 +254,38 @@ pub struct UnpairedCounts {
   pub ambiguous: usize,
 }
 
-impl GenerationIndex {
-  /// Reads the index of the vanilla cache at `cache_dir`, `None` when it has none of this
-  /// algorithm version.
+impl Generations {
+  /// Reads the indices of the vanilla cache at `cache_dir`, `None` when it lacks one or has one of
+  /// another algorithm version.
   pub(crate) fn load(cache_dir: &Path) -> Result<Option<Self>> {
-    let path = cache_dir.join(GENERATIONS_FILE);
-    if !fs::is_file(&path) {
-      return Ok(None);
+    fn read<T: serde::de::DeserializeOwned>(
+      cache_dir: &Path,
+      file: &str,
+      algorithm_version: fn(&T) -> u32,
+    ) -> Result<Option<T>> {
+      let path = cache_dir.join(file);
+      if !fs::is_file(&path) {
+        return Ok(None);
+      }
+      let index: T = crate::common::json::read_json(&path)
+        .map_err(|error| format!("Cannot read {}: {error}", path.display()))?;
+      Ok((algorithm_version(&index) == ALGORITHM_VERSION).then_some(index))
     }
-    let index: Self = crate::common::json::read_json(&path)?;
-    Ok((index.algorithm_version == ALGORITHM_VERSION).then_some(index))
+    let files =
+      read(cache_dir, GENERATIONS_FILE, |index: &GenerationIndex| index.algorithm_version)?;
+    let ymaps = read(cache_dir, YMAP_GENERATIONS_FILE, |index: &YmapGenerationIndex| {
+      index.algorithm_version
+    })?;
+    let ybns =
+      read(cache_dir, YBN_GENERATIONS_FILE, |index: &YbnGenerationIndex| index.algorithm_version)?;
+    Ok(match (files, ymaps, ybns) {
+      (Some(files), Some(ymaps), Some(ybns)) => Some(Self {
+        files,
+        ymaps,
+        ybns,
+      }),
+      _ => None,
+    })
   }
 
   /// The family of the vanilla YMAP `file_name` and its generation there; a `lodlights_*` YMAP
@@ -243,7 +299,8 @@ impl GenerationIndex {
       Some(LightSide::LodLights) => LightSide::partner_name(&name)?,
       _ => name,
     };
-    let families = if listed.ends_with(".ybn") { &self.ybn_families } else { &self.families };
+    let families =
+      if listed.ends_with(".ybn") { &self.ybns.families } else { &self.ymaps.families };
     families.values().find_map(|family| {
       family.generations.iter().enumerate().find_map(|(generation, files)| {
         let file = files.files.iter().position(|file| *file == listed)?;
@@ -263,6 +320,13 @@ impl GenerationIndex {
     &self,
     file_name: &str,
   ) -> Option<String> {
+    if file_name.to_ascii_lowercase().ends_with(".ybn") {
+      return self
+        .ybns
+        .candidates
+        .get(&file_name.to_ascii_lowercase())
+        .and_then(|candidates| Some(candidates.files.first()?.file.clone()));
+    }
     let located = self.locate(file_name)?;
     let listed = &located.family.generations[located.generation].files[located.file];
     let successor = located.family.successors.get(listed)?;
@@ -277,7 +341,7 @@ impl GenerationIndex {
     &self,
     file_name: &str,
   ) -> bool {
-    !self.inactive.contains_key(&file_name.to_ascii_lowercase())
+    !self.files.inactive.contains_key(&file_name.to_ascii_lowercase())
   }
 }
 
@@ -287,7 +351,7 @@ type UnitPairs = HashMap<(u32, u32), (u32, u32)>;
 /// Finds the items of newer generations that items of older ones stand for, loading units as it
 /// needs them.
 pub(crate) struct Counterparts<'a> {
-  index: &'a GenerationIndex,
+  index: &'a Generations,
   cache_dir: &'a Path,
   /// Per unit key, its pairs of each kind.
   units: HashMap<String, HashMap<ItemKind, UnitPairs>>,
@@ -299,7 +363,7 @@ pub(crate) struct Counterparts<'a> {
 
 impl<'a> Counterparts<'a> {
   pub(crate) fn new(
-    index: &'a GenerationIndex,
+    index: &'a Generations,
     cache_dir: &'a Path,
   ) -> Self {
     Self {
@@ -325,7 +389,7 @@ impl<'a> Counterparts<'a> {
     let Some(located) = self.index.locate(&file) else {
       return Ok(Vec::new());
     };
-    let backward = self.index.newer_than_build.contains(&file);
+    let backward = self.index.files.newer_than_build.contains(&file);
     let mut found = Vec::new();
     for unit in located
       .family
@@ -384,7 +448,7 @@ impl<'a> Counterparts<'a> {
   }
 }
 
-/// Where [`GenerationIndex::locate`] found a YMAP.
+/// Where [`Generations::locate`] found a YMAP.
 pub(crate) struct Located<'a> {
   pub family: &'a Family,
   pub generation: usize,
@@ -412,10 +476,21 @@ pub(super) fn index_is_current(
   revision: &str,
   version: &str,
 ) -> bool {
-  GenerationIndex::load(output_dir).ok().flatten().is_some_and(|index| {
-    index.format_version == CACHE_SCHEMA
-      && index.vanilla_manifest_sha256 == revision
-      && index.version == version
+  Generations::load(output_dir).ok().flatten().is_some_and(|index| {
+    let current = |format_version: u32, manifest: &str, built: &str| {
+      format_version == CACHE_SCHEMA && manifest == revision && built == version
+    };
+    current(index.files.format_version, &index.files.vanilla_manifest_sha256, &index.files.version)
+      && current(
+        index.ymaps.format_version,
+        &index.ymaps.vanilla_manifest_sha256,
+        &index.ymaps.version,
+      )
+      && current(
+        index.ybns.format_version,
+        &index.ybns.vanilla_manifest_sha256,
+        &index.ybns.version,
+      )
   })
 }
 
@@ -438,12 +513,13 @@ pub(super) fn write_generations(
   staging: &Path,
   previous: &Path,
   (ymaps, ybns): (&BTreeMap<String, SourceYmap>, &BTreeMap<String, SourceYmap>),
+  activity: Option<&super::activity::DlcActivity>,
   inactive: &BTreeMap<String, String>,
   newer: &BTreeSet<String>,
   stage_ids: &[String],
   revision: &str,
   version: &str,
-) -> Result<GenerationIndex> {
+) -> Result<Generations> {
   let families = families(ymaps, stage_ids);
   let units_dir = staging.join(UNITS_DIR);
   fs::create_dir_all(&units_dir)?;
@@ -451,15 +527,30 @@ pub(super) fn write_generations(
 
   // The units to build, with the YMAPs they need.
   let mut missing = BTreeMap::new();
-  let mut index = GenerationIndex {
-    format_version: CACHE_SCHEMA,
-    algorithm_version: ALGORITHM_VERSION,
-    vanilla_manifest_sha256: revision.to_owned(),
-    version: version.to_owned(),
-    families: BTreeMap::new(),
-    ybn_families: ybn_families(ybns, stage_ids, inactive, newer),
-    inactive: inactive.clone(),
-    newer_than_build: newer.clone(),
+  let mut index = Generations {
+    files: GenerationIndex {
+      format_version: CACHE_SCHEMA,
+      algorithm_version: ALGORITHM_VERSION,
+      vanilla_manifest_sha256: revision.to_owned(),
+      version: version.to_owned(),
+      inactive: inactive.clone(),
+      newer_than_build: newer.clone(),
+    },
+    ymaps: YmapGenerationIndex {
+      format_version: CACHE_SCHEMA,
+      algorithm_version: ALGORITHM_VERSION,
+      vanilla_manifest_sha256: revision.to_owned(),
+      version: version.to_owned(),
+      families: BTreeMap::new(),
+    },
+    ybns: YbnGenerationIndex {
+      format_version: CACHE_SCHEMA,
+      algorithm_version: ALGORITHM_VERSION,
+      vanilla_manifest_sha256: revision.to_owned(),
+      version: version.to_owned(),
+      families: ybn_families(ybns, stage_ids),
+      candidates: super::ybn_candidates::candidates(ybns, activity, inactive, newer)?,
+    },
   };
   for (name, generations) in families {
     let unit_files = |generation: &Generation| -> Vec<UnitFile> {
@@ -493,7 +584,7 @@ pub(super) fn write_generations(
         });
       }
     }
-    index.families.insert(
+    index.ymaps.families.insert(
       name,
       Family {
         generations,
@@ -531,10 +622,12 @@ pub(super) fn write_generations(
       })
       .collect::<std::result::Result<Vec<_>, String>>()?;
   }
-  for family in index.families.values_mut() {
+  for family in index.ymaps.families.values_mut() {
     family.successors = successors(family, &units_dir, inactive, newer)?;
   }
-  write_json(&staging.join(GENERATIONS_FILE), &index)?;
+  write_json(&staging.join(GENERATIONS_FILE), &index.files)?;
+  write_json(&staging.join(YMAP_GENERATIONS_FILE), &index.ymaps)?;
+  write_json(&staging.join(YBN_GENERATIONS_FILE), &index.ybns)?;
   Ok(index)
 }
 
@@ -700,7 +793,7 @@ fn stem(name: &str) -> &str {
 
 /// The marker of a collision variant leading a YBN name, such as `hi@` of `hi@hei_dt1_13_0`,
 /// and the rest of the name; the marker is empty for others.
-fn ybn_marker(name: &str) -> (&str, &str) {
+pub(super) fn ybn_marker(name: &str) -> (&str, &str) {
   match name.find('@') {
     Some(at) if name[..at].chars().all(|c| c.is_ascii_alphanumeric()) => name.split_at(at + 1),
     _ => ("", name),
@@ -708,14 +801,11 @@ fn ybn_marker(name: &str) -> (&str, &str) {
 }
 
 /// The families of `ybns`, formed as YMAP families are among the YBNs of one variant marker,
-/// with the successor of each YBN the game does not load: the loaded YBN of its name without
-/// the prefix in the newest newer generation, or, for one first shipped after the game build,
-/// the newest older one.
+/// without successors: YBNs carry their changes to candidates
+/// ([`super::ybn_candidates`]).
 fn ybn_families(
   ybns: &BTreeMap<String, SourceYmap>,
   stage_ids: &[String],
-  inactive: &BTreeMap<String, String>,
-  newer_than_build: &BTreeSet<String>,
 ) -> BTreeMap<String, Family> {
   let mut by_marker = BTreeMap::<&str, BTreeMap<String, SourceYmap>>::new();
   for (name, source) in ybns {
@@ -732,47 +822,12 @@ fn ybn_families(
           ..generation
         })
         .collect::<Vec<_>>();
-      // A YBN's name without its marker, prefix and extension, the same across generations.
-      let unprefixed = |generation: &Generation, file: &str| {
-        let rest = stem(ybn_marker(file).1);
-        let prefix = format!("{}_", generation.prefix);
-        rest
-          .strip_prefix(prefix.as_str())
-          .filter(|_| !generation.prefix.is_empty())
-          .unwrap_or(rest)
-          .to_owned()
-      };
-      let mut successors = BTreeMap::new();
-      for (index, generation) in generations.iter().enumerate() {
-        for file in &generation.files {
-          let backward = newer_than_build.contains(file);
-          if !backward && !inactive.contains_key(file) {
-            continue;
-          }
-          let name = &unprefixed(generation, file);
-          let candidates: Box<dyn Iterator<Item = &Generation>> = if backward {
-            Box::new(generations[..index].iter().rev())
-          } else {
-            Box::new(generations[index + 1..].iter().rev())
-          };
-          let successor = candidates
-            .flat_map(|other| {
-              other.files.iter().filter(move |candidate| unprefixed(other, candidate) == *name)
-            })
-            .find(|candidate| {
-              !inactive.contains_key(*candidate) && !newer_than_build.contains(*candidate)
-            });
-          if let Some(successor) = successor {
-            successors.insert(file.clone(), successor.clone());
-          }
-        }
-      }
       out.insert(
         format!("{marker}{key}"),
         Family {
           generations,
           units: Vec::new(),
-          successors,
+          successors: BTreeMap::new(),
         },
       );
     }
@@ -1083,7 +1138,7 @@ mod tests {
   }
 
   #[test]
-  fn ybn_families_keep_variants_apart_and_name_the_newest_loaded_successor() {
+  fn ybn_families_keep_variants_apart() {
     let stages = ["0000-base", "0001-heist", "0002-lowrider"].map(String::from);
     let ybns = [
       ("dt1_22_0.ybn", 0),
@@ -1097,26 +1152,25 @@ mod tests {
     .map(|(name, stage)| (name.to_owned(), source(stage)))
     .into_iter()
     .collect();
-    let inactive = ["dt1_22_0.ybn", "hei_dt1_22_0.ybn", "dt1_22_1.ybn", "hi@dt1_22_0.ybn"]
-      .map(|name| (name.to_owned(), "replaced".to_owned()))
-      .into_iter()
-      .collect();
-    let families = ybn_families(&ybns, &stages, &inactive, &BTreeSet::new());
+    let families = ybn_families(&ybns, &stages);
     assert_eq!(families.keys().collect::<Vec<_>>(), ["dt1_22_", "hi@dt1_22_"]);
+    let files = |family: &str| {
+      families[family]
+        .generations
+        .iter()
+        .map(|generation| generation.files.clone())
+        .collect::<Vec<_>>()
+    };
     assert_eq!(
-      families["dt1_22_"].successors,
+      files("dt1_22_"),
       [
-        ("dt1_22_0.ybn", "lr_dt1_22_0.ybn"),
-        ("dt1_22_1.ybn", "hei_dt1_22_1.ybn"),
-        ("hei_dt1_22_0.ybn", "lr_dt1_22_0.ybn"),
+        vec!["dt1_22_0.ybn", "dt1_22_1.ybn"],
+        vec!["hei_dt1_22_0.ybn", "hei_dt1_22_1.ybn"],
+        vec!["lr_dt1_22_0.ybn"]
       ]
-      .map(|(older, newer)| (older.to_owned(), newer.to_owned()))
-      .into()
     );
-    assert_eq!(
-      families["hi@dt1_22_"].successors,
-      [("hi@dt1_22_0.ybn".to_owned(), "hi@hei_dt1_22_0.ybn".to_owned())].into()
-    );
+    assert_eq!(files("hi@dt1_22_"), [vec!["hi@dt1_22_0.ybn"], vec!["hi@hei_dt1_22_0.ybn"]]);
+    assert!(families.values().all(|family| family.successors.is_empty()));
   }
 
   #[test]

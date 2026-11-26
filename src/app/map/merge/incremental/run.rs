@@ -60,7 +60,7 @@ impl IncrementalMerge<'_> {
     // latest generation, its sources are omitted and the vanilla file stays.
     let mut superseded = BTreeMap::<String, (String, Vec<&MergeSourceFile>)>::new();
     if let Some(generations) =
-      crate::app::map::vanilla_cache::generations::GenerationIndex::load(self.vanilla_cache)?
+      crate::app::map::vanilla_cache::generations::Generations::load(self.vanilla_cache)?
     {
       let names = sources
         .keys()

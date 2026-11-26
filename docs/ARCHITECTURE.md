@@ -139,11 +139,14 @@ it, placing its items or collision twice. Resolution is split by what each stage
   and pairs the items of each YMAP family's generations, over the whole archive so that YMAPs
   first shipped after the build are paired too, one unit per older and newer generation,
   stored by a digest of its YMAPs so that rebuilds and game build switches reuse them. It
-  names the loaded successor of each YMAP the game does not load in `generations.json`,
-  and records the YMAPs newer than the build with a successor as `newer_files`, so that
+  names the loaded successor of each YMAP the game does not load in `ymap_generations.json`,
+  the loaded YBNs overlapping each YBN it does not load in `ybn_generations.json`
+  (`app::map::vanilla_cache::ybn_candidates`), the files it does not load in
+  `generations.json`, and records the YMAPs newer than the build with a successor as `newer_files`, so that
   sources streaming them are diffed against them.
 - The merge carries each source's changes to the items they pair with in the loaded
-  generation, and a source YBN's polygon changes to the loaded YBN by geometry, deploys only
+  generation, and a source YBN's polygon changes to the loaded YBNs whose boxes overlap it,
+  polygon by polygon by geometry, deploys only
   that generation, and reports the changes it does not apply or cannot carry.
 
 The engine's loading rules are inferred from the packs' data and loads observed in game;

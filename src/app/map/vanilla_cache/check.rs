@@ -1,16 +1,18 @@
 //! Consistency of the derived vanilla cache with its metadata and the raw archive.
 
-use super::{CACHE_SCHEMA, DerivedManifest, Result, generations::GenerationIndex};
+use super::{CACHE_SCHEMA, DerivedManifest, Result, generations::Generations};
 use crate::core::check::{CheckIssueKind, Findings};
 use crate::platform::fs;
 use std::path::Path;
 
 /// Entries of the cache directory.
-const CACHE_ENTRIES: [&str; 8] = [
+const CACHE_ENTRIES: [&str; 10] = [
   "cache_info.json",
   "ymap_relationships.json",
   "stream_file_rtree.json",
   "generations.json",
+  "ymap_generations.json",
+  "ybn_generations.json",
   "dlc_activity.json",
   // Units of every game build built so far, which the index of the selected one names some of.
   "generation-units",
@@ -46,9 +48,9 @@ pub(crate) fn check(
     let path = Path::new(&manifest.vanilla_dir).join(&file.object);
     findings.recorded_file(dir, &path.to_string_lossy(), None, &file.sha256, deep)?;
   }
-  match GenerationIndex::load(dir) {
+  match Generations::load(dir) {
     Ok(Some(index)) => {
-      for unit in index.families.values().flat_map(|family| &family.units) {
+      for unit in index.ymaps.families.values().flat_map(|family| &family.units) {
         let path = format!("generation-units/{}.json", unit.key);
         if !fs::is_file(dir.join(&path)) {
           findings.add(CheckIssueKind::Missing, &path, None);

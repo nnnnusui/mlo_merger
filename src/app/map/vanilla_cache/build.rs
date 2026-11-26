@@ -79,6 +79,7 @@ impl BuildVanillaCache {
         &generation_sources(&vanilla_dir, &manifest, &current, &newer, ".ymap")?,
         &generation_sources(&vanilla_dir, &manifest, &current, &newer, ".ybn")?,
       ),
+      activity.as_ref(),
       &inactive,
       &newer.keys().cloned().collect(),
       &manifest.versions.iter().map(|version| version.id.clone()).collect::<Vec<_>>(),

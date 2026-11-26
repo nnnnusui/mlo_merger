@@ -255,3 +255,42 @@ fn limits_are_validated() {
     assert!(limits.validate().is_err());
   }
 }
+
+#[test]
+fn changes_are_carried_to_the_candidates_holding_or_holding_the_box_of_each_polygon() {
+  let origin = composite(vec![(strip(0.0, 4), FLAGS), (strip(20.0, 1), FLAGS)]);
+  let changed =
+    composite(vec![(strip(0.0, 2), FLAGS), (strip(0.1, 1), FLAGS), (strip(1.2, 1), FLAGS)]);
+  let diff = polygons::diff(&origin, &changed, TOLERANCE).unwrap();
+  // The newer generation splits the strip at x = 1, so its removed half is in the second file.
+  let first = composite(vec![(strip(0.0, 2), FLAGS)]);
+  let second = composite(vec![(strip(1.0, 2), FLAGS)]);
+  let targets =
+    [(&first, [[0.0, 0.0, 0.0], [1.5, 1.0, 0.0]]), (&second, [[1.0, 0.0, 0.0], [3.0, 1.0, 0.0]])];
+  let (carried, absent) = polygons::carried_among(&diff, &targets, TOLERANCE).unwrap();
+  // The strip at x = 20 is in neither.
+  assert_eq!(absent, 1);
+  let counts = |fields: &polygons::YbnDiffFields| {
+    let group = &fields.polygons[0];
+    (group.removed.len(), group.added.len())
+  };
+  // The first holds the addition at x = 0.1; the second the removed half and the addition at
+  // x = 1.2, which the first's box does not hold.
+  assert_eq!(counts(&carried[0]), (0, 1));
+  assert_eq!(counts(&carried[1]), (2, 1));
+  let mut root = second.clone();
+  polygons::apply(&mut root, &carried[1], TOLERANCE, GeometryLimits::default()).unwrap();
+  assert_eq!(polygon_count(&root), 1);
+
+  // An addition no box holds goes to the nearest.
+  let far = polygons::diff(
+    &origin,
+    &composite(vec![(strip(0.0, 4), FLAGS), (strip(20.0, 1), FLAGS), (strip(9.0, 1), FLAGS)]),
+    TOLERANCE,
+  )
+  .unwrap();
+  let (carried, absent) = polygons::carried_among(&far, &targets, TOLERANCE).unwrap();
+  assert_eq!(absent, 0);
+  assert!(carried[0].is_empty());
+  assert_eq!(counts(&carried[1]), (0, 1));
+}

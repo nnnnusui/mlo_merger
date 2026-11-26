@@ -364,9 +364,9 @@ generation and carry the changes resources make to the others over to it.
   the other generation fits, and no other item fits that one.
 - Each pair of generations of a family is stored as a unit,
   `generation-units/{key}.json`, keyed by the contents of its YMAPs, and
-  `generations.json` lists the units of the selected game build. Units are kept across
+  `ymap_generations.json` lists the units of the selected game build. Units are kept across
   rebuilds and game builds, so a rebuild pairs only the YMAPs that changed.
-- `generations.json` names, per family in `successors`, the YMAP loaded in place of each one
+- `ymap_generations.json` names, per family in `successors`, the YMAP loaded in place of each one
   that is not: of the newest newer generation pairing its items, or for a YMAP first shipped
   after the build of the newest older one, the loaded YMAP holding most of them. YMAPs not
   loaded that no loaded YMAP pairs with have no successor and are merged and deployed as
@@ -428,18 +428,28 @@ generation and carry the changes resources make to the others over to it.
 #### YBN Generations
 
 - YBNs form generations and families by prefix and name as YMAPs do, among the YBNs of one
-  collision variant marker, such as `hi@` of `hi@hei_dt1_13_0.ybn`, in `ybn_families` of
-  `generations.json`. Their polygons match by geometry, so no units are built.
-- A YBN the game does not load has as successor the loaded YBN of its name without the prefix
-  in the newest newer generation of its family, or, for one first shipped after the build, the
-  newest older one.
-- Merge carries a source YBN's changes, after its overwrite, from a generation the game does
-  not load to the successor: the removals of polygons the successor holds within
-  `ybn_position`, in the same collision flags group, and every addition, written to
-  `generations/{resourceName}/{version}/{fileName}.diff.json` (`YbnPropagatedDiff`). The
-  removals the successor lacks are listed in `left_behind.json` with `array` `polygons` and no
-  `index`. The carried documents are merged into the successor after its own sources, those of
-  newer origin generations first, and the source YBN is not deployed.
+  collision variant marker, such as `hi@` of `hi@hei_dt1_13_0.ybn`, in
+  `ybn_generations.json`. The marker names a kind of collision: `hi@` YBNs hold detailed
+  collision for weapons and cameras, and generation prefixes follow the marker. Their
+  polygons match by geometry, so no units are built.
+- A YBN's number indexes a spatial piece of its area, and a DLC rebuilding an area splits its
+  collision again, into other pieces and files of other names. So a YBN the game does not load
+  has no single successor but *candidates*, in `candidates` of `ybn_generations.json`: the
+  loaded YBNs of its marker whose box overlaps its own on the ground plane, from the archives
+  standing for the path its archive stands for (see [Newer DLC Generations](#newer-dlc-generations)),
+  or, for one first shipped after the build, from any archive; each with its box and the share
+  of the YBN's box it covers, most covering first.
+- Merge carries a source YBN's changes, after its overwrite, from a YBN the game does not load
+  to its candidates: a removal to every candidate holding the polygon within `ybn_position`,
+  in the same collision flags group; an addition to the first candidate whose ground-plane box
+  holds the polygon's, or else to the one whose box is nearest it; a child added whole to the
+  most covering candidate. The changes for each candidate are written to
+  `generations/{resourceName}/{version}/{fileName}/{candidate}.diff.json`
+  (`YbnPropagatedDiff`). The removals no candidate holds are listed in `left_behind.json`
+  with `array` `polygons` and no `index`. The carried documents are merged into each
+  candidate after its own sources, those of newer origin generations first, and the source
+  YBN is not deployed; the merge report names the most covering candidate as `superseded_by`.
+  A YBN the game does not load with no candidate is merged and deployed as it is changed.
 
 ### Entity Parents
 

@@ -163,7 +163,7 @@ fn pipeline_runs_on_the_web_sample() {
   );
 
   // Generations: the prefixed copies pair with the base files, and edits carry over to them.
-  let generations = workspace.json("vanilla-cache/generations.json").to_string();
+  let generations = workspace.json("vanilla-cache/ymap_generations.json").to_string();
   for file in
     ["winter_smpl_block_01.ymap", "summer_smpl_block_01.ymap", "winter_distlodlights_small001.ymap"]
   {

@@ -36,7 +36,7 @@ in `web/`, described under `web` in its `release.json`; see [Browser build](web.
 | Source-cache diff documents | `YmapComparisonDiff`, `YmapComparisonFile`, `YmapDiffFields`, `YmapEntityDiff`, `YmapEntityFieldDiff`, `YbnComparisonDiff`, `YbnDiffFields`, `YbnPolygonsDiff` |
 | Changes carried to newer DLC generations | `YmapPropagatedDiff`, `YmapPropagationOrigin`, `LeftBehind`, `LeftBehindReason` |
 | LOD light pair documents | `YmapImplied`, `YmapImpliedPartner` |
-| Vanilla YMAP generations | `GenerationIndex`, `GenerationUnit` |
+| Vanilla YMAP and YBN generations | `GenerationIndex`, `YmapGenerationIndex`, `YbnGenerationIndex`, `Family`, `Generation`, `UnitRef`, `GenerationUnit` |
 | Vanilla archives the game loads | `DlcActivity`, `ArchiveActivity`, `FileActivity`, `PackActivity`, `Unloaded`, `ChangeSetRef` |
 | Overwrite documents | `StreamFileOverwrite`, `OverwriteFingerprint`, `YmapDiffSkip`, `VanillaOverwrite` |
 | Overwrite cache | `AddedStreamFiles`, `AddedStreamFile`, `AddedStreamFileSource`, `LeftOutAddition`, `AddedItem`, `OverwriteWarnings`, `SourceUpdate`, `SourceVersion`, `SourceUpdateOutcome` |
@@ -156,7 +156,7 @@ source root.
 | Inspect differences | none; written by source-cache generation | | `asset/map/source-cache/diff/{resource}/{stream_path}.diff.json` (`YmapComparisonDiff`) |
 | Inspect which vanilla YMAPs the game loads | none; written by vanilla-cache generation | | `asset/map/vanilla-cache/dlc_activity.json` (`DlcActivity`); see [Loaded Vanilla YMAPs](#loaded-vanilla-ymaps) |
 | Inspect what keeps a resource's LOD light pairs in step | none; written by source-cache generation | | `asset/map/source-cache/implied/{resource}/{stream_path}.json` (`YmapImplied`) |
-| Inspect which vanilla YMAP the game loads in place of another | none; written by vanilla-cache generation | | `asset/map/vanilla-cache/generations.json` (`GenerationIndex`), then `asset/map/vanilla-cache/generation-units/{key}.json` (`GenerationUnit`) for the items paired; see [DLC Generations](#dlc-generations) |
+| Inspect which vanilla YMAP the game loads in place of another | none; written by vanilla-cache generation | | `asset/map/vanilla-cache/generations.json` (`GenerationIndex`) and `ymap_generations.json` (`YmapGenerationIndex`), then `asset/map/vanilla-cache/generation-units/{key}.json` (`GenerationUnit`) for the items paired; see [DLC Generations](#dlc-generations) |
 | Inspect changes carried to other DLC generations | none; written by merge | | `asset/map/merged/generations/{resource}/{version}/{file_name}.diff.json` (`YmapPropagatedDiff`); each carried item's `reason` names the item it came from; `asset/map/merged/generations/left_behind.json` (`LeftBehind[]`) lists the changes carried nowhere |
 | Inspect vanilla version differences | none; vanilla-cache generation would write them, but it is currently disabled | | `asset/map/vanilla-cache/ymap_versions.json` (`VanillaYmapVersionIndex`), then `asset/map/vanilla-cache/diff/{version}/ymap/{name}.diff.json` (`VanillaYmapDiff`) for each version after a YMAP's first |
 | Apply overwrites | `--pipeline`, or `--merge` then `--deploy` | `PipelineReport` (pipeline only) | `asset/map/merged/report/index.json` (`MergeReportIndex`), then `asset/map/merged/report/vanilla/{version}/ymap/{file_name}.json` (`YmapMergeReport`); see [Merge Report](reference.md#merge-report) |
@@ -252,20 +252,25 @@ export const unloadedInStage = (version: string): [string, Unloaded][] =>
 
 ### DLC Generations
 
-`asset/map/vanilla-cache/generations.json` (`GenerationIndex`) tells, for the game build the
-vanilla cache was built for, which vanilla YMAP the game loads in place of one it does not
-(see [Newer DLC Generations](reference.md#newer-dlc-generations)):
+Three files of `asset/map/vanilla-cache` tell, for the game build the vanilla cache was built
+for, which vanilla files the game loads, and which it loads in place of one it does not (see
+[Newer DLC Generations](reference.md#newer-dlc-generations)):
 
-- `inactive` lists the YMAPs and YBNs the game does not load, by lowercase file name, with
-  why; `newer_than_build` those of them first shipped after the build.
-- `families` groups the YMAPs of all generations of one name. Each family lists its
+- `generations.json` (`GenerationIndex`): `inactive` lists the YMAPs and YBNs the game does
+  not load, by lowercase file name, with why; `newer_than_build` those of them first shipped
+  after the build.
+- `ymap_generations.json` (`YmapGenerationIndex`): `families` groups the YMAPs of all
+  generations of one name. Each family lists its
   `generations`, oldest first, each with its prefix, the stage first shipping it and its
   YMAPs, a `distlodlights_*` YMAP standing for its LOD light pair. `successors` maps each
   YMAP not loaded to the loaded YMAP holding its items, and `units` names the
   `generation-units/{key}.json` pairing the items of an older and a newer generation by
   their indices.
-- `ybn_families` groups YBNs alike, keyed with their collision variant marker such as `hi@`,
-  with `successors` and no `units`.
+- `ybn_generations.json` (`YbnGenerationIndex`): `families` groups YBNs alike, keyed with
+  their collision variant marker such as `hi@`, without `units` or `successors`.
+  `candidates` maps each YBN the game does not load to its box and the loaded YBNs its
+  changes are carried to, each with its box and the share of the YBN's box it `covers`, most
+  covering first (see [YBN Generations](reference.md#ybn-generations)).
 
 A merge deploys no YMAP with a successor and carries the changes a resource makes to it to
 the successor: the merge report gives `superseded_by` for such a YMAP, and lists the changes
@@ -274,11 +279,16 @@ carried nowhere.
 ```typescript
 // server/generations.ts
 import { readFile } from "node:fs/promises";
-import type { Generation, GenerationIndex } from "../shared/gen_mlo_merger";
+import type {
+  Generation,
+  GenerationIndex,
+  YmapGenerationIndex,
+} from "../shared/gen_mlo_merger";
 
-const index: GenerationIndex = JSON.parse(
-  await readFile("asset/map/vanilla-cache/generations.json", "utf8"),
-);
+const read = async <T>(file: string): Promise<T> =>
+  JSON.parse(await readFile(`asset/map/vanilla-cache/${file}`, "utf8"));
+const index = await read<GenerationIndex>("generations.json");
+const ymaps = await read<YmapGenerationIndex>("ymap_generations.json");
 
 /** The `lodlights_*` name of the pair a `distlodlights_*` name stands for, and back. */
 const partner = (name: string): string | undefined =>
@@ -299,7 +309,7 @@ export const generationOf = (
   fileName: string,
 ): { family: string; position: number; generation: Generation } | undefined => {
   const listed = listedName(fileName.toLowerCase());
-  for (const [family, { generations }] of Object.entries(index.families)) {
+  for (const [family, { generations }] of Object.entries(ymaps.families)) {
     const position = generations.findIndex((generation) => generation.files.includes(listed));
     if (position >= 0) {
       return { family, position, generation: generations[position] };
@@ -313,11 +323,11 @@ export const generationOf = (
  * holds its items. */
 export const loadedInPlaceOf = (fileName: string): string | null => {
   const name = fileName.toLowerCase();
-  if (!(name in (index.inactive ?? {}))) {
+  if (!(name in index.inactive)) {
     return name;
   }
   const listed = listedName(name);
-  for (const family of Object.values(index.families)) {
+  for (const family of Object.values(ymaps.families)) {
     const successor = family.successors[listed];
     if (successor) {
       return listed === name ? successor : partner(successor)!;
@@ -328,7 +338,7 @@ export const loadedInPlaceOf = (fileName: string): string | null => {
 
 /** Whether `fileName` is first shipped after the game build the cache was built for. */
 export const isNewerThanBuild = (fileName: string): boolean =>
-  (index.newer_than_build ?? []).includes(fileName.toLowerCase());
+  index.newer_than_build.includes(fileName.toLowerCase());
 ```
 
 ### `--read`

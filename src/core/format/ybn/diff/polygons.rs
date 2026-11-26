@@ -160,56 +160,116 @@ impl YbnPropagatedDiff {
   pub const SCHEMA_VERSION: u32 = 1;
 }
 
-/// The changes of `diff` that reach `successor`, another generation of the YBN `diff` was taken
-/// from: the removals of polygons it holds within `tolerance`, in the same flags group, and of
-/// children compared whole it has, and every addition. Returns them and how many removals it
-/// lacks.
-pub fn carried_to(
+/// A loaded YBN changes are carried to, with its box: `([min], [max])` in world coordinates.
+pub type CarryTarget<'a> = (&'a Bound, [[f32; 3]; 2]);
+
+/// The changes of `diff`, taken from a YBN the game does not load, that reach each of
+/// `candidates`, loaded YBNs most covering it first, in their order; and how many removals reach
+/// none. A removal reaches every candidate holding the polygon within `tolerance` in the same
+/// flags group, or the child compared whole. An addition goes to the first candidate whose
+/// ground-plane box holds the polygon's, or else to the one whose box is nearest it; a child
+/// added whole to the first candidate.
+pub fn carried_among(
   diff: &YbnDiffFields,
-  successor: &Bound,
+  candidates: &[CarryTarget<'_>],
   tolerance: f32,
-) -> io::Result<(YbnDiffFields, usize)> {
-  let (groups, whole) = groups(successor)?;
+) -> io::Result<(Vec<YbnDiffFields>, usize)> {
+  let mut carried = vec![YbnDiffFields::default(); candidates.len()];
+  if candidates.is_empty() {
+    let removals = diff.polygons.iter().map(|group| group.removed.len()).sum::<usize>()
+      + diff.removed_children.len();
+    return Ok((carried, removals));
+  }
+  let mut held = Vec::with_capacity(candidates.len());
+  for (bound, _) in candidates {
+    let (groups, whole) = groups(bound)?;
+    let whole =
+      whole.iter().map(|child| bound_identity(&child.bound)).collect::<io::Result<HashSet<_>>>()?;
+    held.push((groups, whole));
+  }
   let mut absent = 0;
-  let mut polygons = Vec::new();
   for group in &diff.polygons {
-    let mut held = Lookup::new(tolerance);
-    for entry in groups.get(&group.flags).into_iter().flatten() {
-      held.insert(entry.identity.clone());
-    }
-    let removed = group
-      .removed
+    let lookups = held
       .iter()
-      .filter(|polygon| held.contains(&Identity::of(polygon)))
-      .cloned()
+      .map(|(groups, _)| {
+        let mut lookup = Lookup::new(tolerance);
+        for entry in groups.get(&group.flags).into_iter().flatten() {
+          lookup.insert(entry.identity.clone());
+        }
+        lookup
+      })
       .collect::<Vec<_>>();
-    absent += group.removed.len() - removed.len();
-    if !removed.is_empty() || !group.added.is_empty() {
-      polygons.push(YbnPolygonsDiff {
-        flags: group.flags,
-        removed,
-        added: group.added.clone(),
-      });
+    let mut removed = vec![Vec::new(); candidates.len()];
+    for polygon in &group.removed {
+      let identity = Identity::of(polygon);
+      let mut found = false;
+      for (target, lookup) in lookups.iter().enumerate() {
+        if lookup.contains(&identity) {
+          removed[target].push(polygon.clone());
+          found = true;
+        }
+      }
+      absent += usize::from(!found);
+    }
+    let mut added = vec![Vec::new(); candidates.len()];
+    for polygon in &group.added {
+      added[target_of(polygon, candidates)].push(polygon.clone());
+    }
+    for (target, (removed, added)) in removed.into_iter().zip(added).enumerate() {
+      if !removed.is_empty() || !added.is_empty() {
+        carried[target].polygons.push(YbnPolygonsDiff {
+          flags: group.flags,
+          removed,
+          added,
+        });
+      }
     }
   }
-  let present =
-    whole.iter().map(|child| bound_identity(&child.bound)).collect::<io::Result<HashSet<_>>>()?;
-  let mut removed_children = Vec::new();
   for child in &diff.removed_children {
-    if present.contains(&bound_identity(&child.bound)?) {
-      removed_children.push(child.clone());
-    } else {
-      absent += 1;
+    let identity = bound_identity(&child.bound)?;
+    let mut found = false;
+    for (target, (_, whole)) in held.iter().enumerate() {
+      if whole.contains(&identity) {
+        carried[target].removed_children.push(child.clone());
+        found = true;
+      }
+    }
+    absent += usize::from(!found);
+  }
+  carried[0].added_children = diff.added_children.clone();
+  Ok((carried, absent))
+}
+
+/// The index of the candidate an added `polygon` goes to; see [`carried_among`].
+fn target_of(
+  polygon: &ResolvedPolygon,
+  candidates: &[CarryTarget<'_>],
+) -> usize {
+  let radius = shape_radius(&polygon.shape);
+  let mut low = [f32::INFINITY; 2];
+  let mut high = [f32::NEG_INFINITY; 2];
+  for position in polygon.shape.positions() {
+    for axis in 0..2 {
+      low[axis] = low[axis].min(position[axis] - radius);
+      high[axis] = high[axis].max(position[axis] + radius);
     }
   }
-  Ok((
-    YbnDiffFields {
-      polygons,
-      removed_children,
-      added_children: diff.added_children.clone(),
-    },
-    absent,
-  ))
+  let holds = |(_, [min, max]): &CarryTarget<'_>| {
+    (0..2).all(|axis| min[axis] <= low[axis] && high[axis] <= max[axis])
+  };
+  if let Some(target) = candidates.iter().position(holds) {
+    return target;
+  }
+  // The distance on the ground plane from the polygon's box to each candidate's.
+  let distance = |(_, [min, max]): &CarryTarget<'_>| {
+    (0..2)
+      .map(|axis| (min[axis] - high[axis]).max(low[axis] - max[axis]).max(0.0))
+      .map(|gap| gap * gap)
+      .sum::<f32>()
+  };
+  (0..candidates.len())
+    .min_by(|&a, &b| distance(&candidates[a]).total_cmp(&distance(&candidates[b])))
+    .unwrap_or(0)
 }
 
 /// What a polygon is: its kind, material but for its colour, the corner flags of a triangle,

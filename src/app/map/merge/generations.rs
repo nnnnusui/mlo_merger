@@ -40,7 +40,7 @@ use crate::{
   app::map::{
     overwrite::{OverwriteFingerprint, Overwrites},
     source_cache::{MergeSourceFile, YmapImplied, resource_name},
-    vanilla_cache::generations::{Counterparts, GenerationIndex, ItemKind},
+    vanilla_cache::generations::{Counterparts, Generations, ItemKind},
   },
   common::triangle::Triangle,
   common::{json::write_json, path::ensure_safe_path},
@@ -119,7 +119,7 @@ pub(super) fn carry_generations(
   overwrites: &Overwrites,
   staging: &Path,
 ) -> Result<(Vec<MergeSourceFile>, Vec<LeftBehind>)> {
-  let Some(index) = GenerationIndex::load(vanilla_cache_dir)? else {
+  let Some(index) = Generations::load(vanilla_cache_dir)? else {
     tracing::warn!(
       "The vanilla cache has no YMAP generation index; changes are not carried over to newer generations"
     );
@@ -245,7 +245,7 @@ pub(super) fn carry_ybn_generations(
   overwrites: &Overwrites,
   staging: &Path,
 ) -> Result<(Vec<MergeSourceFile>, Vec<LeftBehind>)> {
-  let Some(index) = GenerationIndex::load(vanilla_cache_dir)? else {
+  let Some(index) = Generations::load(vanilla_cache_dir)? else {
     return Ok((Vec::new(), Vec::new()));
   };
   let tolerance = crate::core::config::matching::current().ybn_position;
@@ -257,15 +257,19 @@ pub(super) fn carry_ybn_generations(
   ensure_safe_path(staging, &target)?;
   let mut documents = Vec::new();
   let mut left_behind = Vec::new();
+  // The loaded YBNs read so far, with their files.
+  let mut bounds =
+    HashMap::<String, (crate::core::format::ybn::model::Bound, &PathBuf, &String)>::new();
   for source in sources.iter().filter(|source| !source.propagated) {
     let file_name = source.file_name.to_ascii_lowercase();
-    let (Some(located), Some(successor)) = (index.locate(&file_name), index.successor(&file_name))
+    if index.loads(&file_name) && !index.files.newer_than_build.contains(&file_name) {
+      continue;
+    }
+    let Some(candidates) =
+      index.ybns.candidates.get(&file_name).filter(|candidates| !candidates.files.is_empty())
     else {
       continue;
     };
-    if index.loads(&file_name) && !index.newer_than_build.contains(&file_name) {
-      continue;
-    }
     let Some(diff_path) = &source.diff_path else {
       continue;
     };
@@ -282,11 +286,21 @@ pub(super) fn carry_ybn_generations(
         &label,
       )?;
     }
-    let (path, object) = vanilla_files
-      .get(&successor)
-      .ok_or_else(|| format!("No latest vanilla YBN named {successor}"))?;
-    let successor_root = crate::core::format::ybn::read_ybn(&fs::read(path)?)?;
-    let (carried, absent) = polygons::carried_to(&diffs, &successor_root, tolerance)?;
+    for candidate in &candidates.files {
+      if !bounds.contains_key(&candidate.file) {
+        let (path, object) = vanilla_files
+          .get(&candidate.file)
+          .ok_or_else(|| format!("No latest vanilla YBN named {}", candidate.file))?;
+        let bound = crate::core::format::ybn::read_ybn(&fs::read(path)?)?;
+        bounds.insert(candidate.file.clone(), (bound, path, object));
+      }
+    }
+    let targets = candidates
+      .files
+      .iter()
+      .map(|candidate| (&bounds[&candidate.file].0, [candidate.box_min, candidate.box_max]))
+      .collect::<Vec<_>>();
+    let (carried, absent) = polygons::carried_among(&diffs, &targets, tolerance)?;
     for _ in 0..absent {
       left_behind.push(LeftBehind {
         resource: source.resource.clone(),
@@ -298,37 +312,54 @@ pub(super) fn carry_ybn_generations(
         reason: LeftBehindReason::AlreadyAbsent,
       });
     }
-    if carried.is_empty() {
-      continue;
-    }
-    let fingerprint = crate::common::fingerprint::Fingerprint::read(path, None, false)?;
-    let origin_version = located.family.generations[located.generation].first_version.clone();
-    let relative = Path::new(&resource_name(&source.resource))
-      .join(&origin_version)
-      .join(format!("{successor}.diff.json"));
-    let document_path = target.join(&relative);
-    ensure_safe_path(&target, &document_path)?;
-    fs::create_dir_all(document_path.parent().ok_or("Carried diff path has no parent")?)?;
-    write_json(
-      &document_path,
-      &YbnPropagatedDiff {
-        schema_version: YbnPropagatedDiff::SCHEMA_VERSION,
-        resource: source.resource.clone(),
-        base: YmapComparisonFile {
-          path: object.clone(),
-          sha256: fingerprint.sha256,
-          size: fingerprint.size,
-          modified_seconds: fingerprint.modified_seconds,
-          modified_nanos: fingerprint.modified_nanos,
+    // The version folder of the vanilla YBN the changes were taken from.
+    let origin_version = document
+      .base
+      .path
+      .split(['/', '\\'])
+      .next()
+      .filter(|version| !version.is_empty())
+      .unwrap_or("vanilla")
+      .to_owned();
+    for (candidate, carried) in candidates.files.iter().zip(carried) {
+      if carried.is_empty() {
+        continue;
+      }
+      let (_, path, object) = &bounds[&candidate.file];
+      let fingerprint = crate::common::fingerprint::Fingerprint::read(path, None, false)?;
+      let relative = Path::new(&resource_name(&source.resource))
+        .join(&origin_version)
+        .join(&file_name)
+        .join(format!("{}.diff.json", candidate.file));
+      let document_path = target.join(&relative);
+      ensure_safe_path(&target, &document_path)?;
+      fs::create_dir_all(document_path.parent().ok_or("Carried diff path has no parent")?)?;
+      write_json(
+        &document_path,
+        &YbnPropagatedDiff {
+          schema_version: YbnPropagatedDiff::SCHEMA_VERSION,
+          resource: source.resource.clone(),
+          base: YmapComparisonFile {
+            path: (*object).clone(),
+            sha256: fingerprint.sha256,
+            size: fingerprint.size,
+            modified_seconds: fingerprint.modified_seconds,
+            modified_nanos: fingerprint.modified_nanos,
+          },
+          origins: vec![YmapPropagationOrigin {
+            target: document.target.clone(),
+            base: document.base.clone(),
+          }],
+          diffs: carried,
         },
-        origins: vec![YmapPropagationOrigin {
-          target: document.target,
-          base: document.base,
-        }],
-        diffs: carried,
-      },
-    )?;
-    documents.push((origin_version, relative, source.resource.clone(), successor));
+      )?;
+      documents.push((
+        origin_version.clone(),
+        relative,
+        source.resource.clone(),
+        candidate.file.clone(),
+      ));
+    }
   }
   if !left_behind.is_empty() {
     tracing::info!(
@@ -627,7 +658,7 @@ struct Propagation<'a> {
   /// The latest vanilla files keyed by lowercase file name, as files of the vanilla archive
   /// with their paths in it.
   vanilla_files: HashMap<String, (std::path::PathBuf, String)>,
-  index: &'a GenerationIndex,
+  index: &'a Generations,
   counterparts: Counterparts<'a>,
   /// The item count of each array of each latest vanilla YMAP read so far.
   item_counts: HashMap<(String, Array), usize>,
@@ -965,13 +996,13 @@ impl Propagation<'_> {
 /// The YMAPs the game loads of the generations whose items those of the vanilla YMAP `listed`
 /// stand for: the newer ones, or the older ones for a YMAP first shipped after the game build.
 fn newer_loaded(
-  index: &GenerationIndex,
+  index: &Generations,
   listed: &str,
 ) -> Vec<String> {
   let Some(located) = index.locate(listed) else {
     return Vec::new();
   };
-  let backward = index.newer_than_build.contains(listed);
+  let backward = index.files.newer_than_build.contains(listed);
   let mut files = located
     .family
     .units

@@ -128,6 +128,7 @@ pub(crate) mod generations;
 mod read;
 mod relationships;
 mod source;
+pub(crate) mod ybn_candidates;
 mod ymap_diffs;
 
 pub(crate) use check::check;
