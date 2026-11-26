@@ -129,6 +129,7 @@ mod read;
 mod relationships;
 mod source;
 pub(crate) mod ybn_candidates;
+pub(crate) mod ybn_repeats;
 mod ymap_diffs;
 
 pub(crate) use check::check;

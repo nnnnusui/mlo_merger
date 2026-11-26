@@ -27,6 +27,15 @@ ymap_grass_position = 0.01
 max_geometry_vertices = 65534
 max_geometry_polygons = 32767
 
+# Polygons a YBN holds twice: the very same polygon (positions, winding, corner flags and
+# material) under the same collision flags. Repeats add work for the game's collision and
+# nothing else, so merges leave them out of every YBN they build, and build without them, from
+# no resource, each loaded vanilla YBN at least vanilla_min_share (0 to 1) of whose polygons
+# repeat. Without this table, or without enabled, repeats are kept.
+[ybn_repeats]
+enabled = true
+vanilla_min_share = 0.05
+
 # FiveM game builds for --gamebuild: the builds FiveM's launcher supports
 # (code/client/launcher/GameCache.cpp) and the names sv_enforceGameBuild accepts for them
 # (code/components/citizen-server-impl/include/GameBuilds.h).

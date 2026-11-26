@@ -44,6 +44,9 @@ pub(super) fn cache_is_current(
   if !generations::index_is_current(output_dir, revision, latest_version) {
     return Ok(false);
   }
+  if !super::ybn_repeats::index_is_current(output_dir, revision, latest_version) {
+    return Ok(false);
+  }
   // The archives the config names additive change which YMAPs the game loads. An archive
   // recording no DLC content has no activity.
   let activity_path = output_dir.join(super::activity::DLC_ACTIVITY_FILE);

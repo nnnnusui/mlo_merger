@@ -26,11 +26,30 @@ impl IncrementalMerge<'_> {
     for source in self.inputs.ybn.iter().chain(&self.inputs.ymap) {
       sources.entry(source.file_name.to_ascii_lowercase()).or_default().push(source);
     }
+    // The loaded vanilla YBNs repeating enough of their polygons to build them without.
+    let repeats = crate::core::config::ybn_repeats()?;
+    let rebuilt_for_repeats = if repeats.enabled {
+      crate::app::map::vanilla_cache::ybn_repeats::YbnRepeatIndex::load(self.vanilla_cache)?
+        .map(|index| {
+          index
+            .files
+            .into_iter()
+            .filter(|(name, count)| {
+              baselines.contains_key(name) && repeats.builds_vanilla(count.polygons, count.repeats)
+            })
+            .map(|(name, _)| name)
+            .collect::<BTreeSet<_>>()
+        })
+        .unwrap_or_default()
+    } else {
+      BTreeSet::new()
+    };
     // A YBN one source replaces is deployed as that source has it, unless an overwrite skips
-    // within it or changes are carried to it.
+    // within it, changes are carried to it, or it is built without its repeats.
     sources.retain(|name, files| {
       !name.ends_with(".ybn")
         || files.len() > 1
+        || rebuilt_for_repeats.contains(name)
         || files
           .iter()
           .any(|source| self.overwrite(source).is_some_and(|overwrite| overwrite.skip.is_some()))
@@ -47,6 +66,10 @@ impl IncrementalMerge<'_> {
           source.stored_path
         );
       }
+    }
+    // A YBN built without its repeats is merged though no resource replaces it.
+    for name in &rebuilt_for_repeats {
+      sources.entry(name.clone()).or_default();
     }
     // A vanilla overwrite is merged like a source, even into a file no resource replaces.
     for name in self.vanilla_overwrites.keys() {
@@ -174,6 +197,7 @@ impl IncrementalMerge<'_> {
           superseded_by: Some(successor),
           merged_at,
           duplicates: Vec::new(),
+          repeats_left_out: 0,
         },
       );
     }
@@ -265,6 +289,7 @@ impl IncrementalMerge<'_> {
           superseded_by: None,
           merged_at: context.now.to_string(),
           duplicates: Vec::new(),
+          repeats_left_out: 0,
         },
       );
     }
@@ -302,6 +327,7 @@ impl IncrementalMerge<'_> {
         let old = &context.previous.ok_or("Merge cache missing")?.files[name];
         record.merged_at = old.merged_at.clone();
         record.duplicates = old.duplicates.clone();
+        record.repeats_left_out = old.repeats_left_out;
         if let Some(output) = &old.output {
           let from = output_path(self.output, &output.path)?;
           let to = output_path(self.staging, &output.path)?;
@@ -315,8 +341,13 @@ impl IncrementalMerge<'_> {
       tracing::debug!("Reusing {} merge group ({} files)", group.extension, group.names.len());
     } else {
       tracing::debug!("Updating {} merge group ({} files)", group.extension, group.names.len());
-      let (duplicates, outputs) =
+      let (duplicates, outputs, repeats) =
         self.merge_group(index, group, context.sources, context.baselines)?;
+      for (name, left_out) in repeats {
+        if let Some(record) = planned.get_mut(&name) {
+          record.repeats_left_out = left_out;
+        }
+      }
       for (name, entries) in duplicates.files {
         if let Some(record) = planned.get_mut(&name) {
           record.duplicates = entries;
@@ -402,7 +433,17 @@ impl IncrementalMerge<'_> {
         }
       })
       .collect();
-    build(inputs, &stream_paths)
+    let mut report = build(inputs, &stream_paths)?;
+    let repeats = super::super::report::YbnRepeatsReport {
+      format_version: 1,
+      files: files
+        .iter()
+        .filter(|(_, record)| record.repeats_left_out > 0)
+        .map(|(name, record)| (name.clone(), record.repeats_left_out))
+        .collect(),
+    };
+    report.insert(super::super::report::ybn_repeats_path(), serde_json::to_vec(&repeats)?);
+    Ok(report)
   }
 
   /// The record of `source` as a merge input, its fingerprint reused from `previous_inputs` when

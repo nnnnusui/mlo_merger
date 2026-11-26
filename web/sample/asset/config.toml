@@ -4,3 +4,7 @@
 1 = []
 100 = ["smpl_winter"]
 200 = ["smpl_summer"]
+
+[ybn_repeats]
+enabled = true
+vanilla_min_share = 0.05

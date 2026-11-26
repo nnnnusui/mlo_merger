@@ -3,16 +3,26 @@
 //! Each source's differences are read from its source-cache diff document, or taken from the
 //! file when it has none, and its overwrite's skip is applied to them; changes carried from
 //! another generation ([`YbnPropagatedDiff`]) follow the sources, in the order given. A YBN only
-//! one source replaces, without an overwrite, is written as that source has it.
+//! one source replaces, without an overwrite, is written as that source has it, unless repeats
+//! are left out. With `[ybn_repeats]` enabled, every YBN built from diffs leaves out the polygons
+//! repeating an earlier one, and each vanilla YBN [`MergeYbnConflicts::standalone`] names is
+//! built from no source to leave them out.
 
 use crate::platform::fs;
-use std::{collections::BTreeMap, io, path::PathBuf};
+use std::{
+  collections::{BTreeMap, BTreeSet},
+  io,
+  path::PathBuf,
+};
 
 use crate::app::map::overwrite::{OverwriteFingerprint, StreamFileOverwrite};
 use crate::core::format::ybn::{
   diff::polygons::{self, YbnComparisonDiff, YbnDiffFields, YbnPropagatedDiff},
-  merge_ybn_diffs, read_ybn,
+  merge_ybn_diffs_with, read_ybn,
 };
+
+/// The file a merge records, in its output directory, how many repeats it left out of each YBN.
+pub const REPEATS_FILE: &str = ".ybn_repeats.json";
 
 /// A source YBN to merge: its file, its diff document and its overwrite; or, when `propagated`,
 /// changes carried from another generation, `path` and `diff_path` naming their document.
@@ -33,6 +43,9 @@ pub struct MergeYbnConflicts {
   pub output_dir: PathBuf,
   /// Receives the merged sources' paths relative to [`Self::source_dir`], one per line.
   pub omitted_files_path: PathBuf,
+  /// Vanilla YBNs, by lowercase file name, built without their repeats though no source
+  /// changes them.
+  pub standalone: BTreeSet<String>,
 }
 
 impl MergeYbnConflicts {
@@ -71,7 +84,13 @@ impl MergeYbnConflicts {
     sources: &[YbnSource],
   ) -> Result<(), Box<dyn std::error::Error>> {
     let limits = crate::core::config::geometry_limits()?;
-    let groups = group_by_name(sources);
+    let leave_out_repeats = crate::core::config::ybn_repeats()?.enabled;
+    let mut groups = group_by_name(sources);
+    if leave_out_repeats {
+      for name in &self.standalone {
+        groups.entry(name.clone()).or_default();
+      }
+    }
     let vanilla = vanilla_by_name(vanilla_files)?;
     fs::create_dir_all(&self.output_dir)?;
     for entry in fs::read_dir(&self.output_dir)? {
@@ -81,6 +100,7 @@ impl MergeYbnConflicts {
       }
     }
     let mut omitted = Vec::new();
+    let mut repeats = BTreeMap::new();
     let mut merged_groups = 0;
     for (name, sources) in &groups {
       let Some(vanilla_path) = vanilla.get(name) else {
@@ -90,7 +110,8 @@ impl MergeYbnConflicts {
       let output_name = vanilla_path.file_name().ok_or("vanilla YBN filename missing")?;
       let merged = match sources.as_slice() {
         [source]
-          if !source.propagated
+          if !leave_out_repeats
+            && !source.propagated
             && source.overwrite.as_ref().is_none_or(|overwrite| overwrite.skip.is_none()) =>
         {
           fs::read(&source.path)?
@@ -100,7 +121,12 @@ impl MergeYbnConflicts {
             .iter()
             .map(|source| self.diff(vanilla_path, source))
             .collect::<Result<Vec<_>, Box<dyn std::error::Error>>>()?;
-          merge_ybn_diffs(&fs::read(vanilla_path)?, &diffs, limits)?
+          let (merged, left_out) =
+            merge_ybn_diffs_with(&fs::read(vanilla_path)?, &diffs, limits, leave_out_repeats)?;
+          if left_out > 0 {
+            repeats.insert(name.clone(), left_out);
+          }
+          merged
         }
       };
       fs::write(self.output_dir.join(output_name), merged)?;
@@ -114,6 +140,7 @@ impl MergeYbnConflicts {
     omitted.sort();
     omitted.dedup();
     fs::write(&self.omitted_files_path, omitted.join("\n"))?;
+    crate::common::json::write_json(&self.output_dir.join(REPEATS_FILE), &repeats)?;
     tracing::debug!("Merged {merged_groups} vanilla-backed YBN source groups");
     Ok(())
   }

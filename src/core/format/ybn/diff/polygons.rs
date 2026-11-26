@@ -890,6 +890,34 @@ pub fn apply(
   tolerance: f32,
   limits: GeometryLimits,
 ) -> io::Result<()> {
+  apply_with(root, diff, tolerance, limits, false).map(|_| ())
+}
+
+/// The polygons of `root` that can be compared, and how many of them repeat an earlier one: the
+/// very same polygon in the same flags group.
+pub fn repeats(root: &Bound) -> io::Result<(usize, usize)> {
+  let (children, _) = entries(root, None, &HashSet::new())?;
+  let mut seen = HashMap::<[u32; 2], HashSet<Vec<u32>>>::new();
+  let (mut polygons, mut repeats) = (0, 0);
+  for (child_index, list) in children {
+    let seen = seen.entry(child_flags(root, child_index)).or_default();
+    for entry in list {
+      polygons += 1;
+      repeats += usize::from(!seen.insert(entry.identity.exact_key()));
+    }
+  }
+  Ok((polygons, repeats))
+}
+
+/// [`apply`], leaving out of `root` the polygons repeating an earlier one of the same flags
+/// group when `leave_out_repeats`; returns how many it left out.
+pub fn apply_with(
+  root: &mut Bound,
+  diff: &YbnDiffFields,
+  tolerance: f32,
+  limits: GeometryLimits,
+  leave_out_repeats: bool,
+) -> io::Result<usize> {
   let mut index = VertexIndex::new(tolerance, true, false);
   // Only the children of groups taking additions are linked to them.
   let linked =
@@ -921,6 +949,25 @@ pub fn apply(
       changed: false,
       original: true,
     });
+  }
+  let mut left_out = 0;
+  if leave_out_repeats {
+    for (lookup, places) in held.values() {
+      let mut seen = HashSet::new();
+      let mut repeated = HashMap::<usize, HashSet<usize>>::new();
+      for (item, identity) in lookup.items.iter().enumerate() {
+        if !seen.insert(identity.exact_key()) {
+          let (slot_index, position) = places[item];
+          repeated.entry(slot_index).or_default().insert(position);
+          left_out += 1;
+        }
+      }
+      for (slot_index, positions) in repeated {
+        let slot = &mut slots[slot_index];
+        slot.kept.retain(|(position, ..)| !positions.contains(position));
+        slot.changed = true;
+      }
+    }
   }
   for group in &diff.polygons {
     let (lookup, places) =
@@ -985,7 +1032,7 @@ pub fn apply(
   write_vec3(&mut root.common, 64, center)?;
   write_vec3(&mut root.common, 80, center)?;
   write_f32(&mut root.common, 20, radius)?;
-  Ok(())
+  Ok(left_out)
 }
 
 /// Points `child` extends to in the Composite's space: those of a `rebuilt` geometry's polygons,

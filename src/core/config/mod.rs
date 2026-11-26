@@ -1,6 +1,7 @@
 pub mod dlc_activity;
 pub mod gamebuild;
 pub mod matching;
+pub mod ybn_repeats;
 
 use crate::core::format::ybn::diff::polygons::GeometryLimits;
 use serde::Deserialize;
@@ -46,6 +47,9 @@ struct Config {
   /// How merged YBN geometry children are filled.
   #[cfg_attr(feature = "typescript", specta(optional))]
   ybn: GeometryLimits,
+  /// Leaving out of YBNs the polygons they hold twice.
+  #[cfg_attr(feature = "typescript", specta(optional))]
+  ybn_repeats: ybn_repeats::YbnRepeatsConfig,
 }
 
 impl Config {
@@ -67,4 +71,49 @@ pub fn geometry_limits() -> io::Result<GeometryLimits> {
     .ybn;
   limits.validate()?;
   Ok(limits)
+}
+
+/// The `[ybn_repeats]` table of the config file ([`path`]), the defaults when it is missing.
+pub fn ybn_repeats() -> io::Result<ybn_repeats::YbnRepeatsConfig> {
+  let path = path();
+  let text = match crate::platform::fs::read_to_string(&path) {
+    Ok(text) => text,
+    Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(Default::default()),
+    Err(error) => return Err(error),
+  };
+  let repeats = Config::parse(&text)
+    .map_err(|error| io::Error::new(error.kind(), format!("{}: {error}", path.display())))?
+    .ybn_repeats;
+  repeats.validate()?;
+  Ok(repeats)
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn ybn_repeats_default_to_disabled_and_parse() {
+    let defaults = Config::parse("").unwrap().ybn_repeats;
+    assert_eq!(defaults, Default::default());
+    assert!(!defaults.enabled && !defaults.builds_vanilla(100, 50));
+    let configured =
+      Config::parse("[ybn_repeats]\nenabled = true\nvanilla_min_share = 0.2").unwrap().ybn_repeats;
+    assert!(configured.enabled);
+    assert_eq!(configured.vanilla_min_share, 0.2);
+    assert!(Config::parse("[ybn_repeats]\nshare = 1").is_err());
+    let enabled = Config::parse("[ybn_repeats]\nenabled = true").unwrap().ybn_repeats;
+    assert_eq!(enabled.vanilla_min_share, 0.05);
+    assert!(enabled.builds_vanilla(100, 5) && !enabled.builds_vanilla(100, 4));
+    assert!(!enabled.builds_vanilla(100, 0));
+    assert!(!configured.builds_vanilla(100, 19) && configured.builds_vanilla(100, 20));
+    assert!(
+      ybn_repeats::YbnRepeatsConfig {
+        vanilla_min_share: 1.5,
+        ..defaults
+      }
+      .validate()
+      .is_err()
+    );
+  }
 }

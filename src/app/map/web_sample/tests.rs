@@ -136,8 +136,14 @@ fn pipeline_runs_on_the_web_sample() {
   let workspace = Workspace::new("pipeline");
   let latest = workspace.pipeline(None);
   // Nine stream files merged or cloned, the custom maps, which the source cache collects too,
-  // and the summer collision its one resource ships.
-  assert_eq!(latest.deploy.copied, 13);
+  // the summer collision its one resource ships, and the park's collision without its repeat.
+  assert_eq!(latest.deploy.copied, 14);
+  // No resource changes the park's collision, but it repeats a box, a quarter of its polygons.
+  assert_eq!(workspace.merged_polygons("smpl_block_02.ybn"), 3);
+  assert_eq!(
+    workspace.json("merged/report/ybn_repeats.json")["files"]["smpl_block_02.ybn"],
+    serde_json::json!(1)
+  );
 
   // Both versions of the custom map merge, the later first: the shared sign once, and the crate
   // once, as placed again under another GUID; the label's parent index follows it.
@@ -382,8 +388,8 @@ fn pipeline_runs_on_the_web_sample() {
   );
   assert!(workspace.asset("read-cache/vanilla/0000-base/ybn/smpl_block_01.ybn.json").is_file());
   // Ten resource YMAPs, the custom maps included, four resource YBNs, and the eight vanilla
-  // YMAPs and one vanilla YBN of build 100.
-  assert_eq!(read.files.len(), 23);
+  // YMAPs and two vanilla YBNs of build 100.
+  assert_eq!(read.files.len(), 24);
 }
 
 #[test]
@@ -413,5 +419,5 @@ fn every_stream_file_covers_the_shared_position() {
     checked += 1;
   }
   // The earlier versions kept in the source cache's history included.
-  assert_eq!(checked, 32);
+  assert_eq!(checked, 33);
 }

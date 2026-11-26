@@ -36,7 +36,8 @@ in `web/`, described under `web` in its `release.json`; see [Browser build](web.
 | Source-cache diff documents | `YmapComparisonDiff`, `YmapComparisonFile`, `YmapDiffFields`, `YmapEntityDiff`, `YmapEntityFieldDiff`, `YbnComparisonDiff`, `YbnDiffFields`, `YbnPolygonsDiff` |
 | Changes carried to newer DLC generations | `YmapPropagatedDiff`, `YmapPropagationOrigin`, `LeftBehind`, `LeftBehindReason` |
 | LOD light pair documents | `YmapImplied`, `YmapImpliedPartner` |
-| Vanilla YMAP and YBN generations | `GenerationIndex`, `YmapGenerationIndex`, `YbnGenerationIndex`, `Family`, `Generation`, `UnitRef`, `GenerationUnit` |
+| Vanilla YMAP and YBN generations | `GenerationIndex`, `YmapGenerationIndex`, `YbnGenerationIndex`, `Family`, `Generation`, `UnitRef`, `GenerationUnit`, `YbnCandidates`, `YbnCandidate` |
+| Repeated YBN polygons | `YbnRepeatIndex`, `YbnRepeatCount`, `YbnRepeatsReport` |
 | Vanilla archives the game loads | `DlcActivity`, `ArchiveActivity`, `FileActivity`, `PackActivity`, `Unloaded`, `ChangeSetRef` |
 | Overwrite documents | `StreamFileOverwrite`, `OverwriteFingerprint`, `YmapDiffSkip`, `VanillaOverwrite` |
 | Overwrite cache | `AddedStreamFiles`, `AddedStreamFile`, `AddedStreamFileSource`, `LeftOutAddition`, `AddedItem`, `OverwriteWarnings`, `SourceUpdate`, `SourceVersion`, `SourceUpdateOutcome` |
@@ -160,6 +161,7 @@ source root.
 | Inspect changes carried to other DLC generations | none; written by merge | | `asset/map/merged/generations/{resource}/{version}/{file_name}.diff.json` (`YmapPropagatedDiff`); each carried item's `reason` names the item it came from; `asset/map/merged/generations/left_behind.json` (`LeftBehind[]`) lists the changes carried nowhere |
 | Inspect vanilla version differences | none; vanilla-cache generation would write them, but it is currently disabled | | `asset/map/vanilla-cache/ymap_versions.json` (`VanillaYmapVersionIndex`), then `asset/map/vanilla-cache/diff/{version}/ymap/{name}.diff.json` (`VanillaYmapDiff`) for each version after a YMAP's first |
 | Apply overwrites | `--pipeline`, or `--merge` then `--deploy` | `PipelineReport` (pipeline only) | `asset/map/merged/report/index.json` (`MergeReportIndex`), then `asset/map/merged/report/vanilla/{version}/ymap/{file_name}.json` (`YmapMergeReport`); see [Merge Report](reference.md#merge-report) |
+| Inspect the repeated polygons left out of YBNs | none; written by vanilla-cache generation and merges | | `asset/map/vanilla-cache/ybn_repeats.json` (`YbnRepeatIndex`) and `asset/map/merged/report/ybn_repeats.json` (`YbnRepeatsReport`); see [YBN](reference.md#ybn) |
 | Check overwrites | `--generate-overwrite-cache`; also run by `--merge` and `--pipeline` | | `asset/map/overwrite-cache/warnings.json` (`OverwriteWarnings`), `asset/map/overwrite-cache/added_stream_files.json` (`AddedStreamFiles`) |
 
 ### Stream-File Bounds Indexes

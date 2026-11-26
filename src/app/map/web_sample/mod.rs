@@ -17,6 +17,8 @@
 //! - `smpl_block_02.ymap` changes in the title update, the patch and `smpl_summer`.
 //! - `smpl_block_01.ybn` is the block's collision, changed in `smpl_summer`, which also ships it
 //!   again as `summer_smpl_block_01.ybn`: a YBN generation.
+//! - `smpl_block_02.ybn` is the park's collision, holding a box twice, which the merge deploys
+//!   without the repeat though no resource changes it.
 //!
 //! The resources edit those files: two resources change `smpl_block_01.ymap` and its collision,
 //! one removes a LOD entity from the parent so the children's parent indices are repaired, one
@@ -249,6 +251,16 @@ fn block_01_collision(with_kiosk: bool) -> Vec<Child> {
     ground.add_box([-7088.0, 7076.0, 19.9], [-7084.0, 7079.0, 23.0]);
   }
   vec![Child::Geometry(ground), Child::Box([-7076.0, 7096.0, 19.9], [-7064.0, 7110.0, 28.0])]
+}
+
+/// The park's collision, holding the fountain's box twice: no resource changes it, but the merge
+/// deploys it without the repeat.
+fn block_02_collision() -> Vec<Child> {
+  let mut ground = Geometry::ground([-7100.0, 7070.0], [-7060.0, 7100.0], 19.9);
+  for _ in 0..2 {
+    ground.add_box([-7095.0, 7085.0, 19.9], [-7091.0, 7089.0, 20.8]);
+  }
+  vec![Child::Geometry(ground)]
 }
 
 /// Panels of the wall strip each of two resources adds to the block's occlude model, joining the
@@ -495,6 +507,7 @@ fn vanilla_stages() -> Vec<(&'static str, StageFiles)> {
         ("lodlights_small001.ymap", ymap_bytes(&lights)),
         ("distlodlights_small001.ymap", ymap_bytes(&distant)),
         ("smpl_block_01.ybn", ybn_bytes(&block_01_collision(false))),
+        ("smpl_block_02.ybn", ybn_bytes(&block_02_collision())),
       ],
     ),
     ("0001-update", vec![("smpl_block_02.ymap", ymap_bytes(&block_02(1)))]),
@@ -555,6 +568,10 @@ const CONFIG: &str = "\
 1 = []
 100 = [\"smpl_winter\"]
 200 = [\"smpl_summer\"]
+
+[ybn_repeats]
+enabled = true
+vanilla_min_share = 0.05
 ";
 
 /// Every file of the sample workspace, with `files.json` listing them for the page.

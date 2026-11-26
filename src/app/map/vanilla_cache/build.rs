@@ -72,13 +72,11 @@ impl BuildVanillaCache {
     for (name, (version, _)) in &newer {
       inactive.insert(name.clone(), format!("first shipped in {version}, after {latest_version}"));
     }
+    let ybns = generation_sources(&vanilla_dir, &manifest, &current, &newer, ".ybn")?;
     let generations = write_generations(
       &staging.0,
       &output_dir,
-      (
-        &generation_sources(&vanilla_dir, &manifest, &current, &newer, ".ymap")?,
-        &generation_sources(&vanilla_dir, &manifest, &current, &newer, ".ybn")?,
-      ),
+      (&generation_sources(&vanilla_dir, &manifest, &current, &newer, ".ymap")?, &ybns),
       activity.as_ref(),
       &inactive,
       &newer.keys().cloned().collect(),
@@ -86,6 +84,7 @@ impl BuildVanillaCache {
       &revision,
       &latest_version,
     )?;
+    super::ybn_repeats::write_repeats(&staging.0, &ybns, &inactive, &revision, &latest_version)?;
     // Only those an older generation stands for are diffed and carried; the others are added.
     let newer = newer
       .into_iter()

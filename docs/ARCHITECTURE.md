@@ -180,8 +180,10 @@ the config's `[dlc_activity]` corrects them where they do not hold.
    replay every change. For YBNs, read each source's diff document, leave out the polygons
    its overwrite skips, add the changes carried over from other generations, combine them
    and apply them to the latest vanilla file, placing added polygons so connected ones share
-   a geometry child (`common::mesh`). A YBN one source replaces, without an overwrite or
-   carried changes, is deployed as that source has it.
+   a geometry child (`common::mesh`), and leave out repeated polygons. The loaded vanilla
+   YBNs the vanilla cache counts enough repeats in (`ybn_repeats.json`) are built without them
+   though no resource changes them. A YBN one source replaces, without an overwrite, carried
+   changes or repeats to leave out, is deployed as that source has it.
 5. Write merged native stream files under extension subdirectories (`ymap/`, `ybn/`),
    `_omit.txt` and the merge report (`report/`, `app::map::merge::report`) at the selected
    output root.

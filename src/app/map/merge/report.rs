@@ -6,6 +6,8 @@
 //! deployed for a successor. Each change names its source by resource and stream path, or by
 //! the carried document and the stage of the generation it comes from, and the entity or item
 //! by its `index` in that source's diff, so that the diff and `--read` documents give the rest.
+//!
+//! `report/ybn_repeats.json` gives the polygons each merged YBN leaves out as repeats.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -154,6 +156,20 @@ pub enum ChangeSource {
 pub struct IgnoredChange {
   pub change: ReportedChange,
   pub reason: IgnoredReason,
+}
+
+/// The polygons each merged YBN leaves out as repeats of an earlier one; `report/ybn_repeats.json`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
+pub struct YbnRepeatsReport {
+  pub format_version: u32,
+  /// By lowercase file name, the YBNs leaving any out.
+  pub files: BTreeMap<String, usize>,
+}
+
+/// The path of [`YbnRepeatsReport`] in the merge output.
+pub(super) fn ybn_repeats_path() -> String {
+  format!("{REPORT_DIR}/ybn_repeats.json")
 }
 
 /// What one vanilla YMAP's report is made of.

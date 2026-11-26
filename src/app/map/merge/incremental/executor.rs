@@ -5,14 +5,15 @@ use std::collections::HashMap;
 impl IncrementalMerge<'_> {
   /// Merges `group` in its own working directory below the staging directory, named by its
   /// `index`, then moves the merged files into the staging directory's `ybn/` or `ymap/`;
-  /// returns the group's duplicate report and the moved files.
+  /// returns the group's duplicate report, the moved files and the repeats left out of each
+  /// YBN.
   pub(super) fn merge_group(
     &self,
     index: usize,
     group: &Group,
     sources: &BTreeMap<String, Vec<&MergeSourceFile>>,
     baselines: &BTreeMap<String, &PathBuf>,
-  ) -> Result<(DuplicateReport, Vec<PathBuf>)> {
+  ) -> Result<(DuplicateReport, Vec<PathBuf>, BTreeMap<String, usize>)> {
     let mut vanilla = group
       .names
       .iter()
@@ -37,11 +38,19 @@ impl IncrementalMerge<'_> {
       fs::write(&path, crate::app::map::source_cache::empty_baseline_bytes()?)?;
       vanilla.push(path);
     }
+    let mut repeats = BTreeMap::new();
     let merged = if group.extension == "ybn" {
       MergeYbnConflicts {
         source_dir: self.source_cache.to_path_buf(),
         output_dir: work.clone(),
         omitted_files_path: work.join(".ybn_omit.txt"),
+        // A YBN of the group no source changes is in it to leave its repeats out.
+        standalone: group
+          .names
+          .iter()
+          .filter(|name| !sources.iter().any(|source| source.file_name.eq_ignore_ascii_case(name)))
+          .cloned()
+          .collect(),
       }
       .run_sources(
         &vanilla,
@@ -56,6 +65,10 @@ impl IncrementalMerge<'_> {
           })
           .collect::<Vec<_>>(),
       )?;
+      let recorded = work.join(crate::app::map::merge::ybn_conflicts::REPEATS_FILE);
+      if fs::is_file(&recorded) {
+        repeats = crate::common::json::read_json(&recorded)?;
+      }
       work.clone()
     } else {
       let vanilla_overwrites = group
@@ -64,7 +77,7 @@ impl IncrementalMerge<'_> {
         .filter_map(|name| Some((name.clone(), self.vanilla_overwrite(name)?.clone())))
         .collect::<HashMap<_, _>>();
       if sources.is_empty() && vanilla_overwrites.is_empty() {
-        return Ok((duplicates, Vec::new()));
+        return Ok((duplicates, Vec::new(), repeats));
       }
       let directory = work.join("ymap");
       let (propagated, stream_files): (Vec<&MergeSourceFile>, Vec<&MergeSourceFile>) =
@@ -151,6 +164,6 @@ impl IncrementalMerge<'_> {
     if fs::exists(&work).unwrap_or(false) {
       fs::remove_dir_all(&work)?;
     }
-    Ok((duplicates, outputs))
+    Ok((duplicates, outputs, repeats))
   }
 }

@@ -490,8 +490,17 @@ generation and carry the changes resources make to the others over to it.
   others kept as they are. The root's bounds keep vanilla's and cover every child.
 - The source cache writes each source YBN's differences from the latest vanilla YBN of its name
   to a diff document, which merges read and overwrites skip within (see
-  [usage](usage.md#ybn-differences)). A YBN merges when several resources replace it or an
-  overwrite skips within it; one only one source replaces is deployed as that source has it.
+  [usage](usage.md#ybn-differences)). A YBN merges when several resources replace it, an
+  overwrite skips within it, changes are carried to it or its repeats are left out; one only
+  one source replaces is otherwise deployed as that source has it.
+- A *repeat* is a polygon the very same as an earlier one of the same flags group: positions,
+  winding, corner flags and material. Repeats add work for the game's collision and nothing
+  else. With `[ybn_repeats]` enabled (see [Matching Configuration](#matching-configuration)),
+  every YBN the merge builds leaves them out, the first kept, and the merge also builds,
+  from no resource, each loaded vanilla YBN at least `vanilla_min_share` of whose polygons
+  repeat, and the YBNs only one resource replaces of those. The vanilla cache counts the
+  repeats of every loaded YBN in `ybn_repeats.json` (`YbnRepeatIndex`), and
+  `report/ybn_repeats.json` (`YbnRepeatsReport`) gives the repeats each merged YBN leaves out.
 - Files without a vanilla baseline are skipped, or rejected when sources conflict.
 
 ## Overwrites
@@ -631,6 +640,16 @@ ymap_grass_position = 0.01
   `max_geometry_vertices` is at most 65534, the vertex indices being 16-bit, and
   `max_geometry_polygons` at most 32767, the GeometryBVH indexing polygons with 16-bit signed
   indices.
+- `[ybn_repeats]` sets whether merges leave repeated polygons out of YBNs (see [YBN](#ybn)),
+  and which vanilla YBNs no resource changes they build for that alone, by the least share
+  (0 to 1) of their polygons that repeat. Without the table, or without `enabled`, it is off;
+  the shipped config file turns it on:
+
+  ```toml
+  [ybn_repeats]
+  enabled = true
+  vanilla_min_share = 0.05
+  ```
 - Effective settings are part of merge freshness, so changing them regenerates on the
   next merge without `-f`. Larger tolerances can treat intentionally different nearby
   shapes as identical.

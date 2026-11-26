@@ -6,13 +6,14 @@ use crate::platform::fs;
 use std::path::Path;
 
 /// Entries of the cache directory.
-const CACHE_ENTRIES: [&str; 10] = [
+const CACHE_ENTRIES: [&str; 11] = [
   "cache_info.json",
   "ymap_relationships.json",
   "stream_file_rtree.json",
   "generations.json",
   "ymap_generations.json",
   "ybn_generations.json",
+  "ybn_repeats.json",
   "dlc_activity.json",
   // Units of every game build built so far, which the index of the selected one names some of.
   "generation-units",

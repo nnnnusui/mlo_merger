@@ -26,6 +26,17 @@ pub fn merge_ybn_diffs(
   diffs: &[super::polygons::YbnDiffFields],
   limits: super::polygons::GeometryLimits,
 ) -> io::Result<Vec<u8>> {
+  merge_ybn_diffs_with(vanilla, diffs, limits, false).map(|(merged, _)| merged)
+}
+
+/// [`merge_ybn_diffs`], leaving out the polygons repeating an earlier one of the same flags group
+/// when `leave_out_repeats`; returns the merged YBN and how many polygons it left out.
+pub fn merge_ybn_diffs_with(
+  vanilla: &[u8],
+  diffs: &[super::polygons::YbnDiffFields],
+  limits: super::polygons::GeometryLimits,
+  leave_out_repeats: bool,
+) -> io::Result<(Vec<u8>, usize)> {
   crate::core::config::matching::with_config(|| {
     let tolerance = crate::core::config::matching::current().ybn_position;
     let mut merged = read_ybn_root(vanilla)?;
@@ -33,8 +44,9 @@ pub fn merge_ybn_diffs(
       return Err(invalid("YBN delta merge requires a Composite vanilla root"));
     }
     let combined = super::polygons::merge(&diffs.iter().collect::<Vec<_>>(), tolerance)?;
-    super::polygons::apply(&mut merged, &combined, tolerance, limits)?;
-    encode_ybn_bound(&merged)
+    let left_out =
+      super::polygons::apply_with(&mut merged, &combined, tolerance, limits, leave_out_repeats)?;
+    Ok((encode_ybn_bound(&merged)?, left_out))
   })?
 }
 

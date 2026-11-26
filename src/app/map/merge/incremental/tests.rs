@@ -65,6 +65,7 @@ fn ybn_version_change_reuses_current_ymap_groups() {
       superseded_by: None,
       merged_at: "cached".into(),
       duplicates: Vec::new(),
+      repeats_left_out: 0,
     };
     record.dependency_fingerprint =
       signature(extension, &BTreeMap::from([(input.file_name.clone(), record.clone())])).unwrap();
@@ -179,6 +180,7 @@ fn dependency_groups_invalidate_connected_maps_but_not_independent_maps() {
     superseded_by: None,
     merged_at: "cached".into(),
     duplicates: Vec::new(),
+    repeats_left_out: 0,
   };
   let mut connected = BTreeMap::from([
     ("parent.ymap".into(), record("parent.ymap")),

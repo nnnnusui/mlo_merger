@@ -47,6 +47,14 @@
           },
           "previous_sha256": null
         },
+        "smpl_block_02.ybn": {
+          "file": {
+            "object": "0000-base/ybn/smpl_block_02.ybn",
+            "sha256": "d2400b7b67d6f8f8722ba07e16910d41b85b2e528e0988fbd68e0cd75b65f8d4",
+            "source": "smpl.rpf/smpl_block_02.ybn"
+          },
+          "previous_sha256": null
+        },
         "smpl_block_02.ymap": {
           "file": {
             "object": "0000-base/ymap/smpl_block_02.ymap",

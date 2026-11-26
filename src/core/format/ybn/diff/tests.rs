@@ -294,3 +294,27 @@ fn changes_are_carried_to_the_candidates_holding_or_holding_the_box_of_each_poly
   assert!(carried[0].is_empty());
   assert_eq!(counts(&carried[1]), (0, 1));
 }
+
+#[test]
+fn repeats_of_one_flags_group_are_counted_and_left_out() {
+  // The first child repeats its first triangle; the second repeats the first child's; the third
+  // holds the same triangle under other flags, which is no repeat.
+  let mut repeating = strip(0.0, 2);
+  repeating.geometry.as_mut().unwrap().polygons.push(triangle([0, 1, 2]));
+  let mut root =
+    composite(vec![(repeating, FLAGS), (strip(0.0, 1), FLAGS), (strip(0.0, 1), WEAPON)]);
+  assert_eq!(polygons::repeats(&root).unwrap(), (5, 2));
+  let left_out = polygons::apply_with(
+    &mut root,
+    &polygons::YbnDiffFields::default(),
+    TOLERANCE,
+    GeometryLimits::default(),
+    true,
+  )
+  .unwrap();
+  assert_eq!(left_out, 2);
+  assert_eq!(polygons::repeats(&root).unwrap(), (3, 0));
+  // The second child, left empty, is dropped; the other flags keep theirs.
+  assert_eq!(root.flags, [FLAGS, WEAPON]);
+  assert_eq!(polygon_count(&root), 3);
+}

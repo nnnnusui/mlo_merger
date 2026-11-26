@@ -100,6 +100,14 @@ pub(in crate::app::map::merge) struct FileRecord {
   pub merged_at: String,
   #[serde(default)]
   pub duplicates: Vec<Competition>,
+  /// How many polygons repeating an earlier one the merged YBN leaves out.
+  #[serde(default, skip_serializing_if = "is_zero")]
+  #[cfg_attr(feature = "typescript", specta(optional))]
+  pub repeats_left_out: usize,
+}
+
+fn is_zero(count: &usize) -> bool {
+  *count == 0
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -193,9 +201,16 @@ pub(super) fn signature(
     .collect::<BTreeMap<_, _>>();
   let (version, tolerances) =
     (algorithm_version(extension)?, crate::core::config::matching::current());
-  // YBN merges fill geometry children within the configured limits.
+  // YBN merges fill geometry children within the configured limits, and leave repeats out as
+  // configured.
   let encoded = if extension == "ybn" {
-    serde_json::to_vec(&(version, tolerances, crate::core::config::geometry_limits()?, inputs))?
+    serde_json::to_vec(&(
+      version,
+      tolerances,
+      crate::core::config::geometry_limits()?,
+      crate::core::config::ybn_repeats()?.enabled,
+      inputs,
+    ))?
   } else {
     serde_json::to_vec(&(version, tolerances, inputs))?
   };
@@ -275,7 +290,8 @@ mod tests {
       let tolerances = crate::core::config::matching::current();
       let encoded = if extension == "ybn" {
         let limits = crate::core::config::geometry_limits().unwrap();
-        serde_json::to_vec(&(version, tolerances, limits, &inputs)).unwrap()
+        let repeats = crate::core::config::ybn_repeats().unwrap().enabled;
+        serde_json::to_vec(&(version, tolerances, limits, repeats, &inputs)).unwrap()
       } else {
         serde_json::to_vec(&(version, tolerances, &inputs)).unwrap()
       };
@@ -322,6 +338,7 @@ mod tests {
           superseded_by: None,
           merged_at: "before".into(),
           duplicates: Vec::new(),
+          repeats_left_out: 0,
         };
         assert!(!reusable(&record, &changed, Path::new("unused"), false).unwrap());
       });
@@ -350,6 +367,7 @@ mod tests {
       superseded_by: None,
       merged_at: "original".into(),
       duplicates: Vec::new(),
+      repeats_left_out: 0,
     };
     assert!(reusable(&record, "signature", &root, false).unwrap());
     assert!(!reusable(&record, "changed", &root, false).unwrap());

@@ -2,7 +2,7 @@
 //! flags ([`polygons`]), and the merge in use ([`merge_ybn_deltas`]).
 
 pub(super) mod legacy;
-pub use legacy::{merge_ybn_deltas, merge_ybn_diffs};
+pub use legacy::{merge_ybn_deltas, merge_ybn_diffs, merge_ybn_diffs_with};
 mod merge_geometry;
 mod polygon;
 pub mod polygons;

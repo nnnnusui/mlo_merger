@@ -8,7 +8,7 @@
 
 Merges deploy only the generation of each vanilla YMAP and YBN the game loads and carry the changes resources make to the others over to it; see [Newer DLC Generations](reference.md#newer-dlc-generations).
 
-- [ ] Record each FiveM game build's own title update data (`dlc_patch/` replacements of packs' `content.xml` and `setup2.xml`, `dlclist.xml`, `lodlights.rpf`), which FiveM mounts for that build, and apply it when the vanilla cache targets the build; the installed title update's is applied to every build now.
+- [ ] Record each FiveM game build's own title update data (`dlc_patch/` replacements of packs' `content.xml` and `setup2.xml`, `dlclist.xml`, `lodlights.rpf`), which FiveM mounts for that build, and apply it when the vanilla cache targets the build; the installed title update's is applied to every build now. A pack's archive the title update patches without the pack declaring it (`not_declared` in `dlc_activity.json`) is taken as not loaded meanwhile, and stands for no path, so the YBNs whose latest version it holds have no candidates to carry their changes to (93 on the local vanilla archive that a same-name successor used to take).
 - [ ] Carry entity parent changes and additions with a parent to other generations; see the [plan](plan/202611191800_generation_entity_parents.md).
 - [ ] Carry modifications of nested arrays to other generations, or list them in `left_behind.json`.
 
@@ -21,6 +21,10 @@ Resource overwrites (`overwrite/resources/{resourceName}/{stream_path}.diff.json
 - [ ] Follow YBN overwrites to a new source version, as YMAP overwrites are followed; one written against an earlier version is only listed as `source_changed` now.
 - [ ] Follow overwrites to a new vanilla version, as they are followed to a new source version: remap the vanilla indices their selectors name. Overwrites whose baseline changed are only listed in `ignored_overwrites` now.
 - [ ] Report selectors that match no difference, unsupported or ambiguous overwrite changes, and overwrite files that are not read (such as the earlier `resources/{resourceName}.json` layout), in the overwrite cache's `warnings.json`, as `ignored_overwrites` does for missing and stale overwrites; they are only logged now.
+
+## Deployment
+
+- [ ] Deploy the merged files as a folder of resources split by area, file type and size, so that a change reloads only the resources holding it; merged files deployed for lighter collision (repeats left out of vanilla YBNs) make the single resource larger now. Choose with arguments between that folder, the single resource, or both, as use cases differ.
 
 ## Architecture
 
