@@ -383,6 +383,31 @@ pub(super) fn occlude_model(
   }
 }
 
+/// A wall of `panels` quads in a row along +X from `start`, each 0.4 wide and 2 high.
+pub(super) fn wall_strip(
+  start: Position,
+  panels: usize,
+) -> Vec<Triangle> {
+  let corner =
+    |index: usize, dz: f32| position(start.x + index as f32 * 0.4, start.y, start.z + dz);
+  (0..panels)
+    .flat_map(|index| {
+      [
+        Triangle {
+          corner_1: corner(index, 0.0),
+          corner_2: corner(index + 1, 0.0),
+          corner_3: corner(index + 1, 2.0),
+        },
+        Triangle {
+          corner_1: corner(index, 0.0),
+          corner_2: corner(index + 1, 2.0),
+          corner_3: corner(index, 2.0),
+        },
+      ]
+    })
+    .collect()
+}
+
 /// A grass batch of `instances` tufts in a row along X through the middle of its box.
 pub(super) fn grass(
   archetype: &str,

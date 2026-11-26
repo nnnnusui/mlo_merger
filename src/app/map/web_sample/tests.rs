@@ -294,6 +294,11 @@ fn pipeline_runs_on_the_web_sample() {
   assert!(block.car_generators.is_empty());
   assert_eq!(block.time_cycle_modifiers[0].percentage, 80.0);
   assert_eq!(parent_indices(&block), [0, 1]);
+  // The wall without its roof and both resources' wall strips, split where the next triangle
+  // would pass 255 vertices.
+  let triangles = block.occlude_models.iter().map(|model| model.triangles.len());
+  assert_eq!(triangles.collect::<Vec<_>>(), [250, 32]);
+  assert_eq!(250 + 32, 2 + 4 * WALL_PANELS);
   assert_eq!(workspace.merged_ymap("smpl_block_01_lod.ymap").entities.len(), 2);
   let winter = workspace.merged_ymap("winter_smpl_block_01.ymap");
   assert!(!guids(&winter).contains(&guid::BIN));

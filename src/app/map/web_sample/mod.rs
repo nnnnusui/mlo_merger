@@ -22,7 +22,8 @@
 //! removes a LOD light pair, and one ships its own map, a child map of it and collision. A later
 //! version of that resource ships the map again, so the merge combines both versions: the sign
 //! they share is kept once, and the crate placed again under another GUID too, its child
-//! following the kept one. Another removes an oak from the park and places a bin there. Edits to
+//! following the kept one. The two resources changing `smpl_block_01.ymap` each add a wall
+//! strip to its occlude model, which together pass the vertex limit, so the merge splits it. Another removes an oak from the park and places a bin there. Edits to
 //! `smpl_block_01.ymap` carry over to its DLC generations.
 //!
 //! The overwrites name one ignored overwrite of every reason on the first pipeline run: some
@@ -247,6 +248,11 @@ fn block_01_collision(with_kiosk: bool) -> Vec<Child> {
   vec![Child::Geometry(ground), Child::Box([-7076.0, 7096.0, 19.9], [-7064.0, 7110.0, 28.0])]
 }
 
+/// Panels of the wall strip each of two resources adds to the block's occlude model: 142
+/// vertices each, which together with the model's own pass the 255 one model holds, so the merge
+/// splits it.
+const WALL_PANELS: usize = 70;
+
 /// Which entity of `map` has `guid`.
 fn find(
   map: &Ymap,
@@ -256,7 +262,8 @@ fn find(
 }
 
 /// Resource `[smpl]/smpl_street_tweaks`: moves the bench, locks the door, removes the car
-/// generator and adds a planter; removes a LOD light pair; adds the planter's collision. Its
+/// generator, adds a planter and extends the occlude model's wall east; removes a LOD light
+/// pair; adds the planter's collision. Its
 /// `earlier` version, which an overwrite was written against, also added a cone.
 fn street_tweaks(earlier: bool) -> Vec<(&'static str, Vec<u8>)> {
   let mut map = block_01("smpl_block_01");
@@ -265,6 +272,9 @@ fn street_tweaks(earlier: bool) -> Vec<(&'static str, Vec<u8>)> {
   let door_entity = find(&map, guid::DOOR);
   map.entities[door_entity].extensions = vec![door("smpl_door_main", true)];
   map.car_generators.clear();
+  let model = &mut map.occlude_models[0];
+  model.triangles.extend(wall_strip(position(-7066.0, 7104.0, 20.0), WALL_PANELS));
+  model.bmax.x = -7038.0;
   map.entities.push(entity("smpl_planter", guid::PLANTER, position(-7095.0, 7088.0, 20.0), 0.0));
   if earlier {
     map.entities.push(entity("smpl_cone", guid::CONE, position(-7092.0, 7090.0, 20.0), 0.0));
@@ -286,14 +296,17 @@ fn street_tweaks(earlier: bool) -> Vec<(&'static str, Vec<u8>)> {
   ]
 }
 
-/// Resource `smpl_block_rework`: brightens the dusk, removes the occlude model's roof and the
-/// bin, recolours the lamp; removes the empty SLOD from the parent, so the houses' parent
+/// Resource `smpl_block_rework`: brightens the dusk, removes the occlude model's roof and adds
+/// a back wall east of it, removes the bin, recolours the lamp; removes the empty SLOD from the parent, so the houses' parent
 /// indices move; removes the bollard's collision. Its `earlier` version, which an overwrite was
 /// written against, recoloured the lamp otherwise.
 fn block_rework(earlier: bool) -> Vec<(&'static str, Vec<u8>)> {
   let mut map = block_01("smpl_block_01");
   map.time_cycle_modifiers[0].percentage = 80.0;
-  map.occlude_models[0].triangles.truncate(2);
+  let model = &mut map.occlude_models[0];
+  model.triangles.truncate(2);
+  model.triangles.extend(wall_strip(position(-7066.0, 7110.0, 20.0), WALL_PANELS));
+  model.bmax.x = -7038.0;
   map.entities.remove(find(&map, guid::BIN));
   let lamp = find(&map, guid::LAMP);
   let colour = if earlier { [200, 200, 255] } else { [170, 200, 255] };
