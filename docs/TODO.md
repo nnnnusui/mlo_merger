@@ -35,6 +35,10 @@ Resource overwrites (`overwrite/resources/{resourceName}/{stream_path}.diff.json
 - [ ] Report unsupported hierarchy/shape changes and conflicts for each format, and document the conservative fallback behavior.
 - [ ] Remove a removed child's geometry from the LOD and SLOD models of its parents, which bake every child in; the merge only updates the parents' `numChildren` now.
 
+## Occlude Models
+
+- [ ] Find what occlude model `flags` 1 does (see [the YMAP format notes](format/ymap.md#5-遮蔽用-ymap)). Test each case beside a control occluder known to work: horizontal planes facing up seen from above gave opposite results on two runs without one.
+
 ## YMAP Baseline Inference
 
 - [-] Compare each source YMAP with the available vanilla versions and infer its source version from the number of differences.
