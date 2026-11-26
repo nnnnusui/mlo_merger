@@ -166,7 +166,7 @@ pub type CarryTarget<'a> = (&'a Bound, [[f32; 3]; 2]);
 /// The changes of `diff`, taken from a YBN the game does not load, that reach each of
 /// `candidates`, loaded YBNs most covering it first, in their order; and how many removals reach
 /// none. A removal reaches every candidate holding the polygon within `tolerance` in the same
-/// flags group, or the child compared whole. An addition goes to the first candidate whose
+/// flags group, naming the candidate's polygon, or the child compared whole. An addition goes to the first candidate whose
 /// ground-plane box holds the polygon's, or else to the one whose box is nearest it; a child
 /// added whole to the first candidate.
 pub fn carried_among(
@@ -204,8 +204,11 @@ pub fn carried_among(
       let identity = Identity::of(polygon);
       let mut found = false;
       for (target, lookup) in lookups.iter().enumerate() {
-        if lookup.contains(&identity) {
-          removed[target].push(polygon.clone());
+        // The removal names the candidate's own polygon, as a removal names its baseline's, so
+        // that it is the very same as the removals the candidate's own sources make of it.
+        if let Some(item) = lookup.find(&identity, |_| true) {
+          let entries = held[target].0.get(&group.flags).expect("looked up in this group");
+          removed[target].push(entries[item].polygon.clone());
           found = true;
         }
       }

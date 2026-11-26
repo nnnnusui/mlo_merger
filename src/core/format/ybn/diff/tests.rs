@@ -318,3 +318,21 @@ fn repeats_of_one_flags_group_are_counted_and_left_out() {
   assert_eq!(root.flags, [FLAGS, WEAPON]);
   assert_eq!(polygon_count(&root), 3);
 }
+
+#[test]
+fn a_carried_removal_names_the_candidates_polygon_so_it_merges_with_its_own_removal() {
+  // The older generation lies 0.01 off the candidate, within the tolerance; a resource removes
+  // the same triangle from both.
+  let older = composite(vec![(strip(0.01, 2), FLAGS)]);
+  let candidate = composite(vec![(strip(0.0, 2), FLAGS)]);
+  let from_older =
+    polygons::diff(&older, &composite(vec![(strip(0.01, 1), FLAGS)]), TOLERANCE).unwrap();
+  let own =
+    polygons::diff(&candidate, &composite(vec![(strip(0.0, 1), FLAGS)]), TOLERANCE).unwrap();
+  let targets = [(&candidate, [[0.0, 0.0, 0.0], [2.0, 1.0, 0.0]])];
+  let (carried, absent) = polygons::carried_among(&from_older, &targets, TOLERANCE).unwrap();
+  assert_eq!(absent, 0);
+  assert_eq!(carried[0].polygons[0].removed, own.polygons[0].removed);
+  let merged = polygons::merge(&[&own, &carried[0]], TOLERANCE).unwrap();
+  assert_eq!(merged.polygons[0].removed.len(), 1);
+}
