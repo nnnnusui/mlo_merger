@@ -23,8 +23,9 @@ use crate::{
   core::{
     conversion::load_hash_names_or_empty,
     format::{
+      compared::ComparedFile,
       ybn::diff::polygons::{self, YbnComparisonDiff},
-      ymap::compare::{YmapComparisonDiff, YmapComparisonFile, YmapComparisonPartner},
+      ymap::compare::{YmapComparisonDiff, YmapComparisonPartner},
     },
   },
 };
@@ -70,8 +71,8 @@ struct DiffInputs {
   schema_version: u32,
   #[serde(default)]
   tolerances: Option<MatchTolerances>,
-  target: YmapComparisonFile,
-  base: YmapComparisonFile,
+  target: ComparedFile,
+  base: ComparedFile,
   #[serde(default)]
   partner: Option<YmapComparisonPartner>,
 }
@@ -257,7 +258,7 @@ fn write_ybn_diffs(
         return Ok(None);
       };
       let failed = |error: &dyn std::fmt::Display| format!("{}: {error}", entry.path.display());
-      let comparison = |path: &Path, stored: &str, previous: Option<&YmapComparisonFile>| {
+      let comparison = |path: &Path, stored: &str, previous: Option<&ComparedFile>| {
         let previous = previous.filter(|previous| previous.path == stored).map(|previous| {
           crate::common::fingerprint::Fingerprint {
             sha256: previous.sha256.clone(),
@@ -267,7 +268,7 @@ fn write_ybn_diffs(
           }
         });
         crate::common::fingerprint::Fingerprint::read(path, previous.as_ref(), false).map(
-          |fingerprint| YmapComparisonFile {
+          |fingerprint| ComparedFile {
             path: stored.to_owned(),
             sha256: fingerprint.sha256,
             size: fingerprint.size,

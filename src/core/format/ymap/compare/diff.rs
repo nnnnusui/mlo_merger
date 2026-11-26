@@ -4,14 +4,14 @@
 //! `#[derive(Diff)]`: every field is optional and omitted when unchanged, so the documents list
 //! only changes.
 
-use crate::platform::fs;
 use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
 use super::YmapDiffFields;
-use crate::common::{Result, fingerprint::Fingerprint};
+use crate::common::Result;
 use crate::core::config::matching::MatchTolerances;
+use crate::core::format::compared::{ComparedFile, PropagationOrigin};
 
 /// Differences of one source YMAP from the vanilla YMAP of the same name.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -20,10 +20,10 @@ pub struct YmapComparisonDiff {
   /// Version of the document layout; documents of another version are regenerated.
   pub schema_version: u32,
   /// The YMAP the differences lead to: the source YMAP.
-  pub target: YmapComparisonFile,
+  pub target: ComparedFile,
   /// The YMAP the differences are taken from: the vanilla YMAP of the same name, the empty
   /// YMAP for one no vanilla YMAP is named after, or the base source's YMAP.
-  pub base: YmapComparisonFile,
+  pub base: ComparedFile,
   /// The matching tolerances the differences were taken with.
   pub tolerances: MatchTolerances,
   /// For one YMAP of a LOD light pair, the other one, whose removals `diffs` also makes as
@@ -38,8 +38,8 @@ pub struct YmapComparisonDiff {
 #[cfg_attr(feature = "typescript", derive(specta::Type))]
 pub struct YmapComparisonPartner {
   /// The source's own YMAP of that name, or the vanilla one when the source has none.
-  pub target: YmapComparisonFile,
-  pub base: YmapComparisonFile,
+  pub target: ComparedFile,
+  pub base: ComparedFile,
 }
 
 impl YmapComparisonDiff {
@@ -84,18 +84,10 @@ pub struct YmapPropagatedDiff {
   /// The resource making the changes, by its ID, its path relative to the source root.
   pub resource: String,
   /// The vanilla YMAP the changes are carried to, as it was when they were.
-  pub base: YmapComparisonFile,
+  pub base: ComparedFile,
   /// The resource's YMAPs the changes are carried over from.
-  pub origins: Vec<YmapPropagationOrigin>,
+  pub origins: Vec<PropagationOrigin>,
   pub diffs: YmapDiffFields,
-}
-
-/// A YMAP of a resource that changes are carried over from, and its vanilla baseline.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "typescript", derive(specta::Type))]
-pub struct YmapPropagationOrigin {
-  pub target: YmapComparisonFile,
-  pub base: YmapComparisonFile,
 }
 
 impl YmapPropagatedDiff {
@@ -116,48 +108,6 @@ impl YmapPropagatedDiff {
     let current =
       document.schema_version == Self::SCHEMA_VERSION && document.base.describes(vanilla)?;
     Ok(current.then_some(document))
-  }
-}
-
-/// A compared YMAP file and its fingerprint when the diff was taken.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "typescript", derive(specta::Type))]
-pub struct YmapComparisonFile {
-  /// The file relative to the store holding it: the source cache, the vanilla cache, or the
-  /// source root for a source file that was not moved into the cache.
-  pub path: String,
-  pub sha256: String,
-  pub size: u64,
-  pub modified_seconds: u64,
-  pub modified_nanos: u32,
-}
-
-impl YmapComparisonFile {
-  /// Whether the file at `path` (after resolving links) has the recorded contents.
-  ///
-  /// The document names the file, so where it is does not matter: a file whose size and
-  /// modification time match is not hashed again.
-  pub fn describes(
-    &self,
-    path: &Path,
-  ) -> Result<bool> {
-    let path = fs::canonicalize(path)?;
-    let previous = Fingerprint {
-      sha256: self.sha256.clone(),
-      size: self.size,
-      modified_seconds: self.modified_seconds,
-      modified_nanos: self.modified_nanos,
-    };
-    let current = Fingerprint::read(&path, Some(&previous), false)?;
-    Ok(current.sha256 == self.sha256 && current.size == self.size)
-  }
-
-  /// Whether `other` has the same contents, wherever it is and whenever it was modified.
-  pub fn same_content(
-    &self,
-    other: &Self,
-  ) -> bool {
-    self.sha256 == other.sha256 && self.size == other.size
   }
 }
 

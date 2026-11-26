@@ -167,8 +167,8 @@ impl MergeYmap {
   fn implied_document(
     &self,
     mod_info: &ModYmapReference,
-    target: &crate::core::format::ymap::compare::YmapComparisonFile,
-    base: &crate::core::format::ymap::compare::YmapComparisonFile,
+    target: &crate::core::format::compared::ComparedFile,
+    base: &crate::core::format::compared::ComparedFile,
   ) -> Result<Option<crate::app::map::source_cache::YmapImplied>, Box<dyn std::error::Error>> {
     let Some(path) = self.implied.get(&mod_info.mod_ymap_path) else {
       return Ok(None);

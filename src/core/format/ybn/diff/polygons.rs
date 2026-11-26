@@ -30,8 +30,8 @@ use super::{
 };
 use crate::common::mesh::{self, VertexIndex};
 use crate::core::format::{
+  compared::{ComparedFile, PropagationOrigin},
   ybn::model::{Bound, Geometry, Material, Polygon, Triangle},
-  ymap::compare::{YmapComparisonFile, YmapPropagationOrigin},
 };
 
 const IDENTITY: [f32; 16] = [1., 0., 0., 0., 0., 1., 0., 0., 0., 0., 1., 0., 0., 0., 0., 1.];
@@ -126,9 +126,9 @@ pub struct YbnComparisonDiff {
   /// Version of the document layout; documents of another version are regenerated.
   pub schema_version: u32,
   /// The YBN the differences lead to: the source YBN.
-  pub target: YmapComparisonFile,
+  pub target: ComparedFile,
   /// The YBN the differences are taken from: the vanilla YBN of the same name.
-  pub base: YmapComparisonFile,
+  pub base: ComparedFile,
   /// The `ybn_position` tolerance the differences were taken with.
   pub tolerance: f32,
   pub diffs: YbnDiffFields,
@@ -149,9 +149,9 @@ pub struct YbnPropagatedDiff {
   /// The resource whose YBN the changes come from.
   pub resource: String,
   /// The YBN the changes are carried to.
-  pub base: YmapComparisonFile,
+  pub base: ComparedFile,
   /// The resource's YBN and the vanilla YBN its changes were taken from.
-  pub origins: Vec<YmapPropagationOrigin>,
+  pub origins: Vec<PropagationOrigin>,
   pub diffs: YbnDiffFields,
 }
 

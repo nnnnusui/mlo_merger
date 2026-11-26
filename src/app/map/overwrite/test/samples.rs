@@ -6,9 +6,10 @@
 //! `MLO_WRITE_SAMPLES=1` to write the samples instead.
 
 use super::*;
+use crate::core::format::compared::ComparedFile;
 use crate::core::format::gamefile::test_support::sample_ymap;
 use crate::core::format::ymap::binary::write_ymap;
-use crate::core::format::ymap::compare::{YmapComparisonDiff, YmapComparisonFile};
+use crate::core::format::ymap::compare::YmapComparisonDiff;
 use crate::core::format::ymap::model::ymap::Ymap;
 use serde_json::json;
 use std::path::PathBuf;
@@ -123,7 +124,7 @@ fn generate_diffs(
     let mut document: YmapComparisonDiff =
       serde_json::from_reader(fs::File::open(root.join("source-cache/diff").join(&name)).unwrap())
         .unwrap();
-    let clean = |file: &mut YmapComparisonFile, path: String| {
+    let clean = |file: &mut ComparedFile, path: String| {
       file.path = path;
       file.modified_seconds = 0;
       file.modified_nanos = 0;
@@ -171,7 +172,7 @@ fn sample_sources_and_overwrites_are_current_and_apply_cleanly() {
   for source in sample_sources() {
     let name = format!("{}/{}.diff.json", resource_name(source.resource), source.stream_path);
     let document = &diffs[&name];
-    let fingerprint = |file: &YmapComparisonFile| OverwriteFingerprint {
+    let fingerprint = |file: &ComparedFile| OverwriteFingerprint {
       sha256: file.sha256.clone(),
       size: file.size,
     };
@@ -219,7 +220,7 @@ fn sample_sources_and_overwrites_are_current_and_apply_cleanly() {
     let name = format!("{}/{}.diff.json", resource_name(source.resource), source.stream_path);
     let document = &diffs[&name];
     let overwrite = loaded.stream_file(resource_name(source.resource), source.stream_path).unwrap();
-    let fingerprint = |file: &YmapComparisonFile| OverwriteFingerprint {
+    let fingerprint = |file: &ComparedFile| OverwriteFingerprint {
       sha256: file.sha256.clone(),
       size: file.size,
     };

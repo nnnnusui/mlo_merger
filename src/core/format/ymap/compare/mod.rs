@@ -22,8 +22,7 @@ pub mod occlude_models;
 mod test;
 
 pub use diff::{
-  YmapComparisonDiff, YmapComparisonFile, YmapComparisonPartner, YmapPropagatedDiff,
-  YmapPropagationOrigin, physics_dictionaries,
+  YmapComparisonDiff, YmapComparisonPartner, YmapPropagatedDiff, physics_dictionaries,
 };
 pub use entities::YmapEntityDiff;
 pub use entity_parent::{

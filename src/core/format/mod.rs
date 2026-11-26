@@ -1,3 +1,4 @@
+pub mod compared;
 pub mod gamefile;
 pub mod rpf;
 pub mod stream_file;

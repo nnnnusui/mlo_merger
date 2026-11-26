@@ -26,6 +26,7 @@
 //! the successor, as entities are. The changes of a YMAP with a successor that reach no loaded item or triangle,
 //! and its other additions, are listed in `generations/left_behind.json` as left behind.
 
+use crate::core::format::compared::{ComparedFile, PropagationOrigin};
 use crate::platform::fs;
 use std::{
   collections::{BTreeMap, BTreeSet, HashMap},
@@ -47,8 +48,7 @@ use crate::{
   core::format::ybn::diff::polygons::{self, YbnComparisonDiff, YbnPropagatedDiff},
   core::format::ymap::{
     compare::{
-      ItemDiff, YmapComparisonDiff, YmapComparisonFile, YmapDiffFields, YmapPropagatedDiff,
-      YmapPropagationOrigin,
+      ItemDiff, YmapComparisonDiff, YmapDiffFields, YmapPropagatedDiff,
       lod_light_pairs::LightSide,
       occlude_models::{TriangleKey, VertexIndex},
     },
@@ -104,7 +104,7 @@ struct CarrySource {
   resource_name: String,
   stream_path: String,
   file_name: String,
-  origin: YmapPropagationOrigin,
+  origin: PropagationOrigin,
   diffs: YmapDiffFields,
 }
 
@@ -133,7 +133,7 @@ pub(super) fn carry_generations(
     let Ok(document) = crate::common::json::read_json::<YmapComparisonDiff>(diff_path) else {
       continue;
     };
-    let origin = YmapPropagationOrigin {
+    let origin = PropagationOrigin {
       target: document.target.clone(),
       base: document.base.clone(),
     };
@@ -339,14 +339,14 @@ pub(super) fn carry_ybn_generations(
         &YbnPropagatedDiff {
           schema_version: YbnPropagatedDiff::SCHEMA_VERSION,
           resource: source.resource.clone(),
-          base: YmapComparisonFile {
+          base: ComparedFile {
             path: (*object).clone(),
             sha256: fingerprint.sha256,
             size: fingerprint.size,
             modified_seconds: fingerprint.modified_seconds,
             modified_nanos: fingerprint.modified_nanos,
           },
-          origins: vec![YmapPropagationOrigin {
+          origins: vec![PropagationOrigin {
             target: document.target.clone(),
             base: document.base.clone(),
           }],
@@ -506,7 +506,7 @@ struct Target {
   /// as the diff JSON holds it but for its anchor and target index.
   added: BTreeMap<Array, (usize, Vec<Map<String, Value>>)>,
   added_dictionaries: BTreeSet<String>,
-  origins: Vec<YmapPropagationOrigin>,
+  origins: Vec<PropagationOrigin>,
 }
 
 impl Target {
@@ -677,7 +677,7 @@ impl Propagation<'_> {
     directory: &Path,
   ) -> Result<(Vec<CarriedDocument>, Vec<LeftBehind>)> {
     let mut documents = Vec::new();
-    let mut vanilla_files = HashMap::<String, YmapComparisonFile>::new();
+    let mut vanilla_files = HashMap::<String, ComparedFile>::new();
     let mut by_resource = BTreeMap::<&str, Vec<&CarrySource>>::new();
     for source in sources {
       by_resource.entry(&source.resource_id).or_default().push(source);
@@ -977,13 +977,13 @@ impl Propagation<'_> {
   fn vanilla_file(
     &self,
     file_name: &str,
-  ) -> Result<YmapComparisonFile> {
+  ) -> Result<ComparedFile> {
     let (path, object) = self
       .vanilla_files
       .get(&file_name.to_ascii_lowercase())
       .ok_or_else(|| format!("No latest vanilla YMAP named {file_name}"))?;
     let fingerprint = crate::common::fingerprint::Fingerprint::read(path, None, false)?;
-    Ok(YmapComparisonFile {
+    Ok(ComparedFile {
       path: object.clone(),
       sha256: fingerprint.sha256,
       size: fingerprint.size,

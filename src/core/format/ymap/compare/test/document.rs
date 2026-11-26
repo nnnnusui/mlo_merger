@@ -5,7 +5,8 @@ use std::path::Path;
 
 use crate::common::fingerprint::Fingerprint;
 use crate::core::config::matching::MatchTolerances;
-use crate::core::format::ymap::compare::{YmapComparisonDiff, YmapComparisonFile};
+use crate::core::format::compared::ComparedFile;
+use crate::core::format::ymap::compare::YmapComparisonDiff;
 
 use serde_json::json;
 
@@ -137,7 +138,7 @@ fn only_documents_of_the_current_files_and_tolerances_are_read() {
   let file = |path: &Path| {
     let path = path.canonicalize().unwrap();
     let fingerprint = Fingerprint::read(&path, None, false).unwrap();
-    YmapComparisonFile {
+    ComparedFile {
       path: path.display().to_string(),
       sha256: fingerprint.sha256,
       size: fingerprint.size,

@@ -1,3 +1,4 @@
+use crate::core::format::compared::ComparedFile;
 use crate::platform::fs;
 use std::{
   collections::{BTreeSet, HashMap},
@@ -8,8 +9,7 @@ use std::{
 use struct_diff::Diff;
 
 use super::{
-  YmapComparisonDiff, YmapComparisonFile, YmapComparisonPartner, YmapDiffContext,
-  lod_light_pairs::LightSide,
+  YmapComparisonDiff, YmapComparisonPartner, YmapDiffContext, lod_light_pairs::LightSide,
 };
 use crate::{
   app::map::source_cache::{SourceYmapIndex, load_source_ymap_index, read_stream_bytes},
@@ -258,8 +258,8 @@ impl YmapComparisonContext {
   pub fn is_diff_current(
     &self,
     file: &StreamFileRef,
-    source: &YmapComparisonFile,
-    vanilla: &YmapComparisonFile,
+    source: &ComparedFile,
+    vanilla: &ComparedFile,
     partner: Option<&YmapComparisonPartner>,
   ) -> Result<bool> {
     let baseline = StreamFileRef {
@@ -295,8 +295,8 @@ impl YmapComparisonContext {
   fn comparison_file(
     &self,
     file: &StreamFileRef,
-    previous: Option<&YmapComparisonFile>,
-  ) -> Result<YmapComparisonFile> {
+    previous: Option<&ComparedFile>,
+  ) -> Result<ComparedFile> {
     if self.is_added_baseline(file) {
       return crate::app::map::source_cache::empty_baseline_file();
     }
@@ -325,7 +325,7 @@ impl YmapComparisonContext {
       modified_seconds,
       modified_nanos,
     } = Fingerprint::read(&path, previous.as_ref(), false)?;
-    Ok(YmapComparisonFile {
+    Ok(ComparedFile {
       path: stored,
       sha256,
       size,

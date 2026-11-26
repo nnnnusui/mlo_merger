@@ -121,8 +121,8 @@ pub struct OverwriteFingerprint {
   pub size: u64,
 }
 
-impl From<&crate::core::format::ymap::compare::YmapComparisonFile> for OverwriteFingerprint {
-  fn from(file: &crate::core::format::ymap::compare::YmapComparisonFile) -> Self {
+impl From<&crate::core::format::compared::ComparedFile> for OverwriteFingerprint {
+  fn from(file: &crate::core::format::compared::ComparedFile) -> Self {
     Self {
       sha256: file.sha256.clone(),
       size: file.size,

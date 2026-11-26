@@ -14,9 +14,8 @@
 
 use super::{Result, read_metadata, types::SourceCacheMetadata};
 use crate::common::json::{read_json, write_json};
-use crate::core::format::ymap::{
-  binary::write_ymap, compare::YmapComparisonFile, model::ymap::Ymap, reference_hash,
-};
+use crate::core::format::compared::ComparedFile;
+use crate::core::format::ymap::{binary::write_ymap, model::ymap::Ymap, reference_hash};
 use crate::platform::fs;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -70,9 +69,9 @@ pub fn empty_baseline_bytes() -> Result<Vec<u8>> {
 
 /// How diff documents record the empty baseline of an added YMAP: no path, and the fingerprint
 /// of [`empty_baseline_bytes`].
-pub fn empty_baseline_file() -> Result<YmapComparisonFile> {
+pub fn empty_baseline_file() -> Result<ComparedFile> {
   let bytes = empty_baseline_bytes()?;
-  Ok(YmapComparisonFile {
+  Ok(ComparedFile {
     path: String::new(),
     sha256: hex::encode(Sha256::digest(&bytes)),
     size: bytes.len() as u64,

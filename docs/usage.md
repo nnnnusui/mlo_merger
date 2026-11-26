@@ -33,8 +33,8 @@ in `web/`, described under `web` in its `release.json`; see [Browser build](web.
 | Stream-file bounds index | `RTreeIndex`, `RTreeItem`, `RTreeInput` |
 | `--read` stdout | `ReadResult`, `ReadFileResult`, `ReadOrigin` |
 | `--read` JSON documents | `YmapReadDocument`, `ReadFingerprint`, `Ymap`, `YmapEntity`, `Position`, `Rotation`, `YbnReadDocument`, `YbnReadBound`, `YbnReadChild`, `YbnReadGeometry`, `YbnReadMaterial`, `YbnReadPolygon`, `CollisionFlags`, `NamedFlags` |
-| Source-cache diff documents | `YmapComparisonDiff`, `YmapComparisonFile`, `YmapDiffFields`, `YmapEntityDiff`, `YmapEntityFieldDiff`, `YbnComparisonDiff`, `YbnDiffFields`, `YbnPolygonsDiff` |
-| Changes carried to newer DLC generations | `YmapPropagatedDiff`, `YmapPropagationOrigin`, `LeftBehind`, `LeftBehindReason` |
+| Source-cache diff documents | `YmapComparisonDiff`, `ComparedFile`, `YmapDiffFields`, `YmapEntityDiff`, `YmapEntityFieldDiff`, `YbnComparisonDiff`, `YbnDiffFields`, `YbnPolygonsDiff` |
+| Changes carried to newer DLC generations | `YmapPropagatedDiff`, `YbnPropagatedDiff`, `PropagationOrigin`, `LeftBehind`, `LeftBehindReason` |
 | LOD light pair documents | `YmapImplied`, `YmapImpliedPartner` |
 | Vanilla generations | `GenerationIndex`, `YmapGenerationIndex`, `YbnGenerationIndex`, `Family`, `Generation`, `UnitRef`, `GenerationUnit`, `YbnCandidates`, `YbnCandidate` |
 | Repeated YBN polygons | `YbnRepeatIndex`, `YbnRepeatCount`, `YbnRepeatsReport` |

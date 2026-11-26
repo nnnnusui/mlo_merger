@@ -17,6 +17,7 @@
 //! `implied/inputs.json` records a digest of the diff record and the vanilla cache revision, and
 //! the documents are kept while it matches.
 
+use crate::core::format::compared::ComparedFile;
 use std::{
   collections::{BTreeMap, BTreeSet},
   path::{Path, PathBuf},
@@ -31,7 +32,7 @@ use crate::{
   app::map::source_cache::{read_metadata, stream_file_diff_path, types::SourceFile},
   common::{json::write_json, path::ensure_safe_path},
   core::format::ymap::compare::{
-    ItemDiff, YmapComparisonDiff, YmapComparisonFile, YmapDiffFields, lod_light_pairs::LightSide,
+    ItemDiff, YmapComparisonDiff, YmapDiffFields, lod_light_pairs::LightSide,
   },
   platform::fs,
 };
@@ -52,8 +53,8 @@ pub struct YmapImplied {
   /// The resource, by its ID.
   pub resource: String,
   /// The source YMAP and its baseline, as its diff document records them.
-  pub target: YmapComparisonFile,
-  pub base: YmapComparisonFile,
+  pub target: ComparedFile,
+  pub base: ComparedFile,
   /// The additions to leave out of the diff document, in the shape of an overwrite's `skip`.
   #[serde(default, skip_serializing_if = "Option::is_none")]
   #[cfg_attr(feature = "typescript", specta(optional, type = Option<crate::app::map::overwrite::YmapDiffSkip>))]
@@ -76,7 +77,7 @@ pub struct YmapImpliedPartner {
   /// The vanilla YMAP, in lowercase.
   pub file_name: String,
   /// The latest vanilla YMAP, as it was when the removals were taken.
-  pub base: YmapComparisonFile,
+  pub base: ComparedFile,
   pub diffs: YmapDiffFields,
 }
 
@@ -272,11 +273,11 @@ impl Pairs<'_> {
   fn vanilla_file(
     &self,
     name: &str,
-  ) -> Result<YmapComparisonFile> {
+  ) -> Result<ComparedFile> {
     let (path, object) =
       self.vanilla.get(name).ok_or_else(|| format!("No latest vanilla YMAP named {name}"))?;
     let fingerprint = crate::common::fingerprint::Fingerprint::read(path, None, false)?;
-    Ok(YmapComparisonFile {
+    Ok(ComparedFile {
       path: object.clone(),
       sha256: fingerprint.sha256,
       size: fingerprint.size,

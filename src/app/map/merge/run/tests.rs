@@ -342,14 +342,12 @@ fn removing_a_child_counts_it_out_of_its_parent_in_an_unchanged_ymap() {
 #[ignore = "requires local vanilla YMAP schemas"]
 fn sources_with_a_diff_document_merge_through_it_and_reject_stale_ones() {
   use crate::common::fingerprint::Fingerprint;
+  use crate::core::format::compared::ComparedFile;
   use crate::core::format::gamefile::{
     meta::{MetaResource, MetaSchemaCatalog},
     rsc7::Rsc7Resource,
   };
-  use crate::core::format::ymap::{
-    binary::ymap_to_model,
-    compare::{YmapComparisonDiff, YmapComparisonFile},
-  };
+  use crate::core::format::ymap::{binary::ymap_to_model, compare::YmapComparisonDiff};
   let files = crate::app::map::vanilla_cache::test_support::asset_latest_files("ymap");
   let file =
     files.iter().find(|file| file.file_stem().unwrap().to_string_lossy().contains("occl")).unwrap();
@@ -373,7 +371,7 @@ fn sources_with_a_diff_document_merge_through_it_and_reject_stale_ones() {
   let recorded = |path: &Path| {
     let path = path.canonicalize().unwrap();
     let fingerprint = Fingerprint::read(&path, None, false).unwrap();
-    YmapComparisonFile {
+    ComparedFile {
       path: path.display().to_string(),
       sha256: fingerprint.sha256,
       size: fingerprint.size,
@@ -509,7 +507,7 @@ fn lod_light_removals_of_either_ymap_of_a_pair_are_made_in_both() {
 fn propagated_changes_merge_into_vanilla_ymaps_and_reject_stale_documents() {
   use crate::common::fingerprint::Fingerprint;
   use crate::core::format::gamefile::test_support::sample_ymap;
-  use crate::core::format::ymap::compare::{YmapComparisonFile, YmapPropagatedDiff};
+  use crate::core::format::{compared::ComparedFile, ymap::compare::YmapPropagatedDiff};
   let root = std::env::temp_dir().join(format!("mlo_propagated_{}", std::process::id()));
   let _ = fs::remove_dir_all(&root);
   let vanilla = root.join("vanilla/parent.ymap");
@@ -522,7 +520,7 @@ fn propagated_changes_merge_into_vanilla_ymaps_and_reject_stale_documents() {
     let carried = YmapPropagatedDiff {
       schema_version: YmapPropagatedDiff::SCHEMA_VERSION,
       resource: "resource".into(),
-      base: YmapComparisonFile {
+      base: ComparedFile {
         path: "latest/ymap/parent.ymap".into(),
         sha256: sha256.into(),
         size: fingerprint.size,
@@ -573,7 +571,7 @@ fn propagated_changes_merge_into_vanilla_ymaps_and_reject_stale_documents() {
 fn additions_several_sources_make_alike_are_added_once() {
   use crate::common::fingerprint::Fingerprint;
   use crate::core::format::gamefile::test_support::sample_ymap;
-  use crate::core::format::ymap::compare::{YmapComparisonFile, YmapPropagatedDiff};
+  use crate::core::format::{compared::ComparedFile, ymap::compare::YmapPropagatedDiff};
   let root = std::env::temp_dir().join(format!("mlo_carried_additions_{}", std::process::id()));
   let _ = fs::remove_dir_all(&root);
   let vanilla = root.join("vanilla/parent.ymap");
@@ -590,7 +588,7 @@ fn additions_several_sources_make_alike_are_added_once() {
     let carried = YmapPropagatedDiff {
       schema_version: YmapPropagatedDiff::SCHEMA_VERSION,
       resource: resource.into(),
-      base: YmapComparisonFile {
+      base: ComparedFile {
         path: "latest/ymap/parent.ymap".into(),
         sha256: fingerprint.sha256.clone(),
         size: fingerprint.size,
