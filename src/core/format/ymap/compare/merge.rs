@@ -6,7 +6,8 @@
 //! modify or replace a vanilla item wins, and additions keep their place after the vanilla item
 //! they follow, in source order. Occlude
 //! models modified by several sources take each field from the first source changing it and
-//! every source's triangle removals and additions, so cut-outs of every source survive. `content_flags`
+//! every source's triangle removals and additions, so cut-outs of every source survive; the
+//! merge stage then fits them with [`YmapOccludeModel::fit_all`]. `content_flags`
 //! are OR-ed into vanilla's, other fields keep the first change, each extent axis and block field
 //! on its own, and added physics dictionaries and prop instances skip names already present.
 //!

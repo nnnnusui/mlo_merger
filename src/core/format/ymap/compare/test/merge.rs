@@ -282,3 +282,65 @@ fn a_replacing_occlude_model_takes_the_vanilla_models_place() {
   };
   assert_eq!(merged(&vanilla, &[&modded]).occlude_models, vec![model(0.0), model(300.0)]);
 }
+
+#[test]
+fn fitting_merged_occlude_models_covers_the_triangles_of_every_source() {
+  let triangle = |x: f32, y: f32| crate::common::triangle::Triangle {
+    corner_1: at(x, y, 0.0),
+    corner_2: at(x + 1.0, y, 0.0),
+    corner_3: at(x, y + 1.0, 0.0),
+  };
+  let vanilla = Ymap {
+    occlude_models: vec![YmapOccludeModel {
+      bmin: at(0.0, 0.0, 0.0),
+      bmax: at(10.0, 10.0, 10.0),
+      triangles: vec![triangle(0.0, 0.0), triangle(5.0, 5.0)],
+      flags: 0,
+    }],
+    ..base()
+  };
+  // Each source grows the maximum X to its own added triangle; the first one's is kept.
+  let mut first = vanilla.clone();
+  first.occlude_models[0].triangles.push(triangle(20.0, 0.0));
+  first.occlude_models[0].bmax.x = 21.0;
+  let mut second = vanilla.clone();
+  second.occlude_models[0].triangles.push(triangle(30.0, 0.0));
+  second.occlude_models[0].bmax.x = 31.0;
+  let mut merged = merged(&vanilla, &[&first, &second]);
+  assert_eq!(merged.occlude_models[0].bmax.x, 21.0);
+  assert_eq!(YmapOccludeModel::fit_all(&mut merged.occlude_models), vec![(0, 1)]);
+  assert_eq!(
+    (merged.occlude_models[0].bmin.clone(), merged.occlude_models[0].bmax.clone()),
+    (at(0.0, 0.0, 0.0), at(31.0, 6.0, 0.0))
+  );
+}
+
+#[test]
+fn fitting_merged_occlude_models_splits_additions_past_the_vertex_limit() {
+  // Triangles of three vertices of their own, 85 of which fill one model.
+  let triangle = |index: usize| crate::common::triangle::Triangle {
+    corner_1: at(index as f32, 0.0, 0.0),
+    corner_2: at(index as f32, 1.0, 0.0),
+    corner_3: at(index as f32, 0.0, 1.0),
+  };
+  let vanilla = Ymap {
+    occlude_models: vec![YmapOccludeModel {
+      bmin: at(0.0, 0.0, 0.0),
+      bmax: at(200.0, 1.0, 1.0),
+      triangles: (0..40).map(triangle).collect(),
+      flags: 3,
+    }],
+    ..base()
+  };
+  let mut first = vanilla.clone();
+  first.occlude_models[0].triangles.extend((40..80).map(triangle));
+  let mut second = vanilla.clone();
+  second.occlude_models[0].triangles.extend((80..120).map(triangle));
+  let mut merged = merged(&vanilla, &[&first, &second]);
+  assert_eq!(merged.occlude_models[0].triangles.len(), 120);
+  assert_eq!(YmapOccludeModel::fit_all(&mut merged.occlude_models), vec![(0, 2)]);
+  let parts = &merged.occlude_models;
+  assert_eq!(parts[0].triangles, (0..85).map(triangle).collect::<Vec<_>>());
+  assert_eq!(parts[1].triangles, (85..120).map(triangle).collect::<Vec<_>>());
+  assert_eq!((parts[1].bmin.x, parts[1].bmax.x, parts[1].flags), (85.0, 119.0, 3));
+}

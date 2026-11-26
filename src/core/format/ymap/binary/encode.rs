@@ -16,6 +16,7 @@ use crate::core::format::{
     YmapCapsuleBound, YmapCarGenerator, YmapContainerLod, YmapDistantLodLights, YmapDoor,
     YmapEntity, YmapExtension, YmapInstancedData, YmapLightAttr, YmapLightEffect, YmapLodLight,
     YmapOccludeModel, YmapSpawnPointOverride, YmapTimeCycleModifier, YmapVerletClothCustomBounds,
+    ymap_occlude_model::MAX_OCCLUDE_MODEL_VERTICES,
   },
 };
 
@@ -287,13 +288,17 @@ impl<'a> Occluder<'a> {
       for vertex in [&triangle.corner_1, &triangle.corner_2, &triangle.corner_3] {
         let index = match vertices.iter().position(|known| *known == vertex) {
           Some(index) => index,
-          None => {
+          None if vertices.len() < MAX_OCCLUDE_MODEL_VERTICES => {
             vertices.push(vertex);
             vertices.len() - 1
           }
+          None => {
+            return Err(invalid(format!(
+              "Occluder has more than {MAX_OCCLUDE_MODEL_VERTICES} vertices"
+            )));
+          }
         };
-        indices
-          .push(u8::try_from(index).map_err(|_| invalid("Occluder has more than 256 vertices"))?);
+        indices.push(u8::try_from(index).map_err(invalid)?);
       }
     }
     let mut verts = vertices
@@ -318,8 +323,9 @@ impl WriteFields for Occluder<'_> {
   ) -> io::Result<()> {
     let model = self.model;
     fields!(field {
-      "bmin" => field.vector(&xyz(&model.bmin)),
-      "bmax" => field.vector(&xyz(&model.bmax)),
+      // Vanilla occlude models carry the minimum and maximum X after `bmin` and `bmax`.
+      "bmin" => field.vector3_with_w(xyz(&model.bmin), model.bmin.x),
+      "bmax" => field.vector3_with_w(xyz(&model.bmax), model.bmax.x),
       "verts" => field.bytes(self.verts.clone()),
       "dataSize" => field.value(u32::try_from(self.verts.len()).map_err(invalid)?),
       "numVertsInBytes" => field.value(u32::try_from(self.vertex_bytes).map_err(invalid)?),

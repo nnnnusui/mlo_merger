@@ -255,7 +255,10 @@ For an added YMAP:
   replacement of it, whatever the source order. An added entity equal to a removed vanilla
   entity is dropped too, so deleting wins over re-adding.
 - Otherwise the first source to modify or replace an item wins. Occlude models are the exception: each field comes from the first source
-  changing it, and every source's triangle changes are applied.
+  changing it, and every source's triangle changes are applied. A merged occlude model with a
+  vertex outside its bounds takes the exact bounds of its vertices, and one indexing more than
+  255 distinct vertices is split, its triangles in order, into consecutive models within that
+  limit, each with the exact bounds of its vertices and the model's flags.
 - Removed and modified items are named by their vanilla index. An unpaired source item
   takes the place of an unpaired vanilla item between the same kept items (a
   replacement), or is added right after the vanilla item preceding it; additions keep

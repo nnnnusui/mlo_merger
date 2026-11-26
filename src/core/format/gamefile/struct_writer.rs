@@ -411,6 +411,23 @@ impl<'s> Field<'_, '_, 's> {
     self.put(&bytes)
   }
 
+  /// Writes a `Vector3` field from `components`, filling the 4 bytes after its three
+  /// components, inside its 16-byte slot, with `w`.
+  pub(crate) fn vector3_with_w(
+    &mut self,
+    components: [f32; 3],
+    w: f32,
+  ) -> io::Result<()> {
+    if self.entry.data_type != 0x33 {
+      return Err(unsupported("field", self.entry.data_type));
+    }
+    let mut bytes = Vec::with_capacity(16);
+    for component in components.into_iter().chain([w]) {
+      bytes.extend(Value::Float(component).float()?.to_le_bytes());
+    }
+    self.put(&bytes)
+  }
+
   /// Writes an inline structure field.
   pub(crate) fn structure(
     &mut self,

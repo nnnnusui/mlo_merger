@@ -29,6 +29,7 @@ fn direct_ymap_binary_preserves_order_and_duplicate_entity_guids() {
 #[test]
 #[ignore = "requires local vanilla YMAP schemas"]
 fn direct_ymap_writer_roundtrips_local_vanilla() {
+  use crate::core::format::gamefile::rsc7::Rsc7Resource;
   use crate::core::format::ymap::binary::ymap_to_model;
   let paths = crate::app::map::vanilla_cache::test_support::asset_latest_files("ymap");
   let mut selected = paths.iter().take(20).collect::<Vec<_>>();
@@ -50,6 +51,17 @@ fn direct_ymap_writer_roundtrips_local_vanilla() {
     assert_eq!(restored, model, "{}", path.display());
     assert_eq!(restored_entities, entities, "{}", path.display());
     assert_eq!(write_ymap(&model, &entities).unwrap(), output);
+    // Occlude model bounds and the values after them match vanilla byte for byte.
+    let occlude_models = |bytes: &[u8]| {
+      let meta = MetaResource::parse(&Rsc7Resource::decode(bytes).unwrap()).unwrap();
+      meta
+        .data_blocks
+        .into_iter()
+        .filter(|block| block.structure_name_hash == jenk_hash("OccludeModel"))
+        .flat_map(|block| block.data.chunks(64).map(|item| item[..32].to_vec()).collect::<Vec<_>>())
+        .collect::<Vec<_>>()
+    };
+    assert_eq!(occlude_models(&output), occlude_models(&bytes), "{}", path.display());
   }
 }
 
@@ -89,4 +101,38 @@ fn entity_extents_alone_match_the_decoded_model() {
     assert_eq!(maximum, model.entities_extents_max, "{name}");
   }
   assert!(super::ymap_entities_extents(b"not a ymap", &std::collections::HashMap::new()).is_err());
+}
+
+#[test]
+fn occlude_models_carry_their_minimum_and_maximum_x_after_the_bounds() {
+  use super::super::model::YmapOccludeModel;
+  use super::to_meta;
+  use crate::common::{position::Position, triangle::Triangle};
+  let at = |x, y, z| Position {
+    x,
+    y,
+    z,
+  };
+  let model = Ymap {
+    occlude_models: vec![YmapOccludeModel {
+      bmin: at(-3.5, 1.0, 2.0),
+      bmax: at(7.25, 4.0, 5.0),
+      triangles: vec![Triangle {
+        corner_1: at(-3.5, 1.0, 2.0),
+        corner_2: at(7.25, 4.0, 5.0),
+        corner_3: at(0.0, 4.0, 2.0),
+      }],
+      flags: 0,
+    }],
+    ..Ymap::empty()
+  };
+  let meta = to_meta(&model, &[]).unwrap();
+  let block = meta
+    .data_blocks
+    .iter()
+    .find(|block| block.structure_name_hash == jenk_hash("OccludeModel"))
+    .unwrap();
+  let float =
+    |offset: usize| f32::from_le_bytes(block.data[offset..offset + 4].try_into().unwrap());
+  assert_eq!([float(0), float(12), float(16), float(28)], [-3.5, -3.5, 7.25, 7.25]);
 }
