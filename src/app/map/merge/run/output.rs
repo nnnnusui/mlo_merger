@@ -19,13 +19,7 @@ impl MergeYmap {
       let binary_path = self.output_dir.join(&output.name);
       let clone_path = clone_ymap_dir.join(&output.name);
       if output.rebuild {
-        let entities = match &output.clone_entities {
-          Some(entities) => runtime_entities(entities.iter()),
-          None => runtime_entities(output.model.entities.iter()),
-        }
-        .into_iter()
-        .cloned()
-        .collect::<Vec<_>>();
+        let entities = output.runtime_entity_values();
         let bytes = crate::core::format::ymap::binary::write_ymap(&output.model, &entities)
           .map_err(|error| {
             std::io::Error::new(error.kind(), format!("Cannot write {}: {error}", output.name))

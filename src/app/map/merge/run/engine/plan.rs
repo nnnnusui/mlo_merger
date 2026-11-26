@@ -209,17 +209,7 @@ impl<'a> MergeRun<'a> {
     .map_err(|error| failed(error.at("entities")))?;
     model.entities =
       link_entities(&mut self.sources, &mut self.references, hash, &model, entities, &parents)?;
-    self.planned.insert(
-      hash,
-      PlannedMap {
-        name: ymap_name.to_string(),
-        model,
-        clone_entities: None,
-        original: compared,
-        copy_target: None,
-        rebuild: true,
-      },
-    );
+    self.planned.insert(hash, PlannedMap::merged(ymap_name.to_string(), model, compared));
     Ok(())
   }
 
@@ -244,16 +234,31 @@ impl<'a> MergeRun<'a> {
       self.sources.normalize(&original, Some(&mod_ref.mod_name), hash, &mut self.references)?;
     self.planned.insert(
       hash,
-      PlannedMap {
-        name: ymap_name.to_string(),
-        model,
-        clone_entities: Some(entities),
-        original,
-        copy_target: Some(mod_ref.clone()),
-        rebuild: false,
-      },
+      PlannedMap::kept(ymap_name.to_string(), model, entities, original, Some(mod_ref.clone())),
     );
     Ok(())
+  }
+
+  /// Plans the vanilla YMAP with name hash `hash` as it is, with its entities linked into the
+  /// merge's identities, unless it is planned already. Returns whether it is planned: vanilla may
+  /// have no such YMAP.
+  pub(super) fn plan_vanilla(
+    &mut self,
+    hash: u32,
+  ) -> Result<bool, Box<dyn std::error::Error>> {
+    if self.planned.contains_key(&hash) {
+      return Ok(true);
+    }
+    if !self.vanilla_map_paths.contains_key(&hash) {
+      return Ok(false);
+    }
+    let Some(original) = self.sources.get(None, hash)? else {
+      return Ok(false);
+    };
+    let name = self.vanilla_name(hash)?.to_string();
+    let (model, entities) = self.sources.normalize(&original, None, hash, &mut self.references)?;
+    self.planned.insert(hash, PlannedMap::kept(name, model, entities, original, None));
+    Ok(true)
   }
 }
 

@@ -9,10 +9,11 @@ impl<'a> MergeRun<'a> {
   pub(super) fn decide_outputs(&mut self) -> Result<(), Box<dyn std::error::Error>> {
     let mut repaired = 0usize;
     for output in self.planned.values_mut() {
-      for entity in output.entities_mut() {
+      for entity in &mut output.model.entities {
         entity.guid = self.references.original_guid(entity.guid)?;
       }
-      if let Some(entities) = &output.clone_entities {
+      if output.kept {
+        let entities = &output.model.entities;
         let changed = entities.len() != output.original.entities.len()
           || entities.iter().zip(&output.original.entities).any(|(after, before)| {
             after.parent_index != before.parent_index

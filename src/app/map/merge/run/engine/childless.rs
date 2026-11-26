@@ -40,37 +40,20 @@ impl<'a> MergeRun<'a> {
     }
     let mut removed = 0;
     for (hash, ids) in by_map {
-      if !self.planned.contains_key(&hash) {
-        if !self.vanilla_map_paths.contains_key(&hash) {
-          continue;
-        }
-        let name = self.vanilla_name(hash)?.to_string();
-        let original = self.sources.get(None, hash)?.ok_or("vanilla parent YMAP unavailable")?;
-        let (model, entities) =
-          self.sources.normalize(&original, None, hash, &mut self.references)?;
-        self.planned.insert(
-          hash,
-          PlannedMap {
-            name,
-            model,
-            clone_entities: Some(entities),
-            original,
-            copy_target: None,
-            rebuild: false,
-          },
-        );
+      if !self.plan_vanilla(hash)? {
+        continue;
       }
       let output = self.planned.get_mut(&hash).ok_or("planned YMAP missing")?;
-      let before = output.entities().len();
+      let before = output.model.entities.len();
       let mut guids = Vec::new();
-      output.retain_entities(|entity| {
+      output.model.entities.retain(|entity| {
         let keep = !ids.contains(&entity.guid);
         if !keep {
           guids.push(entity.guid);
         }
         keep
       });
-      removed += before - output.entities().len();
+      removed += before - output.model.entities.len();
       for id in guids {
         self.references.record_removed(id);
         tracing::debug!(

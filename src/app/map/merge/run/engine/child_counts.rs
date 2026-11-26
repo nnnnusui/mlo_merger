@@ -39,7 +39,7 @@ impl<'a> MergeRun<'a> {
   ) -> Result<(), Box<dyn std::error::Error>> {
     let counted = self.counted_children(changed_layouts, child_counts)?;
     for (hash, output) in &mut self.planned {
-      for entity in output.entities_mut() {
+      for entity in &mut output.model.entities {
         if let Some(counted) = counted.get(&(*hash, entity.guid)) {
           entity.num_children = counted.total;
         }
@@ -79,7 +79,7 @@ impl<'a> MergeRun<'a> {
     let mut counted = HashMap::new();
     for hash in planned {
       let vanilla = self.vanilla_child_totals(hash)?;
-      for entity in self.planned[&hash].entities() {
+      for entity in &self.planned[&hash].model.entities {
         let key = (hash, entity.guid);
         let stated = vanilla.get(&entity.guid).copied().unwrap_or(0);
         let change = delta(&key);
@@ -199,19 +199,8 @@ impl<'a> MergeRun<'a> {
       }
     }
     tracing::debug!("  Child counts of {name} changed; writing it");
-    let mut model = original.model.clone();
-    model.entities = entities.clone();
-    self.planned.insert(
-      hash,
-      PlannedMap {
-        name,
-        model,
-        clone_entities: Some(entities),
-        original,
-        copy_target: None,
-        rebuild: false,
-      },
-    );
+    let model = original.model.clone();
+    self.planned.insert(hash, PlannedMap::kept(name, model, entities, original, None));
     Ok(())
   }
 }

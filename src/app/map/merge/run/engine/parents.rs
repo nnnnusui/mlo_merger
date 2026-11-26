@@ -44,27 +44,11 @@ impl<'a> MergeRun<'a> {
         continue;
       };
       if changed_layouts.contains(&reference_hash(&original.model.parent)) {
-        vanilla_children.push((hash, name.to_string()));
+        vanilla_children.push(hash);
       }
     }
-    for (hash, name) in vanilla_children {
-      if self.planned.contains_key(&hash) {
-        continue;
-      }
-      let original = self.sources.get(None, hash)?.ok_or("vanilla child unavailable")?;
-      let (model, entities) =
-        self.sources.normalize(&original, None, hash, &mut self.references)?;
-      self.planned.insert(
-        hash,
-        PlannedMap {
-          name,
-          model,
-          clone_entities: Some(entities),
-          original,
-          copy_target: None,
-          rebuild: false,
-        },
-      );
+    for hash in vanilla_children {
+      self.plan_vanilla(hash)?;
     }
     Ok(changed_layouts)
   }
@@ -77,7 +61,7 @@ impl<'a> MergeRun<'a> {
     let mut child_counts = ChildCounts::new();
     for (hash, output) in &self.planned {
       let parent_hash = reference_hash(&output.model.parent);
-      for entity in output.entities() {
+      for entity in &output.model.entities {
         let handle = entity.parent_index;
         if handle == -1 {
           continue;
@@ -108,20 +92,18 @@ impl<'a> MergeRun<'a> {
   /// the final entity order of the YMAP it points into, detaching those whose parent was removed
   /// or lies in a YMAP the merged one does not declare. Returns the children counted for each
   /// parent, and the parent references kept.
-  #[allow(clippy::type_complexity)]
   pub(super) fn restore_parent_indices(
     &mut self
-  ) -> Result<(HashMap<(u32, u32), u32>, Vec<ResolvedLink>), Box<dyn std::error::Error>> {
+  ) -> Result<(ChildCounts, Vec<ResolvedLink>), Box<dyn std::error::Error>> {
     let mut layouts =
       self.planned.iter().map(|(hash, output)| (*hash, output.guids())).collect::<HashMap<_, _>>();
-    let mut child_counts = HashMap::<(u32, u32), u32>::new();
+    let mut child_counts = ChildCounts::new();
     let mut resolved_links = Vec::new();
     for (hash, output) in &mut self.planned {
       let parent_hash = reference_hash(&output.model.parent);
       let map_name = output.name.clone();
       let declared_parent = output.model.parent.clone();
-      let entities = output.entities_mut();
-      for (child_index, entity) in entities.into_iter().enumerate() {
+      for (child_index, entity) in output.model.entities.iter_mut().enumerate() {
         let handle = entity.parent_index;
         if handle == -1 {
           continue;
@@ -181,22 +163,13 @@ impl<'a> MergeRun<'a> {
     &self,
     resolved_links: Vec<ResolvedLink>,
   ) -> Result<(), Box<dyn std::error::Error>> {
-    // Each map is assembled once, however many of its entities link within it.
-    let mut final_maps = HashMap::<u32, Ymap>::new();
     for (hash, index, target) in resolved_links {
       if target.map != hash {
         continue;
       }
-      let map = &self.planned[&hash];
-      let child = map.entity_at(index).ok_or("final child entity missing")?;
-      let final_map = final_maps.entry(hash).or_insert_with(|| {
-        let mut final_map = map.model.clone();
-        if let Some(entities) = &map.clone_entities {
-          final_map.entities.clone_from(entities);
-        }
-        final_map
-      });
-      if entity_parent_ref(child, final_map, final_map) != EntityParentRef::SelfMap(target.guid) {
+      let map = &self.planned[&hash].model;
+      let child = map.entities.get(index).ok_or("final child entity missing")?;
+      if entity_parent_ref(child, map, map) != EntityParentRef::SelfMap(target.guid) {
         return Err(
           format!(
             "invalid final local LOD hierarchy for entity {} and parent {}",
