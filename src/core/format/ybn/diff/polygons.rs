@@ -17,7 +17,7 @@
 //! children after the rest, a piece over the limits split breadth-first. Changed children are
 //! rebuilt; the others are kept as they are.
 
-use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::io;
 
 use serde::{Deserialize, Serialize};
@@ -28,6 +28,7 @@ use super::{
   polygon::{ResolvedPolygon, ResolvedShape},
   resolve,
 };
+use crate::common::mesh::{self, VertexIndex};
 use crate::core::format::{
   ybn::model::{Bound, Geometry, Material, Polygon, Triangle},
   ymap::compare::YmapComparisonFile,
@@ -136,86 +137,6 @@ pub struct YbnComparisonDiff {
 impl YbnComparisonDiff {
   /// The current [`Self::schema_version`].
   pub const SCHEMA_VERSION: u32 = 1;
-}
-
-/// Positions found so far, in layers, one per file compared: a position is the vertex of the
-/// same position, or else of one within `tolerance` per axis found in an earlier layer, so the
-/// vertices of one file stay apart however close they lie.
-struct VertexIndex {
-  tolerance: f32,
-  positions: Vec<[f32; 3]>,
-  layers: Vec<usize>,
-  layer: usize,
-  exact: HashMap<[u32; 3], usize>,
-  cells: HashMap<[i64; 3], Vec<usize>>,
-}
-
-impl VertexIndex {
-  fn new(tolerance: f32) -> Self {
-    Self {
-      tolerance,
-      positions: Vec::new(),
-      layers: Vec::new(),
-      layer: 0,
-      exact: HashMap::new(),
-      cells: HashMap::new(),
-    }
-  }
-
-  /// Starts the layer of the next file.
-  fn next_layer(&mut self) {
-    self.layer += 1;
-  }
-
-  fn cell(
-    &self,
-    position: [f32; 3],
-  ) -> [i64; 3] {
-    position.map(|value| (f64::from(value) / f64::from(self.tolerance)).floor() as i64)
-  }
-
-  /// The vertex `position` is: one found before within the tolerance, or a new one.
-  fn vertex(
-    &mut self,
-    position: [f32; 3],
-  ) -> usize {
-    let bits = position.map(f32::to_bits);
-    if let Some(&vertex) = self.exact.get(&bits) {
-      return vertex;
-    }
-    let cell = self.cell(position);
-    let mut nearest: Option<(f32, usize)> = None;
-    for dx in -1..=1 {
-      for dy in -1..=1 {
-        for dz in -1..=1 {
-          let near = [cell[0] + dx, cell[1] + dy, cell[2] + dz];
-          for &vertex in self.cells.get(&near).into_iter().flatten() {
-            if self.layers[vertex] >= self.layer {
-              continue;
-            }
-            let known = self.positions[vertex];
-            let distance =
-              (0..3).map(|axis| (known[axis] - position[axis]).abs()).fold(0.0f32, f32::max);
-            if distance <= self.tolerance && nearest.is_none_or(|(best, _)| distance < best) {
-              nearest = Some((distance, vertex));
-            }
-          }
-        }
-      }
-    }
-    let vertex = match nearest {
-      Some((_, vertex)) => vertex,
-      None => {
-        self.positions.push(position);
-        self.layers.push(self.layer);
-        let vertex = self.positions.len() - 1;
-        self.cells.entry(cell).or_default().push(vertex);
-        vertex
-      }
-    };
-    self.exact.insert(bits, vertex);
-    vertex
-  }
 }
 
 /// What a polygon is: its kind, material but for its colour, the corner flags of a triangle,
@@ -803,8 +724,8 @@ struct Slot {
   /// The original child, or the template a new one copies its record from.
   template: Bound,
   transform: [f32; 16],
-  kept: Vec<(usize, Vec<usize>, MaterialKey)>,
-  added: Vec<(ResolvedPolygon, Vec<usize>)>,
+  kept: Vec<Kept>,
+  added: Vec<Placed>,
   changed: bool,
   original: bool,
 }
@@ -820,30 +741,6 @@ fn material_key(polygon: &ResolvedPolygon) -> MaterialKey {
 }
 
 impl Slot {
-  fn materials(&self) -> HashSet<MaterialKey> {
-    self
-      .kept
-      .iter()
-      .map(|(_, _, material)| *material)
-      .chain(self.added.iter().map(|(polygon, _)| material_key(polygon)))
-      .collect()
-  }
-
-  fn vertices(&self) -> HashSet<usize> {
-    self
-      .kept
-      .iter()
-      .map(|(_, vertices, _)| vertices)
-      .chain(self.added.iter().map(|(_, vertices)| vertices))
-      .flatten()
-      .copied()
-      .collect()
-  }
-
-  fn polygon_count(&self) -> usize {
-    self.kept.len() + self.added.len()
-  }
-
   /// Whether added polygons can join: a GeometryBVH placed as the Composite is.
   fn joinable(&self) -> bool {
     self.template.kind == "GeometryBVH"
@@ -860,7 +757,7 @@ pub fn apply(
   tolerance: f32,
   limits: GeometryLimits,
 ) -> io::Result<()> {
-  let mut index = VertexIndex::new(tolerance);
+  let mut index = VertexIndex::new(tolerance, true, false);
   // Only the children of groups taking additions are linked to them.
   let linked =
     diff.polygons.iter().filter(|group| !group.added.is_empty()).map(|group| group.flags).collect();
@@ -1005,210 +902,96 @@ fn shape_radius(shape: &ResolvedShape) -> f32 {
   }
 }
 
-/// Places `added` (the polygons of flags `flags`, with their vertices) into `slots`; see the
-/// module docs.
+/// Places `added` (the polygons of flags `flags`, with their vertices) into `slots`, the joinable
+/// slots of those flags taking them first; see [`mesh::place`].
 fn place(
   slots: &mut Vec<Slot>,
   flags: [u32; 2],
-  added: Vec<(ResolvedPolygon, Vec<usize>)>,
+  added: Vec<Placed>,
   limits: GeometryLimits,
 ) -> io::Result<()> {
   if added.is_empty() {
     return Ok(());
   }
-  let (max_vertices, max_polygons) =
-    (limits.max_geometry_vertices as usize, limits.max_geometry_polygons as usize);
-  let mut owners = HashMap::<usize, Vec<usize>>::new();
-  let mut counts = HashMap::<usize, (HashSet<usize>, HashSet<MaterialKey>)>::new();
-  for (slot_index, slot) in slots.iter().enumerate() {
-    if slot.flags != flags || !slot.joinable() {
-      continue;
-    }
-    for vertex in slot.vertices() {
-      owners.entry(vertex).or_default().push(slot_index);
-    }
-  }
+  let mut existing = slots
+    .iter()
+    .map(|slot| {
+      (slot.flags == flags && slot.joinable()).then(|| {
+        let mut load = mesh::Load::of(&slot.kept);
+        for placed in &slot.added {
+          load.add(placed);
+        }
+        load
+      })
+    })
+    .collect::<Vec<_>>();
+  let limits = mesh::Limits {
+    vertices: limits.max_geometry_vertices as usize,
+    elements: limits.max_geometry_polygons as usize,
+    keys: MAX_MATERIALS,
+  };
   let template = slots
     .iter()
     .find(|slot| slot.flags == flags && slot.joinable())
     .or_else(|| slots.iter().find(|slot| slot.joinable()))
     .map(|slot| slot.template.clone())
     .ok_or_else(|| invalid_data("YBN has no geometry child to make new ones after"))?;
-  let mut open: Option<usize> = None;
-  for piece in pieces(added) {
-    let piece_vertices =
-      piece.iter().flat_map(|(_, vertices)| vertices).copied().collect::<HashSet<_>>();
-    let piece_materials =
-      piece.iter().map(|(polygon, _)| material_key(polygon)).collect::<HashSet<_>>();
-    let mut shared = BTreeMap::<usize, usize>::new();
-    for vertex in &piece_vertices {
-      for &slot_index in owners.get(vertex).into_iter().flatten() {
-        *shared.entry(slot_index).or_default() += 1;
+  let first_new = slots.len();
+  for (group, polygons) in mesh::place(&mut existing, added, &limits) {
+    let slot_index = match group {
+      mesh::Group::Existing(slot_index) => slot_index,
+      mesh::Group::New(index) => {
+        while slots.len() <= first_new + index {
+          let mut template = template.clone();
+          template.transform = None;
+          slots.push(Slot {
+            flags,
+            template,
+            transform: IDENTITY,
+            kept: Vec::new(),
+            added: Vec::new(),
+            changed: true,
+            original: false,
+          });
+        }
+        first_new + index
       }
-    }
-    let mut candidates = shared.into_iter().collect::<Vec<_>>();
-    candidates.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));
-    let joined = candidates.into_iter().map(|(slot_index, _)| slot_index).find(|&slot_index| {
-      let (vertices, materials) = counts
-        .entry(slot_index)
-        .or_insert_with(|| (slots[slot_index].vertices(), slots[slot_index].materials()));
-      vertices.len() + piece_vertices.difference(vertices).count() <= max_vertices
-        && materials.len() + piece_materials.difference(materials).count() <= MAX_MATERIALS
-        && slots[slot_index].polygon_count() + piece.len() <= max_polygons
-    });
-    if let Some(slot_index) = joined {
-      let (vertices, materials) = counts.get_mut(&slot_index).expect("counted above");
-      vertices.extend(&piece_vertices);
-      materials.extend(&piece_materials);
-      let slot = &mut slots[slot_index];
-      slot.added.extend(piece);
-      slot.changed = true;
-      continue;
-    }
-    for part in split(piece, max_vertices, max_polygons) {
-      let part_vertices =
-        part.iter().flat_map(|(_, vertices)| vertices).copied().collect::<HashSet<_>>();
-      let part_materials =
-        part.iter().map(|(polygon, _)| material_key(polygon)).collect::<HashSet<_>>();
-      let fits = open.is_some_and(|slot_index| {
-        let (vertices, materials) = counts.get(&slot_index).expect("opened with its vertices");
-        vertices.len() + part_vertices.difference(vertices).count() <= max_vertices
-          && materials.len() + part_materials.difference(materials).count() <= MAX_MATERIALS
-          && slots[slot_index].polygon_count() + part.len() <= max_polygons
-      });
-      if !fits {
-        let mut template = template.clone();
-        template.transform = None;
-        slots.push(Slot {
-          flags,
-          template,
-          transform: IDENTITY,
-          kept: Vec::new(),
-          added: Vec::new(),
-          changed: true,
-          original: false,
-        });
-        open = Some(slots.len() - 1);
-        counts.insert(slots.len() - 1, (HashSet::new(), HashSet::new()));
-      }
-      let slot_index = open.expect("opened above");
-      let (vertices, materials) = counts.get_mut(&slot_index).expect("opened with its vertices");
-      vertices.extend(&part_vertices);
-      materials.extend(&part_materials);
-      slots[slot_index].added.extend(part);
-    }
+    };
+    let slot = &mut slots[slot_index];
+    slot.added.extend(polygons);
+    slot.changed = true;
   }
   Ok(())
 }
 
+/// An added polygon with the vertices it joins.
 type Placed = (ResolvedPolygon, Vec<usize>);
 
-/// The connected pieces of `polygons`, by shared vertices, in polygon order.
-fn pieces(polygons: Vec<Placed>) -> Vec<Vec<Placed>> {
-  let mut parent = HashMap::<usize, usize>::new();
-  fn root(
-    parent: &mut HashMap<usize, usize>,
-    vertex: usize,
-  ) -> usize {
-    let mut current = vertex;
-    while let Some(&next) = parent.get(&current).filter(|&&next| next != current) {
-      current = next;
-    }
-    let found = current;
-    let mut current = vertex;
-    while current != found {
-      let next = parent[&current];
-      parent.insert(current, found);
-      current = next;
-    }
-    parent.entry(found).or_insert(found);
-    found
+impl mesh::MeshElement for Placed {
+  type Key = MaterialKey;
+
+  fn vertices(&self) -> &[usize] {
+    &self.1
   }
-  for (_, vertices) in &polygons {
-    let first = root(&mut parent, vertices[0]);
-    for vertex in &vertices[1..] {
-      let other = root(&mut parent, *vertex);
-      if other != first {
-        parent.insert(other, first);
-      }
-    }
+
+  fn key(&self) -> MaterialKey {
+    material_key(&self.0)
   }
-  let mut order = Vec::new();
-  let mut by_root = HashMap::<usize, Vec<Placed>>::new();
-  for placed in polygons {
-    let found = root(&mut parent, placed.1[0]);
-    by_root
-      .entry(found)
-      .or_insert_with(|| {
-        order.push(found);
-        Vec::new()
-      })
-      .push(placed);
-  }
-  order.into_iter().map(|found| by_root.remove(&found).unwrap_or_default()).collect()
 }
 
-/// `piece` split into parts within the limits, breadth-first from its first polygon.
-fn split(
-  piece: Vec<Placed>,
-  max_vertices: usize,
-  max_polygons: usize,
-) -> Vec<Vec<Placed>> {
-  let total = piece.iter().flat_map(|(_, vertices)| vertices).collect::<HashSet<_>>().len();
-  let materials = piece.iter().map(|(polygon, _)| material_key(polygon)).collect::<HashSet<_>>();
-  if total <= max_vertices && piece.len() <= max_polygons && materials.len() <= MAX_MATERIALS {
-    return vec![piece];
+/// A kept polygon: its position in the original child, its vertices and its material.
+type Kept = (usize, Vec<usize>, MaterialKey);
+
+impl mesh::MeshElement for Kept {
+  type Key = MaterialKey;
+
+  fn vertices(&self) -> &[usize] {
+    &self.1
   }
-  let mut by_vertex = HashMap::<usize, Vec<usize>>::new();
-  for (position, (_, vertices)) in piece.iter().enumerate() {
-    for &vertex in vertices {
-      by_vertex.entry(vertex).or_default().push(position);
-    }
+
+  fn key(&self) -> MaterialKey {
+    self.2
   }
-  let mut visited = vec![false; piece.len()];
-  let mut order = Vec::with_capacity(piece.len());
-  let mut queue = VecDeque::new();
-  for start in 0..piece.len() {
-    if visited[start] {
-      continue;
-    }
-    visited[start] = true;
-    queue.push_back(start);
-    while let Some(position) = queue.pop_front() {
-      order.push(position);
-      for vertex in &piece[position].1 {
-        for &next in &by_vertex[vertex] {
-          if !visited[next] {
-            visited[next] = true;
-            queue.push_back(next);
-          }
-        }
-      }
-    }
-  }
-  let mut slots = piece.into_iter().map(Some).collect::<Vec<_>>();
-  let mut parts = Vec::new();
-  let mut part = Vec::new();
-  let mut known = HashSet::new();
-  let mut known_materials = HashSet::new();
-  for position in order {
-    let placed = slots[position].take().expect("each polygon once");
-    let new = placed.1.iter().filter(|vertex| !known.contains(*vertex)).count();
-    let new_material = usize::from(!known_materials.contains(&material_key(&placed.0)));
-    if known.len() + new > max_vertices
-      || part.len() + 1 > max_polygons
-      || known_materials.len() + new_material > MAX_MATERIALS
-    {
-      parts.push(std::mem::take(&mut part));
-      known.clear();
-      known_materials.clear();
-    }
-    known.extend(placed.1.iter().copied());
-    known_materials.insert(material_key(&placed.0));
-    part.push(placed);
-  }
-  parts.push(part);
-  parts
 }
 
 /// Writes `slots` back into `root`'s children: unchanged ones as they were, changed ones rebuilt,

@@ -16,13 +16,13 @@
 //! the other pieces fill new models, a piece over the limit split in breadth-first order. Every
 //! model changed takes the exact bounds of its vertices; the others keep theirs.
 
-use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 use serde::{Deserialize, Serialize};
 use struct_diff::ApplyError;
 
 use crate::{
-  common::{position::Position, triangle::Triangle},
+  common::{mesh, position::Position, triangle::Triangle},
   core::{
     config::matching::{self, MatchTolerances},
     format::ymap::model::{YmapOccludeModel, ymap_occlude_model::MAX_OCCLUDE_MODEL_VERTICES},
@@ -42,34 +42,16 @@ pub struct YmapOccludeTrianglesDiff {
   pub added: Vec<Triangle>,
 }
 
-/// Vertices found so far, each corner within `tolerance` per axis of one taken as it.
-pub struct VertexIndex {
-  tolerance: f32,
-  positions: Vec<Position>,
-  cells: HashMap<[i64; 3], Vec<usize>>,
-}
+/// Positions found so far as vertices: a position within the tolerance per axis of one found
+/// before, the nearest, is that vertex.
+pub struct VertexIndex(mesh::VertexIndex);
 
 /// The vertices of a triangle, rotated to start at the least.
 pub type TriangleKey = [usize; 3];
 
 impl VertexIndex {
   pub fn new(tolerance: f32) -> Self {
-    Self {
-      tolerance,
-      positions: Vec::new(),
-      cells: HashMap::new(),
-    }
-  }
-
-  fn cell(
-    &self,
-    position: &Position,
-  ) -> [i64; 3] {
-    if self.tolerance > 0.0 {
-      [position.x, position.y, position.z].map(|value| (value / self.tolerance).floor() as i64)
-    } else {
-      [position.x, position.y, position.z].map(|value| i64::from(value.to_bits()))
-    }
+    Self(mesh::VertexIndex::new(tolerance, false, true))
   }
 
   /// The vertex `position` is: one found before within the tolerance, or a new one.
@@ -77,46 +59,20 @@ impl VertexIndex {
     &mut self,
     position: &Position,
   ) -> usize {
-    let cell = self.cell(position);
-    let reach = if self.tolerance > 0.0 { 1 } else { 0 };
-    for dx in -reach..=reach {
-      for dy in -reach..=reach {
-        for dz in -reach..=reach {
-          let near = [cell[0] + dx, cell[1] + dy, cell[2] + dz];
-          for &vertex in self.cells.get(&near).into_iter().flatten() {
-            if self.same(&self.positions[vertex], position) {
-              return vertex;
-            }
-          }
-        }
-      }
-    }
-    self.positions.push(position.clone());
-    let vertex = self.positions.len() - 1;
-    self.cells.entry(cell).or_default().push(vertex);
-    vertex
-  }
-
-  fn same(
-    &self,
-    known: &Position,
-    position: &Position,
-  ) -> bool {
-    if self.tolerance > 0.0 {
-      (known.x - position.x).abs() < self.tolerance
-        && (known.y - position.y).abs() < self.tolerance
-        && (known.z - position.z).abs() < self.tolerance
-    } else {
-      known == position
-    }
+    self.0.vertex([position.x, position.y, position.z])
   }
 
   /// Where vertex `vertex` is: the first position taken as it.
   pub fn position(
     &self,
     vertex: usize,
-  ) -> &Position {
-    &self.positions[vertex]
+  ) -> Position {
+    let [x, y, z] = self.0.position(vertex);
+    Position {
+      x,
+      y,
+      z,
+    }
   }
 
   /// The vertices of `triangle`'s corners, in winding order.
@@ -261,9 +217,9 @@ pub fn apply_with(
         (
           corners,
           Triangle {
-            corner_1: index.position(a).clone(),
-            corner_2: index.position(b).clone(),
-            corner_3: index.position(c).clone(),
+            corner_1: index.position(a),
+            corner_2: index.position(b),
+            corner_3: index.position(c),
           },
         )
       });
@@ -307,7 +263,7 @@ pub fn apply_with(
 }
 
 /// Where the added triangles `added` (as vertices) of flags `flags` go: per model index, the
-/// triangles it takes, an index past `meshes` naming a new model; see the module docs.
+/// triangles it takes, an index past `meshes` naming a new model; see [`mesh::place`].
 fn place(
   added: &[[usize; 3]],
   flags: u32,
@@ -317,151 +273,23 @@ fn place(
   if added.is_empty() {
     return Vec::new();
   }
-  let mut owners = HashMap::<usize, Vec<usize>>::new();
-  let mut vertices = meshes.iter().map(|_| None).collect::<Vec<Option<HashSet<usize>>>>();
-  for (model, mesh) in meshes.iter().enumerate().filter(|(model, _)| model_flags[*model] == flags) {
-    for &vertex in mesh.iter().flatten() {
-      let list = owners.entry(vertex).or_default();
-      if list.last() != Some(&model) {
-        list.push(model);
-      }
-    }
-  }
-  let mut placed = BTreeMap::<usize, Vec<[usize; 3]>>::new();
-  let mut open: Option<(usize, HashSet<usize>)> = None;
-  let mut next_new = meshes.len();
-  for piece in pieces(added) {
-    let piece_vertices = piece.iter().flatten().copied().collect::<HashSet<_>>();
-    let mut shared = BTreeMap::<usize, usize>::new();
-    for vertex in &piece_vertices {
-      for &model in owners.get(vertex).into_iter().flatten() {
-        *shared.entry(model).or_default() += 1;
-      }
-    }
-    let mut candidates = shared.into_iter().collect::<Vec<_>>();
-    candidates.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));
-    let joined = candidates.into_iter().find_map(|(model, _)| {
-      let known = vertices[model]
-        .get_or_insert_with(|| meshes[model].iter().flatten().copied().collect::<HashSet<_>>());
-      let total = known.len() + piece_vertices.difference(known).count();
-      (total <= MAX_OCCLUDE_MODEL_VERTICES).then_some(model)
-    });
-    if let Some(model) = joined {
-      vertices[model].as_mut().expect("counted above").extend(&piece_vertices);
-      placed.entry(model).or_default().extend(&piece);
-      continue;
-    }
-    for part in split(&piece) {
-      let part_vertices = part.iter().flatten().copied().collect::<HashSet<_>>();
-      let fits = open.as_ref().is_some_and(|(_, known)| {
-        known.len() + part_vertices.difference(known).count() <= MAX_OCCLUDE_MODEL_VERTICES
-      });
-      if !fits {
-        open = Some((next_new, HashSet::new()));
-        next_new += 1;
-      }
-      let (model, known) = open.as_mut().expect("opened above");
-      known.extend(&part_vertices);
-      placed.entry(*model).or_default().extend(part);
-    }
-  }
-  placed.into_iter().collect()
-}
-
-/// The connected pieces of `triangles`, by shared vertices, each in triangle order, ordered by
-/// their first triangle.
-fn pieces(triangles: &[[usize; 3]]) -> Vec<Vec<[usize; 3]>> {
-  let mut parent = HashMap::<usize, usize>::new();
-  fn root(
-    parent: &mut HashMap<usize, usize>,
-    vertex: usize,
-  ) -> usize {
-    let mut current = vertex;
-    while let Some(&next) = parent.get(&current).filter(|&&next| next != current) {
-      current = next;
-    }
-    let found = current;
-    let mut current = vertex;
-    while current != found {
-      let next = parent[&current];
-      parent.insert(current, found);
-      current = next;
-    }
-    parent.entry(found).or_insert(found);
-    found
-  }
-  for [a, b, c] in triangles {
-    let ra = root(&mut parent, *a);
-    for vertex in [b, c] {
-      let rv = root(&mut parent, *vertex);
-      if rv != ra {
-        parent.insert(rv, ra);
-      }
-    }
-  }
-  let mut order = Vec::<usize>::new();
-  let mut by_root = HashMap::<usize, Vec<[usize; 3]>>::new();
-  for triangle in triangles {
-    let found = root(&mut parent, triangle[0]);
-    let piece = by_root.entry(found).or_insert_with(|| {
-      order.push(found);
-      Vec::new()
-    });
-    piece.push(*triangle);
-  }
-  order.into_iter().map(|found| by_root.remove(&found).unwrap_or_default()).collect()
-}
-
-/// `piece`, one connected piece, split into parts of at most [`MAX_OCCLUDE_MODEL_VERTICES`]
-/// vertices, taking triangles breadth-first from the first so each part stays connected where
-/// it can.
-fn split(piece: &[[usize; 3]]) -> Vec<Vec<[usize; 3]>> {
-  let total = piece.iter().flatten().copied().collect::<HashSet<_>>().len();
-  if total <= MAX_OCCLUDE_MODEL_VERTICES {
-    return vec![piece.to_vec()];
-  }
-  let mut by_vertex = HashMap::<usize, Vec<usize>>::new();
-  for (position, triangle) in piece.iter().enumerate() {
-    for &vertex in triangle {
-      by_vertex.entry(vertex).or_default().push(position);
-    }
-  }
-  let mut visited = vec![false; piece.len()];
-  let mut order = Vec::with_capacity(piece.len());
-  let mut queue = VecDeque::new();
-  for start in 0..piece.len() {
-    if visited[start] {
-      continue;
-    }
-    visited[start] = true;
-    queue.push_back(start);
-    while let Some(position) = queue.pop_front() {
-      order.push(position);
-      for vertex in piece[position] {
-        for &next in &by_vertex[&vertex] {
-          if !visited[next] {
-            visited[next] = true;
-            queue.push_back(next);
-          }
-        }
-      }
-    }
-  }
-  let mut parts = Vec::new();
-  let mut part = Vec::new();
-  let mut known = HashSet::new();
-  for position in order {
-    let triangle = piece[position];
-    let new = triangle.iter().filter(|vertex| !known.contains(*vertex)).count();
-    if known.len() + new > MAX_OCCLUDE_MODEL_VERTICES {
-      parts.push(std::mem::take(&mut part));
-      known.clear();
-    }
-    known.extend(triangle);
-    part.push(triangle);
-  }
-  parts.push(part);
-  parts
+  let mut existing = meshes
+    .iter()
+    .zip(model_flags)
+    .map(|(mesh, model_flags)| (*model_flags == flags).then(|| mesh::Load::of(mesh)))
+    .collect::<Vec<_>>();
+  let limits = mesh::Limits {
+    vertices: MAX_OCCLUDE_MODEL_VERTICES,
+    elements: usize::MAX,
+    keys: usize::MAX,
+  };
+  mesh::place(&mut existing, added.to_vec(), &limits)
+    .into_iter()
+    .map(|(group, triangles)| match group {
+      mesh::Group::Existing(model) => (model, triangles),
+      mesh::Group::New(index) => (meshes.len() + index, triangles),
+    })
+    .collect()
 }
 
 /// The triangle changes of every source in `sources`, diffs of the occlude models `vanilla`,

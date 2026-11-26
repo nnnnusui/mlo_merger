@@ -7,6 +7,7 @@ pub(crate) mod function;
 pub(crate) mod json;
 pub(crate) mod log_block;
 mod r#macro;
+pub(crate) mod mesh;
 pub(crate) mod path;
 pub mod position;
 pub mod rotation;
