@@ -97,9 +97,8 @@ fn merge_dispatches_latest_vanilla_ybn_and_writes_omit_list() {
     crate::core::format::ybn::read_ybn(&fs::read(output_dir.join("ybn/collision.ybn")).unwrap())
       .unwrap();
   let source = crate::core::format::ybn::read_ybn(&bytes).unwrap();
-  let diff = crate::core::format::ybn::diff::YbnDiff::extract_from(&source, &merged).unwrap();
-  assert!(diff.bound_diffs.is_empty());
-  assert!(diff.polygon_diffs.is_empty());
+  let diff = crate::core::format::ybn::diff::polygons::diff(&source, &merged, 0.05).unwrap();
+  assert!(diff.is_empty());
   assert_eq!(
     fs::read_to_string(output_dir.join("_omit.txt")).unwrap().trim(),
     "resource_a/stream/collision.ybn\nresource_a/stream/independent.ybn\nresource_b/stream/collision.ybn\nresource_b/stream/independent.ybn"

@@ -21,6 +21,12 @@ ymap_lod_light_position_decimals = 3
 # Grass instance positions, per axis, in metres.
 ymap_grass_position = 0.01
 
+# How merged YBN geometry children are filled: the most vertices (up to 65534) and polygons (up
+# to 32767, the GeometryBVH indexing them with 16-bit signed indices) of one child.
+[ybn]
+max_geometry_vertices = 65534
+max_geometry_polygons = 32767
+
 # FiveM game builds for --gamebuild: the builds FiveM's launcher supports
 # (code/client/launcher/GameCache.cpp) and the names sv_enforceGameBuild accepts for them
 # (code/components/citizen-server-impl/include/GameBuilds.h).

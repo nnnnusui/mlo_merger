@@ -1,9 +1,9 @@
 //! Native YBN conversion and collision-merge regression tests.
 
 use super::{
-  BOUNDS_SIZE, Bound, COMPOSITE_SIZE, GEOMETRY_BVH_SIZE, Geometry, Material, Polygon,
-  PolygonLookup, Triangle, child, encode_ybn_bound, geometry_polygon_records, identity,
-  merge_ybn_deltas, parse_xml, read_ybn_root, vec3, write_f32, write_vec3, xml_to_ybn, ybn_to_xml,
+  BOUNDS_SIZE, Bound, COMPOSITE_SIZE, GEOMETRY_BVH_SIZE, Geometry, Material, Polygon, Triangle,
+  child, diff::polygons, encode_ybn_bound, identity, merge_ybn_deltas, parse_xml, read_ybn_root,
+  vec3, write_f32, write_vec3, xml_to_ybn, ybn_to_xml,
 };
 use std::path::Path;
 
@@ -11,6 +11,24 @@ fn sample(name: &str) -> Vec<u8> {
   let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("docs/sample/ybn_conflicts").join(name);
   let xml = crate::platform::fs::read_to_string(path).unwrap();
   xml_to_ybn(&xml).unwrap()
+}
+
+/// The polygons `first` has and `second` lacks, and those `second` has and `first` lacks, by
+/// flags, within the default tolerance.
+fn polygon_differences(
+  first: &Bound,
+  second: &Bound,
+) -> (usize, usize) {
+  let diff = polygons::diff(first, second, 0.05).unwrap();
+  (
+    diff.polygons.iter().map(|group| group.removed.len()).sum(),
+    diff.polygons.iter().map(|group| group.added.len()).sum(),
+  )
+}
+
+/// The number of geometry polygons of `root`.
+fn polygon_count(root: &Bound) -> usize {
+  root.children.iter().filter_map(|child| child.geometry.as_ref()).map(|g| g.polygons.len()).sum()
 }
 
 fn merged_children(bytes: &[u8]) -> (usize, [f32; 3], [f32; 3]) {
@@ -144,7 +162,7 @@ fn real_collision_rebuilds_have_relocated_fixup_tables() {
     crate::app::map::vanilla_cache::test_support::asset_latest_file("cs6_05_2.ybn"),
   )
   .unwrap();
-  let merged = merge_ybn_deltas(&vanilla, &[&source, &second]).unwrap();
+  let merged = merge_ybn_deltas(&vanilla, &[&source, &second], Default::default()).unwrap();
   assert_relocated_fixup_tables(&merged);
   let ch1_04b_0 = local_source("MLO_CH1_04B_0_YBN");
   let rebuilt = encode_ybn_bound(&read_ybn_root(&ch1_04b_0).unwrap()).unwrap();
@@ -236,15 +254,8 @@ fn multiline_geometry_text_arrays_are_indented_and_rebuildable() {
   let actual_geometry = actual.children[0].geometry.as_ref().unwrap();
   assert_eq!(actual_geometry.material_colours, expected_geometry.material_colours);
   assert_eq!(actual_geometry.vertex_colours, expected_geometry.vertex_colours);
-  let expected = geometry_polygon_records(&before).unwrap();
-  let actual = geometry_polygon_records(&actual).unwrap();
-  assert_eq!(actual.len(), expected.len());
-  assert!(
-    actual
-      .iter()
-      .zip(&expected)
-      .all(|(actual, expected)| actual.identity.matches(&expected.identity))
-  );
+  assert_eq!(polygon_count(&actual), polygon_count(&before));
+  assert_eq!(polygon_differences(&before, &actual), (0, 0));
 }
 
 #[test]
@@ -291,19 +302,10 @@ fn rebuilding_geometry_bvh_preserves_the_source_vertex_quantum() {
     &[([0, 1, 2], [false; 3])],
   );
   let original = read_ybn_root(&source).unwrap();
-  let expected = geometry_polygon_records(&original).unwrap();
-
   let rebuilt = encode_ybn_bound(&original).unwrap();
   let rebuilt_root = read_ybn_root(&rebuilt).unwrap();
-  let actual = geometry_polygon_records(&rebuilt_root).unwrap();
-
-  assert_eq!(actual.len(), expected.len());
-  assert!(
-    actual
-      .iter()
-      .zip(&expected)
-      .all(|(actual, expected)| actual.identity.matches(&expected.identity))
-  );
+  assert_eq!(polygon_count(&rebuilt_root), polygon_count(&original));
+  assert_eq!(polygon_differences(&original, &rebuilt_root), (0, 0));
 }
 
 #[test]
@@ -324,19 +326,16 @@ fn merges_geometry_triangle_additions_and_removals_by_coordinates() {
     &[([2, 1, 0], [false; 3]), ([2, 4, 5], [false; 3])],
   );
 
-  let merged = merge_ybn_deltas(&vanilla, &[&modded]).unwrap();
+  let merged = merge_ybn_deltas(&vanilla, &[&modded], Default::default()).unwrap();
   let root = read_ybn_root(&merged).unwrap();
-  let actual = geometry_polygon_records(&root).unwrap();
   let modded_root = read_ybn_root(&modded).unwrap();
-  let expected = geometry_polygon_records(&modded_root).unwrap();
-
-  assert_eq!(actual.len(), 2, "one vanilla triangle is removed, one survives, and one is added");
-  let mut expected_lookup = super::PolygonLookup::default();
-  for record in expected {
-    expected_lookup.insert(record.identity);
-  }
-  assert!(actual.iter().all(|record| expected_lookup.contains(&record.identity)));
-  assert_eq!(root.children.len(), 2, "only the added triangle should need a new geometry child");
+  assert_eq!(
+    polygon_count(&root),
+    2,
+    "one vanilla triangle is removed, one survives, and one is added"
+  );
+  assert_eq!(polygon_differences(&modded_root, &root), (0, 0));
+  assert_eq!(root.children.len(), 1, "the added triangle joins the child it shares a corner with");
 }
 
 #[test]
@@ -367,18 +366,10 @@ fn merges_mixed_geometry_polygons_with_quantization_tolerance() {
   });
   let modded = encode_ybn_bound(&mod_root).unwrap();
 
-  let merged = merge_ybn_deltas(&vanilla, &[&modded]).unwrap();
+  let merged = merge_ybn_deltas(&vanilla, &[&modded], Default::default()).unwrap();
   let merged_root = read_ybn_root(&merged).unwrap();
-  let result_records = geometry_polygon_records(&merged_root).unwrap();
-  let expected_records = geometry_polygon_records(&read_ybn_root(&modded).unwrap()).unwrap();
-  let mut expected = PolygonLookup::default();
-  for record in expected_records {
-    expected.insert(record.identity);
-  }
-
-  assert_eq!(merged_root.children.len(), 2);
-  assert_eq!(result_records.len(), 2, "one triangle and one replacement box must remain");
-  assert!(result_records.iter().all(|record| expected.contains(&record.identity)));
+  assert_eq!(polygon_count(&merged_root), 2, "one triangle and one replacement box must remain");
+  assert_eq!(polygon_differences(&read_ybn_root(&modded).unwrap(), &merged_root), (0, 0));
 }
 
 #[test]
@@ -386,7 +377,8 @@ fn merges_mod_child_additions_and_removals_against_vanilla() {
   let vanilla = sample("resource_a.ybn.xml");
   let unchanged_mod = sample("resource_a.ybn.xml");
   let changed_mod = sample("resource_b.ybn.xml");
-  let merged = merge_ybn_deltas(&vanilla, &[&unchanged_mod, &changed_mod]).unwrap();
+  let merged =
+    merge_ybn_deltas(&vanilla, &[&unchanged_mod, &changed_mod], Default::default()).unwrap();
   let (children, minimum, maximum) = merged_children(&merged);
 
   assert_eq!(children, 1, "the removed vanilla child must not survive");
@@ -458,18 +450,20 @@ fn configured_ybn_tolerance_removes_shifted_boxes_but_preserves_distinct_additio
       || {
         for mods in [[deleted.as_slice(), moved.as_slice()], [moved.as_slice(), deleted.as_slice()]]
         {
-          assert_eq!(count_boxes(&merge_ybn_deltas(&vanilla, &mods).unwrap()), expected);
+          assert_eq!(
+            count_boxes(&merge_ybn_deltas(&vanilla, &mods, Default::default()).unwrap()),
+            expected
+          );
         }
       },
     );
   }
   let distinct = shifted(0.08);
   with_tolerances(MatchTolerances::default(), || {
-    assert_eq!(count_boxes(&merge_ybn_deltas(&vanilla, &[&deleted, &distinct]).unwrap()), 1);
-    assert!(super::points_match([0.0; 3], [0.05; 3]));
-    assert!(!super::points_match([0.0; 3], [0.0501, 0.0, 0.0]));
-    assert!(super::matches_radius(Some(0.0), Some(0.05)));
-    assert!(!super::matches_radius(Some(0.0), Some(0.0501)));
+    assert_eq!(
+      count_boxes(&merge_ybn_deltas(&vanilla, &[&deleted, &distinct], Default::default()).unwrap()),
+      1
+    );
   });
 }
 
@@ -478,7 +472,8 @@ fn merges_independent_additions_from_multiple_mods() {
   let vanilla = sample("vanilla_empty.ybn.xml");
   let first_mod = sample("resource_a.ybn.xml");
   let second_mod = sample("resource_b.ybn.xml");
-  let merged = merge_ybn_deltas(&vanilla, &[&first_mod, &second_mod, &first_mod]).unwrap();
+  let merged =
+    merge_ybn_deltas(&vanilla, &[&first_mod, &second_mod, &first_mod], Default::default()).unwrap();
   let (children, minimum, maximum) = merged_children(&merged);
 
   assert_eq!(children, 2, "the same addition from two mods must be deduplicated");
@@ -498,7 +493,8 @@ fn ybn_deletion_wins_over_polygon_attribute_changes() {
     triangle.vertex_flags = [false; 3];
   }
   let changed = encode_ybn_bound(&changed).unwrap();
-  let retained = read_ybn_root(&merge_ybn_deltas(&vanilla, &[&changed]).unwrap()).unwrap();
+  let retained =
+    read_ybn_root(&merge_ybn_deltas(&vanilla, &[&changed], Default::default()).unwrap()).unwrap();
   assert_eq!(retained.children[0].geometry.as_ref().unwrap().materials[0].colour_index, 23);
   let mut deleted = baseline.clone();
   deleted.children.clear();
@@ -506,7 +502,8 @@ fn ybn_deletion_wins_over_polygon_attribute_changes() {
   deleted.flags.clear();
   let deleted = encode_ybn_bound(&deleted).unwrap();
   for mods in [[deleted.as_slice(), changed.as_slice()], [changed.as_slice(), deleted.as_slice()]] {
-    let result = read_ybn_root(&merge_ybn_deltas(&vanilla, &mods).unwrap()).unwrap();
+    let result =
+      read_ybn_root(&merge_ybn_deltas(&vanilla, &mods, Default::default()).unwrap()).unwrap();
     assert!(result.children.is_empty(), "an attribute change must not resurrect a deleted face");
   }
 }
@@ -543,10 +540,13 @@ fn ybn_deletion_matches_box_volume_across_reference_vertex_changes() {
   deleted.flags.clear();
   let deleted = encode_ybn_bound(&deleted).unwrap();
   for mods in [[deleted.as_slice(), changed.as_slice()], [changed.as_slice(), deleted.as_slice()]] {
-    let result = read_ybn_root(&merge_ybn_deltas(&vanilla, &mods).unwrap()).unwrap();
+    let result =
+      read_ybn_root(&merge_ybn_deltas(&vanilla, &mods, Default::default()).unwrap()).unwrap();
     assert!(result.children.is_empty(), "a re-encoded box must not resurrect a deleted volume");
   }
-  let result = read_ybn_root(&merge_ybn_deltas(&vanilla, &[&deleted, &distinct]).unwrap()).unwrap();
+  let result =
+    read_ybn_root(&merge_ybn_deltas(&vanilla, &[&deleted, &distinct], Default::default()).unwrap())
+      .unwrap();
   assert_eq!(result.children.len(), 1, "an independent new box must survive");
 }
 
@@ -562,38 +562,32 @@ fn sc1_18_0_deletion_wins_over_a_reencoded_collision() {
   let deleting = local_source("MLO_SC1_18_0_DELETING_YBN");
   let baseline = read_ybn_root(&vanilla).unwrap();
   let source = read_ybn_root(&reencoded).unwrap();
-  let baseline_records = geometry_polygon_records(&baseline).unwrap();
-  let source_geometry = source.children[1].geometry.as_ref().unwrap();
-  let source_identity = |index| {
-    super::diff::legacy::polygon_identity(
-      &source.children[1],
-      source_geometry,
-      &source_geometry.polygons[index],
+  // The source with only the given polygons of its second child.
+  let only = |indices: &[usize]| {
+    let mut root = source.clone();
+    let child = super::diff::legacy::geometry_polygon_subset(
+      &root.children[1],
+      &indices.iter().copied().collect(),
     )
-    .unwrap()
+    .unwrap();
+    root.children = vec![child];
+    root.transforms = vec![source.transforms[1]];
+    root.flags = vec![source.flags[1]];
+    root
   };
-  let wall = source_identity(138);
-  let mut baseline_lookup = PolygonLookup::default();
-  for record in &baseline_records {
-    baseline_lookup.insert(record.identity.clone());
-  }
-  assert!(baseline_lookup.contains(&wall), "box volume must match vanilla");
+  assert_eq!(polygon_differences(&only(&[138]), &baseline).0, 0, "box volume must match vanilla");
+  let returning = [109, 110, 111, 138, 104, 139];
   for mods in
     [[reencoded.as_slice(), deleting.as_slice()], [deleting.as_slice(), reencoded.as_slice()]]
   {
-    let result = read_ybn_root(&merge_ybn_deltas(&vanilla, &mods).unwrap()).unwrap();
-    let records = geometry_polygon_records(&result).unwrap();
-    let mut retained = PolygonLookup::default();
-    for record in &records {
-      retained.insert(record.identity.clone());
-    }
-    for index in [109, 110, 111, 138, 104, 139] {
-      assert!(
-        !retained.contains(&source_identity(index)),
-        "re-encoded polygon {index} must not return"
-      );
-    }
-    assert!(!records.is_empty(), "unrelated collision must remain");
+    let result =
+      read_ybn_root(&merge_ybn_deltas(&vanilla, &mods, Default::default()).unwrap()).unwrap();
+    assert_eq!(
+      polygon_differences(&only(&returning), &result).0,
+      returning.len(),
+      "re-encoded polygons must not return"
+    );
+    assert!(polygon_count(&result) > 0, "unrelated collision must remain");
   }
 }
 
@@ -659,7 +653,8 @@ fn configured_ybn_tolerance_removes_reported_mirrorpark_box() {
         ..Default::default()
       },
       || {
-        let merged = merge_ybn_deltas(&vanilla, &[&keeping, &removing]).unwrap();
+        let merged =
+          merge_ybn_deltas(&vanilla, &[&keeping, &removing], Default::default()).unwrap();
         let found = count(&merged);
         eprintln!("Mirror Park Box: tolerance={tolerance}, matches={found}");
         assert_eq!(found, expected);

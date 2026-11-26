@@ -1,0 +1,1492 @@
+//! YBN collision compared as the polygons of the whole file, grouped by the collision flags of
+//! the geometry child holding them, as YMAP occlude model triangles are grouped by flags.
+//!
+//! A child's flags pair names what the collision is and what collides with it, so a polygon
+//! repeated under other flags is the same surface in another collision layer: groups are kept
+//! apart. A polygon is its kind, material (but for its colour), corner flags, radius and
+//! positions, corners of two files within the `ybn_position` tolerance being one vertex
+//! ([`VertexIndex`]):
+//! triangles keep their winding from any corner, boxes compare by their eight corners, capsules
+//! and cylinders by their endpoints in either order. Within a group, exact repeats count once. Children holding other than supported polygons, such as primitive Bounds, are compared
+//! whole.
+//!
+//! Applying a diff removes each removed polygon from the child holding it, warning about and
+//! skipping one the file lacks, and drops children left empty; it places the added polygons so
+//! connected ones share a child: each connected piece joins the child of its group sharing most
+//! of its vertices that stays within the [`GeometryLimits`], and the other pieces fill new
+//! children after the rest, a piece over the limits split breadth-first. Changed children are
+//! rebuilt; the others are kept as they are.
+
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
+use std::io;
+
+use serde::{Deserialize, Serialize};
+
+use super::{
+  legacy::{bound_identity, geometry_polygon_subset, is_polygon_geometry, transform_ybn_point},
+  merge_geometry::complete_box_corners,
+  polygon::{ResolvedPolygon, ResolvedShape},
+  resolve,
+};
+use crate::core::format::ybn::model::{Bound, Geometry, Material, Polygon, Triangle};
+
+const IDENTITY: [f32; 16] = [1., 0., 0., 0., 0., 1., 0., 0., 0., 0., 1., 0., 0., 0., 0., 1.];
+
+/// The most vertices and polygons the placement fills a geometry child with.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
+#[serde(default, deny_unknown_fields)]
+pub struct GeometryLimits {
+  /// At most 65534, the vertex indices being 16-bit.
+  #[cfg_attr(feature = "typescript", specta(optional))]
+  pub max_geometry_vertices: u32,
+  /// At most 32767, the GeometryBVH indexing polygons with 16-bit signed indices.
+  #[cfg_attr(feature = "typescript", specta(optional))]
+  pub max_geometry_polygons: u32,
+}
+
+impl Default for GeometryLimits {
+  fn default() -> Self {
+    Self {
+      max_geometry_vertices: 65534,
+      max_geometry_polygons: 32767,
+    }
+  }
+}
+
+impl GeometryLimits {
+  /// Rejects limits outside 1 to 65534 vertices and 1 to 32767 polygons.
+  pub fn validate(&self) -> io::Result<()> {
+    if !(1..=65534).contains(&self.max_geometry_vertices) {
+      return Err(invalid_input("ybn.max_geometry_vertices must be within 1 and 65534"));
+    }
+    if !(1..=32767).contains(&self.max_geometry_polygons) {
+      return Err(invalid_input("ybn.max_geometry_polygons must be within 1 and 32767"));
+    }
+    Ok(())
+  }
+}
+
+/// The polygon changes of the geometry children with one flags pair.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
+pub struct YbnPolygonsDiff {
+  /// The children's collision flags: what the collision is, and what collides with it.
+  pub flags: [u32; 2],
+  #[serde(default, skip_serializing_if = "Vec::is_empty")]
+  #[cfg_attr(feature = "typescript", specta(optional))]
+  pub removed: Vec<ResolvedPolygon>,
+  #[serde(default, skip_serializing_if = "Vec::is_empty")]
+  #[cfg_attr(feature = "typescript", specta(optional))]
+  pub added: Vec<ResolvedPolygon>,
+}
+
+/// A Composite child compared whole, with its slot's transform and flags.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
+pub struct YbnChild {
+  pub flags: [u32; 2],
+  pub transform: [f32; 16],
+  #[cfg_attr(feature = "typescript", specta(type = serde_json::Value))]
+  pub bound: Bound,
+}
+
+/// How a YBN differs from its baseline.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
+pub struct YbnDiffFields {
+  /// Per flags pair whose polygons change, the polygons removed and added.
+  #[serde(default, skip_serializing_if = "Vec::is_empty")]
+  #[cfg_attr(feature = "typescript", specta(optional))]
+  pub polygons: Vec<YbnPolygonsDiff>,
+  /// Children compared whole that the baseline has and the source lacks.
+  #[serde(default, skip_serializing_if = "Vec::is_empty")]
+  #[cfg_attr(feature = "typescript", specta(optional))]
+  pub removed_children: Vec<YbnChild>,
+  /// Children compared whole that the source adds.
+  #[serde(default, skip_serializing_if = "Vec::is_empty")]
+  #[cfg_attr(feature = "typescript", specta(optional))]
+  pub added_children: Vec<YbnChild>,
+}
+
+impl YbnDiffFields {
+  pub fn is_empty(&self) -> bool {
+    self.polygons.is_empty() && self.removed_children.is_empty() && self.added_children.is_empty()
+  }
+}
+
+/// Positions found so far, in layers, one per file compared: a position is the vertex of the
+/// same position, or else of one within `tolerance` per axis found in an earlier layer, so the
+/// vertices of one file stay apart however close they lie.
+struct VertexIndex {
+  tolerance: f32,
+  positions: Vec<[f32; 3]>,
+  layers: Vec<usize>,
+  layer: usize,
+  exact: HashMap<[u32; 3], usize>,
+  cells: HashMap<[i64; 3], Vec<usize>>,
+}
+
+impl VertexIndex {
+  fn new(tolerance: f32) -> Self {
+    Self {
+      tolerance,
+      positions: Vec::new(),
+      layers: Vec::new(),
+      layer: 0,
+      exact: HashMap::new(),
+      cells: HashMap::new(),
+    }
+  }
+
+  /// Starts the layer of the next file.
+  fn next_layer(&mut self) {
+    self.layer += 1;
+  }
+
+  fn cell(
+    &self,
+    position: [f32; 3],
+  ) -> [i64; 3] {
+    position.map(|value| (f64::from(value) / f64::from(self.tolerance)).floor() as i64)
+  }
+
+  /// The vertex `position` is: one found before within the tolerance, or a new one.
+  fn vertex(
+    &mut self,
+    position: [f32; 3],
+  ) -> usize {
+    let bits = position.map(f32::to_bits);
+    if let Some(&vertex) = self.exact.get(&bits) {
+      return vertex;
+    }
+    let cell = self.cell(position);
+    let mut nearest: Option<(f32, usize)> = None;
+    for dx in -1..=1 {
+      for dy in -1..=1 {
+        for dz in -1..=1 {
+          let near = [cell[0] + dx, cell[1] + dy, cell[2] + dz];
+          for &vertex in self.cells.get(&near).into_iter().flatten() {
+            if self.layers[vertex] >= self.layer {
+              continue;
+            }
+            let known = self.positions[vertex];
+            let distance =
+              (0..3).map(|axis| (known[axis] - position[axis]).abs()).fold(0.0f32, f32::max);
+            if distance <= self.tolerance && nearest.is_none_or(|(best, _)| distance < best) {
+              nearest = Some((distance, vertex));
+            }
+          }
+        }
+      }
+    }
+    let vertex = match nearest {
+      Some((_, vertex)) => vertex,
+      None => {
+        self.positions.push(position);
+        self.layers.push(self.layer);
+        let vertex = self.positions.len() - 1;
+        self.cells.entry(cell).or_default().push(vertex);
+        vertex
+      }
+    };
+    self.exact.insert(bits, vertex);
+    vertex
+  }
+}
+
+/// What a polygon is: its kind, material but for its colour, the corner flags of a triangle,
+/// its radius and its positions (box corners completed, capsule and cylinder endpoints either way
+/// round). Material colours are left out: tools drop colour tables while keeping the indices
+/// into them, and the colours have no bearing on collision.
+#[derive(Debug, Clone)]
+struct Identity {
+  kind: u8,
+  material: Material,
+  corner_flags: [bool; 3],
+  radius: f32,
+  points: Vec<[f32; 3]>,
+}
+
+/// What an [`Identity`] is in every respect but its positions and radius, which match within a
+/// tolerance; corner flags sorted, as triangles match from any corner.
+type Signature = (u8, Material, [bool; 3]);
+
+impl Identity {
+  fn of(polygon: &ResolvedPolygon) -> Self {
+    let mut corner_flags = [false; 3];
+    let (points, radius) = match &polygon.shape {
+      ResolvedShape::Triangle {
+        vertices,
+        vertex_flags,
+      } => {
+        corner_flags = *vertex_flags;
+        (vertices.to_vec(), 0.0)
+      }
+      ResolvedShape::Box {
+        vertices,
+      } => {
+        let mut corners = vertices.to_vec();
+        complete_box_corners(&mut corners);
+        (corners, 0.0)
+      }
+      ResolvedShape::Sphere {
+        center,
+        radius,
+      } => (vec![*center], *radius),
+      ResolvedShape::Capsule {
+        endpoints,
+        radius,
+      }
+      | ResolvedShape::Cylinder {
+        endpoints,
+        radius,
+      } => (endpoints.to_vec(), *radius),
+    };
+    Self {
+      kind: polygon.shape.kind(),
+      material: Material {
+        colour_index: 0,
+        ..polygon.material
+      },
+      corner_flags,
+      radius,
+      points,
+    }
+  }
+
+  /// The identity with material and corner flags left out: where the polygon is.
+  fn geometry(&self) -> Self {
+    Self {
+      material: Material::default(),
+      corner_flags: [false; 3],
+      ..self.clone()
+    }
+  }
+
+  fn signature(&self) -> Signature {
+    let mut flags = self.corner_flags;
+    flags.sort_unstable();
+    (self.kind, self.material, flags)
+  }
+
+  fn centroid(&self) -> [f32; 3] {
+    let count = self.points.len() as f32;
+    std::array::from_fn(|axis| self.points.iter().map(|point| point[axis]).sum::<f32>() / count)
+  }
+
+  /// Whether `other` is the same polygon within `tolerance` per axis and of radius.
+  fn matches(
+    &self,
+    other: &Self,
+    tolerance: f32,
+  ) -> bool {
+    let close = |first: &[f32; 3], second: &[f32; 3]| {
+      (0..3).all(|axis| (first[axis] - second[axis]).abs() <= tolerance)
+    };
+    if self.signature() != other.signature()
+      || (self.radius - other.radius).abs() > tolerance
+      || self.points.len() != other.points.len()
+    {
+      return false;
+    }
+    let count = self.points.len();
+    match self.kind {
+      0 => (0..count).any(|shift| {
+        (0..count).all(|index| {
+          close(&self.points[index], &other.points[(index + shift) % count])
+            && self.corner_flags[index] == other.corner_flags[(index + shift) % count]
+        })
+      }),
+      1 => {
+        let mut used = vec![false; count];
+        self.points.iter().all(|point| {
+          match (0..count)
+            .find(|&candidate| !used[candidate] && close(point, &other.points[candidate]))
+          {
+            Some(candidate) => {
+              used[candidate] = true;
+              true
+            }
+            None => false,
+          }
+        })
+      }
+      _ => {
+        (0..count).all(|index| close(&self.points[index], &other.points[index]))
+          || (0..count).all(|index| close(&self.points[index], &other.points[count - 1 - index]))
+      }
+    }
+  }
+
+  /// The exact form of the polygon, the same for the very same polygon from any corner.
+  fn exact_key(&self) -> Vec<u32> {
+    let bits = |point: &[f32; 3]| point.map(f32::to_bits);
+    let mut points = self.points.iter().map(bits).collect::<Vec<_>>();
+    let mut flags = self.corner_flags.to_vec();
+    match self.kind {
+      0 => {
+        let start = (0..points.len()).min_by_key(|&index| points[index]).unwrap_or(0);
+        points.rotate_left(start);
+        flags.rotate_left(start);
+      }
+      _ => points.sort_unstable(),
+    }
+    let material = &self.material;
+    let mut key = vec![
+      u32::from(self.kind),
+      u32::from(material.kind),
+      u32::from(material.procedural_id),
+      u32::from(material.room_id),
+      u32::from(material.ped_density),
+      u32::from(material.flags),
+      u32::from(material.unknown),
+      self.radius.to_bits(),
+    ];
+    key.extend(flags.into_iter().map(u32::from));
+    key.extend(points.into_iter().flatten());
+    key
+  }
+}
+
+/// Polygons found by [`Identity`]: the very same ones by their exact form, and those within a
+/// tolerance by the cell of their centroid, cells twice the tolerance wide.
+struct Lookup {
+  tolerance: f32,
+  items: Vec<Identity>,
+  exact: HashMap<Vec<u32>, Vec<usize>>,
+  cells: HashMap<[i64; 3], Vec<usize>>,
+}
+
+impl Lookup {
+  fn new(tolerance: f32) -> Self {
+    Self {
+      tolerance,
+      items: Vec::new(),
+      exact: HashMap::new(),
+      cells: HashMap::new(),
+    }
+  }
+
+  fn width(&self) -> f64 {
+    f64::from(self.tolerance.max(f32::EPSILON)) * 2.0
+  }
+
+  /// Adds `identity`, returning its index.
+  fn insert(
+    &mut self,
+    identity: Identity,
+  ) -> usize {
+    let index = self.items.len();
+    let width = self.width();
+    let cell = identity.centroid().map(|value| (f64::from(value) / width).floor() as i64);
+    self.exact.entry(identity.exact_key()).or_default().push(index);
+    self.cells.entry(cell).or_default().push(index);
+    self.items.push(identity);
+    index
+  }
+
+  /// An item matching `identity` of those `keep` accepts, a very same one first.
+  fn find(
+    &self,
+    identity: &Identity,
+    keep: impl Fn(usize) -> bool,
+  ) -> Option<usize> {
+    if let Some(&index) =
+      self.exact.get(&identity.exact_key()).into_iter().flatten().find(|&&index| keep(index))
+    {
+      return Some(index);
+    }
+    // A centroid within the tolerance lies in this cell or the next one towards it, per axis.
+    let width = self.width();
+    let scaled = identity.centroid().map(|value| f64::from(value) / width);
+    let cell = scaled.map(|value| value.floor() as i64);
+    let step: [i64; 3] =
+      std::array::from_fn(|axis| if scaled[axis] - (cell[axis] as f64) < 0.5 { -1 } else { 1 });
+    let signature = identity.signature();
+    for corner in 0..8 {
+      let near: [i64; 3] = std::array::from_fn(|axis| {
+        cell[axis] + if corner >> axis & 1 == 1 { step[axis] } else { 0 }
+      });
+      for &index in self.cells.get(&near).into_iter().flatten() {
+        let item = &self.items[index];
+        if keep(index) && item.signature() == signature && item.matches(identity, self.tolerance) {
+          return Some(index);
+        }
+      }
+    }
+    None
+  }
+
+  fn contains(
+    &self,
+    identity: &Identity,
+  ) -> bool {
+    self.find(identity, |_| true).is_some()
+  }
+
+  /// The items that are the very same as `identity`, of those `keep` accepts.
+  fn same(
+    &self,
+    identity: &Identity,
+    keep: impl Fn(usize) -> bool,
+  ) -> Vec<usize> {
+    self
+      .exact
+      .get(&identity.exact_key())
+      .into_iter()
+      .flatten()
+      .copied()
+      .filter(|&index| keep(index))
+      .collect()
+  }
+}
+
+/// A geometry child's polygon, resolved to positions in the Composite's space, with its
+/// identity and the vertices it joins.
+struct Entry {
+  identity: Identity,
+  polygon: ResolvedPolygon,
+  vertices: Vec<usize>,
+}
+
+/// The vertices `polygon` joins, for connecting it with others.
+fn joined(
+  polygon: &ResolvedPolygon,
+  index: &mut VertexIndex,
+) -> Vec<usize> {
+  polygon.shape.positions().iter().map(|position| index.vertex(*position)).collect()
+}
+
+/// `polygon` of `geometry`, resolved, with positions in the Composite's space by `bound`'s
+/// transform.
+fn world_polygon(
+  bound: &Bound,
+  geometry: &Geometry,
+  polygon: &Polygon,
+) -> io::Result<ResolvedPolygon> {
+  let mut resolved = resolve::resolved(geometry, polygon)?;
+  let place = |position: &mut [f32; 3]| *position = transform_ybn_point(*position, bound.transform);
+  match &mut resolved.shape {
+    ResolvedShape::Triangle {
+      vertices,
+      ..
+    } => vertices.iter_mut().for_each(place),
+    ResolvedShape::Box {
+      vertices,
+    } => vertices.iter_mut().for_each(place),
+    ResolvedShape::Sphere {
+      center,
+      ..
+    } => place(center),
+    ResolvedShape::Capsule {
+      endpoints,
+      ..
+    }
+    | ResolvedShape::Cylinder {
+      endpoints,
+      ..
+    } => endpoints.iter_mut().for_each(place),
+  }
+  Ok(resolved)
+}
+
+/// The polygons of geometry children, by child index.
+type ChildEntries = BTreeMap<usize, Vec<Entry>>;
+
+/// The geometry children's polygons of `root`, per child index, with the vertices they join
+/// when `index` is given for children of `linked` flags, and the children compared whole.
+fn entries(
+  root: &Bound,
+  mut index: Option<&mut VertexIndex>,
+  linked: &HashSet<[u32; 2]>,
+) -> io::Result<(ChildEntries, Vec<usize>)> {
+  if root.kind != "Composite" {
+    return Err(invalid_data("YBN polygon diffs need a Composite root"));
+  }
+  let mut children = BTreeMap::new();
+  let mut whole = Vec::new();
+  for (child_index, child) in root.children.iter().enumerate() {
+    if !is_polygon_geometry(child) {
+      if child.kind != "None" {
+        whole.push(child_index);
+      }
+      continue;
+    }
+    let geometry = child.geometry.as_ref().expect("a polygon geometry");
+    let links = linked.contains(&child_flags(root, child_index));
+    let mut list = Vec::with_capacity(geometry.polygons.len());
+    for polygon in &geometry.polygons {
+      let polygon = world_polygon(child, geometry, polygon)?;
+      list.push(Entry {
+        identity: Identity::of(&polygon),
+        vertices: index
+          .as_deref_mut()
+          .filter(|_| links)
+          .map(|index| joined(&polygon, index))
+          .unwrap_or_default(),
+        polygon,
+      });
+    }
+    children.insert(child_index, list);
+  }
+  Ok((children, whole))
+}
+
+/// The distinct polygons of `root` per flags pair, in child order, exact repeats once.
+fn groups(root: &Bound) -> io::Result<Grouped> {
+  let (children, whole) = entries(root, None, &HashSet::new())?;
+  let mut groups = BTreeMap::<[u32; 2], (Lookup, Vec<Entry>)>::new();
+  for (child_index, list) in children {
+    let flags = child_flags(root, child_index);
+    let (seen, kept) = groups.entry(flags).or_insert_with(|| (Lookup::new(0.0), Vec::new()));
+    for entry in list {
+      if !seen.contains(&entry.identity) {
+        seen.insert(entry.identity.clone());
+        kept.push(entry);
+      }
+    }
+  }
+  let whole = whole.into_iter().map(|child_index| whole_child(root, child_index)).collect();
+  Ok((groups.into_iter().map(|(flags, (_, kept))| (flags, kept)).collect(), whole))
+}
+
+fn child_flags(
+  root: &Bound,
+  child_index: usize,
+) -> [u32; 2] {
+  root.flags.get(child_index).copied().unwrap_or_default()
+}
+
+fn whole_child(
+  root: &Bound,
+  child_index: usize,
+) -> YbnChild {
+  YbnChild {
+    flags: child_flags(root, child_index),
+    transform: root.transforms.get(child_index).copied().unwrap_or(IDENTITY),
+    bound: root.children[child_index].clone(),
+  }
+}
+
+/// The entries of `entries` that no entry of `other` matches within `tolerance`.
+fn unmatched(
+  entries: &[Entry],
+  other: &[Entry],
+  tolerance: f32,
+) -> Vec<ResolvedPolygon> {
+  let mut lookup = Lookup::new(tolerance);
+  for entry in other {
+    lookup.insert(entry.identity.clone());
+  }
+  entries
+    .iter()
+    .filter(|entry| !lookup.contains(&entry.identity))
+    .map(|entry| entry.polygon.clone())
+    .collect()
+}
+
+/// How `after` differs from `before`, positions and radii within `tolerance` matching.
+pub fn diff(
+  before: &Bound,
+  after: &Bound,
+  tolerance: f32,
+) -> io::Result<YbnDiffFields> {
+  diff_grouped(&groups(before)?, after, tolerance)
+}
+
+/// How each of `afters` differs from `before`, as [`diff`] takes it.
+pub fn diff_each(
+  before: &Bound,
+  afters: &[Bound],
+  tolerance: f32,
+) -> io::Result<Vec<YbnDiffFields>> {
+  let before = groups(before)?;
+  afters.iter().map(|after| diff_grouped(&before, after, tolerance)).collect()
+}
+
+/// A file's distinct polygons by flags, and its children compared whole.
+type Grouped = (BTreeMap<[u32; 2], Vec<Entry>>, Vec<YbnChild>);
+
+fn diff_grouped(
+  (before_groups, before_whole): &Grouped,
+  after: &Bound,
+  tolerance: f32,
+) -> io::Result<YbnDiffFields> {
+  let (after_groups, after_whole) = groups(after)?;
+  let mut polygons = Vec::new();
+  let all_flags =
+    before_groups.keys().chain(after_groups.keys()).copied().collect::<BTreeSet<[u32; 2]>>();
+  for flags in all_flags {
+    let (old, new) = (
+      before_groups.get(&flags).map_or(&[][..], Vec::as_slice),
+      after_groups.get(&flags).map_or(&[][..], Vec::as_slice),
+    );
+    let removed = unmatched(old, new, tolerance);
+    let added = unmatched(new, old, tolerance);
+    if !removed.is_empty() || !added.is_empty() {
+      polygons.push(YbnPolygonsDiff {
+        flags,
+        removed,
+        added,
+      });
+    }
+  }
+  let (removed_children, added_children) = whole_changes(before_whole, &after_whole)?;
+  Ok(YbnDiffFields {
+    polygons,
+    removed_children,
+    added_children,
+  })
+}
+
+/// The children compared whole that `before` has and `after` lacks, and the other way round,
+/// counting repeats.
+fn whole_changes(
+  before: &[YbnChild],
+  after: &[YbnChild],
+) -> io::Result<(Vec<YbnChild>, Vec<YbnChild>)> {
+  let identities = |children: &[YbnChild]| {
+    children.iter().map(|child| bound_identity(&child.bound)).collect::<io::Result<Vec<_>>>()
+  };
+  let (before_keys, after_keys) = (identities(before)?, identities(after)?);
+  let take = |from: &[YbnChild], keys: &[Vec<u8>], other: &[Vec<u8>]| {
+    let mut remaining = HashMap::<&Vec<u8>, usize>::new();
+    for key in other {
+      *remaining.entry(key).or_default() += 1;
+    }
+    from
+      .iter()
+      .zip(keys)
+      .filter(|(_, key)| match remaining.get_mut(key) {
+        Some(count) if *count > 0 => {
+          *count -= 1;
+          false
+        }
+        _ => true,
+      })
+      .map(|(child, _)| child.clone())
+      .collect::<Vec<_>>()
+  };
+  Ok((take(before, &before_keys, &after_keys), take(after, &after_keys, &before_keys)))
+}
+
+/// The changes of every source in `sources`, diffs of one baseline, combined: every source's
+/// removals, and every source's additions once each in source order, but those placing a
+/// geometry that a source removes without placing it again, so a removal wins over another
+/// source's material or corner-flag change.
+pub fn merge(
+  sources: &[&YbnDiffFields],
+  tolerance: f32,
+) -> io::Result<YbnDiffFields> {
+  let mut removed = BTreeMap::<[u32; 2], (Lookup, Vec<ResolvedPolygon>)>::new();
+  let mut deleted = BTreeMap::<[u32; 2], Lookup>::new();
+  for source in sources {
+    for group in &source.polygons {
+      let mut placed = Lookup::new(tolerance);
+      for polygon in &group.added {
+        placed.insert(Identity::of(polygon).geometry());
+      }
+      // Removals name baseline polygons, so the same ones are the very same.
+      let (seen, list) =
+        removed.entry(group.flags).or_insert_with(|| (Lookup::new(0.0), Vec::new()));
+      for polygon in &group.removed {
+        let identity = Identity::of(polygon);
+        if !placed.contains(&identity.geometry()) {
+          deleted
+            .entry(group.flags)
+            .or_insert_with(|| Lookup::new(tolerance))
+            .insert(identity.geometry());
+        }
+        if !seen.contains(&identity) {
+          seen.insert(identity);
+          list.push(polygon.clone());
+        }
+      }
+    }
+  }
+  // Additions another source makes too, within the tolerance, are placed once; one source's
+  // own additions are all placed.
+  let mut added = BTreeMap::<[u32; 2], (Lookup, Vec<ResolvedPolygon>)>::new();
+  let readded = removed
+    .iter()
+    .map(|(flags, (seen, _))| {
+      let mut lookup = Lookup::new(0.0);
+      for identity in &seen.items {
+        lookup.insert(identity.clone());
+      }
+      (*flags, lookup)
+    })
+    .collect::<BTreeMap<_, _>>();
+  for source in sources {
+    for group in &source.polygons {
+      let (seen, list) =
+        added.entry(group.flags).or_insert_with(|| (Lookup::new(tolerance), Vec::new()));
+      let earlier = seen.items.len();
+      for polygon in &group.added {
+        let identity = Identity::of(polygon);
+        if deleted.get(&group.flags).is_some_and(|deleted| deleted.contains(&identity.geometry())) {
+          tracing::debug!("    YBN polygons: a removal wins over another change of {polygon:?}");
+        } else if readded.get(&group.flags).is_some_and(|readded| readded.contains(&identity)) {
+          tracing::debug!("    YBN polygons: {polygon:?} re-adds a removed polygon");
+        } else if seen.find(&identity, |item| item < earlier).is_none() {
+          seen.insert(identity);
+          list.push(polygon.clone());
+        }
+      }
+    }
+  }
+  let mut polygons = Vec::new();
+  for flags in removed.keys().chain(added.keys()).copied().collect::<BTreeSet<_>>() {
+    let removed = removed.remove(&flags).map(|(_, list)| list).unwrap_or_default();
+    let added = added.remove(&flags).map(|(_, list)| list).unwrap_or_default();
+    if !removed.is_empty() || !added.is_empty() {
+      polygons.push(YbnPolygonsDiff {
+        flags,
+        removed,
+        added,
+      });
+    }
+  }
+  let mut removed_children = Vec::new();
+  let mut removed_child_keys = HashSet::new();
+  let mut added_children = Vec::new();
+  let mut added_child_keys = HashSet::new();
+  for source in sources {
+    for child in &source.removed_children {
+      if removed_child_keys.insert(bound_identity(&child.bound)?) {
+        removed_children.push(child.clone());
+      }
+    }
+  }
+  for source in sources {
+    for child in &source.added_children {
+      if added_child_keys.insert(bound_identity(&child.bound)?) {
+        added_children.push(child.clone());
+      }
+    }
+  }
+  Ok(YbnDiffFields {
+    polygons,
+    removed_children,
+    added_children,
+  })
+}
+
+/// A geometry child while applying: its polygons, those kept from the original by index and
+/// those added, with the vertices of each.
+struct Slot {
+  flags: [u32; 2],
+  /// The original child, or the template a new one copies its record from.
+  template: Bound,
+  transform: [f32; 16],
+  kept: Vec<(usize, Vec<usize>, MaterialKey)>,
+  added: Vec<(ResolvedPolygon, Vec<usize>)>,
+  changed: bool,
+  original: bool,
+}
+
+/// The most materials a geometry child holds, its polygons indexing them with a byte.
+const MAX_MATERIALS: usize = 256;
+
+/// A polygon's material, with its colour by value.
+type MaterialKey = (Material, Option<[u8; 4]>);
+
+fn material_key(polygon: &ResolvedPolygon) -> MaterialKey {
+  (polygon.material, polygon.material_colour)
+}
+
+impl Slot {
+  fn materials(&self) -> HashSet<MaterialKey> {
+    self
+      .kept
+      .iter()
+      .map(|(_, _, material)| *material)
+      .chain(self.added.iter().map(|(polygon, _)| material_key(polygon)))
+      .collect()
+  }
+
+  fn vertices(&self) -> HashSet<usize> {
+    self
+      .kept
+      .iter()
+      .map(|(_, vertices, _)| vertices)
+      .chain(self.added.iter().map(|(_, vertices)| vertices))
+      .flatten()
+      .copied()
+      .collect()
+  }
+
+  fn polygon_count(&self) -> usize {
+    self.kept.len() + self.added.len()
+  }
+
+  /// Whether added polygons can join: a GeometryBVH placed as the Composite is.
+  fn joinable(&self) -> bool {
+    self.template.kind == "GeometryBVH"
+      && self.transform == IDENTITY
+      && self.template.transform.is_none_or(|transform| transform == IDENTITY)
+  }
+}
+
+/// Applies `diff` to `root`, positions and radii within `tolerance` matching, filling children
+/// within `limits`; see the module docs.
+pub fn apply(
+  root: &mut Bound,
+  diff: &YbnDiffFields,
+  tolerance: f32,
+  limits: GeometryLimits,
+) -> io::Result<()> {
+  let mut index = VertexIndex::new(tolerance);
+  // Only the children of groups taking additions are linked to them.
+  let linked =
+    diff.polygons.iter().filter(|group| !group.added.is_empty()).map(|group| group.flags).collect();
+  let (children, _) = entries(root, Some(&mut index), &linked)?;
+  index.next_layer();
+  // Every polygon of the file by group, with the slot and position holding it.
+  let mut held = HashMap::<[u32; 2], (Lookup, Vec<(usize, usize)>)>::new();
+  let mut slots = Vec::new();
+  let mut slot_of_child = HashMap::new();
+  for (child_index, list) in children {
+    let slot_index = slots.len();
+    slot_of_child.insert(child_index, slot_index);
+    let flags = child_flags(root, child_index);
+    let (lookup, places) =
+      held.entry(flags).or_insert_with(|| (Lookup::new(tolerance), Vec::new()));
+    let mut kept = Vec::with_capacity(list.len());
+    for (position, entry) in list.into_iter().enumerate() {
+      lookup.insert(entry.identity);
+      places.push((slot_index, position));
+      kept.push((position, entry.vertices, material_key(&entry.polygon)));
+    }
+    slots.push(Slot {
+      flags,
+      template: root.children[child_index].clone(),
+      transform: root.transforms.get(child_index).copied().unwrap_or(IDENTITY),
+      kept,
+      added: Vec::new(),
+      changed: false,
+      original: true,
+    });
+  }
+  for group in &diff.polygons {
+    let (lookup, places) =
+      held.entry(group.flags).or_insert_with(|| (Lookup::new(tolerance), Vec::new()));
+    let mut taken = HashSet::new();
+    let mut removals = HashMap::<usize, HashSet<usize>>::new();
+    for polygon in &group.removed {
+      // The polygon and its exact repeats, or else the one matching it within the tolerance.
+      let identity = Identity::of(polygon);
+      let mut items = lookup.same(&identity, |item| !taken.contains(&item));
+      if items.is_empty() {
+        items.extend(lookup.find(&identity, |item| !taken.contains(&item)));
+      }
+      if items.is_empty() {
+        tracing::warn!(
+          "YBN polygon {polygon:?} of flags {:?} to remove is not in the file; skipping it",
+          group.flags
+        );
+        continue;
+      }
+      for item in items {
+        taken.insert(item);
+        let (slot_index, position) = places[item];
+        removals.entry(slot_index).or_default().insert(position);
+      }
+    }
+    for (slot_index, positions) in removals {
+      let slot = &mut slots[slot_index];
+      slot.kept.retain(|(position, ..)| !positions.contains(position));
+      slot.changed = true;
+    }
+    // An addition the file holds already, as a carried change may find it, is placed once.
+    let existing = lookup.items.len();
+    let mut added = Vec::new();
+    for polygon in &group.added {
+      let identity = Identity::of(polygon);
+      if lookup.find(&identity, |item| item < existing && !taken.contains(&item)).is_none() {
+        lookup.insert(identity);
+        places.push((usize::MAX, 0));
+        added.push((polygon.clone(), joined(polygon, &mut index)));
+      }
+    }
+    place(&mut slots, group.flags, added, limits)?;
+  }
+  let rebuilt = rebuild(root, slots, &slot_of_child, &diff.removed_children, &diff.added_children)?;
+  // The root's broadphase keeps its extent and covers every child.
+  let mut minimum = read_vec3(&root.common, 48)?;
+  let mut maximum = read_vec3(&root.common, 32)?;
+  for (child_index, child) in root.children.iter().enumerate() {
+    for point in child_extent(child, rebuilt.contains(&child_index))? {
+      for axis in 0..3 {
+        minimum[axis] = minimum[axis].min(point[axis]);
+        maximum[axis] = maximum[axis].max(point[axis]);
+      }
+    }
+  }
+  let center = std::array::from_fn(|axis| (minimum[axis] + maximum[axis]) * 0.5);
+  let radius = (0..3).map(|axis| (maximum[axis] - center[axis]).powi(2)).sum::<f32>().sqrt();
+  let radius = radius.max(read_f32(&root.common, 20)?);
+  write_vec3(&mut root.common, 48, minimum)?;
+  write_vec3(&mut root.common, 32, maximum)?;
+  write_vec3(&mut root.common, 64, center)?;
+  write_vec3(&mut root.common, 80, center)?;
+  write_f32(&mut root.common, 20, radius)?;
+  Ok(())
+}
+
+/// Points `child` extends to in the Composite's space: those of a `rebuilt` geometry's polygons,
+/// widened by their radii, or else the minimum and maximum of its record.
+fn child_extent(
+  child: &Bound,
+  rebuilt: bool,
+) -> io::Result<Vec<[f32; 3]>> {
+  if child.kind == "None" {
+    return Ok(Vec::new());
+  }
+  if !rebuilt || !is_polygon_geometry(child) {
+    return Ok(
+      [read_vec3(&child.common, 48)?, read_vec3(&child.common, 32)?]
+        .map(|point| transform_ybn_point(point, child.transform))
+        .to_vec(),
+    );
+  }
+  let geometry = child.geometry.as_ref().expect("a polygon geometry");
+  let mut points = Vec::new();
+  for polygon in &geometry.polygons {
+    let polygon = world_polygon(child, geometry, polygon)?;
+    let radius = shape_radius(&polygon.shape);
+    for position in polygon.shape.positions() {
+      points.push(position.map(|value| value - radius));
+      points.push(position.map(|value| value + radius));
+    }
+  }
+  Ok(points)
+}
+
+fn shape_radius(shape: &ResolvedShape) -> f32 {
+  match shape {
+    ResolvedShape::Sphere {
+      radius,
+      ..
+    }
+    | ResolvedShape::Capsule {
+      radius,
+      ..
+    }
+    | ResolvedShape::Cylinder {
+      radius,
+      ..
+    } => *radius,
+    _ => 0.0,
+  }
+}
+
+/// Places `added` (the polygons of flags `flags`, with their vertices) into `slots`; see the
+/// module docs.
+fn place(
+  slots: &mut Vec<Slot>,
+  flags: [u32; 2],
+  added: Vec<(ResolvedPolygon, Vec<usize>)>,
+  limits: GeometryLimits,
+) -> io::Result<()> {
+  if added.is_empty() {
+    return Ok(());
+  }
+  let (max_vertices, max_polygons) =
+    (limits.max_geometry_vertices as usize, limits.max_geometry_polygons as usize);
+  let mut owners = HashMap::<usize, Vec<usize>>::new();
+  let mut counts = HashMap::<usize, (HashSet<usize>, HashSet<MaterialKey>)>::new();
+  for (slot_index, slot) in slots.iter().enumerate() {
+    if slot.flags != flags || !slot.joinable() {
+      continue;
+    }
+    for vertex in slot.vertices() {
+      owners.entry(vertex).or_default().push(slot_index);
+    }
+  }
+  let template = slots
+    .iter()
+    .find(|slot| slot.flags == flags && slot.joinable())
+    .or_else(|| slots.iter().find(|slot| slot.joinable()))
+    .map(|slot| slot.template.clone())
+    .ok_or_else(|| invalid_data("YBN has no geometry child to make new ones after"))?;
+  let mut open: Option<usize> = None;
+  for piece in pieces(added) {
+    let piece_vertices =
+      piece.iter().flat_map(|(_, vertices)| vertices).copied().collect::<HashSet<_>>();
+    let piece_materials =
+      piece.iter().map(|(polygon, _)| material_key(polygon)).collect::<HashSet<_>>();
+    let mut shared = BTreeMap::<usize, usize>::new();
+    for vertex in &piece_vertices {
+      for &slot_index in owners.get(vertex).into_iter().flatten() {
+        *shared.entry(slot_index).or_default() += 1;
+      }
+    }
+    let mut candidates = shared.into_iter().collect::<Vec<_>>();
+    candidates.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));
+    let joined = candidates.into_iter().map(|(slot_index, _)| slot_index).find(|&slot_index| {
+      let (vertices, materials) = counts
+        .entry(slot_index)
+        .or_insert_with(|| (slots[slot_index].vertices(), slots[slot_index].materials()));
+      vertices.len() + piece_vertices.difference(vertices).count() <= max_vertices
+        && materials.len() + piece_materials.difference(materials).count() <= MAX_MATERIALS
+        && slots[slot_index].polygon_count() + piece.len() <= max_polygons
+    });
+    if let Some(slot_index) = joined {
+      let (vertices, materials) = counts.get_mut(&slot_index).expect("counted above");
+      vertices.extend(&piece_vertices);
+      materials.extend(&piece_materials);
+      let slot = &mut slots[slot_index];
+      slot.added.extend(piece);
+      slot.changed = true;
+      continue;
+    }
+    for part in split(piece, max_vertices, max_polygons) {
+      let part_vertices =
+        part.iter().flat_map(|(_, vertices)| vertices).copied().collect::<HashSet<_>>();
+      let part_materials =
+        part.iter().map(|(polygon, _)| material_key(polygon)).collect::<HashSet<_>>();
+      let fits = open.is_some_and(|slot_index| {
+        let (vertices, materials) = counts.get(&slot_index).expect("opened with its vertices");
+        vertices.len() + part_vertices.difference(vertices).count() <= max_vertices
+          && materials.len() + part_materials.difference(materials).count() <= MAX_MATERIALS
+          && slots[slot_index].polygon_count() + part.len() <= max_polygons
+      });
+      if !fits {
+        let mut template = template.clone();
+        template.transform = None;
+        slots.push(Slot {
+          flags,
+          template,
+          transform: IDENTITY,
+          kept: Vec::new(),
+          added: Vec::new(),
+          changed: true,
+          original: false,
+        });
+        open = Some(slots.len() - 1);
+        counts.insert(slots.len() - 1, (HashSet::new(), HashSet::new()));
+      }
+      let slot_index = open.expect("opened above");
+      let (vertices, materials) = counts.get_mut(&slot_index).expect("opened with its vertices");
+      vertices.extend(&part_vertices);
+      materials.extend(&part_materials);
+      slots[slot_index].added.extend(part);
+    }
+  }
+  Ok(())
+}
+
+type Placed = (ResolvedPolygon, Vec<usize>);
+
+/// The connected pieces of `polygons`, by shared vertices, in polygon order.
+fn pieces(polygons: Vec<Placed>) -> Vec<Vec<Placed>> {
+  let mut parent = HashMap::<usize, usize>::new();
+  fn root(
+    parent: &mut HashMap<usize, usize>,
+    vertex: usize,
+  ) -> usize {
+    let mut current = vertex;
+    while let Some(&next) = parent.get(&current).filter(|&&next| next != current) {
+      current = next;
+    }
+    let found = current;
+    let mut current = vertex;
+    while current != found {
+      let next = parent[&current];
+      parent.insert(current, found);
+      current = next;
+    }
+    parent.entry(found).or_insert(found);
+    found
+  }
+  for (_, vertices) in &polygons {
+    let first = root(&mut parent, vertices[0]);
+    for vertex in &vertices[1..] {
+      let other = root(&mut parent, *vertex);
+      if other != first {
+        parent.insert(other, first);
+      }
+    }
+  }
+  let mut order = Vec::new();
+  let mut by_root = HashMap::<usize, Vec<Placed>>::new();
+  for placed in polygons {
+    let found = root(&mut parent, placed.1[0]);
+    by_root
+      .entry(found)
+      .or_insert_with(|| {
+        order.push(found);
+        Vec::new()
+      })
+      .push(placed);
+  }
+  order.into_iter().map(|found| by_root.remove(&found).unwrap_or_default()).collect()
+}
+
+/// `piece` split into parts within the limits, breadth-first from its first polygon.
+fn split(
+  piece: Vec<Placed>,
+  max_vertices: usize,
+  max_polygons: usize,
+) -> Vec<Vec<Placed>> {
+  let total = piece.iter().flat_map(|(_, vertices)| vertices).collect::<HashSet<_>>().len();
+  let materials = piece.iter().map(|(polygon, _)| material_key(polygon)).collect::<HashSet<_>>();
+  if total <= max_vertices && piece.len() <= max_polygons && materials.len() <= MAX_MATERIALS {
+    return vec![piece];
+  }
+  let mut by_vertex = HashMap::<usize, Vec<usize>>::new();
+  for (position, (_, vertices)) in piece.iter().enumerate() {
+    for &vertex in vertices {
+      by_vertex.entry(vertex).or_default().push(position);
+    }
+  }
+  let mut visited = vec![false; piece.len()];
+  let mut order = Vec::with_capacity(piece.len());
+  let mut queue = VecDeque::new();
+  for start in 0..piece.len() {
+    if visited[start] {
+      continue;
+    }
+    visited[start] = true;
+    queue.push_back(start);
+    while let Some(position) = queue.pop_front() {
+      order.push(position);
+      for vertex in &piece[position].1 {
+        for &next in &by_vertex[vertex] {
+          if !visited[next] {
+            visited[next] = true;
+            queue.push_back(next);
+          }
+        }
+      }
+    }
+  }
+  let mut slots = piece.into_iter().map(Some).collect::<Vec<_>>();
+  let mut parts = Vec::new();
+  let mut part = Vec::new();
+  let mut known = HashSet::new();
+  let mut known_materials = HashSet::new();
+  for position in order {
+    let placed = slots[position].take().expect("each polygon once");
+    let new = placed.1.iter().filter(|vertex| !known.contains(*vertex)).count();
+    let new_material = usize::from(!known_materials.contains(&material_key(&placed.0)));
+    if known.len() + new > max_vertices
+      || part.len() + 1 > max_polygons
+      || known_materials.len() + new_material > MAX_MATERIALS
+    {
+      parts.push(std::mem::take(&mut part));
+      known.clear();
+      known_materials.clear();
+    }
+    known.extend(placed.1.iter().copied());
+    known_materials.insert(material_key(&placed.0));
+    part.push(placed);
+  }
+  parts.push(part);
+  parts
+}
+
+/// Writes `slots` back into `root`'s children: unchanged ones as they were, changed ones rebuilt,
+/// emptied ones dropped, new ones after the rest; then the children compared whole that
+/// `removed` and `added` name. Returns the indices of the rebuilt children.
+fn rebuild(
+  root: &mut Bound,
+  slots: Vec<Slot>,
+  slot_of_child: &HashMap<usize, usize>,
+  removed: &[YbnChild],
+  added: &[YbnChild],
+) -> io::Result<HashSet<usize>> {
+  let mut rebuilt_children = HashSet::new();
+  let mut remaining = HashMap::<Vec<u8>, usize>::new();
+  for child in removed {
+    *remaining.entry(bound_identity(&child.bound)?).or_default() += 1;
+  }
+  let mut slots = slots.into_iter().map(Some).collect::<Vec<_>>();
+  let mut children = Vec::new();
+  let mut transforms = Vec::new();
+  let mut flags = Vec::new();
+  let old_children = std::mem::take(&mut root.children);
+  for (child_index, child) in old_children.into_iter().enumerate() {
+    let transform = root.transforms.get(child_index).copied().unwrap_or(IDENTITY);
+    let child_flags = root.flags.get(child_index).copied().unwrap_or_default();
+    match slot_of_child.get(&child_index) {
+      Some(&slot_index) => {
+        let slot = slots[slot_index].take().expect("each slot once");
+        let changed = slot.changed;
+        if let Some(bound) = rebuilt(slot)? {
+          if changed {
+            rebuilt_children.insert(children.len());
+          }
+          children.push(bound);
+          transforms.push(transform);
+          flags.push(child_flags);
+        }
+      }
+      None => {
+        if child.kind != "None"
+          && let Some(count) =
+            remaining.get_mut(&bound_identity(&child)?).filter(|count| **count > 0)
+        {
+          *count -= 1;
+          continue;
+        }
+        children.push(child);
+        transforms.push(transform);
+        flags.push(child_flags);
+      }
+    }
+  }
+  for slot in slots.into_iter().flatten() {
+    let (transform, child_flags) = (slot.transform, slot.flags);
+    if let Some(bound) = rebuilt(slot)? {
+      rebuilt_children.insert(children.len());
+      children.push(bound);
+      transforms.push(transform);
+      flags.push(child_flags);
+    }
+  }
+  for child in added {
+    children.push(child.bound.clone());
+    transforms.push(child.transform);
+    flags.push(child.flags);
+  }
+  if children.len() > u16::MAX as usize {
+    return Err(invalid_data("YBN Composite has too many children"));
+  }
+  root.children = children;
+  root.transforms = transforms;
+  root.flags = flags;
+  Ok(rebuilt_children)
+}
+
+/// The child `slot` stands for: its original when unchanged, otherwise rebuilt from the polygons
+/// it keeps and those added; `None` when it holds none.
+fn rebuilt(slot: Slot) -> io::Result<Option<Bound>> {
+  if !slot.changed {
+    return Ok(Some(slot.template));
+  }
+  if slot.kept.is_empty() && slot.added.is_empty() {
+    return Ok(None);
+  }
+  let mut bound = if slot.original {
+    let selected = slot.kept.iter().map(|(position, ..)| *position).collect::<HashSet<_>>();
+    geometry_polygon_subset(&slot.template, &selected)?
+  } else {
+    let mut bound = slot.template.clone();
+    let template = bound.geometry.take().unwrap_or_default();
+    let positions = slot.added.iter().flat_map(|(polygon, _)| polygon.shape.positions().to_vec());
+    let (mut minimum, mut maximum) = ([f32::INFINITY; 3], [f32::NEG_INFINITY; 3]);
+    for position in positions {
+      for axis in 0..3 {
+        minimum[axis] = minimum[axis].min(position[axis]);
+        maximum[axis] = maximum[axis].max(position[axis]);
+      }
+    }
+    bound.geometry = Some(Geometry {
+      center: std::array::from_fn(|axis| (minimum[axis] + maximum[axis]) * 0.5),
+      unknown_9c: template.unknown_9c,
+      unknown_ac: template.unknown_ac,
+      ..Geometry::default()
+    });
+    bound
+  };
+  let geometry = bound.geometry.as_mut().expect("a geometry child");
+  if !slot.added.is_empty() {
+    // Only the materials the kept polygons use count toward the limit placement checked.
+    crate::core::format::ybn::binary::compact_polygon_materials(geometry);
+    let colours = !geometry.vertex_colours.is_empty()
+      || (geometry.vertices.is_empty()
+        && slot.added.iter().any(|(polygon, _)| !polygon.vertex_colours.is_empty()));
+    let mut builder = GeometryBuilder::new(geometry, colours);
+    for (polygon, _) in &slot.added {
+      let polygon = builder.append(polygon)?;
+      builder.geometry.polygons.push(polygon);
+    }
+    // A grid holding every vertex placed, which the writer rounds them to.
+    geometry.vertex_quantum = Some(match bound.kind.as_str() {
+      "GeometryBVH" => {
+        crate::core::format::ybn::binary::geometry_bvh_quantum(geometry, &bound.common)?
+      }
+      _ => crate::core::format::ybn::binary::geometry_quantum(&bound.common)?,
+    });
+  }
+  Ok(Some(bound))
+}
+
+/// Appends resolved polygons to a geometry, finding its vertices, materials and colours by value.
+struct GeometryBuilder<'a> {
+  geometry: &'a mut Geometry,
+  colours: bool,
+  vertices: HashMap<([u32; 3], [u8; 4]), u16>,
+}
+
+impl<'a> GeometryBuilder<'a> {
+  fn new(
+    geometry: &'a mut Geometry,
+    colours: bool,
+  ) -> Self {
+    let mut vertices = HashMap::new();
+    for (index, vertex) in geometry.vertices.iter().enumerate() {
+      let colour = geometry.vertex_colours.get(index).copied().unwrap_or_default();
+      vertices.entry((vertex.map(f32::to_bits), colour)).or_insert(index as u16);
+    }
+    Self {
+      geometry,
+      colours,
+      vertices,
+    }
+  }
+
+  fn vertex(
+    &mut self,
+    position: [f32; 3],
+    colour: Option<[u8; 4]>,
+  ) -> io::Result<u16> {
+    let local = std::array::from_fn(|axis| position[axis] - self.geometry.center[axis]);
+    let colour = if self.colours { colour.unwrap_or([255; 4]) } else { [0; 4] };
+    let key = (local.map(f32::to_bits), colour);
+    if let Some(index) = self.vertices.get(&key) {
+      return Ok(*index);
+    }
+    let index = u16::try_from(self.geometry.vertices.len())
+      .ok()
+      .filter(|index| *index < u16::MAX)
+      .ok_or_else(|| invalid_data("YBN geometry has too many vertices"))?;
+    self.geometry.vertices.push(local);
+    if self.colours {
+      self.geometry.vertex_colours.push(colour);
+    }
+    self.vertices.insert(key, index);
+    Ok(index)
+  }
+
+  fn append(
+    &mut self,
+    polygon: &ResolvedPolygon,
+  ) -> io::Result<Polygon> {
+    let mut material = polygon.material;
+    if let Some(colour) = polygon.material_colour {
+      let index = match self.geometry.material_colours.iter().position(|known| *known == colour) {
+        Some(index) => index,
+        None => {
+          self.geometry.material_colours.push(colour);
+          self.geometry.material_colours.len() - 1
+        }
+      };
+      material.colour_index =
+        u8::try_from(index).map_err(|_| invalid_data("YBN has too many material colours"))?;
+    }
+    let material_index = match self.geometry.materials.iter().position(|known| *known == material) {
+      Some(index) => index,
+      None => {
+        self.geometry.materials.push(material);
+        self.geometry.materials.len() - 1
+      }
+    };
+    let material =
+      u8::try_from(material_index).map_err(|_| invalid_data("YBN has too many materials"))?;
+    let colour = |index: usize| polygon.vertex_colours.get(index).copied();
+    Ok(match &polygon.shape {
+      ResolvedShape::Triangle {
+        vertices,
+        vertex_flags,
+      } => Polygon::Triangle(Triangle {
+        material,
+        vertices: [
+          self.vertex(vertices[0], colour(0))?,
+          self.vertex(vertices[1], colour(1))?,
+          self.vertex(vertices[2], colour(2))?,
+        ],
+        vertex_flags: *vertex_flags,
+        edge_indices: [u16::MAX; 3],
+        ..Triangle::default()
+      }),
+      ResolvedShape::Box {
+        vertices,
+      } => Polygon::Box {
+        material,
+        vertices: [
+          self.vertex(vertices[0], colour(0))?,
+          self.vertex(vertices[1], colour(1))?,
+          self.vertex(vertices[2], colour(2))?,
+          self.vertex(vertices[3], colour(3))?,
+        ],
+      },
+      ResolvedShape::Sphere {
+        center,
+        radius,
+      } => Polygon::Sphere {
+        material,
+        vertex: self.vertex(*center, colour(0))?,
+        radius: *radius,
+      },
+      ResolvedShape::Capsule {
+        endpoints,
+        radius,
+      } => Polygon::Capsule {
+        material,
+        vertex1: self.vertex(endpoints[0], colour(0))?,
+        vertex2: self.vertex(endpoints[1], colour(1))?,
+        radius: *radius,
+      },
+      ResolvedShape::Cylinder {
+        endpoints,
+        radius,
+      } => Polygon::Cylinder {
+        material,
+        vertex1: self.vertex(endpoints[0], colour(0))?,
+        vertex2: self.vertex(endpoints[1], colour(1))?,
+        radius: *radius,
+      },
+    })
+  }
+}
+
+fn read_vec3(
+  bytes: &[u8],
+  offset: usize,
+) -> io::Result<[f32; 3]> {
+  Ok([read_f32(bytes, offset)?, read_f32(bytes, offset + 4)?, read_f32(bytes, offset + 8)?])
+}
+
+fn read_f32(
+  bytes: &[u8],
+  offset: usize,
+) -> io::Result<f32> {
+  let slice =
+    bytes.get(offset..offset + 4).ok_or_else(|| invalid_data("YBN record is too short"))?;
+  Ok(f32::from_le_bytes(slice.try_into().expect("four bytes")))
+}
+
+fn write_vec3(
+  bytes: &mut [u8],
+  offset: usize,
+  value: [f32; 3],
+) -> io::Result<()> {
+  for (axis, component) in value.into_iter().enumerate() {
+    write_f32(bytes, offset + axis * 4, component)?;
+  }
+  Ok(())
+}
+
+fn write_f32(
+  bytes: &mut [u8],
+  offset: usize,
+  value: f32,
+) -> io::Result<()> {
+  bytes
+    .get_mut(offset..offset + 4)
+    .ok_or_else(|| invalid_data("YBN record is too short"))?
+    .copy_from_slice(&value.to_le_bytes());
+  Ok(())
+}
+
+fn invalid_data(message: &str) -> io::Error {
+  io::Error::new(io::ErrorKind::InvalidData, message)
+}
+
+fn invalid_input(message: &str) -> io::Error {
+  io::Error::new(io::ErrorKind::InvalidInput, message)
+}

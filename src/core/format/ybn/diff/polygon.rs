@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 /// Collision shape expressed in its owning Bounds-local coordinates after GeometryCenter.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 pub enum ResolvedShape {
   /// Triangle winding is preserved; cyclic corner shifts are equivalent.
   Triangle {
@@ -42,6 +43,7 @@ pub enum ResolvedShape {
 
 /// A collision primitive with vertex and material references resolved by value.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 pub struct ResolvedPolygon {
   /// Geometry without BVH, polygon indices or derived triangle metadata.
   pub shape: ResolvedShape,
@@ -51,35 +53,6 @@ pub struct ResolvedPolygon {
   pub material_colour: Option<[u8; 4]>,
   /// Colours parallel to shape vertices, or empty when absent.
   pub vertex_colours: Vec<[u8; 4]>,
-}
-
-/// Provenance in one input model, not a cross-version polygon identity.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct PolygonLocation {
-  /// Child slots from the root to the owning Bounds; empty denotes the root.
-  pub bound_path: Vec<usize>,
-  /// Input polygon position, useful for diagnostics and locating a change in that input.
-  pub polygon_index: usize,
-}
-
-/// One added or removed occurrence, preserving duplicate-face multiplicity.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(tag = "change", rename_all = "snake_case")]
-pub enum PolygonDiff {
-  /// A primitive present only in the modified input.
-  Added {
-    /// Modified-input location.
-    location: PolygonLocation,
-    /// Resolved primitive.
-    polygon: ResolvedPolygon,
-  },
-  /// A primitive present only in the baseline input.
-  Removed {
-    /// Baseline-input location.
-    location: PolygonLocation,
-    /// Resolved primitive.
-    polygon: ResolvedPolygon,
-  },
 }
 
 impl ResolvedShape {

@@ -1,7 +1,10 @@
 use serde::{Deserialize, Serialize};
 
 /// Collision material properties, independent of material table ordering.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(
+  Debug, Clone, Copy, Default, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize,
+)]
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 pub struct Material {
   /// Surface material type.
   pub kind: u8,

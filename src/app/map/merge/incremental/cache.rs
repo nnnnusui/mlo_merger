@@ -191,11 +191,14 @@ pub(super) fn signature(
       (name, value)
     })
     .collect::<BTreeMap<_, _>>();
-  Ok(hex::encode(Sha256::digest(serde_json::to_vec(&(
-    algorithm_version(extension)?,
-    crate::core::config::matching::current(),
-    inputs,
-  ))?)))
+  let (version, tolerances) = (algorithm_version(extension)?, crate::core::config::matching::current());
+  // YBN merges fill geometry children within the configured limits.
+  let encoded = if extension == "ybn" {
+    serde_json::to_vec(&(version, tolerances, crate::core::config::geometry_limits()?, inputs))?
+  } else {
+    serde_json::to_vec(&(version, tolerances, inputs))?
+  };
+  Ok(hex::encode(Sha256::digest(encoded)))
 }
 
 #[cfg(test)]
@@ -268,9 +271,14 @@ mod tests {
     let files = BTreeMap::new();
     let inputs = BTreeMap::<String, serde_json::Value>::new();
     for (extension, version) in [("ymap", YMAP_ALGORITHM_VERSION), ("ybn", YBN_ALGORITHM_VERSION)] {
-      let expected = hex::encode(Sha256::digest(
-        serde_json::to_vec(&(version, crate::core::config::matching::current(), &inputs)).unwrap(),
-      ));
+      let tolerances = crate::core::config::matching::current();
+      let encoded = if extension == "ybn" {
+        let limits = crate::core::config::geometry_limits().unwrap();
+        serde_json::to_vec(&(version, tolerances, limits, &inputs)).unwrap()
+      } else {
+        serde_json::to_vec(&(version, tolerances, &inputs)).unwrap()
+      };
+      let expected = hex::encode(Sha256::digest(encoded));
       assert_eq!(signature(extension, &files).unwrap(), expected);
     }
     assert!(signature("unsupported", &files).is_err());

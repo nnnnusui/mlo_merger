@@ -2,6 +2,7 @@ pub mod dlc_activity;
 pub mod gamebuild;
 pub mod matching;
 
+use crate::core::format::ybn::diff::polygons::GeometryLimits;
 use serde::Deserialize;
 use std::{
   collections::BTreeMap,
@@ -42,10 +43,28 @@ struct Config {
   /// Corrections to which DLC archives the game loads.
   #[cfg_attr(feature = "typescript", specta(optional))]
   dlc_activity: dlc_activity::DlcActivityTable,
+  /// How merged YBN geometry children are filled.
+  #[cfg_attr(feature = "typescript", specta(optional))]
+  ybn: GeometryLimits,
 }
 
 impl Config {
   fn parse(text: &str) -> io::Result<Self> {
     toml::from_str(text).map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))
   }
+}
+
+/// The `[ybn]` limits of the config file ([`path`]), the defaults when it is missing.
+pub fn geometry_limits() -> io::Result<GeometryLimits> {
+  let path = path();
+  let text = match crate::platform::fs::read_to_string(&path) {
+    Ok(text) => text,
+    Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(GeometryLimits::default()),
+    Err(error) => return Err(error),
+  };
+  let limits = Config::parse(&text)
+    .map_err(|error| io::Error::new(error.kind(), format!("{}: {error}", path.display())))?
+    .ybn;
+  limits.validate()?;
+  Ok(limits)
 }

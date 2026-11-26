@@ -30,6 +30,7 @@ impl MergeYbnConflicts {
     vanilla_files: &[PathBuf],
     source_files: &[PathBuf],
   ) -> Result<(), Box<dyn std::error::Error>> {
+    let limits = crate::core::config::geometry_limits()?;
     let groups = group_by_name(source_files);
     let vanilla = vanilla_by_name(vanilla_files)?;
     fs::create_dir_all(&self.output_dir)?;
@@ -49,7 +50,7 @@ impl MergeYbnConflicts {
       let vanilla_bytes = fs::read(vanilla_path)?;
       let mod_bytes = paths.iter().map(fs::read).collect::<io::Result<Vec<_>>>()?;
       let mod_refs = mod_bytes.iter().map(Vec::as_slice).collect::<Vec<_>>();
-      let merged = merge_ybn_deltas(&vanilla_bytes, &mod_refs)?;
+      let merged = merge_ybn_deltas(&vanilla_bytes, &mod_refs, limits)?;
       let output_name = vanilla_path.file_name().ok_or("vanilla YBN filename missing")?;
       fs::write(self.output_dir.join(output_name), merged)?;
       for path in paths {

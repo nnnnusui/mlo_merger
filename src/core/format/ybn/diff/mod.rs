@@ -1,17 +1,14 @@
-//! Collision differences ([`YbnDiff`]) and the merge in use ([`merge_ybn_deltas`], in
-//! `legacy`), which works on the files themselves until YBNs get diff documents.
+//! Collision differences: YBNs compared as the polygons of the whole file grouped by collision
+//! flags ([`polygons`]), and the merge in use ([`merge_ybn_deltas`]).
 
 pub(super) mod legacy;
 pub use legacy::merge_ybn_deltas;
-mod compare;
 mod merge_geometry;
 mod polygon;
+pub mod polygons;
 mod resolve;
-mod semantic;
 
-pub use polygon::{PolygonDiff, PolygonLocation, ResolvedPolygon, ResolvedShape};
-pub use resolve::{BoundMetadata, PrimitiveBounds};
-pub use semantic::{BoundDiff, YbnDiff};
+pub use polygon::{ResolvedPolygon, ResolvedShape};
 
 #[cfg(test)]
 mod tests;

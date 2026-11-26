@@ -444,12 +444,23 @@ generation and carry the changes resources make to the others over to it.
 
 ### YBN
 
-- Shapes matching vanilla that any source lacks are removed, and new shapes from every
-  source are combined. Removal wins over material or triangle-corner flag changes of the
-  same geometry, whatever the source order.
-- Shapes match by geometry within the coordinate tolerance, not by polygon or vertex
-  index; boxes match by their eight corners, so a different reference vertex does not
-  bring back a removed box.
+- Collision is compared as the polygons of the whole file, grouped by the collision flags of
+  the geometry child holding them: what the collision is (`MAP_WEAPON`, `MAP_DYNAMIC`, ...) and
+  what collides with it (`PED`, `PROJECTILE`, ...). A polygon repeated under other flags is the
+  same surface in another collision layer, so groups are kept apart.
+- Polygons match by kind, material (but for its colour), corner flags, radius and positions
+  within `ybn_position`, not by polygon or vertex index: triangles keep their winding from any
+  corner, boxes match by their eight corners, capsules and cylinders by their endpoints either
+  way round. Exact repeats within a group count once. Children holding other than these
+  polygons are compared whole.
+- Polygons matching vanilla that any source lacks are removed, and the new polygons of every
+  source are added, those two sources add alike once. A removal wins over another source's
+  material or corner-flag change of the same geometry, whatever the source order.
+- Added polygons are placed so connected ones share a child: each connected piece joins the
+  child of its flags sharing most of its vertices that stays within the `[ybn]` limits and 256
+  materials, and the other pieces fill new children after the rest, a piece over the limits
+  split breadth-first. Children left empty are dropped; changed children are rebuilt and the
+  others kept as they are. The root's bounds keep vanilla's and cover every child.
 - Files without a vanilla baseline are skipped, or rejected when sources conflict.
 
 ## Overwrites
@@ -578,6 +589,17 @@ ymap_grass_position = 0.01
   quaternion and its negation make the same turn.
 - All other values must be positive; floating values must also be finite. Unknown keys and
   invalid TOML are errors.
+- `[ybn]` sets how merged YBN geometry children are filled (see [YBN](#ybn)):
+
+  ```toml
+  [ybn]
+  max_geometry_vertices = 65534
+  max_geometry_polygons = 32767
+  ```
+
+  `max_geometry_vertices` is at most 65534, the vertex indices being 16-bit, and
+  `max_geometry_polygons` at most 32767, the GeometryBVH indexing polygons with 16-bit signed
+  indices.
 - Effective settings are part of merge freshness, so changing them regenerates on the
   next merge without `-f`. Larger tolerances can treat intentionally different nearby
   shapes as identical.
