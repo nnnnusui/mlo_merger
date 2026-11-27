@@ -930,7 +930,9 @@ are arrays. File sizes and timestamps are JSON numbers, represented as TypeScrip
 - Which [DLC generations](#newer-dlc-generations) the game loads is worked out from the
   installed game's files and, with `--game-storage`, each build's title-update patches of the
   packs. FiveM also mounts the build's own `dlclist.xml`, `lodlights.rpf` and other files of
-  its title update, which the raw archive takes from the installed game for every build. The
+  its title update, which the raw archive takes from the installed game for every build; they
+  hold the same map data from build 3095 to 3889
+  ([game_data.md](format/game_data.md#differences-between-builds)). The
   engine's rules are inferred from the packs' data and observed loads, such as
   island LOD lights loading beside the archives they would otherwise replace.
 - `--get-diff SOURCE` writes the source YMAP's differences from the latest vanilla cache

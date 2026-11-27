@@ -8,7 +8,7 @@
 
 Merges deploy only the generation of each vanilla stream file the game loads and carry the changes resources make to the others over to it; see [Newer DLC Generations](reference.md#newer-dlc-generations).
 
-- [ ] Record the rest of each FiveM game build's own title update data that FiveM mounts for that build (`dlclist.xml`, `lodlights.rpf`, `scenario/`), and apply it when the vanilla cache targets the build; the installed title update's is applied to every build now. The packs' `dlc_patch/` replacements are kept per build (`--game-storage`). A pack's archive the title update patches without the pack declaring it (`not_declared` in `dlc_activity.json`) is taken as not loaded meanwhile, and stands for no path, so the YBNs whose latest version it holds have no candidates to carry their changes to (93 on the local vanilla archive that a same-name successor used to take).
+- [ ] A pack's archive the title update patches without the pack declaring it (`not_declared` in `dlc_activity.json`) is taken as not loaded, and stands for no path, so the YBNs whose latest version it holds have no candidates to carry their changes to (93 on the local vanilla archive that a same-name successor used to take).
 - [ ] Carry entity parent changes and additions with a parent to other generations; see the [plan](plan/202611191800_generation_entity_parents.md).
 - [ ] Carry modifications of nested arrays to other generations, or list them in `left_behind.json`.
 

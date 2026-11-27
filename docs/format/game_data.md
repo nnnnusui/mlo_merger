@@ -84,6 +84,21 @@ on one build than on another; the others differ in what the packs declare, or in
 other than YMAPs, YBNs and what the packs declare, or are missing from the builds before
 their pack's patch was added.
 
+The other paths FiveM takes from the build's `update.rpf` hold the same map data in the
+title updates of builds 3095 to 3889 (3323's was not compared), compared with the installed
+game's (3889):
+
+- `lodlights.rpf` and `paths.rpf` are the same, as are every YMAP and YBN of these paths.
+- `dlclist.xml` of each build is the start of the installed game's, ending before the packs
+  `[gamebuild]` in [asset/config.toml](../../asset/config.toml) lists for the next build, so
+  the stages `[gamebuild]` selects for a build out of the installed game's are the packs its
+  own list names.
+- `scenario/` (YMTs), `sp_manifest.ymt`, `ExtraTitleUpdateData.meta` and `x64/patch/` differ,
+  none of them map data.
+
+So the raw archive takes these paths from the installed game for every build. The title
+updates of builds before 3095 were not compared.
+
 So for a build below the installed one, the map data FiveM loads differs from the installed
 game's in the DLC packs' `dlc_patch/`: a file a later title update adds to a pack's patch is
 loaded from the pack's `dlc.rpf` instead, or is missing when the pack does not hold it, and the
