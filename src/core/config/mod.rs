@@ -41,6 +41,9 @@ struct Config {
   /// FiveM game builds and the DLC names that identify them, keyed by build number.
   #[cfg_attr(feature = "typescript", specta(optional))]
   gamebuild: BTreeMap<String, Vec<String>>,
+  /// The SHA-1 of each FiveM game build's `update/update.rpf`, keyed by build number.
+  #[cfg_attr(feature = "typescript", specta(optional))]
+  update_rpf: BTreeMap<String, String>,
   /// Corrections to which DLC archives the game loads.
   #[cfg_attr(feature = "typescript", specta(optional))]
   dlc_activity: dlc_activity::DlcActivityTable,

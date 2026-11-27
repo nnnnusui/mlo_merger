@@ -98,7 +98,7 @@ fn generate_diffs(
   fs::copy(docs().join("hash_names.json"), vanilla.join("hash_names.json")).unwrap();
   crate::common::json::write_json(
     &vanilla.join("cache_info.json"),
-    &json!({"format_version": 1, "game_dir": "", "versions": [{
+    &json!({"format_version": 4, "contents": ["map"], "game_dir": "", "versions": [{
       "id": "0000-base", "parent": null, "archives": [], "unchanged": 0,
       "changes": {VANILLA_NAME: {"previous_sha256": null, "file": {
         "sha256": hex::encode(Sha256::digest(&vanilla_bytes)), "object": object,

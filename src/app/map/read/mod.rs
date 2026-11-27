@@ -12,7 +12,7 @@ mod tests;
 use crate::app::map::source_cache::{HASH_NAMES, InventoriedFile, inventoried_files};
 use crate::app::map::vanilla_cache::{built_version, target_version};
 use crate::common::{Result, fingerprint::Fingerprint};
-use crate::core::config::gamebuild::GameBuild;
+use crate::core::config::gamebuild::{GameBuild, GameBuilds};
 use crate::core::conversion::load_hash_names_or_empty;
 use crate::core::format::ybn::{
   read::{YbnReadBound, read_model},
@@ -27,6 +27,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashSet};
 use std::io::{BufWriter, Write};
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::time::Duration;
 
 pub use lod_parents::{EntityLodParent, EntityLodParentRef, EntityLodParentScope};
@@ -580,8 +581,7 @@ impl Read {
     &self,
     matched: &mut [bool],
   ) -> Result<Vec<Selected>> {
-    let (manifest, _) = load_content(&self.vanilla_dir, ArchiveContent::Map)?;
-    let version = self.vanilla_version(&manifest)?;
+    let (manifest, version) = self.vanilla_stage()?;
     let files = manifest.resolve_version(&version)?;
     let mut selected = Vec::new();
     for (file_name, file) in files {
@@ -619,24 +619,32 @@ impl Read {
     Ok(selected)
   }
 
-  /// The stage vanilla files are read from: the last stage of [`Self::gamebuild`], otherwise
-  /// the stage the vanilla cache was built for, otherwise the last stage.
-  fn vanilla_version(
-    &self,
-    manifest: &VanillaCacheManifest,
-  ) -> Result<String> {
+  /// The stages vanilla files are read from, as a game build loads them, and the stage among
+  /// them: the last stage of [`Self::gamebuild`], otherwise the stage the vanilla cache was
+  /// built for, as the build it was built for loads it, otherwise the installed game's last
+  /// stage.
+  fn vanilla_stage(&self) -> Result<(Arc<VanillaCacheManifest>, String)> {
     if self.gamebuild.is_some() {
-      return target_version(manifest, self.gamebuild.as_ref());
+      let (manifest, _) =
+        load_content(&self.vanilla_dir, ArchiveContent::Map, self.gamebuild.as_ref())?;
+      let version = target_version(&manifest, self.gamebuild.as_ref())?;
+      return Ok((manifest, version));
     }
-    if let Some(version) = built_version(&self.vanilla_cache_dir) {
+    if let Some((version, built_for)) = built_version(&self.vanilla_cache_dir) {
+      let gamebuild = built_for
+        .map(|build| GameBuilds::load(&crate::core::config::path())?.resolve(&build.to_string()))
+        .transpose()?;
+      let (manifest, _) = load_content(&self.vanilla_dir, ArchiveContent::Map, gamebuild.as_ref())?;
       if manifest.versions.iter().any(|candidate| candidate.id == version) {
-        return Ok(version);
+        return Ok((manifest, version));
       }
       tracing::warn!(
         "The vanilla cache targets {version}, which the vanilla archive does not have; reading the last stage"
       );
     }
-    target_version(manifest, None)
+    let (manifest, _) = load_content(&self.vanilla_dir, ArchiveContent::Map, None)?;
+    let version = target_version(&manifest, None)?;
+    Ok((manifest, version))
   }
 
   /// The header of the document at `path`, unless it is missing or unreadable.

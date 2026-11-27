@@ -625,8 +625,7 @@ fn workspace_files(earlier: bool) -> Vec<SampleFile> {
     }));
     parent = Some(stage);
   }
-  let manifest =
-    serde_json::json!({"format_version": 1, "game_dir": "/mnt/gtav", "versions": versions});
+  let manifest = serde_json::json!({"format_version": 4, "contents": ["map"], "game_dir": "/mnt/gtav", "versions": versions});
   files.push(SampleFile {
     path: "asset/vanilla/cache_info.json".into(),
     bytes: serde_json::to_vec_pretty(&manifest).unwrap(),

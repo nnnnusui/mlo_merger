@@ -37,6 +37,7 @@ fn pipeline_routes_resources_through_merge_and_deploy_and_reuses_vanilla() {
     source_dir: root.join("input"),
     game_dir: root.join("missing-game"),
     magic: "magic.dat".into(),
+    game_storage: None,
     vanilla_dir: root.join("vanilla"),
     vanilla_cache_dir: root.join("vanilla-cache"),
     source_cache_dir: root.join("source-cache"),
@@ -82,9 +83,10 @@ fn pipeline_routes_resources_through_merge_and_deploy_and_reuses_vanilla() {
   write_json(
     &pipeline.vanilla_dir.join("cache_info.json"),
     &VanillaCacheManifest {
-      format_version: 2,
+      format_version: crate::core::game_archive::FORMAT_VERSION,
       contents: crate::core::game_archive::ArchiveContent::ALL.into(),
       game_dir: pipeline.game_dir.clone(),
+      title_updates: Default::default(),
       versions: vec![CacheVersion {
         id: "0000-base".into(),
         parent: None,
@@ -93,6 +95,7 @@ fn pipeline_routes_resources_through_merge_and_deploy_and_reuses_vanilla() {
         unchanged: 0,
         file_kinds: Default::default(),
         dlc: None,
+        patches: Vec::new(),
       }],
     },
   )
@@ -240,6 +243,7 @@ fn pipeline_reuses_vanilla_and_applies_exclusions_only_for_this_run() {
     source_dir: root.join("source"),
     game_dir: root.join("game"),
     magic: "magic.dat".into(),
+    game_storage: None,
     vanilla_dir: root.join("vanilla"),
     vanilla_cache_dir: root.join("vanilla-cache"),
     source_cache_dir: root.join("source-cache"),
@@ -261,9 +265,10 @@ fn pipeline_reuses_vanilla_and_applies_exclusions_only_for_this_run() {
   write_json(
     &pipeline.vanilla_dir.join("cache_info.json"),
     &VanillaCacheManifest {
-      format_version: 2,
+      format_version: crate::core::game_archive::FORMAT_VERSION,
       contents: crate::core::game_archive::ArchiveContent::ALL.into(),
       game_dir: pipeline.game_dir.clone(),
+      title_updates: Default::default(),
       versions: vec![CacheVersion {
         id: "0000-base".into(),
         parent: None,
@@ -272,6 +277,7 @@ fn pipeline_reuses_vanilla_and_applies_exclusions_only_for_this_run() {
         unchanged: 0,
         file_kinds: Default::default(),
         dlc: None,
+        patches: Vec::new(),
       }],
     },
   )
@@ -309,6 +315,7 @@ fn missing_vanilla_requires_a_game_directory_without_destroying_existing_data() 
     source_dir: root.join("input"),
     game_dir: root.join("missing-game"),
     magic: "magic.dat".into(),
+    game_storage: None,
     vanilla_dir: root.join("vanilla"),
     vanilla_cache_dir: root.join("vanilla-cache"),
     source_cache_dir: root.join("source-cache"),

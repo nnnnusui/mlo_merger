@@ -22,6 +22,10 @@ pub struct GenerateVanilla {
   pub output_dir: PathBuf,
   /// CodeWalker's `magic.dat`, needed only when generating.
   pub magic: PathBuf,
+  /// FiveM's `game-storage` directory (`FiveM.app/data/game-storage/`), from whose copies of the
+  /// game builds' `update/update.rpf` each build's title-update patches of the DLC packs are
+  /// read; without it, only the installed game's are.
+  pub game_storage: Option<PathBuf>,
   /// The content sets to extract. Generation also extracts those the existing archive holds.
   pub contents: BTreeSet<ArchiveContent>,
   /// Reuses a valid existing archive holding `contents`; otherwise generates only into an
@@ -39,7 +43,8 @@ impl GenerateVanilla {
   /// use mlo_merger::core::game_archive::ArchiveContent;
   /// mlo_merger::app::vanilla::GenerateVanilla {
   ///   game_dir: "/mnt/gtav".into(), output_dir: "asset/vanilla".into(),
-  ///   magic: "magic.dat".into(), contents: ArchiveContent::ALL.into(), reuse_existing: true,
+  ///   magic: "magic.dat".into(), game_storage: None, contents: ArchiveContent::ALL.into(),
+  ///   reuse_existing: true,
   /// }.run()?;
   /// # Ok::<(), Box<dyn std::error::Error>>(())
   /// ```
@@ -54,6 +59,7 @@ impl GenerateVanilla {
           game_dir: self.game_dir.clone(),
           output_dir: self.output_dir.clone(),
           magic: self.magic.clone(),
+          game_storage: self.game_storage.clone(),
           files: FileSelection::new(contents),
         }
         .run_with_metadata(&["hash_names.json"], &["rpf_names.json"], write_hash_index)

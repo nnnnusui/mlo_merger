@@ -1,7 +1,7 @@
 //! FiveM game builds placed among vanilla stages by the DLCs they first include.
 
 use crate::platform::fs;
-use std::{io, path::Path};
+use std::{collections::BTreeMap, io, path::Path};
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
@@ -128,6 +128,48 @@ fn fivem_name(name: &str) -> String {
     name = format!("mp{name}");
   }
   name
+}
+
+/// The `[update_rpf]` table: the SHA-1 of each FiveM game build's `update/update.rpf`, by which
+/// vanilla generation finds the build's file among those FiveM downloads.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct UpdateRpfs {
+  /// Lowercase SHA-1 by build number.
+  pub builds: BTreeMap<u32, String>,
+}
+
+impl UpdateRpfs {
+  /// Loads `[update_rpf]` from optional TOML configuration; a missing file has no builds.
+  pub fn load(path: &Path) -> io::Result<Self> {
+    let text = match fs::read_to_string(path) {
+      Ok(text) => text,
+      Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(Self::default()),
+      Err(error) => return Err(error),
+    };
+    Self::parse(&text)
+      .map_err(|error| io::Error::new(error.kind(), format!("{}: {error}", path.display())))
+  }
+
+  /// Parses `[update_rpf]` from TOML configuration text.
+  pub fn parse(text: &str) -> io::Result<Self> {
+    let invalid = |message: String| io::Error::new(io::ErrorKind::InvalidData, message);
+    let mut builds = BTreeMap::new();
+    for (key, sha1) in super::Config::parse(text)?.update_rpf {
+      let build = key
+        .parse::<u32>()
+        .ok()
+        .filter(|build| *build > 0)
+        .ok_or_else(|| invalid(format!("update_rpf.{key} is not a game build number")))?;
+      let sha1 = sha1.trim().to_ascii_lowercase();
+      if sha1.len() != 40 || !sha1.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        return Err(invalid(format!("update_rpf.{key} is not a SHA-1: {sha1}")));
+      }
+      builds.insert(build, sha1);
+    }
+    Ok(Self {
+      builds,
+    })
+  }
 }
 
 impl GameBuild {

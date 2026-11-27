@@ -60,7 +60,7 @@ impl ListVanillaVersions {
     if name.is_empty() || matches!(name, "." | "..") || name.contains(['/', '\\', ':']) {
       return Err("Expected a vanilla basename such as example.ymap or example.ybn".into());
     }
-    let (manifest, _) = load_content(&self.vanilla_cache_dir, ArchiveContent::Map)?;
+    let (manifest, _) = load_content(&self.vanilla_cache_dir, ArchiveContent::Map, None)?;
     let mut ids = BTreeSet::new();
     let mut previous_version = None;
     let mut previous_hash: Option<&str> = None;
@@ -125,9 +125,10 @@ mod tests {
       },
     };
     let mut manifest = VanillaCacheManifest {
-      format_version: 2,
+      format_version: crate::core::game_archive::FORMAT_VERSION,
       contents: crate::core::game_archive::ArchiveContent::ALL.into(),
       game_dir: root.join("missing-game"),
+      title_updates: Default::default(),
       versions: vec![
         CacheVersion {
           id: "0000-base".into(),
@@ -140,6 +141,7 @@ mod tests {
             ("a.ybn".into(), change(None, "ybn-first", "0000-base/ybn/a.ybn")),
           ]),
           dlc: None,
+          patches: Vec::new(),
         },
         CacheVersion {
           id: "0001-unchanged".into(),
@@ -149,6 +151,7 @@ mod tests {
           file_kinds: BTreeMap::new(),
           changes: BTreeMap::new(),
           dlc: None,
+          patches: Vec::new(),
         },
         CacheVersion {
           id: "0002-patch".into(),
@@ -165,6 +168,7 @@ mod tests {
             ("a.ybn".into(), change(Some("ybn-first"), "ybn-second", "0002-patch/ybn/a.ybn")),
           ]),
           dlc: None,
+          patches: Vec::new(),
         },
       ],
     };

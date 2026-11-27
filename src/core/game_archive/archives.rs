@@ -148,7 +148,25 @@ pub(crate) fn extract(
 ) -> Result<Vec<ExtractedFile>> {
   tracing::info!("Scanning {relative}");
   let path = game_path(game_dir, Path::new(relative))?;
-  let root = RpfArchive::open(&path, keys)?;
+  extract_from(keys, &path, relative, output, subtree, rpf_names, selection)
+}
+
+/// [`extract`] from the archive at `path`, read as the game's archive at `relative`, whose
+/// name selects its key and which the extracted files' sources start with.
+pub(crate) fn extract_from(
+  keys: &RpfKeys,
+  path: &Path,
+  relative: &str,
+  output: &Path,
+  subtree: Option<&str>,
+  rpf_names: &mut RpfNames,
+  selection: &FileSelection,
+) -> Result<Vec<ExtractedFile>> {
+  let name = Path::new(relative)
+    .file_name()
+    .and_then(|name| name.to_str())
+    .ok_or_else(|| format!("Invalid archive path: {relative}"))?;
+  let root = RpfArchive::open_as(path, name, keys)?;
   let prefix = subtree.map(|subtree| format!("{}/", subtree.to_lowercase()));
   let mut selected: Vec<(&RpfArchive, &RpfFile)> = Vec::new();
   for archive in root.archives() {
@@ -182,7 +200,7 @@ pub(crate) fn extract(
     .par_iter()
     .enumerate()
     .map_init(
-      || File::open(&path),
+      || File::open(path),
       |file, (index, (archive, entry))| -> std::result::Result<Option<ExtractedFile>, String> {
         let file = file.as_mut().map_err(|error| format!("{}: {error}", path.display()))?;
         let data = archive

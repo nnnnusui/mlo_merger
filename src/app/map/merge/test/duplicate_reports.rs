@@ -41,6 +41,7 @@ fn incremental_merge_preserves_and_restores_duplicate_reports() {
       format_version: 2,
       contents: crate::core::game_archive::ArchiveContent::ALL.into(),
       game_dir: root.join("game"),
+      title_updates: Default::default(),
       versions: vec![CacheVersion {
         id: "0000-base".into(),
         parent: None,
@@ -59,6 +60,7 @@ fn incremental_merge_preserves_and_restores_duplicate_reports() {
         )]),
         file_kinds: Default::default(),
         dlc: None,
+        patches: Vec::new(),
       }],
     },
   )

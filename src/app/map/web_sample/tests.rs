@@ -71,6 +71,7 @@ impl Workspace {
       source_dir: self.map("source"),
       game_dir: self.asset("missing-game"),
       magic: self.asset("magic.dat"),
+      game_storage: None,
       vanilla_dir: self.asset("vanilla"),
       vanilla_cache_dir: self.map("vanilla-cache"),
       source_cache_dir: self.map("source-cache"),

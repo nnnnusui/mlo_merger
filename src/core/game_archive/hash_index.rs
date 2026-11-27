@@ -42,8 +42,18 @@ pub(crate) fn write_hash_index(
   rpf_names: &RpfNames,
 ) -> Result<()> {
   let manifest_bytes = fs::read(super::manifest_path(vanilla_dir))?;
-  let latest_version = manifest.versions.last().ok_or("Vanilla archive has no stages")?.id.clone();
-  let files = manifest.resolve_version(&latest_version)?;
+  let installed = manifest.for_build(None)?;
+  let latest_version = installed.versions.last().ok_or("Vanilla archive has no stages")?.id.clone();
+  let mut files = installed.resolve_version(&latest_version)?.into_iter().collect::<Vec<_>>();
+  // The versions of the title update's patches other game builds ship name their own entities.
+  let latest = files.iter().map(|(_, file)| file.object.clone()).collect::<BTreeSet<_>>();
+  for patch in manifest.versions.iter().flat_map(|version| &version.patches) {
+    for (name, change) in &patch.changes {
+      if !latest.contains(&change.file.object) {
+        files.push((name.clone(), change.file.clone()));
+      }
+    }
+  }
   let revision = hex::encode(Sha256::digest(&manifest_bytes));
 
   let ymaps = files

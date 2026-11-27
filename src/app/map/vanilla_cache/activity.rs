@@ -611,11 +611,13 @@ mod tests {
       file_kinds: BTreeMap::new(),
       unchanged: 0,
       dlc,
+      patches: Vec::new(),
     };
     let manifest = VanillaCacheManifest {
-      format_version: 2,
+      format_version: crate::core::game_archive::FORMAT_VERSION,
       contents: Default::default(),
       game_dir: ".".into(),
+      title_updates: Default::default(),
       versions: vec![
         version(
           "0000-base",

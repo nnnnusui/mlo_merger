@@ -28,6 +28,7 @@ pub(super) fn earlier_versions() -> &'static [(String, Vec<u8>)] {
       source_dir: map.join("source"),
       game_dir: asset.join("missing-game"),
       magic: asset.join("magic.dat"),
+      game_storage: None,
       vanilla_dir: asset.join("vanilla"),
       vanilla_cache_dir: map.join("vanilla-cache"),
       source_cache_dir: map.join("source-cache"),

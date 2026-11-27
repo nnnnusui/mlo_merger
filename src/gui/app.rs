@@ -92,6 +92,7 @@ impl VanillaApp {
           game_dir: PathBuf::from(self.game_dir.trim()),
           output_dir: self.output_dir(),
           magic: PathBuf::from(self.magic.trim()),
+          game_storage: None,
           contents: [ArchiveContent::Map].into(),
           reuse_existing: false,
         };

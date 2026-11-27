@@ -12,7 +12,7 @@ use super::{
     platform_virtual_path, sub_pack_count,
   },
   publication::{Staging, publish_cache, reset_output_directory},
-  stage::stage,
+  stage::{self, stage, stage_pack},
 };
 use crate::app::map::vanilla_cache::{ListVanillaVersions, VanillaVersionChange};
 
@@ -93,32 +93,34 @@ fn resets_only_cache_output_and_refuses_game_or_workspace_paths() {
 }
 
 #[test]
-fn cache_manifest_accepts_known_schemas_and_reads_legacy_archives_as_maps() {
+fn cache_manifest_accepts_its_schema_and_asks_to_regenerate_older_ones() {
   let root = std::env::temp_dir().join(format!("vanilla_schema_test_{}", std::process::id()));
   fs::create_dir_all(&root).unwrap();
   let _cleanup = Staging(root.clone());
-  fs::write(
-    root.join("cache_info.json"),
-    r#"{"format_version":1,"game_dir":"game","versions":[]}"#,
-  )
-  .unwrap();
-  let legacy = load_manifest(&root).unwrap();
-  assert_eq!(legacy.contents, [ArchiveContent::Map].into());
-  assert!(load_content(&root, ArchiveContent::Map).is_ok());
-  assert!(
-    load_content(&root, ArchiveContent::Clothing)
-      .unwrap_err()
-      .to_string()
-      .contains("--generate-vanilla --content clothing")
-  );
+  for older in [1, 2, 3] {
+    fs::write(
+      root.join("cache_info.json"),
+      format!(r#"{{"format_version":{older},"contents":["map"],"game_dir":"game","versions":[]}}"#),
+    )
+    .unwrap();
+    assert!(load_manifest(&root).unwrap_err().to_string().contains("--generate-vanilla"));
+  }
   let mut manifest = VanillaCacheManifest {
     format_version: FORMAT_VERSION,
-    contents: ArchiveContent::ALL.into(),
+    contents: [ArchiveContent::Map].into(),
     game_dir: "game".into(),
+    title_updates: Default::default(),
     versions: vec![],
   };
   write_json(&root.join("cache_info.json"), &manifest).unwrap();
   assert_eq!(load_manifest(&root).unwrap().format_version, FORMAT_VERSION);
+  assert!(load_content(&root, ArchiveContent::Map, None).is_ok());
+  assert!(
+    load_content(&root, ArchiveContent::Clothing, None)
+      .unwrap_err()
+      .to_string()
+      .contains("--generate-vanilla --content clothing")
+  );
   manifest.format_version = FORMAT_VERSION + 1;
   write_json(&root.join("cache_info.json"), &manifest).unwrap();
   assert!(load_manifest(&root).unwrap_err().to_string().contains("Unsupported GTA V cache schema"));
@@ -148,6 +150,7 @@ fn content_views_keep_their_files_and_revisions_apart() {
     format_version: FORMAT_VERSION,
     contents: ArchiveContent::ALL.into(),
     game_dir: "game".into(),
+    title_updates: Default::default(),
     versions: vec![CacheVersion {
       id: "0000-base".into(),
       parent: None,
@@ -160,11 +163,12 @@ fn content_views_keep_their_files_and_revisions_apart() {
       file_kinds: BTreeMap::from([("a.ymt".into(), "ped_variation".into())]),
       unchanged,
       dlc: None,
+      patches: Vec::new(),
     }],
   };
   write_json(&root.join("cache_info.json"), &manifest("first", 0)).unwrap();
-  let (map, map_revision) = load_content(&root, ArchiveContent::Map).unwrap();
-  let (clothing, clothing_revision) = load_content(&root, ArchiveContent::Clothing).unwrap();
+  let (map, map_revision) = load_content(&root, ArchiveContent::Map, None).unwrap();
+  let (clothing, clothing_revision) = load_content(&root, ArchiveContent::Clothing, None).unwrap();
   assert_eq!(map.contents, [ArchiveContent::Map].into());
   assert_eq!(
     map.versions[0].changes.keys().map(String::as_str).collect::<Vec<_>>(),
@@ -176,8 +180,8 @@ fn content_views_keep_their_files_and_revisions_apart() {
   assert_eq!(load_manifest(&root).unwrap().versions[0].changes.len(), 3);
 
   write_json(&root.join("cache_info.json"), &manifest("second", 4)).unwrap();
-  let (_, changed_map) = load_content(&root, ArchiveContent::Map).unwrap();
-  let (_, changed_clothing) = load_content(&root, ArchiveContent::Clothing).unwrap();
+  let (_, changed_map) = load_content(&root, ArchiveContent::Map, None).unwrap();
+  let (_, changed_clothing) = load_content(&root, ArchiveContent::Clothing, None).unwrap();
   assert_eq!(changed_map, map_revision);
   assert_ne!(changed_clothing, clothing_revision);
 }
@@ -192,9 +196,10 @@ fn stages_store_only_changed_raw_files_and_resolve_prior_versions() {
   fs::write(root.join("second"), b"second map version").unwrap();
   fs::write(root.join("third"), b"third map version").unwrap();
   let mut manifest = VanillaCacheManifest {
-    format_version: 2,
+    format_version: crate::core::game_archive::FORMAT_VERSION,
     contents: crate::core::game_archive::ArchiveContent::ALL.into(),
     game_dir: "game".into(),
+    title_updates: Default::default(),
     versions: vec![],
   };
   let mut current = BTreeMap::new();
@@ -298,9 +303,10 @@ fn stages_cache_raw_ybn_replacements_and_ymap_files() {
     )
   };
   let mut manifest = VanillaCacheManifest {
-    format_version: 2,
+    format_version: crate::core::game_archive::FORMAT_VERSION,
     contents: crate::core::game_archive::ArchiveContent::ALL.into(),
     game_dir: "missing-game".into(),
+    title_updates: Default::default(),
     versions: vec![],
   };
   let mut current = BTreeMap::new();
@@ -410,11 +416,13 @@ fn publication_restores_existing_versions_if_root_metadata_cannot_be_replaced() 
     file_kinds: Default::default(),
     unchanged: 0,
     dlc: None,
+    patches: Vec::new(),
   };
   let manifest = VanillaCacheManifest {
-    format_version: 2,
+    format_version: crate::core::game_archive::FORMAT_VERSION,
     contents: crate::core::game_archive::ArchiveContent::ALL.into(),
     game_dir: "game".into(),
+    title_updates: Default::default(),
     versions: vec![version],
   };
   fs::write(output.join("0000-base/ymap/map.ymap"), b"old").unwrap();
@@ -456,9 +464,10 @@ fn publication_keeps_empty_versions_in_metadata_without_stage_directories() {
   fs::create_dir_all(output.join("0000-base")).unwrap();
   fs::write(root.join("map.ymap"), b"raw map").unwrap();
   let mut manifest = VanillaCacheManifest {
-    format_version: 2,
+    format_version: crate::core::game_archive::FORMAT_VERSION,
     contents: crate::core::game_archive::ArchiveContent::ALL.into(),
     game_dir: root.join("game"),
+    title_updates: Default::default(),
     versions: vec![],
   };
   let mut current = BTreeMap::new();
@@ -526,8 +535,219 @@ fn publication_keeps_empty_versions_in_metadata_without_stage_directories() {
   assert_eq!(issues[0].kind, crate::core::check::CheckIssueKind::Unrecorded);
 }
 
+/// A stage with files of `contents`, each `(name, source, stored)`, extracted into `root`.
+fn extracted(
+  root: &Path,
+  files: &[(&str, &str, &str)],
+) -> Vec<(ExtractedFile, PathBuf)> {
+  files
+    .iter()
+    .map(|(name, source, stored)| {
+      let file = ExtractedFile {
+        name: (*name).into(),
+        source: (*source).into(),
+        stored: (*stored).into(),
+        sha256: hex::encode(Sha256::digest(fs::read(root.join(stored)).unwrap())),
+        kind: None,
+      };
+      (file, root.to_path_buf())
+    })
+    .collect()
+}
+
 #[test]
-fn title_update_patches_belong_to_their_dlc_stage() {
+fn title_update_patches_are_kept_per_version_in_their_packs_stage() {
+  let extensions = &FileSelection::new([ArchiveContent::Map]).extensions();
+  let root = std::env::temp_dir().join(format!("vanilla_patch_stage_{}", std::process::id()));
+  fs::create_dir_all(&root).unwrap();
+  let _cleanup = Staging(root.clone());
+  for name in ["base", "pack", "old", "new", "shared"] {
+    fs::write(root.join(name), format!("{name} version")).unwrap();
+  }
+  let mut manifest = VanillaCacheManifest {
+    format_version: FORMAT_VERSION,
+    contents: [ArchiveContent::Map].into(),
+    game_dir: "game".into(),
+    title_updates: BTreeMap::from([
+      (100, "update+update.rpf_a".into()),
+      (200, "update/update.rpf".into()),
+    ]),
+    versions: vec![],
+  };
+  let builds = manifest.title_updates.keys().copied().collect();
+  let mut current = stage::Cumulative::default();
+  for label in ["base", "update"] {
+    stage::stage_with(&mut manifest, &mut current, &root, label, extensions, || {
+      Ok((vec![], extracted(&root, &[("a.ymap", "x64a.rpf/a.ymap", "base")])))
+    })
+    .unwrap();
+  }
+  let declared = |device: &str| super::dlc_content::DlcContent {
+    device: device.into(),
+    ..Default::default()
+  };
+  let patch = "update/update.rpf/dlc_patch/pack/x64/a.rpf";
+  stage_pack(&mut manifest, &mut current, &root, "pack", extensions, &builds, || {
+    Ok(stage::PackFiles {
+      archives: vec!["update/x64/dlcpacks/pack/dlc.rpf".into()],
+      files: extracted(&root, &[("a.ymap", "update/x64/dlcpacks/pack/dlc.rpf/a.ymap", "pack")]),
+      dlc: Some(declared("pack")),
+      patches: vec![
+        stage::PatchSource {
+          name: "100".into(),
+          builds: vec![100],
+          installed: false,
+          files: extracted(
+            &root,
+            &[
+              ("a.ymap", &format!("{patch}/a.ymap"), "old"),
+              ("d.ymap", &format!("{patch}/d.ymap"), "shared"),
+            ],
+          ),
+          dlc: Some(declared("old")),
+        },
+        stage::PatchSource {
+          name: "200".into(),
+          builds: vec![200],
+          installed: true,
+          files: extracted(
+            &root,
+            &[
+              ("a.ymap", &format!("{patch}/a.ymap"), "new"),
+              ("c.ymap", &format!("{patch}/c.ymap"), "new"),
+              ("d.ymap", &format!("{patch}/d.ymap"), "shared"),
+            ],
+          ),
+          dlc: Some(declared("new")),
+        },
+      ],
+    })
+  })
+  .unwrap();
+  // Every build and the installed game ship the same patch of `same`.
+  stage_pack(&mut manifest, &mut current, &root, "same", extensions, &builds, || {
+    Ok(stage::PackFiles {
+      archives: vec![],
+      files: vec![],
+      dlc: None,
+      patches: vec![stage::PatchSource {
+        name: "100".into(),
+        builds: vec![100, 200],
+        installed: true,
+        files: extracted(&root, &[("s.ymap", "update/update.rpf/dlc_patch/same/s.ymap", "shared")]),
+        dlc: None,
+      }],
+    })
+  })
+  .unwrap();
+  // A later pack shipping what the installed game's patch does: kept for build 100, whose patch
+  // differs, while a file every build shares stays unchanged.
+  stage_pack(&mut manifest, &mut current, &root, "later", extensions, &builds, || {
+    Ok(stage::PackFiles {
+      archives: vec![],
+      files: extracted(
+        &root,
+        &[
+          ("a.ymap", "update/x64/dlcpacks/later/dlc.rpf/a.ymap", "new"),
+          ("s.ymap", "update/x64/dlcpacks/later/dlc.rpf/s.ymap", "shared"),
+        ],
+      ),
+      dlc: None,
+      patches: vec![],
+    })
+  })
+  .unwrap();
+
+  let ids = manifest.versions.iter().map(|version| version.id.as_str()).collect::<Vec<_>>();
+  assert_eq!(ids, ["0000-base", "0001-update", "0002-pack", "0003-same", "0004-later"]);
+  let pack = &manifest.versions[2];
+  assert_eq!(pack.dlc, Some(declared("pack")));
+  let patch_ids = pack.patches.iter().map(|patch| patch.id.as_str()).collect::<Vec<_>>();
+  assert_eq!(patch_ids, ["0002-pack/update_rpf/100", "0002-pack/update_rpf/200"]);
+  assert_eq!(fs::read(root.join("0002-pack/ymap/a.ymap")).unwrap(), b"pack version");
+  assert_eq!(fs::read(root.join("0002-pack/update_rpf/100/ymap/a.ymap")).unwrap(), b"old version");
+  assert_eq!(fs::read(root.join("0002-pack/update_rpf/200/ymap/c.ymap")).unwrap(), b"new version");
+  // A file both versions ship is stored once.
+  let shared = &pack.patches[1].changes["d.ymap"].file.object;
+  assert_eq!(shared, "0002-pack/update_rpf/100/ymap/d.ymap");
+  assert!(!root.join("0002-pack/update_rpf/200/ymap/d.ymap").exists());
+  assert_eq!(manifest.versions[3].patches[0].id, "0003-same/update_rpf/100");
+  assert_eq!(manifest.versions[4].changes.keys().collect::<Vec<_>>(), ["a.ymap"]);
+  assert_eq!(manifest.versions[4].unchanged, 1);
+  let info: CacheVersion =
+    crate::common::json::read_json(root.join("0002-pack/version_info.json")).unwrap();
+  assert_eq!(info.patches.len(), 2);
+  // A stage holding only patches is a directory of its own.
+  assert!(root.join("0003-same/version_info.json").is_file());
+
+  let table = crate::core::config::gamebuild::GameBuilds::parse(
+    "[gamebuild]\n1 = []\n100 = [\"pack\"]\n200 = []\n",
+  )
+  .unwrap();
+  let view = |build: Option<&str>| {
+    let gamebuild = build.map(|build| table.resolve(build).unwrap());
+    manifest.for_build(gamebuild.as_ref()).unwrap()
+  };
+  let ids = |view: &VanillaCacheManifest| {
+    view.versions.iter().map(|version| version.id.clone()).collect::<Vec<_>>()
+  };
+  let installed = view(None);
+  assert_eq!(
+    ids(&installed),
+    [
+      "0000-base",
+      "0001-update",
+      "0002-pack",
+      "0002-pack/update_rpf/200",
+      "0003-same",
+      "0003-same/update_rpf/100",
+      "0004-later"
+    ]
+  );
+  assert_eq!(installed.versions[2].dlc, Some(declared("new")));
+  assert!(installed.versions.iter().all(|version| version.patches.is_empty()));
+  // The later pack's copy matches the installed game's patch.
+  let later = &installed.versions[6].changes["a.ymap"];
+  assert_eq!(later.previous_sha256.as_ref(), Some(&later.file.sha256));
+  let latest = installed.resolve_version("0003-same/update_rpf/100").unwrap();
+  assert_eq!(latest["a.ymap"].object, "0002-pack/update_rpf/200/ymap/a.ymap");
+  assert_eq!(latest["c.ymap"].object, "0002-pack/update_rpf/200/ymap/c.ymap");
+  // Build 150 has no title update of its own and reads build 100's.
+  for build in ["100", "150"] {
+    let old = view(Some(build));
+    assert_eq!(old.versions[3].id, "0002-pack/update_rpf/100");
+    assert_eq!(old.versions[2].dlc, Some(declared("old")));
+    let files = old.resolve_version("0002-pack/update_rpf/100").unwrap();
+    assert_eq!(files["a.ymap"].object, "0002-pack/update_rpf/100/ymap/a.ymap");
+    assert!(!files.contains_key("c.ymap"));
+    let later = &old.versions.last().unwrap().changes["a.ymap"];
+    assert_eq!(later.previous_sha256, Some(hex::encode(Sha256::digest("old version"))));
+    assert_eq!(
+      old.resolve_version("0004-later").unwrap()["a.ymap"].object,
+      "0004-later/ymap/a.ymap"
+    );
+  }
+  // Build 1 stops at the title update, so the packs after it take the installed game's patches.
+  assert_eq!(ids(&view(Some("1")))[3], "0002-pack/update_rpf/200");
+}
+
+#[test]
+fn update_rpf_table_lists_sha1s_by_build() {
+  use crate::core::config::gamebuild::UpdateRpfs;
+  let sha1 = "31CBD81373475D5407C20058733EA910CADCE13B";
+  let table = UpdateRpfs::parse(&format!("[update_rpf]\n3889 = \"{sha1}\"\n")).unwrap();
+  assert_eq!(table.builds[&3889], sha1.to_ascii_lowercase());
+  assert!(UpdateRpfs::parse("[update_rpf]\n3889 = \"abc\"\n").is_err());
+  assert!(UpdateRpfs::parse(&format!("[update_rpf]\nlatest = \"{sha1}\"\n")).is_err());
+  let asset = Path::new(env!("CARGO_MANIFEST_DIR")).join("asset/config.toml");
+  let builds = crate::core::config::gamebuild::GameBuilds::load(&asset).unwrap();
+  for build in UpdateRpfs::load(&asset).unwrap().builds.keys() {
+    assert_eq!(builds.resolve(&build.to_string()).unwrap().build, *build);
+  }
+}
+
+#[test]
+fn title_update_patches_name_their_pack() {
   assert_eq!(
     patch_dlc("update/update.rpf/dlc_patch/mpbeach/x64/levels/map.rpf/a.ymap"),
     Some("mpbeach")

@@ -143,7 +143,7 @@ pub(crate) fn publish_cache(
         fs::rename(&destination, backup.join(&version.id))?;
       }
       published.push((version.id.clone(), existed));
-      if !version.changes.is_empty() {
+      if super::stage::has_files(version) {
         fs::rename(build.join(&version.id), destination)?;
       }
     }

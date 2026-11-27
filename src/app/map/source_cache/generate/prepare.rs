@@ -173,7 +173,7 @@ pub(super) fn prepare(build: &BuildSourceCache) -> Result<Prepared> {
     relocated = true;
     tracing::info!("Relocated source resource {old_id} -> {id}");
   }
-  let (_, manifest_sha256) = load_content(&vanilla_dir, ArchiveContent::Map)?;
+  let (_, manifest_sha256) = load_content(&vanilla_dir, ArchiveContent::Map, None)?;
   let derived = load_cache(&vanilla_cache_dir, &manifest_sha256)?;
   let derived_revision = derived.revision.clone();
   let resource_revision = format!("{manifest_sha256}:{derived_revision}");

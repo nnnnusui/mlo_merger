@@ -102,6 +102,17 @@ impl RpfArchive {
       .file_name()
       .and_then(|name| name.to_str())
       .ok_or_else(|| invalid_data(format!("Invalid archive name: {}", path.display())))?;
+    Self::open_as(path, name, keys)
+  }
+
+  /// Reads the archive at `path` as the game names it, `name`, which selects its NG key: a copy
+  /// stored under another name, such as FiveM's `update+update.rpf_{sha1}`, is read as
+  /// `update.rpf`.
+  pub fn open_as(
+    path: &Path,
+    name: &str,
+    keys: &RpfKeys,
+  ) -> io::Result<Self> {
     let mut file = File::open(path)?;
     let size = file.metadata()?.len();
     Self::read(&mut file, keys, 0, name, &name.to_lowercase(), size)

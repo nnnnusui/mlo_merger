@@ -25,6 +25,9 @@ pub struct Pipeline {
   pub game_dir: PathBuf,
   /// CodeWalker's `magic.dat`, used only to create missing vanilla data.
   pub magic: PathBuf,
+  /// FiveM's `game-storage` directory, read for the game builds' title updates only when
+  /// creating missing vanilla data.
+  pub game_storage: Option<PathBuf>,
   /// Raw vanilla archive directory.
   pub vanilla_dir: PathBuf,
   /// Derived vanilla artifact directory.
@@ -56,6 +59,7 @@ impl Pipeline {
   /// use mlo_merger::app::map::Pipeline;
   /// Pipeline {
   ///   source_dir: "asset/map/source".into(), game_dir: "/mnt/gtav".into(), magic: "magic.dat".into(),
+  ///   game_storage: None,
   ///   vanilla_dir: "asset/vanilla".into(), vanilla_cache_dir: "asset/map/vanilla-cache".into(),
   ///   source_cache_dir: "asset/map/source-cache".into(), merged_dir: "asset/map/merged".into(),
   ///   exclusions: None, overwrite_dir: Some("asset/map/overwrite".into()),
@@ -81,6 +85,7 @@ impl Pipeline {
       game_dir: self.game_dir.clone(),
       output_dir: self.vanilla_dir.clone(),
       magic: self.magic.clone(),
+      game_storage: self.game_storage.clone(),
       contents: [ArchiveContent::Map].into(),
       reuse_existing: true,
     }

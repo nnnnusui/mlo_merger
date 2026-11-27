@@ -368,17 +368,27 @@ both content sets, extracted in one pass over the archives: `map` (YMAP, YBN) an
 `clothing` (YMT), listed in the manifest's `contents`; regeneration extracts the
 requested content with the content the archive already holds. Each feature reads the
 archive through its content's view (`core/game_archive::load_content`): every stage,
-with only that content's files, and a revision over them, so derived caches follow
-changes to their own content only. A schema-1 manifest, without `contents`, holds
-`map`. The
+with only that content's files, as a game build loads them, and a revision over the
+content's files of every build, so derived caches follow changes to their own content
+only. The
 table names hashes from YMAP META strings and archive entry names; entity archetypes
 that neither spells out, mostly LOD and SLOD models, take the names CodeWalker derives
 from `.ydr` and `.ydd` file names. A DLC
 pack's stage reads its `dlc.rpf`, then the subpacks (`dlc1.rpf`, …) its `setup2.xml`
-declares, as the game mounts them, then its title-update patch, and records the pack's
-device, data files and change sets. The derived cache selects
-the latest files through the last stage of the chosen game build and indexes YMAP
-parent/child relationships. Its metadata names the raw archive, relative to the cache
+declares, as the game mounts them, and records the pack's device, data files and change
+sets. The title update's patch of the pack (`update/update.rpf/dlc_patch/{pack}/`)
+differs between game builds, so the stage keeps one version of it per distinct content, in
+`{index}-{pack}/update_rpf/{build}/`, each recording the builds that ship it and what the
+pack declares with it; a file two versions share is stored once. The versions are read
+from FiveM's copies of each build's `update.rpf` in its game-storage, found by the SHA-1
+the `[update_rpf]` configuration table lists per build, a build without a copy taking the
+closest build's below it; without game-storage, only the installed game's patches are read.
+The pack's versions of the files a patch replaces are kept beside it. A reader views the
+stages as one game build loads them (`VanillaCacheManifest::for_build`): each pack's stage
+followed by the build's version of the patch as a stage of its own, the packs after the
+build's last stage taking the installed game's. The derived cache selects the latest files
+through the last stage of the chosen game build, in that view, records the build, and
+indexes YMAP parent/child relationships. Its metadata names the raw archive, relative to the cache
 when they share a root so that the two move together, and each latest file's path in it;
 every reader resolves the files through that metadata. A game build is placed among the stages by the `[gamebuild]`
 table in configuration, which names the DLCs each FiveM build first includes. It can be

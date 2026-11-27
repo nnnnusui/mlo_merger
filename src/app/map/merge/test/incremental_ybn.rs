@@ -33,9 +33,10 @@ fn merge_dispatches_latest_vanilla_ybn_and_writes_omit_list() {
   write_json(
     &vanilla_dir.join("cache_info.json"),
     &VanillaCacheManifest {
-      format_version: 2,
+      format_version: crate::core::game_archive::FORMAT_VERSION,
       contents: crate::core::game_archive::ArchiveContent::ALL.into(),
       game_dir: root.join("game"),
+      title_updates: Default::default(),
       versions: vec![CacheVersion {
         id: "0000-base".into(),
         parent: None,
@@ -54,6 +55,7 @@ fn merge_dispatches_latest_vanilla_ybn_and_writes_omit_list() {
         unchanged: 0,
         file_kinds: Default::default(),
         dlc: None,
+        patches: Vec::new(),
       }],
     },
   )

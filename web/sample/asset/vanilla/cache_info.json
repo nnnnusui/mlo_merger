@@ -1,5 +1,8 @@
 {
-  "format_version": 1,
+  "contents": [
+    "map"
+  ],
+  "format_version": 4,
   "game_dir": "/mnt/gtav",
   "versions": [
     {

@@ -17,7 +17,9 @@ impl BuildVanillaCache {
     let (manifest, revision) = crate::core::game_archive::load_content(
       &vanilla_dir,
       crate::core::game_archive::ArchiveContent::Map,
+      self.gamebuild.as_ref(),
     )?;
+    let gamebuild = self.gamebuild.as_ref().map(|gamebuild| gamebuild.build);
     let through_index = resolve_through_version(&manifest, self.gamebuild.as_ref())?;
     let latest_version = manifest.versions[through_index].id.clone();
     let current = resolve_files(&manifest, through_index)?;
@@ -45,7 +47,7 @@ impl BuildVanillaCache {
         previous.as_ref().map(|previous| &previous.manifest),
         &vanilla_dir,
         &revision,
-        &latest_version,
+        (&latest_version, gamebuild),
         &input_timestamps,
         &configured_additive,
       )?
@@ -94,7 +96,7 @@ impl BuildVanillaCache {
       &vanilla_dir,
       &staging.0,
       &output_dir,
-      &latest_version,
+      (&latest_version, gamebuild),
       &revision,
       (&current, &newer),
       &input_timestamps,
@@ -137,7 +139,7 @@ impl BuildVanillaCache {
     vanilla_dir: &Path,
     staging: &Path,
     output_dir: &Path,
-    latest_version: &str,
+    (latest_version, gamebuild): (&str, Option<u32>),
     revision: &str,
     (current, newer): (&ResolvedFiles, &ResolvedFiles),
     input_timestamps: &BTreeMap<String, SourceTimestamp>,
@@ -176,6 +178,7 @@ impl BuildVanillaCache {
         vanilla_dir: recorded_vanilla_dir(output_dir, vanilla_dir),
         vanilla_manifest_sha256: revision.to_owned(),
         latest_version: latest_version.to_owned(),
+        gamebuild,
         vanilla_input_timestamps: input_timestamps.clone(),
         files: latest_files.clone(),
         newer_files: newer

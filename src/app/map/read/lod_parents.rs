@@ -10,14 +10,11 @@ use super::{Read, ReadTarget, Selected};
 use crate::{
   app::map::source_cache::inventoried_files,
   common::Result,
-  core::{
-    format::ymap::{
-      binary::ymap_to_model,
-      model::Ymap,
-      reference_hash,
-      relation::{is_local_parent, runtime_entity_indices},
-    },
-    game_archive::{ArchiveContent, load_content},
+  core::format::ymap::{
+    binary::ymap_to_model,
+    model::Ymap,
+    reference_hash,
+    relation::{is_local_parent, runtime_entity_indices},
   },
   platform::fs,
 };
@@ -77,8 +74,7 @@ impl<'a> ParentMaps<'a> {
     }
     let mut vanilla = Candidates::new();
     if fs::is_file(crate::core::game_archive::manifest_path(&read.vanilla_dir)) {
-      let (manifest, _) = load_content(&read.vanilla_dir, ArchiveContent::Map)?;
-      let version = read.vanilla_version(&manifest)?;
+      let (manifest, version) = read.vanilla_stage()?;
       for (name, file) in manifest.resolve_version(&version)? {
         insert(&mut vanilla, &name, file.path(&read.vanilla_dir)?);
       }

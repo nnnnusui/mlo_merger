@@ -25,9 +25,10 @@ fn restoring_some_resources_keeps_the_others_cached_until_the_next_generation() 
   write_json(
     &vanilla.join("cache_info.json"),
     &VanillaCacheManifest {
-      format_version: 2,
+      format_version: crate::core::game_archive::FORMAT_VERSION,
       contents: crate::core::game_archive::ArchiveContent::ALL.into(),
       game_dir: root.join("game"),
+      title_updates: Default::default(),
       versions: vec![CacheVersion {
         id: "0000-base".into(),
         parent: None,
@@ -46,6 +47,7 @@ fn restoring_some_resources_keeps_the_others_cached_until_the_next_generation() 
           },
         )]),
         dlc: None,
+        patches: Vec::new(),
       }],
     },
   )

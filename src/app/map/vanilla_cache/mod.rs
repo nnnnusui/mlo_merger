@@ -82,6 +82,11 @@ struct DerivedManifest {
   vanilla_dir: String,
   vanilla_manifest_sha256: String,
   latest_version: String,
+  /// The game build the cache was built for, whose versions of the title update's patches of
+  /// the DLC packs its files are; none for the installed game.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  #[cfg_attr(feature = "typescript", specta(optional))]
+  gamebuild: Option<u32>,
   vanilla_input_timestamps: BTreeMap<String, SourceTimestamp>,
   files: BTreeMap<String, LatestFile>,
   /// The YMAPs first shipped after [`Self::latest_version`] that an older generation the game
@@ -148,10 +153,12 @@ pub(crate) use relationships::ymap_parent_hash;
 use source::*;
 pub use ymap_diffs::{VanillaYmapDiff, VanillaYmapHistory, VanillaYmapVersion, ymap_history};
 
-/// The vanilla stage the cache in `cache_dir` was built for, unless the cache is missing or
-/// unreadable.
-pub(crate) fn built_version(cache_dir: &Path) -> Option<String> {
-  read::read_derived(cache_dir).ok().map(|loaded| loaded.manifest.latest_version.clone())
+/// The vanilla stage the cache in `cache_dir` was built for, with the game build it was built
+/// for (none for the installed game), unless the cache is missing or unreadable.
+pub(crate) fn built_version(cache_dir: &Path) -> Option<(String, Option<u32>)> {
+  read::read_derived(cache_dir)
+    .ok()
+    .map(|loaded| (loaded.manifest.latest_version.clone(), loaded.manifest.gamebuild))
 }
 
 /// The vanilla stage the cache targets for `gamebuild`: its last stage, or the last stage of
@@ -205,6 +212,7 @@ pub(crate) mod test_support {
       vanilla_dir: vanilla_dir.into(),
       vanilla_manifest_sha256: String::new(),
       latest_version: version.into(),
+      gamebuild: None,
       vanilla_input_timestamps: Default::default(),
       files: files
         .iter()

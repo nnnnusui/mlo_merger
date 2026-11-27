@@ -28,7 +28,8 @@ pub(crate) fn check(
   }
   for version in &manifest.versions {
     recorded.insert(format!("{}/version_info.json", version.id));
-    for change in version.changes.values() {
+    let patches = version.patches.iter().flat_map(|patch| patch.changes.values());
+    for change in version.changes.values().chain(patches) {
       let object = change.file.object.replace('\\', "/");
       findings.recorded_file(dir, &object, None, &change.file.sha256, deep)?;
       recorded.insert(object);

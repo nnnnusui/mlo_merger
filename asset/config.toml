@@ -68,6 +68,32 @@ vanilla_min_share = 0.05
 3788 = []
 3889 = ["mp2026_01"]
 
+# The SHA-1 of each FiveM game build's update/update.rpf (code/client/launcher/GameCache.cpp), by
+# which --generate-vanilla --game-storage finds the build's file among those FiveM downloads
+# into FiveM.app/data/game-storage/ (update+update.rpf_{sha1} or
+# override+update+update.rpf_{sha1}). Each build's title-update patches of the DLC packs
+# (dlc_patch/) are taken from its own file; a build whose file is missing takes them from the
+# closest build below it that has one.
+[update_rpf]
+1604 = "fc941d698834e30e40a06a40f6a35b1b18e1c50c"
+2060 = "736f1cb26e59167f302c22385463d231cce302d3"
+2189 = "fe387dbc0f700d690b53d44ce1226c624c24b8fc"
+2372 = "1824cdbc27c3e0eaa86920a38751322727872831"
+2545 = "2993b3c30f61cbbb8dbce859604d7fb717ff8dae"
+2612 = "80f9bd028e5bc781f641fe210a88579eff827989"
+2699 = "86d88c5ea36e67683a138c0e690c42fe288205fa"
+2802 = "66388a381347511b7b28aaf91741615e45008e8b"
+2944 = "abc628b0ae04e68f88e0581f3572d26dbaed84d2"
+3095 = "fd46de4495d32f0533b8b3ae72507b829e8650f3"
+3179 = "fd46de4495d32f0533b8b3ae72507b829e8650f3"
+3258 = "abf3a580ddfc4cb372b5a4ce48ed7b2ea31e5270"
+3323 = "3633a58585791b30281cec14f90f5ac1e2bfdc57"
+3407 = "f6cdcdec5e3e993a31f45acc96b638283c474f53"
+3570 = "49ed7a6c3d035bcf764942dd58597211448941fd"
+3751 = "4d475df8caa95cb99aedcb0b555a3f83f8acf60c"
+3788 = "4d475df8caa95cb99aedcb0b555a3f83f8acf60c"
+3889 = "31cbd81373475d5407c20058733ea910cadce13b"
+
 # Which DLC archives the game loads, as dlc_activity.json in the vanilla cache records it.
 # A DLC's change set usually enables its archive in place of a base game archive, invalidating
 # the base game path: the archive then replaces the one standing for that path before, so of the

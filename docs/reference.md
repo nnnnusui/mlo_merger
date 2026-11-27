@@ -100,7 +100,32 @@ naming the `--content` value to regenerate with.
 ```bash
 mlo_merger --generate-vanilla -i /mnt/gtav -o asset/vanilla --magic magic.dat
 mlo_merger --generate-vanilla -i /mnt/gtav --magic magic.dat --content map
+mlo_merger --generate-vanilla -i /mnt/gtav --magic magic.dat --game-storage /path/to/FiveM.app/data/game-storage
 ```
+
+The archive's stages are `{index}-base`, `{index}-update` (the title update's own
+files), then each DLC pack in `dlclist.xml` order as `{index}-{pack}` (its `dlc.rpf` and
+subpacks). The title update's patch of a pack (`update/update.rpf/dlc_patch/{pack}/`) is
+kept in the pack's stage, one version per content as the game builds ship it, in
+`{index}-{pack}/update_rpf/{build}/`, `{build}` being the oldest game build shipping that
+version (`installed` when only the installed game's title update does). The pack's own
+version of a file stays beside the patch's that replaces it. `cache_info.json` lists each
+version under its stage's `patches`, with the builds shipping it, and the title update read
+for each build under `title_updates`.
+
+`--game-storage` names FiveM's `FiveM.app/data/game-storage/`, where FiveM keeps each game
+build's `update/update.rpf` as `update+update.rpf_{sha1}` or
+`override+update+update.rpf_{sha1}`. Each build listed under `[update_rpf]` in
+[asset/config.toml](../asset/config.toml), with the SHA-1 of its `update.rpf` from FiveM's
+`code/client/launcher/GameCache.cpp`, takes its patches from its own file there, or from the
+installed game when that is the build's file. A build whose file is missing takes them from
+the closest build below it that has one, else from the closest above, with a warning.
+Without `--game-storage`, every build takes the installed game's patches. The base game and
+the title update's other files come from the installed game for every build; between builds
+3095 and 3889 their YMAPs and YBNs are the same.
+
+An archive written before the patches were kept per game build is rejected with a request to
+regenerate it.
 
 The vanilla archive retains every version in `cache_info.json`. A stage with no
 additions or replacements has no directory, and extension subdirectories are
@@ -320,8 +345,10 @@ generation and carry the changes resources make to the others over to it.
 #### Which YMAPs The Game Loads
 
 - Each DLC stage of the raw archive records its pack's device, data files and the change
-  sets the game executes without a script (`dlc` in `cache_info.json`), from the title
-  update's `dlc_patch/{pack}/setup2.xml` and `content.xml` where it has them, and the
+  sets the game executes without a script (`dlc` in `cache_info.json`), and each version of
+  the title update's patch of the pack what the pack declares with it, from the patch's
+  `dlc_patch/{pack}/setup2.xml` and `content.xml` where it has them; the vanilla cache takes
+  the one of the selected game build's patch. Both record the
   islands its island hopper files (`ISLAND_HOPPER_FILE` data files in `common/data/`)
   define, with their LOD lights YMAP. An archive built without this record loads every
   YMAP.
@@ -579,13 +606,18 @@ supports a new one.
 - A build that adds no DLC pack is given by its number: FiveM's name for it, such as
   `mp2026_patch_01` for 3788, is not a stage and is not accepted.
 - A build ends at the last stage before the next build's first listed DLC in
-  `dlclist.xml` order, so it includes its own patch and `_g9ec` stages; a name listed
-  under several builds selects the latest. A build without DLC names (such as 3323)
-  includes what the build before it does, and build 1 stops at the title update.
-- The build applies only to the vanilla-cache step: `--generate-vanilla` always extracts
-  every stage, and the vanilla cache selects the latest files from the stages up to the build's
-  last one. The base and title-update files come from the installed game, not from the
-  target build.
+  `dlclist.xml` order, so it includes its own patch and `_g9ec` stages; a
+  name listed under several builds selects the latest. A build without DLC names (such as
+  3323) includes what the build before it does, and build 1 stops at the title update.
+- The build applies to the vanilla-cache step and to `--read`: `--generate-vanilla` always
+  extracts every stage, and the vanilla cache selects the latest files from the stages up to
+  the build's last one, each pack's stage followed by the version of the title update's patch
+  of it that the build ships (see `--game-storage` under
+  [Vanilla Generation](#vanilla-generation)). Packs after the build's last stage, which it does not
+  load, take the installed game's patches, as does every pack without `--gamebuild`. The
+  base and the title update's other files come from the installed game;
+  [Game Data](format/game_data.md#fivem-game-builds) describes what FiveM takes from the
+  target build's title update.
 - The pipeline, `--generate-source-cache` and `--merge` pass their `--gamebuild` to the
   vanilla-cache step they run first, so running one without it returns the cache to the
   last stage.
@@ -846,10 +878,10 @@ are arrays. File sizes and timestamps are JSON numbers, represented as TypeScrip
   differences exactly. The code writing vanilla YMAP version-to-version diffs is kept but
   not called; see [vanillaDiff.md](vanillaDiff.md).
 - Which [DLC generations](#newer-dlc-generations) the game loads is worked out from the
-  installed game's files. For an older game build FiveM mounts that build's own title update,
-  with its `dlc_patch/` replacements of packs' `content.xml`, `dlclist.xml` and
-  `lodlights.rpf`, while the raw archive records the installed title update's for every
-  build. The engine's rules are inferred from the packs' data and observed loads, such as
+  installed game's files and, with `--game-storage`, each build's title-update patches of the
+  packs. FiveM also mounts the build's own `dlclist.xml`, `lodlights.rpf` and other files of
+  its title update, which the raw archive takes from the installed game for every build. The
+  engine's rules are inferred from the packs' data and observed loads, such as
   island LOD lights loading beside the archives they would otherwise replace.
 - `--get-diff SOURCE` writes the source YMAP's differences from the latest vanilla cache
   in the source cache's diff form; `--get-diff SOURCE TARGET` only prints a mock

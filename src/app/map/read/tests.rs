@@ -85,7 +85,7 @@ impl Fixture {
     write(
       &vanilla.join("cache_info.json"),
       &serde_json::to_vec(&json!({
-        "format_version": 1, "game_dir": "", "versions": [
+        "format_version": 4, "contents": ["map"], "game_dir": "", "versions": [
           {"id": "0000-base", "parent": null, "archives": [], "unchanged": 0,
             "changes": {"parent.ymap": change("0000-base/ymap/parent.ymap", &parent)}},
           {"id": "0001-update", "parent": "0000-base", "archives": [], "unchanged": 0,

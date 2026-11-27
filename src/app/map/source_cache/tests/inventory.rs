@@ -20,9 +20,10 @@ fn builds_source_inventory_and_skips_unchanged_inputs_without_diffing() {
   fs::write(source_resource.join("stream/unmatched.ybn"), b"source ybn").unwrap();
   fs::write(second_resource.join("stream/unmatched.ybn"), b"other source ybn").unwrap();
   let raw_manifest = VanillaCacheManifest {
-    format_version: 2,
+    format_version: crate::core::game_archive::FORMAT_VERSION,
     contents: crate::core::game_archive::ArchiveContent::ALL.into(),
     game_dir: "game".into(),
+    title_updates: Default::default(),
     versions: vec![CacheVersion {
       id: "0000-base".into(),
       parent: None,
@@ -31,6 +32,7 @@ fn builds_source_inventory_and_skips_unchanged_inputs_without_diffing() {
       unchanged: 0,
       file_kinds: Default::default(),
       dlc: None,
+      patches: Vec::new(),
     }],
   };
   write_json(&vanilla.join("cache_info.json"), &raw_manifest).unwrap();

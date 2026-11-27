@@ -29,9 +29,10 @@ fn moves_vanilla_files_retains_history_and_updates_only_selected_resources() {
   write_json(
     &vanilla.join("cache_info.json"),
     &VanillaCacheManifest {
-      format_version: 2,
+      format_version: crate::core::game_archive::FORMAT_VERSION,
       contents: crate::core::game_archive::ArchiveContent::ALL.into(),
       game_dir: root.join("game"),
+      title_updates: Default::default(),
       versions: vec![CacheVersion {
         id: "0000-base".into(),
         parent: None,
@@ -50,6 +51,7 @@ fn moves_vanilla_files_retains_history_and_updates_only_selected_resources() {
           },
         )]),
         dlc: None,
+        patches: Vec::new(),
       }],
     },
   )

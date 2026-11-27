@@ -132,9 +132,10 @@ fn clothing_extraction_keeps_raw_definitions_and_uses_vanilla_overlays() {
   let output = root.join("archive");
   fs::create_dir(&output).unwrap();
   let mut manifest = VanillaCacheManifest {
-    format_version: 2,
+    format_version: crate::core::game_archive::FORMAT_VERSION,
     contents: crate::core::game_archive::ArchiveContent::ALL.into(),
     game_dir: root.clone(),
+    title_updates: Default::default(),
     versions: vec![],
   };
   let mut current = BTreeMap::new();

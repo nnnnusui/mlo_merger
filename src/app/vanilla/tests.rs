@@ -17,9 +17,10 @@ fn write_archive(
   write_json(
     &output_dir.join("cache_info.json"),
     &VanillaCacheManifest {
-      format_version: 2,
+      format_version: crate::core::game_archive::FORMAT_VERSION,
       contents,
       game_dir: game_dir.to_path_buf(),
+      title_updates: Default::default(),
       versions: vec![CacheVersion {
         id: "0000-base".into(),
         parent: None,
@@ -28,6 +29,7 @@ fn write_archive(
         unchanged: 0,
         file_kinds: Default::default(),
         dlc: None,
+        patches: Vec::new(),
       }],
     },
   )

@@ -174,9 +174,10 @@ fn cache_reuses_matching_archives_and_rebuilds_changed_or_forced_ones() {
   let archive = root.join("clothing");
   fs::create_dir_all(&archive).unwrap();
   let manifest = |label: &str| VanillaCacheManifest {
-    format_version: 2,
+    format_version: crate::core::game_archive::FORMAT_VERSION,
     contents: crate::core::game_archive::ArchiveContent::ALL.into(),
     game_dir: root.join("game"),
+    title_updates: Default::default(),
     versions: vec![CacheVersion {
       id: format!("0000-{label}"),
       parent: None,
@@ -185,6 +186,7 @@ fn cache_reuses_matching_archives_and_rebuilds_changed_or_forced_ones() {
       file_kinds: Default::default(),
       unchanged: 0,
       dlc: None,
+      patches: Vec::new(),
     }],
   };
   write_manifest(&archive.join("cache_info.json"), &manifest("base")).unwrap();
@@ -237,7 +239,7 @@ fn cache_skips_creature_metadata_when_counting_variation_ymts() {
   write_manifest(
     &archive.join("cache_info.json"),
     &serde_json::json!({
-      "format_version": 2,
+      "format_version": 4,
       "contents": ["clothing"],
       "game_dir": root.join("game"),
       "versions": [{
@@ -294,7 +296,7 @@ fn cache_fails_on_unreadable_definitions_and_keeps_missing_output_absent() {
   fs::create_dir_all(archive.join("0000-base/ymt")).unwrap();
   fs::write(archive.join("0000-base/ymt/bad.ymt"), b"not a resource").unwrap();
   let manifest = serde_json::json!({
-    "format_version": 2,
+    "format_version": 4,
     "contents": ["clothing"],
     "game_dir": root.join("game"),
     "versions": [{

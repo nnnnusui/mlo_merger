@@ -128,7 +128,7 @@ impl BuildClothingCache {
   /// # Ok::<(), Box<dyn std::error::Error>>(())
   /// ```
   pub fn run(&self) -> Result<()> {
-    let (manifest, revision) = load_content(&self.vanilla_dir, ArchiveContent::Clothing)?;
+    let (manifest, revision) = load_content(&self.vanilla_dir, ArchiveContent::Clothing, None)?;
     let latest_version =
       manifest.versions.last().ok_or("Vanilla archive has no stages")?.id.clone();
     let output = prepare_output_path(&self.output_dir, &self.vanilla_dir)?;

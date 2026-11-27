@@ -11,7 +11,7 @@ pub(super) fn cache_is_current(
   manifest: Option<&DerivedManifest>,
   vanilla_dir: &Path,
   revision: &str,
-  latest_version: &str,
+  (latest_version, gamebuild): (&str, Option<u32>),
   input_timestamps: &BTreeMap<String, SourceTimestamp>,
   configured_additive: &[String],
 ) -> Result<bool> {
@@ -26,6 +26,7 @@ pub(super) fn cache_is_current(
     || manifest.vanilla_dir != recorded_vanilla_dir(output_dir, vanilla_dir)
     || manifest.vanilla_manifest_sha256 != revision
     || manifest.latest_version != latest_version
+    || manifest.gamebuild != gamebuild
     || manifest.vanilla_input_timestamps != *input_timestamps
   {
     return Ok(false);

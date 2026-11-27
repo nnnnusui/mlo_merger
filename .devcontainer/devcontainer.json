@@ -44,7 +44,8 @@
 
   "mounts": [
     "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=cached",
-    "source=/mnt/c/Program Files (x86)/Steam/steamapps/common/Grand Theft Auto V,target=/mnt/gtav,type=bind,consistency=cached"
+    "source=/mnt/c/Program Files (x86)/Steam/steamapps/common/Grand Theft Auto V,target=/mnt/gtav,type=bind,consistency=cached",
+    "source=/mnt/c/Users/N4U/AppData/Local/FiveM/FiveM.app/data/game-storage,target=/mnt/fivem-storage,type=bind,consistency=cached"
   ],
 
   "workspaceFolder": "/workspace",

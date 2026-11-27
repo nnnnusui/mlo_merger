@@ -26,9 +26,10 @@ fn builds_latest_files_through_selected_stage_and_reuses_valid_output() {
     source: format!("{stage}.rpf/map.ybn"),
   };
   let manifest = VanillaCacheManifest {
-    format_version: 2,
+    format_version: crate::core::game_archive::FORMAT_VERSION,
     contents: crate::core::game_archive::ArchiveContent::ALL.into(),
     game_dir: "game".into(),
+    title_updates: Default::default(),
     versions: vec![
       CacheVersion {
         id: "0000-update".into(),
@@ -44,6 +45,7 @@ fn builds_latest_files_through_selected_stage_and_reuses_valid_output() {
         unchanged: 0,
         file_kinds: Default::default(),
         dlc: None,
+        patches: Vec::new(),
       },
       CacheVersion {
         id: "0001-patch".into(),
@@ -59,6 +61,7 @@ fn builds_latest_files_through_selected_stage_and_reuses_valid_output() {
         unchanged: 0,
         file_kinds: Default::default(),
         dlc: None,
+        patches: Vec::new(),
       },
     ],
   };
@@ -176,7 +179,7 @@ fn builds_latest_files_through_selected_stage_and_reuses_valid_output() {
     serde_json::from_reader(fs::File::open(output.join("ymap_relationships.json")).unwrap())
       .unwrap();
   assert_eq!(relationships.version, "0001-patch");
-  let (_, raw_revision) = load_content(&vanilla, ArchiveContent::Map).unwrap();
+  let (_, raw_revision) = load_content(&vanilla, ArchiveContent::Map, None).unwrap();
   let loaded = load_cache(&output, &raw_revision).unwrap();
   assert_eq!(loaded.latest_version, "0001-patch");
   assert_eq!(loaded.files["map.ybn"].version, "0001-patch");
@@ -267,14 +270,16 @@ fn writes_ymap_version_diffs_that_rebuild_each_version() {
       unchanged: 0,
       file_kinds: Default::default(),
       dlc: None,
+      patches: Vec::new(),
     });
   }
   write_json(
     &vanilla.join("cache_info.json"),
     &VanillaCacheManifest {
-      format_version: 2,
+      format_version: crate::core::game_archive::FORMAT_VERSION,
       contents: crate::core::game_archive::ArchiveContent::ALL.into(),
       game_dir: "game".into(),
+      title_updates: Default::default(),
       versions,
     },
   )
