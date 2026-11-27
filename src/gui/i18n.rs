@@ -62,6 +62,14 @@ pub struct Text {
   /// `{}`: error.
   pub magic_download_failed: &'static str,
 
+  pub game_storage_label: &'static str,
+  pub game_storage_dialog: &'static str,
+  pub game_storage_empty: &'static str,
+  /// `{}`: number of game builds' update.rpf.
+  pub game_storage_ok: &'static str,
+  pub game_storage_no_update_rpf: &'static str,
+  pub game_storage_missing: &'static str,
+
   pub generate_label: &'static str,
   /// `{}`: output directory.
   pub output: &'static str,
@@ -103,7 +111,14 @@ const EN: Text = Text {
   magic_downloaded: "Downloaded",
   magic_download_failed: "Download failed: {}",
 
-  generate_label: "3. Generate",
+  game_storage_label: "3. FiveM game-storage folder (optional)",
+  game_storage_dialog: "Select FiveM.app/data/game-storage",
+  game_storage_empty: "Not set: the installed game's DLC patches are used for every game build",
+  game_storage_ok: "Found {} game builds' update.rpf",
+  game_storage_no_update_rpf: "No update.rpf found here: the installed game's DLC patches are used for every game build",
+  game_storage_missing: "The folder was not found",
+
+  generate_label: "4. Generate",
   output: "Output: {}",
   output_replaced: "The existing vanilla folder will be replaced",
   generate: "Generate vanilla",
@@ -141,7 +156,14 @@ const JA: Text = Text {
   magic_downloaded: "ダウンロードしました",
   magic_download_failed: "ダウンロードに失敗しました: {}",
 
-  generate_label: "3. 生成",
+  game_storage_label: "3. FiveM の game-storage フォルダ（任意）",
+  game_storage_dialog: "FiveM.app/data/game-storage を選択",
+  game_storage_empty: "未指定: すべてのゲームビルドにインストール済みゲームの DLC パッチを使います",
+  game_storage_ok: "{} 個のゲームビルドの update.rpf を確認しました",
+  game_storage_no_update_rpf: "update.rpf が見つかりません: すべてのゲームビルドにインストール済みゲームの DLC パッチを使います",
+  game_storage_missing: "フォルダが見つかりません",
+
+  generate_label: "4. 生成",
   output: "出力先: {}",
   output_replaced: "既存の vanilla フォルダは置き換えられます",
   generate: "vanilla を生成",

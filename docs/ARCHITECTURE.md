@@ -86,8 +86,9 @@ names them, does not affect any stage. The source cache identifies its source tr
 resources rather than its path: a source root holding none of them is rejected.
 Format codecs (`format/*`) stay independent of artifact layout and batch processing.
 The GUI, opened when the executable starts without arguments, is a front end for
-vanilla generation only: it collects the game directory and `magic.dat` and runs the
-same generation as `--generate-vanilla --content map`.
+vanilla generation only: it collects the game directory, `magic.dat` and, optionally,
+FiveM's game-storage directory, and runs the same generation as
+`--generate-vanilla --content map [--game-storage]`.
 
 ## Source Cache
 

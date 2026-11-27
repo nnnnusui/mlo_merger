@@ -8,6 +8,7 @@ use mlo_merger::{app::vanilla::GenerateVanilla, core::game_archive::ArchiveConte
 
 use super::{
   game_dir::{self, GameDirStatus},
+  game_storage::{self, GameStorageStatus},
   i18n::{Lang, Text, fill},
   log_view::LogView,
   magic,
@@ -38,6 +39,8 @@ pub struct VanillaApp {
   log_view: LogView,
   game_dir: String,
   magic: String,
+  /// FiveM's game-storage directory; empty to read the installed game's patches for every build.
+  game_storage: String,
   job: Option<(JobKind, Task)>,
   outcome: Option<Outcome>,
   lang: Lang,
@@ -51,12 +54,15 @@ impl VanillaApp {
   ) -> Self {
     let game_dir = game_dir::detect().map(|dir| dir.display().to_string()).unwrap_or_default();
     let magic = base_dir.join("magic.dat").display().to_string();
+    let game_storage =
+      game_storage::detect().map(|dir| dir.display().to_string()).unwrap_or_default();
     Self {
       base_dir,
       log_path,
       log_view,
       game_dir,
       magic,
+      game_storage,
       job: None,
       outcome: None,
       lang: Lang::default(),
@@ -92,7 +98,9 @@ impl VanillaApp {
           game_dir: PathBuf::from(self.game_dir.trim()),
           output_dir: self.output_dir(),
           magic: PathBuf::from(self.magic.trim()),
-          game_storage: None,
+          game_storage: Some(self.game_storage.trim())
+            .filter(|dir| !dir.is_empty())
+            .map(PathBuf::from),
           contents: [ArchiveContent::Map].into(),
           reuse_existing: false,
         };
@@ -216,6 +224,38 @@ impl VanillaApp {
     ready
   }
 
+  fn game_storage_row(
+    &mut self,
+    ui: &mut egui::Ui,
+  ) -> bool {
+    let text = self.text();
+    ui.label(RichText::new(text.game_storage_label).strong());
+    ui.horizontal(|ui| {
+      if ui.button(text.browse).clicked() {
+        let mut dialog = rfd::FileDialog::new().set_title(text.game_storage_dialog);
+        if Path::new(self.game_storage.trim()).is_dir() {
+          dialog = dialog.set_directory(self.game_storage.trim());
+        }
+        if let Some(dir) = dialog.pick_folder() {
+          self.game_storage = dir.display().to_string();
+        }
+      }
+      ui.add(egui::TextEdit::singleline(&mut self.game_storage).desired_width(f32::INFINITY));
+    });
+    let path = self.game_storage.trim();
+    let (ready, message, color) = if path.is_empty() {
+      (true, text.game_storage_empty.to_string(), ui.visuals().weak_text_color())
+    } else {
+      match game_storage::status(Path::new(path)) {
+        GameStorageStatus::UpdateRpfs(count) => (true, fill(text.game_storage_ok, count), OK),
+        GameStorageStatus::Empty => (true, text.game_storage_no_update_rpf.to_string(), WARN),
+        GameStorageStatus::Missing => (false, text.game_storage_missing.to_string(), ERROR),
+      }
+    };
+    ui.label(RichText::new(message).color(color));
+    ready
+  }
+
   fn generate_row(
     &mut self,
     ui: &mut egui::Ui,
@@ -321,7 +361,9 @@ impl eframe::App for VanillaApp {
       ui.add_space(8.0);
       let magic_ready = self.magic_row(ui);
       ui.add_space(8.0);
-      self.generate_row(ui, game_ready && magic_ready);
+      let storage_ready = ui.add_enabled_ui(enabled, |ui| self.game_storage_row(ui)).inner;
+      ui.add_space(8.0);
+      self.generate_row(ui, game_ready && magic_ready && storage_ready);
       ui.separator();
       self.log_panel(ui);
     });

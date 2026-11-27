@@ -1,6 +1,6 @@
 //! The vanilla generator window shown when the executable starts without arguments.
 //!
-//! It asks for the GTA V directory and `magic.dat`, then generates `vanilla/` next to the
+//! It asks for the GTA V directory, `magic.dat` and optionally FiveM's game-storage, then generates `vanilla/` next to the
 //! executable so a user can upload it to the server without using the command line.
 
 use std::{error::Error, path::PathBuf};
@@ -11,6 +11,7 @@ use crate::log;
 
 mod app;
 mod game_dir;
+mod game_storage;
 mod i18n;
 mod log_view;
 mod magic;

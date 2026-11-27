@@ -24,7 +24,11 @@ window that generates the vanilla archive:
    detected.
 2. Choose `magic.dat`, or press **Download from GitHub** to save CodeWalker's copy next to
    the executable. The link next to it opens the file's GitHub page.
-3. Press **Generate vanilla**. `vanilla/` is created next to the executable; upload it to
+3. Optionally choose FiveM's `FiveM.app/data/game-storage` folder (detected in the default
+   FiveM install), so that each game build takes its own title update's DLC patches; left
+   empty, every build takes the installed game's (`--game-storage` under
+   [Reference](docs/reference.md)).
+4. Press **Generate vanilla**. `vanilla/` is created next to the executable; upload it to
    the server as `asset/vanilla`.
 
 The window is in English; switch it to Japanese with the language selector. Its log is
