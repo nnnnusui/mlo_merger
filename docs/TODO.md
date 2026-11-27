@@ -37,10 +37,6 @@ Resource overwrites (`overwrite/resources/{resourceName}/{stream_path}.diff.json
 
 - [ ] Find what occlude model `flags` 1 does (see [the YMAP format notes](format/ymap.md#5-遮蔽用-ymap)). Test each case beside a control occluder known to work: horizontal planes facing up seen from above gave opposite results on two runs without one.
 
-## YBN Documents
-
-- [ ] Name material surface types in `--read` YBN documents, from the game's `materials.dat`, which the vanilla archive does not collect; they are written as indices now.
-
 ## YMAP Baseline Inference
 
 - [-] Compare each source YMAP with the available vanilla versions and infer its source version from the number of differences.

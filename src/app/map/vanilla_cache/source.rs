@@ -62,6 +62,10 @@ pub(super) fn source_timestamps(
   if fs::is_file(crate::core::game_archive::hash_names_path(vanilla_dir)) {
     paths.insert("hash_names.json".to_owned());
   }
+  // The surface type names are read from it.
+  if fs::is_file(crate::core::game_archive::materials_dat_path(vanilla_dir)) {
+    paths.insert(crate::core::game_archive::MATERIALS_DAT.to_owned());
+  }
   for (name, (_, file)) in current {
     if is_supported_stream_file(name) {
       paths.insert(file.object.clone());

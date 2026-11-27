@@ -17,6 +17,12 @@ Vanilla generation reads the base game, `update/update.rpf` and the DLC packs, a
 [FiveM Game Builds](#fivem-game-builds)).
 `update/update2.rpf` holds no map data, so it is not read.
 
+The collision surface types YBN materials index are listed in `common/data/materials/materials.dat`,
+which the title update replaces. The title update's file is the same for builds 3095 to 3889;
+it inserts `STUNT_RAMP_SURFACE` in the middle of the base game's list, so the surface types
+after it are one index later than in `common.rpf`. `mpstunt`'s `dlc.rpf` holds another copy,
+which its `content.xml` does not declare.
+
 ## FiveM Game Builds
 
 FiveM keeps each game build's `GTA5.exe`, `update/update.rpf` and `update/update2.rpf`

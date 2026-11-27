@@ -174,6 +174,16 @@ impl BuildGameArchive {
       ))
     })?;
 
+    match update.iter().find(|file| file.source == super::materials::MATERIALS_SOURCE) {
+      Some(file) => {
+        super::materials::write_materials(build, &fs::read(update_dir.join(&file.stored))?)?
+      }
+      None => tracing::warn!(
+        "{} is missing; YBN surface types stay unnamed",
+        super::materials::MATERIALS_SOURCE
+      ),
+    }
+
     let dlc_stages = dlc_items
       .into_iter()
       .map(|item| -> Result<_> {
@@ -408,7 +418,9 @@ impl BuildGameArchive {
     write_json(&super::manifest_path(build), manifest)?;
     write_metadata(build, manifest, rpf_names)?;
     tracing::info!("Publishing {} vanilla stages", manifest.versions.len());
-    publish_cache(build, output_dir, manifest, metadata_files, obsolete_files)?;
+    let mut metadata_files = metadata_files.to_vec();
+    metadata_files.push(super::materials::MATERIALS_DAT);
+    publish_cache(build, output_dir, manifest, &metadata_files, obsolete_files)?;
     tracing::info!("Saved {} vanilla stages to {}", manifest.versions.len(), output_dir.display());
     Ok(())
   }

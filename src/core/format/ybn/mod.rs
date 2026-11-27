@@ -11,6 +11,7 @@ use std::{
 
 mod binary;
 pub mod diff;
+pub mod materials;
 pub mod model;
 pub mod read;
 pub mod xml;

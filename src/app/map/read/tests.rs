@@ -264,6 +264,33 @@ fn a_ybn_is_read_as_its_bound_tree_with_named_flags() {
 
   let again = fixture.read(ReadTarget::Resource("alpha".into()), &["collision.ybn"]).unwrap();
   assert!(!again.files[0].updated);
+
+  // The vanilla cache's surface type names name the materials, and change the documents.
+  assert!(document.materials.is_none());
+  assert!(geometry.materials.iter().all(|material| material.surface.is_none()));
+  let names = (0..=u8::MAX).map(|index| format!("SURFACE_{index}")).collect::<Vec<_>>();
+  fs::create_dir_all(fixture.root.join("vanilla-cache")).unwrap();
+  crate::common::json::write_json(
+    &crate::app::map::vanilla_cache::materials_path(&fixture.root.join("vanilla-cache")),
+    &crate::core::format::ybn::materials::SurfaceMaterials {
+      source: "materials.dat".into(),
+      sha256: String::new(),
+      names,
+    },
+  )
+  .unwrap();
+  let named = fixture.read(ReadTarget::Resource("alpha".into()), &["collision.ybn"]).unwrap();
+  assert!(named.files[0].updated);
+  let document: YbnReadDocument =
+    serde_json::from_str(&fs::read_to_string(&named.files[0].output).unwrap()).unwrap();
+  assert!(document.materials.is_some());
+  let geometry =
+    document.model.children[0].bound.as_ref().unwrap().geometry.as_ref().unwrap().clone();
+  for material in &geometry.materials {
+    assert_eq!(material.surface.as_deref(), Some(format!("SURFACE_{}", material.kind).as_str()));
+  }
+  let again = fixture.read(ReadTarget::Resource("alpha".into()), &["collision.ybn"]).unwrap();
+  assert!(!again.files[0].updated);
 }
 
 #[test]

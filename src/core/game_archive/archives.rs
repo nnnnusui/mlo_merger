@@ -249,6 +249,8 @@ fn traversal_metadata(path: &str) -> bool {
       && rest.to_ascii_lowercase().ends_with(".meta")
   };
   path.ends_with("/common/data/dlclist.xml")
+    // The title update's surface types, which YBN materials name by index.
+    || path == "update.rpf/common/data/materials/materials.dat"
     || (path.matches('/').count() == 1 && pack_metadata(path))
     || path.strip_prefix("dlc.rpf/").is_some_and(data_file)
     // The title update's replacements of a pack's, at `dlc_patch/{pack}/`.

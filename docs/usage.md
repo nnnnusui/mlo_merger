@@ -419,8 +419,10 @@ A YBN's `output` is a `YbnReadDocument`; its `model` is the root bound:
   `materials`: a `triangle` lists its corners in winding order (with `vertex_flags` when a
   corner flag is set), a `box` four reference corners, a `sphere` its centre `vertex`, a
   `capsule` or `cylinder` its axis endpoints; the last three carry a `radius`.
-- A material's `kind` is the index of its surface type in the game's `materials.dat`, and its
-  `flags` are named after CodeWalker's `EBoundMaterialFlags` without the `FLAG_` prefix.
+- A material's `kind` is the index of its surface type in the game's `materials.dat`, and
+  `surface` that type's name, such as `CONCRETE`, when the vanilla cache holds the names
+  (`materials.json`); its `flags` are named after CodeWalker's `EBoundMaterialFlags` without
+  the `FLAG_` prefix.
 
 ### How Diff Documents Compose
 

@@ -127,6 +127,13 @@ the title update's other files come from the installed game for every build; bet
 An archive written before the patches were kept per game build is rejected with a request to
 regenerate it.
 
+The archive also keeps the title update's `common/data/materials/materials.dat`, which lists
+the collision surface types YBN materials index, as `materials.dat` at its root. The file is
+the same in the title update of every FiveM build from 3095 to 3889, and the DLC packs declare
+none, so one is kept for every build. The vanilla cache reads the surface type names from it
+into `materials.json`, and `--read` names YBN materials with them. An archive generated before
+has no `materials.dat`, and `--read` writes the indices alone until it is regenerated.
+
 The vanilla archive retains every version in `cache_info.json`. A stage with no
 additions or replacements has no directory, and extension subdirectories are
 created only for files written at that stage. An empty `latest_version-{version_id}`
@@ -792,13 +799,15 @@ mlo_merger --read --all
 and fingerprint of the file it was read from, the vanilla `hash_names.json` that named its
 hashes, for a resource's file the source cache's `hash_names.json` that named those vanilla
 leaves unnamed, and the resolved `entity_lod_parents` for a YMAP (`YmapReadDocument`); and the
-bound tree with named collision and material flags for a YBN (`YbnReadDocument`); see
+bound tree with named collision and material flags and surface types, with the vanilla
+cache's `materials.json` that named them, for a YBN (`YbnReadDocument`); see
 [usage](usage.md#--read). A resource's file is written to
 `asset/map/read-cache/resources/{resourceName}/{stream-relative-path}.json` and a vanilla
 file to `asset/map/read-cache/vanilla/{version}/{extension}/{fileName}.json`, where `{version}` is the
 version folder holding the file in the vanilla archive: the last version, up to the stage
 read, that changed it. Versions holding the same file share its document. A JSON is
-written again when its file, hash names or resolved LOD parents change, or with `-f`.
+written again when its file, hash names, surface type names or resolved LOD parents change, or
+with `-f`.
 
 Vanilla files are read from the stage the vanilla cache was built for (`latest_version` in
 `asset/map/vanilla-cache/cache_info.json`, `--vanilla-cache` to change the cache), so they match

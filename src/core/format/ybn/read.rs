@@ -153,6 +153,11 @@ pub struct YbnReadGeometry {
 pub struct YbnReadMaterial {
   /// Surface type: the index of the game's `materials.dat` entry.
   pub kind: u8,
+  /// The surface type's name in `materials.dat`, when the vanilla cache holds the names and the
+  /// index is among them.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  #[cfg_attr(feature = "typescript", specta(optional))]
+  pub surface: Option<String>,
   pub procedural_id: u8,
   pub room_id: u8,
   pub ped_density: u8,
@@ -207,8 +212,12 @@ fn none_set(flags: &[bool; 3]) -> bool {
   !flags.iter().any(|flag| *flag)
 }
 
-/// `bound` as it is read.
-pub fn read_model(bound: &Bound) -> YbnReadBound {
+/// `bound` as it is read, its materials' surface types named by `surfaces`, the names of
+/// `materials.dat` by index.
+pub fn read_model(
+  bound: &Bound,
+  surfaces: &[String],
+) -> YbnReadBound {
   let corner = |offset: usize| -> [f32; 3] {
     std::array::from_fn(|axis| {
       let at = offset + axis * 4;
@@ -225,7 +234,7 @@ pub fn read_model(bound: &Bound) -> YbnReadBound {
     .map(|(index, child)| YbnReadChild {
       flags: CollisionFlags::of(bound.flags.get(index).copied().unwrap_or_default()),
       transform: bound.transforms.get(index).copied().unwrap_or(IDENTITY),
-      bound: if child.kind == "None" { None } else { Some(read_model(child)) },
+      bound: if child.kind == "None" { None } else { Some(read_model(child, surfaces)) },
     })
     .collect();
   YbnReadBound {
@@ -233,15 +242,19 @@ pub fn read_model(bound: &Bound) -> YbnReadBound {
     box_min: corner(48),
     box_max: corner(32),
     children,
-    geometry: bound.geometry.as_ref().map(read_geometry),
+    geometry: bound.geometry.as_ref().map(|geometry| read_geometry(geometry, surfaces)),
   }
 }
 
 const IDENTITY: [f32; 16] = [1., 0., 0., 0., 0., 1., 0., 0., 0., 0., 1., 0., 0., 0., 0., 1.];
 
-fn read_geometry(geometry: &Geometry) -> YbnReadGeometry {
+fn read_geometry(
+  geometry: &Geometry,
+  surfaces: &[String],
+) -> YbnReadGeometry {
   let material = |material: &Material| YbnReadMaterial {
     kind: material.kind,
+    surface: surfaces.get(usize::from(material.kind)).cloned(),
     procedural_id: material.procedural_id,
     room_id: material.room_id,
     ped_density: material.ped_density,

@@ -7,6 +7,7 @@ mod content;
 pub mod dlc_content;
 mod hash_index;
 mod manifest;
+mod materials;
 pub(crate) mod publication;
 pub(crate) mod stage;
 
@@ -27,6 +28,7 @@ pub use manifest::{
   object_path,
 };
 pub(crate) use manifest::{load_content, load_manifest, missing_content};
+pub use materials::{MATERIALS_DAT, materials_dat_path};
 #[cfg(test)]
 pub(crate) use publication::Staging;
 pub(crate) use publication::latest_version_marker;

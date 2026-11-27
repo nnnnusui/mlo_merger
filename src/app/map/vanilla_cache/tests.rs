@@ -144,6 +144,25 @@ fn builds_latest_files_through_selected_stage_and_reuses_valid_output() {
   assert_eq!(reused.summary(), "Vanilla derived cache is current through 0000-update");
   assert_eq!(latest(&output), b"base");
 
+  // The archive's `materials.dat` gives the cache its surface type names, and rebuilds it.
+  assert!(!crate::app::map::vanilla_cache::materials_path(&output).exists());
+  let row = |name: &str| format!("{name}\t\t\tFILTER\tFX\tDEFAULT\t-\t-\t1.0\t0.1\t1750.0\t1.0\r");
+  fs::write(
+    crate::core::game_archive::materials_dat_path(&vanilla),
+    ["12.00\r".to_owned(), row("DEFAULT"), row("CONCRETE")].join("\n"),
+  )
+  .unwrap();
+  let named = BuildVanillaCache {
+    vanilla_dir: root.join("vanilla"),
+    output_dir: output.clone(),
+    gamebuild: no_dlc(),
+    force: false,
+  }
+  .run()
+  .unwrap();
+  assert!(named.rebuilt);
+  assert_eq!(crate::app::map::vanilla_cache::material_names(&output), ["DEFAULT", "CONCRETE"]);
+
   // A cache moved away from its archive is built again, naming the archive where it is now.
   let moved = root.join("moved/cache");
   fs::create_dir_all(moved.parent().unwrap()).unwrap();

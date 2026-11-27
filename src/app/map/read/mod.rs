@@ -152,12 +152,16 @@ pub struct YbnReadDocument {
   pub schema_version: u32,
   /// The YBN read.
   pub source: ReadFingerprint,
+  /// The vanilla cache's `materials.json`, which names the surface types, when it has one.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  #[cfg_attr(feature = "typescript", specta(optional))]
+  pub materials: Option<ReadFingerprint>,
   pub model: YbnReadBound,
 }
 
 impl YbnReadDocument {
   /// The current [`Self::schema_version`].
-  pub const SCHEMA_VERSION: u32 = 1;
+  pub const SCHEMA_VERSION: u32 = 2;
 }
 
 /// A file a document was read from, as it was then.
@@ -216,6 +220,8 @@ struct Header {
   hash_names: Option<ReadFingerprint>,
   #[serde(default)]
   source_hash_names: Option<ReadFingerprint>,
+  #[serde(default)]
+  materials: Option<ReadFingerprint>,
 }
 
 /// A stream file selected to be read.
@@ -358,6 +364,20 @@ impl Read {
             && same(&previous.source_hash_names, &source_names_of(selected))
         })
     };
+    let materials_path = crate::app::map::vanilla_cache::materials_path(&self.vanilla_cache_dir);
+    let reads_ybns = checked
+      .iter()
+      .any(|(selected, _, _)| extension(&selected.stored).eq_ignore_ascii_case("ybn"));
+    let (materials, surfaces) = if reads_ybns {
+      (
+        fingerprint(&materials_path, crate::app::map::vanilla_cache::MATERIALS_FILE, |header| {
+          header.materials.as_ref()
+        })?,
+        crate::app::map::vanilla_cache::material_names(&self.vanilla_cache_dir),
+      )
+    } else {
+      (None, Vec::new())
+    };
     let names = load_hash_names_or_empty(&names_path);
     // A resource's own names only fill the hashes vanilla's leave unnamed.
     let mut resource_names = names.clone();
@@ -375,7 +395,7 @@ impl Read {
       .map(|(selected, previous, source)| {
         let _tick = progress.tick();
         if extension(&selected.stored).eq_ignore_ascii_case("ybn") {
-          return self.read_ybn(selected, previous, source);
+          return self.read_ybn(selected, previous, source, (&materials, &surfaces));
         }
         let current = if stale(&selected, &previous, &source) {
           None
@@ -432,23 +452,31 @@ impl Read {
     selected: Selected,
     previous: Option<Header>,
     source: ReadFingerprint,
+    (materials, surfaces): (&Option<ReadFingerprint>, &[String]),
   ) -> std::result::Result<ReadFileResult, String> {
+    let same_materials = |previous: &Option<ReadFingerprint>| match (previous, materials) {
+      (Some(previous), Some(current)) => previous.same_content(current),
+      (None, None) => true,
+      _ => false,
+    };
     let current = !self.force
       && previous.is_some_and(|previous| {
         previous.schema_version == YbnReadDocument::SCHEMA_VERSION
           && previous.source.same_content(&source)
+          && same_materials(&previous.materials)
       });
     if !current {
       let bytes = fs::read(&selected.input)
         .map_err(|error| format!("Cannot open {}: {error}", selected.input.display()))?;
       let model = read_ybn(&bytes)
-        .map(|bound| read_model(&bound))
+        .map(|bound| read_model(&bound, surfaces))
         .map_err(|error| format!("Cannot read {}: {error}", selected.input.display()))?;
       write_minified(
         &selected.output,
         &YbnReadDocument {
           schema_version: YbnReadDocument::SCHEMA_VERSION,
           source,
+          materials: materials.clone(),
           model,
         },
       )

@@ -6,7 +6,8 @@ use crate::core::game_archive::{latest_version_marker, load_manifest};
 use std::{collections::BTreeSet, path::Path};
 
 /// Files of the archive besides the stages' objects.
-const ARCHIVE_FILES: [&str; 2] = ["cache_info.json", "hash_names.json"];
+const ARCHIVE_FILES: [&str; 3] =
+  ["cache_info.json", "hash_names.json", super::materials::MATERIALS_DAT];
 
 /// Checks that every object the manifest records exists, with its SHA-256 when `deep`, and
 /// that the archive holds nothing else.

@@ -6,8 +6,9 @@ use crate::platform::fs;
 use std::path::Path;
 
 /// Entries of the cache directory.
-const CACHE_ENTRIES: [&str; 11] = [
+const CACHE_ENTRIES: [&str; 12] = [
   "cache_info.json",
+  super::materials::MATERIALS_FILE,
   "ymap_relationships.json",
   "stream_file_rtree.json",
   "generations.json",

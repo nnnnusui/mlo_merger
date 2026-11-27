@@ -130,6 +130,7 @@ mod check;
 mod filesystem;
 mod freshness;
 pub(crate) mod generations;
+mod materials;
 mod read;
 mod relationships;
 mod source;
@@ -141,6 +142,7 @@ pub(crate) use check::check;
 use filesystem::*;
 use freshness::{cache_is_current, previous_manifest};
 use generations::write_generations;
+pub use materials::{MATERIALS_FILE, material_names, materials_path};
 pub(crate) use read::{ArchivedVersion, archive_dir, archived_versions, versions_digest};
 pub(crate) use read::{DerivedVanillaFile, LoadedCache, load_cache};
 pub use read::{

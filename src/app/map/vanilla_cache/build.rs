@@ -113,6 +113,7 @@ impl BuildVanillaCache {
     //   &staging.0,
     //   previous_diffs,
     // )?;
+    super::materials::write_materials(&vanilla_dir, &staging.0)?;
     publish_directory(&staging.0, &output_dir)?;
     let mut changes = StoreChanges::default();
     let mut previous_files: BTreeMap<_, _> = previous
