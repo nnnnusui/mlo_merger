@@ -1,53 +1,49 @@
 //! The web demo's sample workspace under `web/sample`: an original vanilla archive and source
 //! resources, built here so that no game data is shipped.
 //!
-//! Every name is invented (`smpl_*`, and DLCs `smpl_winter` and `smpl_summer`), and everything
-//! sits around (-7100, 7100), in the sea off the map. The vanilla archive has the stages `base`,
-//! `update`, `smpl_winter` (build 100 of the sample's `asset/config.toml`), a patch, and
-//! `smpl_summer` (build 200), so `--gamebuild` changes what the merge sees:
+//! Every name is invented (`smpl_*`, the DLCs `smpl_winter`, `smpl_patch_01` and `smpl_summer`,
+//! and the game builds 1, 100 and 200), and everything sits around (-7100, 7100), in the sea off
+//! the map. The vanilla archive ([`vanilla`]) has the stages `base`, `update`, `smpl_winter`
+//! (build 100) with a title-update patch per build, `smpl_patch_01` and `smpl_summer` (build
+//! 200), records what each DLC pack declares about the archives it mounts, and holds a
+//! `materials.dat`.
 //!
-//! - `smpl_block_01.ymap` holds one item of every kind: entities with each extension (door,
-//!   light effect, spawn point override, cloth bounds), a car generator, a time-cycle modifier,
-//!   a box occluder, an occlude model, a physics dictionary and a grass batch. Its parent
-//!   `smpl_block_01_lod.ymap` holds the LOD entities its houses point to.
-//! - `winter_smpl_block_01.ymap` (build 100) and `summer_smpl_block_01.ymap` (build 200) ship it
-//!   again with items reordered and added: DLC generations, which the vanilla cache pairs.
-//! - `lodlights_small001.ymap` and `distlodlights_small001.ymap` are a LOD light pair, shipped
-//!   again as `winter_*` with one more light.
-//! - `smpl_block_02.ymap` changes in the title update, the patch and `smpl_summer`.
-//! - `smpl_block_01.ybn` is the block's collision, changed in `smpl_summer`, which also ships it
-//!   again as `summer_smpl_block_01.ybn`: a YBN generation.
-//! - `smpl_block_02.ybn` is the park's collision, holding a box twice, which the merge deploys
-//!   without the repeat though no resource changes it.
+//! Each resource ([`resources`]) shows one behaviour of the merger a user meets on real data, and
+//! is named after it; `web/sample/README.md` lists them as examples, by section, with what to
+//! look at after a pipeline run:
 //!
-//! The resources edit those files: two resources change `smpl_block_01.ymap` and its collision,
-//! one removes a LOD entity from the parent so the children's parent indices are repaired, one
-//! removes a LOD light pair, and one ships its own map, a child map of it and collision. A later
-//! version of that resource ships the map again, so the merge combines both versions: the sign
-//! they share is kept once, and the crate placed again under another GUID too, its child
-//! following the kept one. The two resources changing `smpl_block_01.ymap` each extend the wall
-//! of its occlude model with a strip, which together pass the vertex limit of one model, so the
-//! merge places the second strip in a model of its own. Another removes an oak from the park
-//! and places a bin there. Edits to `smpl_block_01.ymap` carry over to its DLC generations.
-//!
-//! The overwrites name one ignored overwrite of every reason on the first pipeline run: some
-//! written against earlier versions of the resources' files (see [`earlier_versions`]), the
-//! others in [`ignored::overwrites`]. One more, [`collision_overwrite`], leaves the planter's
-//! collision of `smpl_street_tweaks` out.
+//! - Generations: the block's edits carried to its DLC generations, and the square, which
+//!   `smpl_winter` replaces, omitted for its successor; a YMAP first shipped after build 100;
+//!   changes left behind for each reason; YBN changes carried to the YBNs `smpl_summer` splits the
+//!   yard into.
+//! - Older versions of a vanilla file: resources made from the title update's park, from the
+//!   collision before the kiosk and from the LOD lights before the title update's light, and one
+//!   matching `smpl_winter`'s rink before its patches, which is not deployed.
+//! - Game builds and DLC content: the title update's patches of `smpl_winter` per build, the
+//!   archives the packs' change sets unload, and the stages each build ends at.
+//! - Entity parents: indices repaired after a LOD entity is removed, LODs removed with all their
+//!   children, a parent GUID two entities share, and a house left without its parent.
+//! - Combining sources: the merge report's reasons, an added map two versions of a resource ship,
+//!   and GUIDs rounded through a float.
+//! - LOD light pairs, YBN repeats and surface names, and overwrites: one ignored overwrite of
+//!   every reason, some written against earlier versions of the resources' files (see
+//!   [`earlier_versions`]), the others in [`ignored::overwrites`], and [`collision_overwrite`],
+//!   leaving the planter's collision of `smpl_street_tweaks` out.
 //!
 //! Every stream file covers [`EVERY_FILE_POSITION`].
 //!
-//! The test checks that `web/sample` holds what this module builds and that the pipeline runs
-//! on it; run it with `MLO_WRITE_SAMPLES=1` to write the samples instead.
+//! The tests check that `web/sample` holds what this module builds and each example's outcome,
+//! one test each; run them with `MLO_WRITE_SAMPLES=1` to write the samples instead.
 
 mod build;
 mod earlier;
 mod ignored;
+mod resources;
 #[cfg(test)]
 mod tests;
+mod vanilla;
 mod ybn;
 
-use build::*;
 use earlier::earlier_versions;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
@@ -55,9 +51,12 @@ use std::path::{Path, PathBuf};
 use crate::core::format::gamefile::meta::jenk_hash;
 use crate::core::format::ymap::binary::{write_ymap, ymap_to_model};
 use crate::core::format::ymap::model::ymap::Ymap;
+use crate::core::game_archive::{
+  CacheVersion, CachedFile, FileChange, PatchVariant, VanillaCacheManifest,
+};
 use crate::platform::fs;
 use sha2::{Digest, Sha256};
-use ybn::{Child, Geometry};
+use ybn::Child;
 
 /// Guids of the sample's entities, so edits can find them.
 mod guid {
@@ -73,12 +72,38 @@ mod guid {
   pub const SLOD: u32 = 0x534D_0100;
   pub const HOUSE_A_LOD: u32 = 0x534D_0101;
   pub const HOUSE_B_LOD: u32 = 0x534D_0102;
-  pub const OAK_1: u32 = 0x534D_0201;
-  pub const OAK_2: u32 = 0x534D_0202;
-  pub const OAK_3: u32 = 0x534D_0203;
-  pub const FOUNTAIN: u32 = 0x534D_0204;
-  pub const PARK_BENCH: u32 = 0x534D_0205;
-  pub const KIOSK: u32 = 0x534D_0206;
+  // The park's GUIDs lie far apart, so each rounds to a GUID of its own through a float.
+  pub const OAK_1: u32 = 0x5310_2201;
+  pub const OAK_2: u32 = 0x5320_4402;
+  pub const OAK_3: u32 = 0x5330_6603;
+  pub const FOUNTAIN: u32 = 0x5340_8804;
+  pub const PARK_BENCH: u32 = 0x5350_AA05;
+  pub const KIOSK: u32 = 0x5360_CC06;
+  pub const STATUE_LOD: u32 = 0x534D_0300;
+  pub const STATUE: u32 = 0x534D_0301;
+  pub const SQUARE_BENCH: u32 = 0x534D_0302;
+  pub const SQUARE_BIN: u32 = 0x534D_0303;
+  pub const SQUARE_TREE: u32 = 0x534D_0304;
+  pub const SQUARE_LAMP: u32 = 0x534D_0305;
+  pub const SNOWMAN: u32 = 0x534D_0306;
+  pub const PIER_BOLLARD_1: u32 = 0x534D_0401;
+  pub const PIER_BOLLARD_2: u32 = 0x534D_0402;
+  pub const RINK_BARRIER: u32 = 0x534D_0501;
+  pub const RINK_LAMP: u32 = 0x534D_0502;
+  pub const RINK_BENCH: u32 = 0x534D_0503;
+  pub const HUT: u32 = 0x534D_0504;
+  pub const ROW_SLOD: u32 = 0x534D_0600;
+  pub const HOUSE_C_LOD: u32 = 0x534D_0601;
+  pub const HOUSE_D_LOD: u32 = 0x534D_0602;
+  pub const HOUSE_E_LOD: u32 = 0x534D_0603;
+  pub const HOUSE_F_LOD: u32 = 0x534D_0604;
+  pub const HOUSE_C: u32 = 0x534D_0611;
+  pub const HOUSE_D: u32 = 0x534D_0612;
+  pub const HOUSE_E: u32 = 0x534D_0613;
+  pub const HOUSE_F: u32 = 0x534D_0614;
+  pub const CRANE_LOD: u32 = 0x534D_0700;
+  pub const CRANE: u32 = 0x534D_0701;
+  pub const QUAY_BOLLARD: u32 = 0x534D_0702;
   pub const BLOCK_99_BENCH: u32 = 0x534D_0901;
   pub const PLANTER: u32 = 0x5A5A_0001;
   pub const BIRCH: u32 = 0x5A5A_0002;
@@ -90,6 +115,8 @@ mod guid {
   pub const BARREL: u32 = 0x5A5A_0203;
   pub const PARK_BIN: u32 = 0x5A5A_0301;
   pub const OLD_SIGN: u32 = 0x5A5A_0401;
+  pub const SQUARE_SIGN: u32 = 0x5A5A_0501;
+  pub const FLOWER_BED: u32 = 0x5A5A_0502;
 }
 
 /// A point every stream file of the sample covers: inside each YMAP's entity extents and each
@@ -102,326 +129,12 @@ struct SampleFile {
   bytes: Vec<u8>,
 }
 
-fn block_01_lod() -> Ymap {
-  let mut map = ymap("smpl_block_01_lod", "", 2, 2);
-  map.entities = vec![
-    lod_entity(
-      "smpl_block_slod",
-      guid::SLOD,
-      position(-7085.0, 7100.0, 20.0),
-      "LODTYPES_DEPTH_SLOD1",
-      0,
-    ),
-    lod_entity(
-      "smpl_house_a_lod",
-      guid::HOUSE_A_LOD,
-      position(-7100.0, 7100.0, 20.0),
-      "LODTYPES_DEPTH_LOD",
-      1,
-    ),
-    lod_entity(
-      "smpl_house_b_lod",
-      guid::HOUSE_B_LOD,
-      position(-7070.0, 7100.0, 20.0),
-      "LODTYPES_DEPTH_LOD",
-      1,
-    ),
-  ];
-  fit_extents(&mut map);
-  map
-}
-
-/// The block as the base game ships it, named `name` so DLC generations can reuse it.
-fn block_01(name: &str) -> Ymap {
-  let mut map = ymap(name, "smpl_block_01_lod", 0, 1);
-  let mut house_a = entity("smpl_house_a", guid::HOUSE_A, position(-7100.0, 7100.0, 20.0), 0.0);
-  house_a.parent_index = 1;
-  let mut house_b = entity("smpl_house_b", guid::HOUSE_B, position(-7070.0, 7100.0, 20.0), 180.0);
-  house_b.parent_index = 2;
-  let mut door_entity = entity("smpl_door_front", guid::DOOR, position(-7100.0, 7092.0, 20.0), 0.0);
-  door_entity.extensions.push(door("smpl_door_main", false));
-  let mut lamp = entity("smpl_lamp_post", guid::LAMP, position(-7085.0, 7090.0, 20.0), 0.0);
-  lamp.extensions.push(light_effect("smpl_lamp_light", [255, 214, 160]));
-  let mut bench = entity("smpl_bench", guid::BENCH, position(-7080.0, 7088.0, 20.0), 90.0);
-  bench.extensions.push(spawn_point("smpl_bench_seat"));
-  let mut flag = entity("smpl_flag_cloth", guid::FLAG, position(-7060.0, 7092.0, 20.0), 0.0);
-  flag.extensions.push(cloth_bounds("smpl_flag_bounds"));
-  let bin = entity("smpl_bin", guid::BIN, position(-7078.0, 7088.0, 20.0), 0.0);
-  map.entities = vec![house_a, house_b, door_entity, lamp, bench, flag, bin];
-  map.car_generators.push(car_generator(position(-7090.0, 7080.0, 20.0), "smpl_hatchback"));
-  map.time_cycle_modifiers.push(time_cycle_modifier(
-    "smpl_dusk_glow",
-    position(-7115.0, 7075.0, 15.0),
-    position(-7055.0, 7115.0, 40.0),
-    40.0,
-  ));
-  map.box_occluders.push(box_occluder(-7100.0, 7108.0, 24.0, [10.0, 8.0, 8.0]));
-  map.occlude_models.push(occlude_model(-7074.0, 7104.0, 20.0));
-  map.physics_dictionaries.push("smpl_props_phys".into());
-  map.instanced_data.grass_instance_list.push(grass(
-    "smpl_grass_tuft",
-    position(-7110.0, 7082.0, 19.8),
-    position(-7090.0, 7084.0, 20.2),
-    6,
-  ));
-  fit_extents(&mut map);
-  map
-}
-
-/// The block as `smpl_winter` ships it again: its items in another order, and a tree.
-fn winter_block_01() -> Ymap {
-  let mut map = block_01("winter_smpl_block_01");
-  map.entities[2..].reverse();
-  map.entities.push(entity(
-    "smpl_xmas_tree",
-    guid::XMAS_TREE,
-    position(-7090.0, 7095.0, 20.0),
-    0.0,
-  ));
-  fit_extents(&mut map);
-  map
-}
-
-/// The block as `smpl_summer` ships it again: a parasol instead of the tree.
-fn summer_block_01() -> Ymap {
-  let mut map = block_01("summer_smpl_block_01");
-  map.entities.push(entity("smpl_parasol", guid::PARASOL, position(-7076.0, 7086.0, 20.0), 0.0));
-  fit_extents(&mut map);
-  map
-}
-
-/// The park after `changes` of the stages that change it: `update`, the patch and
-/// `smpl_summer`.
-fn block_02(changes: usize) -> Ymap {
-  let mut map = ymap("smpl_block_02", "", 0, 1);
-  map.entities = vec![
-    entity("smpl_tree_oak", guid::OAK_1, position(-7110.0, 7080.0, 20.0), 0.0),
-    entity("smpl_tree_oak", guid::OAK_2, position(-7095.0, 7075.0, 20.0), 45.0),
-    entity("smpl_tree_oak", guid::OAK_3, position(-7080.0, 7082.0, 20.0), 90.0),
-    entity("smpl_fountain", guid::FOUNTAIN, position(-7095.0, 7090.0, 20.0), 0.0),
-  ];
-  if changes >= 1 {
-    map.entities[0].position.x += 2.0;
-  }
-  if changes >= 2 {
-    map.entities.push(entity(
-      "smpl_bench",
-      guid::PARK_BENCH,
-      position(-7100.0, 7090.0, 20.0),
-      270.0,
-    ));
-  }
-  if changes >= 3 {
-    map.entities.remove(1);
-    map.entities.push(entity("smpl_kiosk", guid::KIOSK, position(-7085.0, 7095.0, 20.0), 180.0));
-  }
-  fit_extents(&mut map);
-  map
-}
-
-/// LOD lights over the block's street, `count` of them, and their distant partners.
-fn lod_lights(
-  prefix: &str,
-  count: usize,
-) -> (Ymap, Ymap) {
-  let places = [(-7085.0, 7090.0), (-7100.0, 7080.0), (-7070.0, 7080.0), (-7055.0, 7090.0)];
-  let distant_name = format!("{prefix}distlodlights_small001");
-  let mut lights = ymap(&format!("{prefix}lodlights_small001"), &distant_name, 0, 128);
-  let mut distant = ymap(&distant_name, "", 2, 256);
-  for (index, (x, y)) in places.into_iter().take(count).enumerate() {
-    lights.lod_lights.push(lod_light(0x534D_1000 + index as u32));
-    distant.distant_lod_lights.items.push(distant_light(position(x, y, 25.0), 0xFFD6_A0C8));
-  }
-  distant.distant_lod_lights.num_street_lights = count as u32;
-  fit_extents(&mut distant);
-  lights.streaming_extents_min = distant.streaming_extents_min.clone();
-  lights.streaming_extents_max = distant.streaming_extents_max.clone();
-  lights.entities_extents_min = distant.entities_extents_min.clone();
-  lights.entities_extents_max = distant.entities_extents_max.clone();
-  (lights, distant)
-}
-
-/// The block's collision: ground, house A and a bollard in one geometry, house B as a box.
-/// `smpl_summer` adds the kiosk's collision.
-fn block_01_collision(with_kiosk: bool) -> Vec<Child> {
-  let mut ground = Geometry::ground([-7115.0, 7075.0], [-7055.0, 7115.0], 19.9);
-  ground.add_box([-7106.0, 7096.0, 19.9], [-7094.0, 7110.0, 28.0]);
-  ground.add_sphere([-7092.0, 7086.0, 20.4], 0.4);
-  if with_kiosk {
-    ground.add_box([-7088.0, 7076.0, 19.9], [-7084.0, 7079.0, 23.0]);
-  }
-  vec![Child::Geometry(ground), Child::Box([-7076.0, 7096.0, 19.9], [-7064.0, 7110.0, 28.0])]
-}
-
-/// The park's collision, holding the fountain's box twice: no resource changes it, but the merge
-/// deploys it without the repeat.
-fn block_02_collision() -> Vec<Child> {
-  let mut ground = Geometry::ground([-7100.0, 7070.0], [-7060.0, 7100.0], 19.9);
-  for _ in 0..2 {
-    ground.add_box([-7095.0, 7085.0, 19.9], [-7091.0, 7089.0, 20.8]);
-  }
-  vec![Child::Geometry(ground)]
-}
-
-/// Panels of the wall strip each of two resources adds to the block's occlude model, joining the
-/// wall at either end: 142 vertices each, which together with the wall's pass the 255 one model
-/// holds.
-const WALL_PANELS: usize = 70;
-
 /// Which entity of `map` has `guid`.
 fn find(
   map: &Ymap,
   guid: u32,
 ) -> usize {
   map.entities.iter().position(|entity| entity.guid == guid).unwrap()
-}
-
-/// Resource `[smpl]/smpl_street_tweaks`: moves the bench, locks the door, removes the car
-/// generator, adds a planter and extends the occlude model's wall east; removes a LOD light
-/// pair; adds the planter's collision. Its
-/// `earlier` version, which an overwrite was written against, also added a cone.
-fn street_tweaks(earlier: bool) -> Vec<(&'static str, Vec<u8>)> {
-  let mut map = block_01("smpl_block_01");
-  let bench = find(&map, guid::BENCH);
-  map.entities[bench].position.x += 1.5;
-  let door_entity = find(&map, guid::DOOR);
-  map.entities[door_entity].extensions = vec![door("smpl_door_main", true)];
-  map.car_generators.clear();
-  let model = &mut map.occlude_models[0];
-  model.triangles.extend(wall_strip(position(-7066.0, 7104.0, 20.0), WALL_PANELS));
-  model.fit_bounds();
-  map.entities.push(entity("smpl_planter", guid::PLANTER, position(-7095.0, 7088.0, 20.0), 0.0));
-  if earlier {
-    map.entities.push(entity("smpl_cone", guid::CONE, position(-7092.0, 7090.0, 20.0), 0.0));
-  }
-  fit_extents(&mut map);
-  let (mut lights, mut distant) = lod_lights("", 3);
-  lights.lod_lights.remove(2);
-  distant.distant_lod_lights.items.remove(2);
-  distant.distant_lod_lights.num_street_lights -= 1;
-  let mut collision = block_01_collision(false);
-  if let Child::Geometry(ground) = &mut collision[0] {
-    ground.add_box([-7096.0, 7087.0, 19.9], [-7094.0, 7089.0, 20.8]);
-  }
-  vec![
-    ("stream/smpl_block_01.ymap", ymap_bytes(&map)),
-    ("stream/lodlights_small001.ymap", ymap_bytes(&lights)),
-    ("stream/distlodlights_small001.ymap", ymap_bytes(&distant)),
-    ("stream/smpl_block_01.ybn", ybn_bytes(&collision)),
-  ]
-}
-
-/// Resource `smpl_block_rework`: brightens the dusk, removes the occlude model's roof and extends
-/// its wall west, removes the bin, recolours the lamp; removes the empty SLOD from the parent, so
-/// the houses' parent indices move; removes the bollard's collision. Its `earlier` version, which an overwrite was
-/// written against, recoloured the lamp otherwise.
-fn block_rework(earlier: bool) -> Vec<(&'static str, Vec<u8>)> {
-  let mut map = block_01("smpl_block_01");
-  map.time_cycle_modifiers[0].percentage = 80.0;
-  let model = &mut map.occlude_models[0];
-  model.triangles.truncate(2);
-  model.triangles.extend(wall_strip(position(-7102.0, 7104.0, 20.0), WALL_PANELS));
-  model.fit_bounds();
-  map.entities.remove(find(&map, guid::BIN));
-  let lamp = find(&map, guid::LAMP);
-  let colour = if earlier { [200, 200, 255] } else { [170, 200, 255] };
-  map.entities[lamp].extensions = vec![light_effect("smpl_lamp_light", colour)];
-  // The resource's own parent has lost its first entity, so its houses point one lower.
-  let (house_a, house_b) = (find(&map, guid::HOUSE_A), find(&map, guid::HOUSE_B));
-  map.entities[house_a].parent_index = 0;
-  map.entities[house_b].parent_index = 1;
-  fit_extents(&mut map);
-  let mut parent = block_01_lod();
-  parent.entities.remove(find(&parent, guid::SLOD));
-  fit_extents(&mut parent);
-  let mut collision = block_01_collision(false);
-  if let Child::Geometry(ground) = &mut collision[0] {
-    ground.vertices.pop();
-    ground.polygons.pop();
-  }
-  vec![
-    ("stream/maps/smpl_block_01.ymap", ymap_bytes(&map)),
-    ("stream/maps/smpl_block_01_lod.ymap", ymap_bytes(&parent)),
-    ("stream/maps/smpl_block_01.ybn", ybn_bytes(&collision)),
-  ]
-}
-
-/// The custom map as `smpl_custom_props` ships it: a sign and a crate.
-fn custom_01() -> Ymap {
-  let mut custom = ymap("smpl_custom_01", "", 0, 1);
-  let mut sign = entity("smpl_sign_board", guid::SIGN, position(-7094.0, 7097.0, 20.0), 90.0);
-  sign.extensions.push(light_effect("smpl_sign_light", [255, 80, 80]));
-  custom.entities =
-    vec![sign, entity("smpl_crate", guid::CRATE, position(-7091.0, 7095.0, 20.0), 15.0)];
-  fit_extents(&mut custom);
-  custom
-}
-
-/// Resource `smpl_custom_props`: its own map, a child map whose label points at the map's crate,
-/// the map's collision, a birch in the park as `smpl_summer` left it, and `smpl_summer`'s
-/// generation of the block's collision with the kiosk's taken out and a bench's put in. Under
-/// a game build before `smpl_summer`, those changes are carried to `smpl_block_01.ybn`.
-fn custom_props() -> Vec<(&'static str, Vec<u8>)> {
-  let custom = custom_01();
-  let mut detail = ymap("smpl_custom_02", "smpl_custom_01", 0, 1);
-  let mut label =
-    entity("smpl_crate_label", guid::CRATE_LABEL, position(-7091.0, 7094.5, 20.5), 15.0);
-  label.parent_index = find(&custom, guid::CRATE) as i32;
-  detail.entities = vec![label];
-  fit_extents(&mut detail);
-  let mut park = block_02(3);
-  park.entities.push(entity("smpl_tree_birch", guid::BIRCH, position(-7070.0, 7075.0, 20.0), 0.0));
-  fit_extents(&mut park);
-  let mut collision = Geometry::ground([-7096.0, 7090.0], [-7086.0, 7100.0], 19.9);
-  collision.add_box([-7092.0, 7094.0, 19.9], [-7090.0, 7096.0, 21.0]);
-  vec![
-    ("stream/smpl_custom_01.ymap", ymap_bytes(&custom)),
-    ("stream/smpl_custom_02.ymap", ymap_bytes(&detail)),
-    ("stream/smpl_custom_01.ybn", ybn_bytes(&[Child::Geometry(collision)])),
-    ("stream/smpl_block_02.ymap", ymap_bytes(&park)),
-    ("stream/summer_smpl_block_01.ybn", ybn_bytes(&summer_collision_with_bench())),
-  ]
-}
-
-/// The collision `smpl_summer` ships as `summer_smpl_block_01.ybn`, without the kiosk's box and
-/// with a bench's.
-fn summer_collision_with_bench() -> Vec<Child> {
-  let mut collision = block_01_collision(false);
-  if let Child::Geometry(ground) = &mut collision[0] {
-    ground.add_box([-7082.0, 7087.0, 19.9], [-7080.0, 7088.0, 20.5]);
-  }
-  collision
-}
-
-/// Resource `smpl_custom_props_v2`, a later version of `smpl_custom_props` loaded after it: the
-/// same custom map with a barrel first, the sign recoloured, and the crate placed again under
-/// another GUID and turned.
-fn custom_props_v2() -> Vec<(&'static str, Vec<u8>)> {
-  let mut custom = custom_01();
-  let sign = find(&custom, guid::SIGN);
-  custom.entities[sign].extensions = vec![light_effect("smpl_sign_light", [80, 160, 255])];
-  let mut crate_v2 = custom.entities.remove(find(&custom, guid::CRATE));
-  crate_v2.guid = guid::CRATE_V2;
-  crate_v2.rotation = heading(45.0);
-  custom
-    .entities
-    .insert(0, entity("smpl_barrel", guid::BARREL, position(-7088.0, 7096.0, 20.0), 0.0));
-  custom.entities.push(crate_v2);
-  fit_extents(&mut custom);
-  vec![("stream/smpl_custom_01.ymap", ymap_bytes(&custom))]
-}
-
-/// Resource `smpl_park_tweaks`: removes an oak from the park as `smpl_summer` left it and
-/// places a bin by the fountain. Its `earlier` version, which an overwrite was written against,
-/// removed the other oak and placed the bin last.
-fn park_tweaks(earlier: bool) -> Vec<(&'static str, Vec<u8>)> {
-  let mut park = block_02(3);
-  park.entities.remove(find(&park, if earlier { guid::OAK_1 } else { guid::OAK_3 }));
-  let bin = entity("smpl_bin", guid::PARK_BIN, position(-7093.0, 7088.0, 20.0), 0.0);
-  let at = if earlier { park.entities.len() } else { find(&park, guid::FOUNTAIN) + 1 };
-  park.entities.insert(at, bin);
-  fit_extents(&mut park);
-  vec![("stream/smpl_block_02.ymap", ymap_bytes(&park))]
 }
 
 /// Every name the sample hashes, so `hash_names.json` resolves them all.
@@ -435,6 +148,16 @@ const NAMES: &[&str] = &[
   "distlodlights_small001",
   "winter_lodlights_small001",
   "winter_distlodlights_small001",
+  "smpl_square",
+  "smpl_square_lod",
+  "winter_smpl_square",
+  "smpl_pier",
+  "winter_smpl_rink",
+  "winter_smpl_hut",
+  "smpl_row",
+  "smpl_row_lod",
+  "smpl_quay",
+  "smpl_quay_lod",
   "smpl_custom_01",
   "smpl_custom_02",
   "smpl_custom_old",
@@ -473,6 +196,24 @@ const NAMES: &[&str] = &[
   "smpl_dusk_glow",
   "smpl_props_phys",
   "smpl_grass_tuft",
+  "smpl_statue",
+  "smpl_statue_lod",
+  "smpl_snowman",
+  "smpl_bollard",
+  "smpl_rink_barrier",
+  "smpl_hut",
+  "smpl_house_c",
+  "smpl_house_d",
+  "smpl_house_e",
+  "smpl_house_f",
+  "smpl_house_c_lod",
+  "smpl_house_d_lod",
+  "smpl_house_e_lod",
+  "smpl_house_f_lod",
+  "smpl_row_slod",
+  "smpl_crane",
+  "smpl_crane_lod",
+  "smpl_flower_bed",
 ];
 
 fn hash_names() -> BTreeMap<u32, String> {
@@ -491,53 +232,12 @@ fn ybn_bytes(children: &[Child]) -> Vec<u8> {
   crate::core::format::ybn::xml::xml_to_ybn(&ybn::xml(children)).unwrap()
 }
 
-type StageFiles = Vec<(&'static str, Vec<u8>)>;
-
-/// The vanilla stages in load order, each with the files it ships.
-fn vanilla_stages() -> Vec<(&'static str, StageFiles)> {
-  let (lights, distant) = lod_lights("", 3);
-  let (winter_lights, winter_distant) = lod_lights("winter_", 4);
-  vec![
-    (
-      "0000-base",
-      vec![
-        ("smpl_block_01.ymap", ymap_bytes(&block_01("smpl_block_01"))),
-        ("smpl_block_01_lod.ymap", ymap_bytes(&block_01_lod())),
-        ("smpl_block_02.ymap", ymap_bytes(&block_02(0))),
-        ("lodlights_small001.ymap", ymap_bytes(&lights)),
-        ("distlodlights_small001.ymap", ymap_bytes(&distant)),
-        ("smpl_block_01.ybn", ybn_bytes(&block_01_collision(false))),
-        ("smpl_block_02.ybn", ybn_bytes(&block_02_collision())),
-      ],
-    ),
-    ("0001-update", vec![("smpl_block_02.ymap", ymap_bytes(&block_02(1)))]),
-    (
-      "0002-smpl_winter",
-      vec![
-        ("winter_smpl_block_01.ymap", ymap_bytes(&winter_block_01())),
-        ("winter_lodlights_small001.ymap", ymap_bytes(&winter_lights)),
-        ("winter_distlodlights_small001.ymap", ymap_bytes(&winter_distant)),
-      ],
-    ),
-    ("0003-smpl_patch_01", vec![("smpl_block_02.ymap", ymap_bytes(&block_02(2)))]),
-    (
-      "0004-smpl_summer",
-      vec![
-        ("summer_smpl_block_01.ymap", ymap_bytes(&summer_block_01())),
-        ("smpl_block_02.ymap", ymap_bytes(&block_02(3))),
-        ("smpl_block_01.ybn", ybn_bytes(&block_01_collision(true))),
-        ("summer_smpl_block_01.ybn", ybn_bytes(&block_01_collision(true))),
-      ],
-    ),
-  ]
-}
-
 /// The overwrite of `smpl_street_tweaks`'s `smpl_block_01.ybn` leaving out the box it adds, the
 /// planter's collision, written against the collision `smpl_summer` ships.
 fn collision_overwrite() -> (String, Vec<u8>) {
   let fingerprint =
     |bytes: &[u8]| serde_json::json!({"sha256": sha256(bytes), "size": bytes.len()});
-  let source = street_tweaks(false)
+  let source = resources::street_tweaks(false)
     .into_iter()
     .find(|(path, _)| path.ends_with(".ybn"))
     .map(|(_, bytes)| bytes)
@@ -545,7 +245,7 @@ fn collision_overwrite() -> (String, Vec<u8>) {
   let overwrite = serde_json::json!({
     "schema_version": crate::app::map::overwrite::StreamFileOverwrite::SCHEMA_VERSION,
     "target": fingerprint(&source),
-    "base": fingerprint(&ybn_bytes(&block_01_collision(true))),
+    "base": fingerprint(&ybn_bytes(&vanilla::block_01_collision(true))),
     "skip": {"polygons": [{"flags": [0, 0], "added": [{"shape": {"type": "box"}}]}]},
   });
   (
@@ -598,37 +298,18 @@ fn sample_files() -> Vec<SampleFile> {
 /// their current ones.
 fn workspace_files(earlier: bool) -> Vec<SampleFile> {
   let mut files = Vec::new();
-  let mut versions = Vec::new();
-  let mut previous: BTreeMap<&str, String> = BTreeMap::new();
-  let mut parent: Option<&str> = None;
-  for (stage, stage_files) in vanilla_stages() {
-    let mut changes = serde_json::Map::new();
-    for (name, bytes) in stage_files {
-      let extension = name.rsplit_once('.').unwrap().1;
-      let object = format!("{stage}/{extension}/{name}");
-      let sha = sha256(&bytes);
-      changes.insert(
-        name.into(),
-        serde_json::json!({
-          "previous_sha256": previous.get(name),
-          "file": {"sha256": sha, "object": object, "source": format!("smpl.rpf/{name}")},
-        }),
-      );
-      previous.insert(name, sha);
-      files.push(SampleFile {
-        path: format!("asset/vanilla/{object}"),
-        bytes,
-      });
-    }
-    versions.push(serde_json::json!({
-      "id": stage, "parent": parent, "archives": ["smpl.rpf"], "changes": changes, "unchanged": 0,
-    }));
-    parent = Some(stage);
-  }
-  let manifest = serde_json::json!({"format_version": 4, "contents": ["map"], "game_dir": "/mnt/gtav", "versions": versions});
+  let (manifest, objects) = vanilla_manifest();
+  files.extend(objects.into_iter().map(|(object, bytes)| SampleFile {
+    path: format!("asset/vanilla/{object}"),
+    bytes,
+  }));
   files.push(SampleFile {
     path: "asset/vanilla/cache_info.json".into(),
     bytes: serde_json::to_vec_pretty(&manifest).unwrap(),
+  });
+  files.push(SampleFile {
+    path: format!("asset/vanilla/{}", crate::core::game_archive::MATERIALS_DAT),
+    bytes: vanilla::materials_dat().into_bytes(),
   });
   let names = hash_names()
     .into_iter()
@@ -638,13 +319,7 @@ fn workspace_files(earlier: bool) -> Vec<SampleFile> {
     path: "asset/vanilla/hash_names.json".into(),
     bytes: serde_json::to_vec_pretty(&serde_json::json!({"names": names})).unwrap(),
   });
-  for (resource, resource_files) in [
-    ("[smpl]/smpl_street_tweaks", street_tweaks(earlier)),
-    ("smpl_block_rework", block_rework(earlier)),
-    ("smpl_custom_props", custom_props()),
-    ("smpl_custom_props_v2", custom_props_v2()),
-    ("smpl_park_tweaks", park_tweaks(earlier)),
-  ] {
+  for (resource, resource_files) in resources::resources(earlier) {
     files.push(SampleFile {
       path: format!("asset/map/source/{resource}/fxmanifest.lua"),
       bytes: FXMANIFEST.into(),
@@ -661,6 +336,89 @@ fn workspace_files(earlier: bool) -> Vec<SampleFile> {
     bytes: CONFIG.into(),
   });
   files
+}
+
+/// The vanilla archive's manifest of [`vanilla::stages`], and its files by their object path, as
+/// `--generate-vanilla` would store them: each stage's under `{stage}/{extension}/`, and each
+/// version of a pack's title-update patch under `{stage}/update_rpf/{name}/{extension}/`, its
+/// changes relative to the files the installed game loads before it.
+fn vanilla_manifest() -> (VanillaCacheManifest, Vec<(String, Vec<u8>)>) {
+  let mut objects = Vec::new();
+  // The latest version of each file as the installed game loads the stages so far.
+  let mut installed = BTreeMap::<String, String>::new();
+  let mut changes_of =
+    |directory: &str, files: Vec<vanilla::StageFile>, installed: &BTreeMap<String, String>| {
+      let mut changes = BTreeMap::new();
+      for (name, archive, bytes) in files {
+        let extension = name.rsplit_once('.').unwrap().1;
+        let object = format!("{directory}/{extension}/{name}");
+        changes.insert(
+          name.to_owned(),
+          FileChange {
+            previous_sha256: installed.get(name).cloned(),
+            file: CachedFile {
+              sha256: sha256(&bytes),
+              object: object.clone(),
+              source: format!("{archive}/{name}"),
+            },
+          },
+        );
+        objects.push((object, bytes));
+      }
+      changes
+    };
+  let mut versions = Vec::<CacheVersion>::new();
+  for (index, stage) in vanilla::stages().into_iter().enumerate() {
+    let id = format!("{index:04}-{}", stage.label);
+    let changes = changes_of(&id, stage.files, &installed);
+    for (name, change) in &changes {
+      installed.insert(name.clone(), change.file.sha256.clone());
+    }
+    let mut patches = Vec::new();
+    for patch in stage.patches {
+      let patch_id = format!("{id}/update_rpf/{}", patch.name);
+      let patch_changes = changes_of(&patch_id, patch.files, &installed);
+      patches.push((
+        patch.installed,
+        PatchVariant {
+          id: patch_id,
+          builds: patch.builds,
+          installed: patch.installed,
+          archives: vec![format!("update/update.rpf/dlc_patch/{}", stage.label)],
+          changes: patch_changes,
+          file_kinds: BTreeMap::new(),
+          unchanged: 0,
+          dlc: stage.dlc.clone(),
+        },
+      ));
+    }
+    for (_, patch) in patches.iter().filter(|(installed, _)| *installed) {
+      for (name, change) in &patch.changes {
+        installed.insert(name.clone(), change.file.sha256.clone());
+      }
+    }
+    versions.push(CacheVersion {
+      id,
+      parent: versions.last().map(|previous| previous.id.clone()),
+      archives: stage.archives,
+      changes,
+      file_kinds: BTreeMap::new(),
+      unchanged: 0,
+      dlc: stage.dlc,
+      patches: patches.into_iter().map(|(_, patch)| patch).collect(),
+    });
+  }
+  let manifest = VanillaCacheManifest {
+    format_version: crate::core::game_archive::FORMAT_VERSION,
+    contents: [crate::core::game_archive::ArchiveContent::Map].into(),
+    game_dir: "/mnt/gtav".into(),
+    title_updates: vanilla::TITLE_UPDATES
+      .iter()
+      .map(|(build, title_update)| (*build, (*title_update).to_owned()))
+      .collect(),
+    versions,
+  };
+  (manifest, objects)
 }
 
 fn sample_root() -> PathBuf {

@@ -79,10 +79,10 @@ workflow runs it before packaging. The page runs the merger in `web/worker.js`, 
 seeds `/work` with the files `web/sample/files.json` lists through `web/vfs.js`'s `addFile`,
 calls `run(args, onLog)`, and sends back `snapshot()` and each write reported by `onChange`.
 
-`web/sample` is an original vanilla archive and source resources, with every kind of YMAP item,
-LOD parents, DLC generations, game-build stages and collisions; see its `README.md`. The test
-module `src/core/web_sample` builds it and runs the pipeline on it; after changing either,
-regenerate the files:
+`web/sample` is an original vanilla archive and source resources, each resource showing one
+behaviour of the merger as an example; its `README.md` lists them. The test module
+`src/app/map/web_sample` builds it and checks each example's outcome on a pipeline run; after
+changing either, regenerate the files:
 
 ```bash
 MLO_WRITE_SAMPLES=1 cargo test --lib web_sample

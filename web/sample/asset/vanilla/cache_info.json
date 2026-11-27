@@ -1,187 +1,504 @@
 {
+  "format_version": 4,
   "contents": [
     "map"
   ],
-  "format_version": 4,
   "game_dir": "/mnt/gtav",
+  "title_updates": {
+    "100": "update+update.rpf_5a4d5031",
+    "200": "update/update.rpf"
+  },
   "versions": [
     {
+      "id": "0000-base",
+      "parent": null,
       "archives": [
-        "smpl.rpf"
+        "x64s.rpf"
       ],
       "changes": {
         "distlodlights_small001.ymap": {
+          "previous_sha256": null,
           "file": {
-            "object": "0000-base/ymap/distlodlights_small001.ymap",
             "sha256": "811353438914ba4efddab51f65264ea6924d0b7c61e97b4a9062949a50bd1cdc",
-            "source": "smpl.rpf/distlodlights_small001.ymap"
-          },
-          "previous_sha256": null
+            "object": "0000-base/ymap/distlodlights_small001.ymap",
+            "source": "x64s.rpf/levels/smpl/smpl_lights.rpf/distlodlights_small001.ymap"
+          }
         },
         "lodlights_small001.ymap": {
+          "previous_sha256": null,
           "file": {
-            "object": "0000-base/ymap/lodlights_small001.ymap",
             "sha256": "2103d9c1e96c50c2555547844308a22736a0575b84f7adea05a83e7bc8ba0d84",
-            "source": "smpl.rpf/lodlights_small001.ymap"
-          },
-          "previous_sha256": null
+            "object": "0000-base/ymap/lodlights_small001.ymap",
+            "source": "x64s.rpf/levels/smpl/smpl_lights.rpf/lodlights_small001.ymap"
+          }
         },
         "smpl_block_01.ybn": {
+          "previous_sha256": null,
           "file": {
+            "sha256": "3344a6c028e921ad0c7427a33243c2440af408749250b35561a721cc072bfc6b",
             "object": "0000-base/ybn/smpl_block_01.ybn",
-            "sha256": "9ab8910f287894e941d7fc1fe88b721bc728eccd6bcecf72dd8b93928da51630",
-            "source": "smpl.rpf/smpl_block_01.ybn"
-          },
-          "previous_sha256": null
+            "source": "x64s.rpf/levels/smpl/smpl_block.rpf/smpl_block_01.ybn"
+          }
         },
         "smpl_block_01.ymap": {
+          "previous_sha256": null,
           "file": {
-            "object": "0000-base/ymap/smpl_block_01.ymap",
             "sha256": "7325265584c045c62870b8f504dc710d3bece47d5ab0f3abbe5c1cd0885f1172",
-            "source": "smpl.rpf/smpl_block_01.ymap"
-          },
-          "previous_sha256": null
+            "object": "0000-base/ymap/smpl_block_01.ymap",
+            "source": "x64s.rpf/levels/smpl/smpl_block.rpf/smpl_block_01.ymap"
+          }
         },
         "smpl_block_01_lod.ymap": {
+          "previous_sha256": null,
           "file": {
-            "object": "0000-base/ymap/smpl_block_01_lod.ymap",
             "sha256": "6763a32ef7c16a67c38975f9f3ee3470226ec87bf8a9ebe54a087469cb9ae10a",
-            "source": "smpl.rpf/smpl_block_01_lod.ymap"
-          },
-          "previous_sha256": null
+            "object": "0000-base/ymap/smpl_block_01_lod.ymap",
+            "source": "x64s.rpf/levels/smpl/smpl_block.rpf/smpl_block_01_lod.ymap"
+          }
         },
         "smpl_block_02.ybn": {
+          "previous_sha256": null,
           "file": {
+            "sha256": "d79f466678f940e1f48f9713b1305cd12736b37d89f8221274891b5c7007354b",
             "object": "0000-base/ybn/smpl_block_02.ybn",
-            "sha256": "d2400b7b67d6f8f8722ba07e16910d41b85b2e528e0988fbd68e0cd75b65f8d4",
-            "source": "smpl.rpf/smpl_block_02.ybn"
-          },
-          "previous_sha256": null
+            "source": "x64s.rpf/levels/smpl/smpl_block.rpf/smpl_block_02.ybn"
+          }
         },
         "smpl_block_02.ymap": {
+          "previous_sha256": null,
           "file": {
+            "sha256": "7ae516eba114ae92eb469418a2a90cc22f20b2d40feb1da0de40c101e859d7db",
             "object": "0000-base/ymap/smpl_block_02.ymap",
-            "sha256": "056564e02e48946af83b5fea22d99753c740835ea040da20587c9befd7ff185d",
-            "source": "smpl.rpf/smpl_block_02.ymap"
-          },
-          "previous_sha256": null
+            "source": "x64s.rpf/levels/smpl/smpl_block.rpf/smpl_block_02.ymap"
+          }
+        },
+        "smpl_pier.ymap": {
+          "previous_sha256": null,
+          "file": {
+            "sha256": "7100db4b177bca8535c024f77960c88ac1c06d3c398b6f22b3686bc7d22865dc",
+            "object": "0000-base/ymap/smpl_pier.ymap",
+            "source": "x64s.rpf/levels/smpl/smpl_pier.rpf/smpl_pier.ymap"
+          }
+        },
+        "smpl_quay.ymap": {
+          "previous_sha256": null,
+          "file": {
+            "sha256": "29fc7d0daa2d6e95f9159bd205ce43d5a6a20fbe50f2ad97b3958090ac602838",
+            "object": "0000-base/ymap/smpl_quay.ymap",
+            "source": "x64s.rpf/levels/smpl/smpl_block.rpf/smpl_quay.ymap"
+          }
+        },
+        "smpl_quay_lod.ymap": {
+          "previous_sha256": null,
+          "file": {
+            "sha256": "615ddc35e131ef7971418e239f944388a5e284f9cc9d4f826e8ce1e472950509",
+            "object": "0000-base/ymap/smpl_quay_lod.ymap",
+            "source": "x64s.rpf/levels/smpl/smpl_block.rpf/smpl_quay_lod.ymap"
+          }
+        },
+        "smpl_row.ymap": {
+          "previous_sha256": null,
+          "file": {
+            "sha256": "6d0d0080709c00c4a4bb247e1d7f20fdcfa9c6001a1eb5fa486887e7585d8bce",
+            "object": "0000-base/ymap/smpl_row.ymap",
+            "source": "x64s.rpf/levels/smpl/smpl_block.rpf/smpl_row.ymap"
+          }
+        },
+        "smpl_row_lod.ymap": {
+          "previous_sha256": null,
+          "file": {
+            "sha256": "46383769a41379ffc72da4ec01cab1f329be0c37cd50edc1b3cc197fda552e91",
+            "object": "0000-base/ymap/smpl_row_lod.ymap",
+            "source": "x64s.rpf/levels/smpl/smpl_block.rpf/smpl_row_lod.ymap"
+          }
+        },
+        "smpl_square.ymap": {
+          "previous_sha256": null,
+          "file": {
+            "sha256": "2a27287ce9d31f1b9f2287a56e1f80078394b25d79987f8e67d04e2d8a59f348",
+            "object": "0000-base/ymap/smpl_square.ymap",
+            "source": "x64s.rpf/levels/smpl/smpl_square.rpf/smpl_square.ymap"
+          }
+        },
+        "smpl_square_lod.ymap": {
+          "previous_sha256": null,
+          "file": {
+            "sha256": "d09ff920f39249807ca0aa70b1ebb4e7e63f12e2fc572db981ad4d697c2be013",
+            "object": "0000-base/ymap/smpl_square_lod.ymap",
+            "source": "x64s.rpf/levels/smpl/smpl_block.rpf/smpl_square_lod.ymap"
+          }
+        },
+        "smpl_yard.ybn": {
+          "previous_sha256": null,
+          "file": {
+            "sha256": "13a815c61c9d811ae1a4052e79e7515d76bb0608b1e3b39eb2c6e4b67089b291",
+            "object": "0000-base/ybn/smpl_yard.ybn",
+            "source": "x64s.rpf/levels/smpl/smpl_yard.rpf/smpl_yard.ybn"
+          }
         }
       },
-      "id": "0000-base",
-      "parent": null,
       "unchanged": 0
     },
     {
-      "archives": [
-        "smpl.rpf"
-      ],
-      "changes": {
-        "smpl_block_02.ymap": {
-          "file": {
-            "object": "0001-update/ymap/smpl_block_02.ymap",
-            "sha256": "ac91a0f8b8a4ac33aa960949b225a2e7db5d2eda2db68fd30f04490c3a4cda42",
-            "source": "smpl.rpf/smpl_block_02.ymap"
-          },
-          "previous_sha256": "056564e02e48946af83b5fea22d99753c740835ea040da20587c9befd7ff185d"
-        }
-      },
       "id": "0001-update",
       "parent": "0000-base",
+      "archives": [
+        "update/update.rpf"
+      ],
+      "changes": {
+        "distlodlights_small001.ymap": {
+          "previous_sha256": "811353438914ba4efddab51f65264ea6924d0b7c61e97b4a9062949a50bd1cdc",
+          "file": {
+            "sha256": "223dda40da88fb83592d0965aa2601e3e0b246d4d71354ae471b78eac83c77fd",
+            "object": "0001-update/ymap/distlodlights_small001.ymap",
+            "source": "update/update.rpf/x64/levels/smpl/smpl_lights.rpf/distlodlights_small001.ymap"
+          }
+        },
+        "lodlights_small001.ymap": {
+          "previous_sha256": "2103d9c1e96c50c2555547844308a22736a0575b84f7adea05a83e7bc8ba0d84",
+          "file": {
+            "sha256": "63d7efac0c28f8d642bab000ba9c012428915e0c8cad6fe3e62ccf8d1f9de9ff",
+            "object": "0001-update/ymap/lodlights_small001.ymap",
+            "source": "update/update.rpf/x64/levels/smpl/smpl_lights.rpf/lodlights_small001.ymap"
+          }
+        },
+        "smpl_block_02.ymap": {
+          "previous_sha256": "7ae516eba114ae92eb469418a2a90cc22f20b2d40feb1da0de40c101e859d7db",
+          "file": {
+            "sha256": "ca9e7f71c1fd4398e651df04f70fd88ba4664f8a11fbb5e9be32ecb20c980971",
+            "object": "0001-update/ymap/smpl_block_02.ymap",
+            "source": "update/update.rpf/x64/levels/smpl/smpl_block.rpf/smpl_block_02.ymap"
+          }
+        },
+        "smpl_yard.ybn": {
+          "previous_sha256": "13a815c61c9d811ae1a4052e79e7515d76bb0608b1e3b39eb2c6e4b67089b291",
+          "file": {
+            "sha256": "9f053862765478ac9fbd263d64830d728943326d58aa431a8eebc1e21cb52976",
+            "object": "0001-update/ybn/smpl_yard.ybn",
+            "source": "update/update.rpf/x64/levels/smpl/smpl_yard.rpf/smpl_yard.ybn"
+          }
+        }
+      },
       "unchanged": 0
     },
     {
+      "id": "0002-smpl_winter",
+      "parent": "0001-update",
       "archives": [
-        "smpl.rpf"
+        "update/x64/dlcpacks/smpl_winter/dlc.rpf"
       ],
       "changes": {
         "winter_distlodlights_small001.ymap": {
+          "previous_sha256": null,
           "file": {
+            "sha256": "25cd00d7d2ddf79f6ddbd8e3ff6ed33cedfcf69ef1905ed78ad142f1977f4cce",
             "object": "0002-smpl_winter/ymap/winter_distlodlights_small001.ymap",
-            "sha256": "e8fc46a24e93766cce8b7e9df55d490e80832889b68ea5eae8df8369e19f1eb1",
-            "source": "smpl.rpf/winter_distlodlights_small001.ymap"
-          },
-          "previous_sha256": null
+            "source": "update/x64/dlcpacks/smpl_winter/dlc.rpf/x64/levels/smpl/smpl_winter.rpf/winter_distlodlights_small001.ymap"
+          }
         },
         "winter_lodlights_small001.ymap": {
+          "previous_sha256": null,
           "file": {
+            "sha256": "dea1cea53b1c5ce46fed4ffe95829ddd3b52b88f515d000f14fbc816e5043e56",
             "object": "0002-smpl_winter/ymap/winter_lodlights_small001.ymap",
-            "sha256": "43a24ca782d1f4f183dc6a6b7cccf75615d808236b2c3c8f2cbeb9d24501bd97",
-            "source": "smpl.rpf/winter_lodlights_small001.ymap"
-          },
-          "previous_sha256": null
+            "source": "update/x64/dlcpacks/smpl_winter/dlc.rpf/x64/levels/smpl/smpl_winter.rpf/winter_lodlights_small001.ymap"
+          }
         },
         "winter_smpl_block_01.ymap": {
+          "previous_sha256": null,
           "file": {
-            "object": "0002-smpl_winter/ymap/winter_smpl_block_01.ymap",
             "sha256": "a9cd50e8415686fff3e3fcdaad9e3519403f9af52c770ba2a259d6d6ae23a7f7",
-            "source": "smpl.rpf/winter_smpl_block_01.ymap"
-          },
-          "previous_sha256": null
+            "object": "0002-smpl_winter/ymap/winter_smpl_block_01.ymap",
+            "source": "update/x64/dlcpacks/smpl_winter/dlc.rpf/x64/levels/smpl/smpl_winter.rpf/winter_smpl_block_01.ymap"
+          }
+        },
+        "winter_smpl_rink.ymap": {
+          "previous_sha256": null,
+          "file": {
+            "sha256": "82df70c103d60dac013eb0f5f8c86f3c191762de82787ec5546ab3f184bc02cf",
+            "object": "0002-smpl_winter/ymap/winter_smpl_rink.ymap",
+            "source": "update/x64/dlcpacks/smpl_winter/dlc.rpf/x64/levels/smpl/smpl_winter.rpf/winter_smpl_rink.ymap"
+          }
+        },
+        "winter_smpl_square.ymap": {
+          "previous_sha256": null,
+          "file": {
+            "sha256": "dfc764df34934a2d2fd3ff2ca1cc387811450b78b39e046cf213243977f21b96",
+            "object": "0002-smpl_winter/ymap/winter_smpl_square.ymap",
+            "source": "update/x64/dlcpacks/smpl_winter/dlc.rpf/x64/levels/smpl/smpl_square.rpf/winter_smpl_square.ymap"
+          }
         }
       },
-      "id": "0002-smpl_winter",
-      "parent": "0001-update",
-      "unchanged": 0
+      "unchanged": 0,
+      "dlc": {
+        "device": "dlcsmplwinter",
+        "data_files": [
+          {
+            "path": "dlcsmplwinter:/levels/smpl/smpl_winter.rpf",
+            "overlay": false,
+            "disabled": false,
+            "file_type": "RPF_FILE"
+          },
+          {
+            "path": "dlcsmplwinter:/levels/smpl/smpl_square.rpf",
+            "overlay": false,
+            "disabled": true,
+            "file_type": "RPF_FILE"
+          }
+        ],
+        "change_sets": [
+          {
+            "name": "SMPL_WINTER_MAP",
+            "invalidate": [
+              "platform:/levels/smpl/smpl_square.rpf",
+              "platform:/levels/smpl/smpl_pier.rpf"
+            ],
+            "enable": [
+              "dlcsmplwinter:/levels/smpl/smpl_square.rpf"
+            ]
+          }
+        ]
+      },
+      "patches": [
+        {
+          "id": "0002-smpl_winter/update_rpf/100",
+          "builds": [
+            100
+          ],
+          "installed": false,
+          "archives": [
+            "update/update.rpf/dlc_patch/smpl_winter"
+          ],
+          "changes": {
+            "winter_smpl_rink.ymap": {
+              "previous_sha256": "82df70c103d60dac013eb0f5f8c86f3c191762de82787ec5546ab3f184bc02cf",
+              "file": {
+                "sha256": "b7a69a16fe9f4eb90e9be8d787e5f0a65ab3e38e0516ca3874ee2ea33f74f316",
+                "object": "0002-smpl_winter/update_rpf/100/ymap/winter_smpl_rink.ymap",
+                "source": "update/update.rpf/dlc_patch/smpl_winter/x64/levels/smpl/smpl_winter.rpf/winter_smpl_rink.ymap"
+              }
+            }
+          },
+          "unchanged": 0,
+          "dlc": {
+            "device": "dlcsmplwinter",
+            "data_files": [
+              {
+                "path": "dlcsmplwinter:/levels/smpl/smpl_winter.rpf",
+                "overlay": false,
+                "disabled": false,
+                "file_type": "RPF_FILE"
+              },
+              {
+                "path": "dlcsmplwinter:/levels/smpl/smpl_square.rpf",
+                "overlay": false,
+                "disabled": true,
+                "file_type": "RPF_FILE"
+              }
+            ],
+            "change_sets": [
+              {
+                "name": "SMPL_WINTER_MAP",
+                "invalidate": [
+                  "platform:/levels/smpl/smpl_square.rpf",
+                  "platform:/levels/smpl/smpl_pier.rpf"
+                ],
+                "enable": [
+                  "dlcsmplwinter:/levels/smpl/smpl_square.rpf"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "id": "0002-smpl_winter/update_rpf/200",
+          "builds": [
+            200
+          ],
+          "installed": true,
+          "archives": [
+            "update/update.rpf/dlc_patch/smpl_winter"
+          ],
+          "changes": {
+            "winter_smpl_hut.ymap": {
+              "previous_sha256": null,
+              "file": {
+                "sha256": "e6593bb1cf7afc8c7f016d9f4ab669078ef0714b0a44fac20585a531cb795213",
+                "object": "0002-smpl_winter/update_rpf/200/ymap/winter_smpl_hut.ymap",
+                "source": "update/update.rpf/dlc_patch/smpl_winter/x64/levels/smpl/smpl_hut.rpf/winter_smpl_hut.ymap"
+              }
+            },
+            "winter_smpl_rink.ymap": {
+              "previous_sha256": "82df70c103d60dac013eb0f5f8c86f3c191762de82787ec5546ab3f184bc02cf",
+              "file": {
+                "sha256": "53e745d8b29fcf81c5311469f3225a2fd4b707dcaa2e22263baef8fa6b8027aa",
+                "object": "0002-smpl_winter/update_rpf/200/ymap/winter_smpl_rink.ymap",
+                "source": "update/update.rpf/dlc_patch/smpl_winter/x64/levels/smpl/smpl_winter.rpf/winter_smpl_rink.ymap"
+              }
+            }
+          },
+          "unchanged": 0,
+          "dlc": {
+            "device": "dlcsmplwinter",
+            "data_files": [
+              {
+                "path": "dlcsmplwinter:/levels/smpl/smpl_winter.rpf",
+                "overlay": false,
+                "disabled": false,
+                "file_type": "RPF_FILE"
+              },
+              {
+                "path": "dlcsmplwinter:/levels/smpl/smpl_square.rpf",
+                "overlay": false,
+                "disabled": true,
+                "file_type": "RPF_FILE"
+              }
+            ],
+            "change_sets": [
+              {
+                "name": "SMPL_WINTER_MAP",
+                "invalidate": [
+                  "platform:/levels/smpl/smpl_square.rpf",
+                  "platform:/levels/smpl/smpl_pier.rpf"
+                ],
+                "enable": [
+                  "dlcsmplwinter:/levels/smpl/smpl_square.rpf"
+                ]
+              }
+            ]
+          }
+        }
+      ]
     },
     {
+      "id": "0003-smpl_patch_01",
+      "parent": "0002-smpl_winter",
       "archives": [
-        "smpl.rpf"
+        "update/x64/dlcpacks/smpl_patch_01/dlc.rpf"
       ],
       "changes": {
         "smpl_block_02.ymap": {
+          "previous_sha256": "ca9e7f71c1fd4398e651df04f70fd88ba4664f8a11fbb5e9be32ecb20c980971",
           "file": {
+            "sha256": "e5e29af1f05da046f2c46f1fda4c347207d048e87995bb1fc290201716624905",
             "object": "0003-smpl_patch_01/ymap/smpl_block_02.ymap",
-            "sha256": "ab79abf1d1a61c1e62acbb6f243af02e902acdb5dcdb7201ecade06a14a8b974",
-            "source": "smpl.rpf/smpl_block_02.ymap"
-          },
-          "previous_sha256": "ac91a0f8b8a4ac33aa960949b225a2e7db5d2eda2db68fd30f04490c3a4cda42"
+            "source": "update/x64/dlcpacks/smpl_patch_01/dlc.rpf/x64/levels/smpl/smpl_block.rpf/smpl_block_02.ymap"
+          }
         }
       },
-      "id": "0003-smpl_patch_01",
-      "parent": "0002-smpl_winter",
-      "unchanged": 0
+      "unchanged": 0,
+      "dlc": {
+        "device": "dlcsmplpatch01",
+        "data_files": [
+          {
+            "path": "dlcsmplpatch01:/levels/smpl/smpl_block.rpf",
+            "overlay": true,
+            "disabled": true,
+            "file_type": "RPF_FILE"
+          }
+        ],
+        "change_sets": [
+          {
+            "name": "SMPL_PATCH_01_MAP",
+            "enable": [
+              "dlcsmplpatch01:/levels/smpl/smpl_block.rpf"
+            ]
+          }
+        ]
+      }
     },
     {
+      "id": "0004-smpl_summer",
+      "parent": "0003-smpl_patch_01",
       "archives": [
-        "smpl.rpf"
+        "update/x64/dlcpacks/smpl_summer/dlc.rpf"
       ],
       "changes": {
         "smpl_block_01.ybn": {
+          "previous_sha256": "3344a6c028e921ad0c7427a33243c2440af408749250b35561a721cc072bfc6b",
           "file": {
+            "sha256": "2e521b0a9bd681f489c1e9b292a7f608d88b2146ae5a72aa61b08f85c376b223",
             "object": "0004-smpl_summer/ybn/smpl_block_01.ybn",
-            "sha256": "f71d0a02241682ad13c93cfc691b601190b01e96206ca1c73d6cfb48582c57c3",
-            "source": "smpl.rpf/smpl_block_01.ybn"
-          },
-          "previous_sha256": "9ab8910f287894e941d7fc1fe88b721bc728eccd6bcecf72dd8b93928da51630"
+            "source": "update/x64/dlcpacks/smpl_summer/dlc.rpf/x64/levels/smpl/smpl_block.rpf/smpl_block_01.ybn"
+          }
         },
         "smpl_block_02.ymap": {
+          "previous_sha256": "e5e29af1f05da046f2c46f1fda4c347207d048e87995bb1fc290201716624905",
           "file": {
+            "sha256": "744b22ef05ee8832c8a56f8f02b19e6ccd4312a4c7be359a1b31e145d7c86333",
             "object": "0004-smpl_summer/ymap/smpl_block_02.ymap",
-            "sha256": "350e9f844e228d388ceb5f30b43270635737ea282a3f5462a9d8fb3331e51a5d",
-            "source": "smpl.rpf/smpl_block_02.ymap"
-          },
-          "previous_sha256": "ab79abf1d1a61c1e62acbb6f243af02e902acdb5dcdb7201ecade06a14a8b974"
+            "source": "update/x64/dlcpacks/smpl_summer/dlc.rpf/x64/levels/smpl/smpl_block.rpf/smpl_block_02.ymap"
+          }
         },
         "summer_smpl_block_01.ybn": {
+          "previous_sha256": null,
           "file": {
+            "sha256": "2e521b0a9bd681f489c1e9b292a7f608d88b2146ae5a72aa61b08f85c376b223",
             "object": "0004-smpl_summer/ybn/summer_smpl_block_01.ybn",
-            "sha256": "f71d0a02241682ad13c93cfc691b601190b01e96206ca1c73d6cfb48582c57c3",
-            "source": "smpl.rpf/summer_smpl_block_01.ybn"
-          },
-          "previous_sha256": null
+            "source": "update/x64/dlcpacks/smpl_summer/dlc.rpf/x64/levels/smpl/smpl_summer.rpf/summer_smpl_block_01.ybn"
+          }
         },
         "summer_smpl_block_01.ymap": {
+          "previous_sha256": null,
           "file": {
-            "object": "0004-smpl_summer/ymap/summer_smpl_block_01.ymap",
             "sha256": "d1097d4836c9edc329bf4b5bcd3e4bac1134de6dfd02ace7dd31b2ca8f4de18b",
-            "source": "smpl.rpf/summer_smpl_block_01.ymap"
-          },
-          "previous_sha256": null
+            "object": "0004-smpl_summer/ymap/summer_smpl_block_01.ymap",
+            "source": "update/x64/dlcpacks/smpl_summer/dlc.rpf/x64/levels/smpl/smpl_summer.rpf/summer_smpl_block_01.ymap"
+          }
+        },
+        "summer_smpl_yard_0.ybn": {
+          "previous_sha256": null,
+          "file": {
+            "sha256": "22f526315f3f80cd7b1abbfaf3245f72194c957e0b27bf1d2174cf58aacf6570",
+            "object": "0004-smpl_summer/ybn/summer_smpl_yard_0.ybn",
+            "source": "update/x64/dlcpacks/smpl_summer/dlc.rpf/x64/levels/smpl/smpl_yard.rpf/summer_smpl_yard_0.ybn"
+          }
+        },
+        "summer_smpl_yard_1.ybn": {
+          "previous_sha256": null,
+          "file": {
+            "sha256": "e24deeb297f6304edfac7feb26d7d5d77a1f4f6cfe9c83436ee1a0501161f4b0",
+            "object": "0004-smpl_summer/ybn/summer_smpl_yard_1.ybn",
+            "source": "update/x64/dlcpacks/smpl_summer/dlc.rpf/x64/levels/smpl/smpl_yard.rpf/summer_smpl_yard_1.ybn"
+          }
         }
       },
-      "id": "0004-smpl_summer",
-      "parent": "0003-smpl_patch_01",
-      "unchanged": 0
+      "unchanged": 0,
+      "dlc": {
+        "device": "dlcsmplsummer",
+        "data_files": [
+          {
+            "path": "dlcsmplsummer:/levels/smpl/smpl_summer.rpf",
+            "overlay": false,
+            "disabled": false,
+            "file_type": "RPF_FILE"
+          },
+          {
+            "path": "dlcsmplsummer:/levels/smpl/smpl_block.rpf",
+            "overlay": true,
+            "disabled": true,
+            "file_type": "RPF_FILE"
+          },
+          {
+            "path": "dlcsmplsummer:/levels/smpl/smpl_yard.rpf",
+            "overlay": false,
+            "disabled": true,
+            "file_type": "RPF_FILE"
+          }
+        ],
+        "change_sets": [
+          {
+            "name": "SMPL_SUMMER_MAP",
+            "invalidate": [
+              "platform:/levels/smpl/smpl_yard.rpf"
+            ],
+            "enable": [
+              "dlcsmplsummer:/levels/smpl/smpl_block.rpf",
+              "dlcsmplsummer:/levels/smpl/smpl_yard.rpf"
+            ]
+          }
+        ]
+      }
     }
   ]
 }

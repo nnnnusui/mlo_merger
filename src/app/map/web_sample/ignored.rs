@@ -3,7 +3,9 @@
 //!
 //! [`IgnoredOverwriteReason`]: crate::app::map::overwrite::IgnoredOverwriteReason
 
-use super::{block_02, entity, find, fit_extents, guid, position, sha256, ymap, ymap_bytes};
+use super::build::{entity, fit_extents, position, ymap};
+use super::vanilla::block_02;
+use super::{find, guid, sha256, ymap_bytes};
 use crate::app::map::overwrite::{OverwriteFingerprint, StreamFileOverwrite, VanillaOverwrite};
 use serde::Serialize;
 

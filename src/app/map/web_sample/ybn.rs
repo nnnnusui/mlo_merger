@@ -140,10 +140,14 @@ impl Child {
       Self::Box(..) => format!("<Item type=\"Box\">\n{}\n{CHILD}\n</Item>", common(min, max)),
       Self::Geometry(geometry) => {
         let centre = std::array::from_fn::<f32, 3, _>(|axis| (min[axis] + max[axis]) / 2.0);
+        // Vertices are stored relative to the geometry's centre.
         let vertices = geometry
           .vertices
           .iter()
-          .map(|vertex| format!("{}, {}, {}", vertex[0], vertex[1], vertex[2]))
+          .map(|vertex| {
+            let [x, y, z] = std::array::from_fn::<f32, 3, _>(|axis| vertex[axis] - centre[axis]);
+            format!("{x}, {y}, {z}")
+          })
           .collect::<Vec<_>>()
           .join("\n");
         let polygons = geometry

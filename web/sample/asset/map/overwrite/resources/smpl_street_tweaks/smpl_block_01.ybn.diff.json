@@ -1,7 +1,7 @@
 {
   "base": {
-    "sha256": "f71d0a02241682ad13c93cfc691b601190b01e96206ca1c73d6cfb48582c57c3",
-    "size": 550
+    "sha256": "2e521b0a9bd681f489c1e9b292a7f608d88b2146ae5a72aa61b08f85c376b223",
+    "size": 520
   },
   "schema_version": 2,
   "skip": {
@@ -22,7 +22,7 @@
     ]
   },
   "target": {
-    "sha256": "c895fcd4fed622331d2e147299111f2f8b984bcea01662ee72422e97d8e1c48b",
-    "size": 551
+    "sha256": "1596a526b4fe0135360fa07756e5cdc18a601e6918a473d1ed057713c6b5f266",
+    "size": 521
   }
 }

@@ -1,7 +1,8 @@
 //! The earlier versions of three resources' files, which the sample's overwrites were written
 //! against, and the source cache's history of them.
 
-use super::{block_01, block_02, find, guid, sha256, workspace_files};
+use super::vanilla::{block_01, block_02};
+use super::{find, guid, sha256, workspace_files};
 use crate::platform::fs;
 
 /// The overwrites written against the earlier versions of two resources' `smpl_block_01.ymap`
