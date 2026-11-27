@@ -141,7 +141,7 @@ pub(crate) use check::check;
 use filesystem::*;
 use freshness::{cache_is_current, previous_manifest};
 use generations::write_generations;
-pub(crate) use read::archive_dir;
+pub(crate) use read::{ArchivedVersion, archive_dir, archived_versions, versions_digest};
 pub(crate) use read::{DerivedVanillaFile, LoadedCache, load_cache};
 pub use read::{
   VanillaLatestFile, cache_info_path, latest_files, latest_version, newer_files,

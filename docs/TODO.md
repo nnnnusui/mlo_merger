@@ -8,8 +8,7 @@
 
 Source-cache generation leaves out of a source YMAP's differences what the older vanilla version it was made from holds; see [Source Baselines](reference.md#source-baselines).
 
-- [ ] Relate the remaining YMAP differences to the baseline: occlude models, LOD lights with their distant LOD lights (parallel arrays, and the implied removals of LOD light pairs), physics dictionaries and instanced data.
-- [ ] Infer the baseline of source YBNs among the vanilla YBN versions.
+- [ ] Relate the lights of LOD light pairs to the baseline: both YMAPs of a pair would need to leave out the same lights, and the implied removals each takes from the other would need to be relative to the baseline too. They are kept as taken from the latest now.
 
 ## DLC Generations
 

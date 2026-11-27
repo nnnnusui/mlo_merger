@@ -59,55 +59,14 @@ pub struct YmapComparisonContext {
   /// Names used to resolve hashes while decoding, e.g. vanilla `hash_names.json`.
   hash_names: HashMap<u32, String>,
   pub(super) cache_by_ref: Mutex<HashMap<StreamFileRef, Arc<Ymap>>>,
-  /// Every vanilla version of each YMAP in the vanilla archive, those of every stage and of
-  /// every game build's title-update patches, keyed by lowercase file name, oldest first.
+  /// Every vanilla version of each YMAP and YBN in the vanilla archive, keyed by lowercase file
+  /// name ([`crate::app::map::vanilla_cache::archived_versions`]).
   vanilla_versions: HashMap<String, Vec<VanillaVersion>>,
   /// The vanilla versions decoded so far, keyed by their path in the vanilla archive.
   versions_by_object: Mutex<HashMap<String, Arc<Ymap>>>,
 }
 
-/// One vanilla version of a YMAP in the vanilla archive.
-#[derive(Debug, Clone)]
-struct VanillaVersion {
-  path: PathBuf,
-  object: String,
-  sha256: String,
-}
-
-/// Every distinct version of each YMAP the vanilla archive at `archive` stores; empty when it
-/// cannot be read.
-fn vanilla_versions(archive: &Path) -> HashMap<String, Vec<VanillaVersion>> {
-  let manifest = match crate::core::game_archive::load_manifest(archive) {
-    Ok(manifest) => manifest,
-    Err(error) => {
-      tracing::debug!("No vanilla versions to find source baselines among: {error}");
-      return HashMap::new();
-    }
-  };
-  let mut versions = HashMap::<String, Vec<VanillaVersion>>::new();
-  let changes = manifest.versions.iter().flat_map(|version| {
-    version.changes.iter().chain(version.patches.iter().flat_map(|patch| patch.changes.iter()))
-  });
-  for (name, change) in changes {
-    let name = name.to_ascii_lowercase();
-    if !name.ends_with(".ymap") {
-      continue;
-    }
-    let known = versions.entry(name).or_default();
-    if known.iter().any(|version| version.sha256 == change.file.sha256) {
-      continue;
-    }
-    let Ok(path) = change.file.path(archive) else {
-      continue;
-    };
-    known.push(VanillaVersion {
-      path,
-      object: change.file.object.clone(),
-      sha256: change.file.sha256.clone(),
-    });
-  }
-  versions
-}
+type VanillaVersion = crate::app::map::vanilla_cache::ArchivedVersion;
 
 impl YmapComparisonContext {
   /// Reads source YMAPs through the inventory of `source_cache_dir`, finding those that were not
@@ -131,9 +90,7 @@ impl YmapComparisonContext {
         file_names_by_hash.entry(reference_hash(stem)).or_default().insert(file_name);
       }
     }
-    let vanilla_versions = crate::app::map::vanilla_cache::archive_dir(vanilla_cache_dir)
-      .map(|archive| vanilla_versions(&archive))
-      .unwrap_or_default();
+    let vanilla_versions = crate::app::map::vanilla_cache::archived_versions(vanilla_cache_dir);
     Ok(Self {
       vanilla_files,
       stores: [source_cache_dir.to_path_buf(), source_dir.to_path_buf()],
@@ -234,6 +191,7 @@ impl YmapComparisonContext {
           source: &modded,
           latest_ctx: &ctx,
           baseline_ctx: &baseline_ctx,
+          light_pair: LightSide::of(&file.file_name).is_some(),
         },
       );
       let fingerprint = Fingerprint::read(&version.path, None, false)?;
@@ -333,16 +291,10 @@ impl YmapComparisonContext {
     &self,
     file: &StreamFileRef,
   ) -> Option<String> {
-    use sha2::{Digest, Sha256};
-    let versions = self.vanilla_versions.get(&file.file_name.to_ascii_lowercase())?;
-    if versions.len() < 2 || file.resource_name.is_none() {
-      return None;
-    }
-    let mut digest = Sha256::new();
-    for version in versions {
-      digest.update(version.sha256.as_bytes());
-    }
-    Some(hex::encode(digest.finalize()))
+    file.resource_name.as_ref()?;
+    crate::app::map::vanilla_cache::versions_digest(
+      self.vanilla_versions.get(&file.file_name.to_ascii_lowercase())?,
+    )
   }
 
   /// For `file`, one YMAP of a LOD light pair whose vanilla baseline is `vanilla`, its side and

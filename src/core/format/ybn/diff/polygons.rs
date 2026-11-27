@@ -131,12 +131,23 @@ pub struct YbnComparisonDiff {
   pub base: ComparedFile,
   /// The `ybn_position` tolerance the differences were taken with.
   pub tolerance: f32,
+  /// A digest of the vanilla versions of the YBN the source was compared with to find its
+  /// baseline, when there are several.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  #[cfg_attr(feature = "typescript", specta(optional))]
+  pub vanilla_versions: Option<String>,
+  /// The vanilla version the source differs least from, taken as the one it was made from,
+  /// when it is not `base`: `diffs` leave out what the source keeps from it (see
+  /// [`relative_to_baseline`]).
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  #[cfg_attr(feature = "typescript", specta(optional))]
+  pub baseline: Option<ComparedFile>,
   pub diffs: YbnDiffFields,
 }
 
 impl YbnComparisonDiff {
   /// The current [`Self::schema_version`].
-  pub const SCHEMA_VERSION: u32 = 1;
+  pub const SCHEMA_VERSION: u32 = 2;
 }
 
 /// Changes a resource makes to a vanilla YBN of a generation the game does not load, carried
@@ -749,6 +760,64 @@ fn whole_changes(
       .collect::<Vec<_>>()
   };
   Ok((take(before, &before_keys, &after_keys), take(after, &after_keys, &before_keys)))
+}
+
+/// Leaves out of `latest`, a source's differences from the latest vanilla version, what the
+/// source keeps from its baseline, given its differences from the baseline, `from_baseline`:
+/// a polygon or child the source removes is kept only when the baseline has it too, and one it
+/// adds only when the baseline lacks it too, polygons matching within `tolerance`. So the
+/// removals of what vanilla added after the baseline, and the additions of what it removed
+/// after, are left out (see [`crate::core::format::ymap::compare::baseline`]).
+pub fn relative_to_baseline(
+  latest: &mut YbnDiffFields,
+  from_baseline: &YbnDiffFields,
+  tolerance: f32,
+) -> io::Result<()> {
+  let lookup = |polygons: &[ResolvedPolygon]| {
+    let mut lookup = Lookup::new(tolerance);
+    for polygon in polygons {
+      lookup.insert(Identity::of(polygon));
+    }
+    lookup
+  };
+  for group in &mut latest.polygons {
+    let baseline = from_baseline.polygons.iter().find(|baseline| baseline.flags == group.flags);
+    let (removed, added) = baseline.map_or((&[][..], &[][..]), |baseline| {
+      (baseline.removed.as_slice(), baseline.added.as_slice())
+    });
+    let (removed, added) = (lookup(removed), lookup(added));
+    group.removed.retain(|polygon| removed.contains(&Identity::of(polygon)));
+    group.added.retain(|polygon| added.contains(&Identity::of(polygon)));
+  }
+  latest.polygons.retain(|group| !group.removed.is_empty() || !group.added.is_empty());
+  let shared = |children: &mut Vec<YbnChild>, baseline: &[YbnChild]| -> io::Result<()> {
+    let mut remaining = HashMap::<Vec<u8>, usize>::new();
+    for child in baseline {
+      *remaining.entry(bound_identity(&child.bound)?).or_default() += 1;
+    }
+    let mut kept = Vec::new();
+    for child in children.drain(..) {
+      if let Some(count) = remaining.get_mut(&bound_identity(&child.bound)?)
+        && *count > 0
+      {
+        *count -= 1;
+        kept.push(child);
+      }
+    }
+    *children = kept;
+    Ok(())
+  };
+  shared(&mut latest.removed_children, &from_baseline.removed_children)?;
+  shared(&mut latest.added_children, &from_baseline.added_children)?;
+  Ok(())
+}
+
+/// How many changes `diff` makes, by which the vanilla version a source differs least from is
+/// told: one per polygon and per child.
+pub fn change_count(diff: &YbnDiffFields) -> usize {
+  diff.polygons.iter().map(|group| group.removed.len() + group.added.len()).sum::<usize>()
+    + diff.removed_children.len()
+    + diff.added_children.len()
 }
 
 /// The changes of every source in `sources`, diffs of one baseline, combined: every source's

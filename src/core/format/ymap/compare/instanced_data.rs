@@ -13,7 +13,7 @@
 //! their bounds overlap in XY. Instances are compared only within a pair, so a batch split in two
 //! is a modified batch plus an added one. Prop instances and the IMAP link compare by name hash.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use serde::{Deserialize, Serialize};
 use struct_diff::{ApplyError, Diff};
@@ -449,6 +449,24 @@ fn grass_batch_diffs(
   tolerance: f32,
 ) -> Vec<YmapGrassBatchDiff> {
   let (vanilla_placed, modded_placed) = (place(vanilla), place(modded));
+  let pairing = batch_pairing((vanilla, &vanilla_placed), (modded, &modded_placed), tolerance);
+  ItemDiff::collect_with(pairing, modded, |vanilla_index, modded_index| {
+    let changes = YmapGrassBatchFieldDiff::between(
+      (&vanilla[vanilla_index], &vanilla_placed[vanilla_index]),
+      (&modded[modded_index], &modded_placed[modded_index]),
+      tolerance,
+    );
+    (changes != YmapGrassBatchFieldDiff::default()).then_some(changes)
+  })
+}
+
+/// The pairs of `vanilla` and `modded` batches, each given with its instances placed; see the
+/// module docs.
+fn batch_pairing(
+  (vanilla, vanilla_placed): (&[GrassInstanceBatch], &[Vec<Placed>]),
+  (modded, modded_placed): (&[GrassInstanceBatch], &[Vec<Placed>]),
+  tolerance: f32,
+) -> Pairing {
   let groups = |batches: &[GrassInstanceBatch]| {
     let mut groups = HashMap::<GroupKey, Vec<usize>>::new();
     for (index, batch) in batches.iter().enumerate() {
@@ -467,7 +485,7 @@ fn grass_batch_diffs(
     let (vanilla_batches, modded_batches) = (&vanilla_groups[key], &modded_groups[key]);
     // Count instances matching across each batch pair over the whole group.
     let (before, after) =
-      (flatten(vanilla_batches, &vanilla_placed), flatten(modded_batches, &modded_placed));
+      (flatten(vanilla_batches, vanilla_placed), flatten(modded_batches, modded_placed));
     let (unchanged, modified) = match_instances(&before, &after, tolerance);
     let mut shared = HashMap::<(usize, usize), f32>::new();
     for (from, to) in unchanged.into_iter().chain(modified) {
@@ -488,19 +506,110 @@ fn grass_batch_diffs(
     pair_by_score(overlaps, &mut vanilla_paired, &mut modded_paired, &mut pairs);
   }
   pairs.sort();
-  let pairing = Pairing {
+  Pairing {
     pairs,
     removed: (0..vanilla.len()).filter(|index| !vanilla_paired[*index]).collect(),
     added: (0..modded.len()).filter(|index| !modded_paired[*index]).collect(),
+  }
+}
+
+/// How many changes a grass batch diff makes, by which the vanilla version a source differs
+/// least from is told: one per instance a modification changes, besides its bounds, one per
+/// instance of a batch added or replaced, and one for a batch removed.
+pub(super) fn grass_change_count(diff: &YmapGrassBatchDiff) -> usize {
+  match diff {
+    ItemDiff::Added {
+      item,
+      ..
+    }
+    | ItemDiff::Replaced {
+      item,
+      ..
+    } => item.instances.len().max(1),
+    ItemDiff::Removed {
+      ..
+    } => 1,
+    ItemDiff::Modified {
+      changes,
+      ..
+    } => {
+      usize::from(changes.batch_aabb.is_some())
+        + changes.removed_instances.len()
+        + changes.added_instances.len()
+        + changes.modified_instances.len()
+    }
+  }
+}
+
+/// Leaves out of `diffs`, the grass batches changed from the latest version to the source, what
+/// the source keeps from its baseline (see [`super::baseline`]): batches pair as the diffs pair
+/// them, and so do the instances of a source batch and its baseline batch, in world space. Of a
+/// modified batch, a removal of an instance the baseline batch lacks, an addition of one the
+/// baseline batch has but the latest lacks, and a modification of one the source keeps as the
+/// baseline has it are left out; its bounds stay the source's.
+pub(super) fn relate_grass_batches(
+  diffs: &mut Option<Vec<YmapGrassBatchDiff>>,
+  (latest, baseline, source): (&[GrassInstanceBatch], &[GrassInstanceBatch], &[GrassInstanceBatch]),
+  tolerance: f32,
+) {
+  if diffs.is_none() {
+    return;
+  }
+  let (latest_placed, baseline_placed, source_placed) =
+    (place(latest), place(baseline), place(source));
+  let pairs = |later: (&[GrassInstanceBatch], &[Vec<Placed>])| {
+    batch_pairing((baseline, &baseline_placed), later, tolerance).pairs
   };
-  ItemDiff::collect_with(pairing, modded, |vanilla_index, modded_index| {
-    let changes = YmapGrassBatchFieldDiff::between(
-      (&vanilla[vanilla_index], &vanilla_placed[vanilla_index]),
-      (&modded[modded_index], &modded_placed[modded_index]),
-      tolerance,
-    );
-    (changes != YmapGrassBatchFieldDiff::default()).then_some(changes)
-  })
+  let pairs = (pairs((source, &source_placed)), pairs((latest, &latest_placed)));
+  super::baseline::relate_paired(diffs, pairs, |diff, baseline_index| match diff {
+    ItemDiff::Modified {
+      base_index,
+      target_index,
+      changes,
+      ..
+    } => {
+      let held = &baseline_placed[baseline_index];
+      let (kept, kept_modified) = match_instances(held, &latest_placed[*base_index], tolerance);
+      let latest_held =
+        kept.iter().chain(&kept_modified).map(|&(_, latest)| latest).collect::<HashSet<_>>();
+      let kept_by_latest =
+        kept.iter().chain(&kept_modified).map(|&(baseline, _)| baseline).collect::<HashSet<_>>();
+      let (unchanged, modified) = match_instances(held, &source_placed[*target_index], tolerance);
+      let as_baseline = unchanged.iter().map(|&(_, source)| source).collect::<HashSet<_>>();
+      let source_baseline = unchanged
+        .iter()
+        .chain(&modified)
+        .map(|&(baseline, source)| (source, baseline))
+        .collect::<HashMap<_, _>>();
+      changes.removed_instances.retain(|index| latest_held.contains(index));
+      changes.added_instances.retain(|added| {
+        added.target_index.is_none_or(|index| {
+          source_baseline.get(&index).is_none_or(|baseline| kept_by_latest.contains(baseline))
+        })
+      });
+      changes.modified_instances.retain(|modified| !as_baseline.contains(&modified.target_index));
+      // Bounds the source keeps from its baseline give way to the latest's, grown to hold the
+      // instances added, so the latest instances keep their places.
+      if source[*target_index].batch_aabb == baseline[baseline_index].batch_aabb {
+        let mut bounds = latest[*base_index].batch_aabb.clone();
+        for added in &changes.added_instances {
+          let position = &added.world_position;
+          bounds.min.x = bounds.min.x.min(position.x);
+          bounds.min.y = bounds.min.y.min(position.y);
+          bounds.min.z = bounds.min.z.min(position.z);
+          bounds.max.x = bounds.max.x.max(position.x);
+          bounds.max.y = bounds.max.y.max(position.y);
+          bounds.max.z = bounds.max.z.max(position.z);
+        }
+        for added in &mut changes.added_instances {
+          added.instance.position = pack_position(&bounds, &added.world_position);
+        }
+        changes.batch_aabb = (bounds != latest[*base_index].batch_aabb).then_some(bounds);
+      }
+      *changes != YmapGrassBatchFieldDiff::default()
+    }
+    _ => true,
+  });
 }
 
 impl YmapGrassBatchFieldDiff {

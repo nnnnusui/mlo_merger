@@ -254,6 +254,8 @@ fn write_ybn_diffs(
     .into_iter()
     .map(|file| (file.name.to_ascii_lowercase(), (file.path, file.object)))
     .collect::<std::collections::HashMap<_, _>>();
+  // Every version of each YBN, among which a source's baseline is found.
+  let versions = crate::app::map::vanilla_cache::archived_versions(vanilla_cache_dir);
   let results = entries
     .par_iter()
     .map(|entry| -> std::result::Result<Option<bool>, String> {
@@ -280,10 +282,13 @@ fn write_ybn_diffs(
           },
         )
       };
+      let candidates = versions.get(&entry.file_name).map_or(&[][..], Vec::as_slice);
+      let digest = crate::app::map::vanilla_cache::versions_digest(candidates);
       let previous = crate::common::json::read_json::<YbnComparisonDiff>(&entry.previous).ok();
       let current = previous.as_ref().is_some_and(|previous| {
         entry.vouched
           || (previous.schema_version == YbnComparisonDiff::SCHEMA_VERSION
+            && previous.vanilla_versions == digest
             && previous.tolerance == tolerances.ybn_position
             && comparison(&entry.source, &entry.stored, Some(&previous.target))
               .is_ok_and(|target| target.same_content(&previous.target))
@@ -297,14 +302,40 @@ fn write_ybn_diffs(
         return Ok(Some(false));
       }
       let taken = (|| -> Result<YbnComparisonDiff> {
+        let tolerance = tolerances.ybn_position;
         let source = crate::core::format::ybn::read_ybn(&fs::read(&entry.source)?)?;
         let base = crate::core::format::ybn::read_ybn(&fs::read(vanilla_path)?)?;
+        let mut diffs = polygons::diff(&base, &source, tolerance)?;
+        // The version the source differs least from, when it is not the latest.
+        let mut least = polygons::change_count(&diffs);
+        let mut baseline = None;
+        for version in candidates.iter().filter(|version| version.object != *object) {
+          let from_version = polygons::diff(
+            &crate::core::format::ybn::read_ybn(&fs::read(&version.path)?)?,
+            &source,
+            tolerance,
+          )?;
+          let count = polygons::change_count(&from_version);
+          if count < least {
+            least = count;
+            baseline = Some((version, from_version));
+          }
+        }
+        let baseline = match baseline {
+          Some((version, from_version)) => {
+            polygons::relative_to_baseline(&mut diffs, &from_version, tolerance)?;
+            Some(comparison(&version.path, &version.object, None)?)
+          }
+          None => None,
+        };
         Ok(YbnComparisonDiff {
           schema_version: YbnComparisonDiff::SCHEMA_VERSION,
           target: comparison(&entry.source, &entry.stored, None)?,
           base: comparison(vanilla_path, object, None)?,
-          tolerance: tolerances.ybn_position,
-          diffs: polygons::diff(&base, &source, tolerances.ybn_position)?,
+          tolerance,
+          vanilla_versions: digest.clone(),
+          baseline,
+          diffs,
         })
       })();
       match taken {

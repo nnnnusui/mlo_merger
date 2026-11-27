@@ -213,3 +213,67 @@ pub(crate) fn load_cache(
     revision: hex::encode(digest.finalize()),
   })
 }
+
+/// One version of a stream file the vanilla archive stores.
+#[derive(Debug, Clone)]
+pub(crate) struct ArchivedVersion {
+  pub(crate) path: PathBuf,
+  /// Its path in the vanilla archive.
+  pub(crate) object: String,
+  pub(crate) sha256: String,
+}
+
+/// Every distinct version of each YMAP and YBN the vanilla archive of the cache at `cache_dir`
+/// stores, those of every stage and of every game build's title-update patches, keyed by
+/// lowercase file name, oldest first; empty when the archive cannot be read.
+pub(crate) fn archived_versions(
+  cache_dir: &Path
+) -> std::collections::HashMap<String, Vec<ArchivedVersion>> {
+  let read = || -> Result<_> {
+    let archive = archive_dir(cache_dir)?;
+    Ok((crate::core::game_archive::load_manifest(&archive)?, archive))
+  };
+  let (manifest, archive) = match read() {
+    Ok(read) => read,
+    Err(error) => {
+      tracing::debug!("No vanilla versions to find source baselines among: {error}");
+      return Default::default();
+    }
+  };
+  let mut versions = std::collections::HashMap::<String, Vec<ArchivedVersion>>::new();
+  let changes = manifest.versions.iter().flat_map(|version| {
+    version.changes.iter().chain(version.patches.iter().flat_map(|patch| patch.changes.iter()))
+  });
+  for (name, change) in changes {
+    let name = name.to_ascii_lowercase();
+    if !name.ends_with(".ymap") && !name.ends_with(".ybn") {
+      continue;
+    }
+    let known = versions.entry(name).or_default();
+    if known.iter().any(|version| version.sha256 == change.file.sha256) {
+      continue;
+    }
+    let Ok(path) = change.file.path(&archive) else {
+      continue;
+    };
+    known.push(ArchivedVersion {
+      path,
+      object: change.file.object.clone(),
+      sha256: change.file.sha256.clone(),
+    });
+  }
+  versions
+}
+
+/// A digest of `versions`, recorded by the diffs that found a baseline among them; `None` for a
+/// single version, which is the latest.
+pub(crate) fn versions_digest(versions: &[ArchivedVersion]) -> Option<String> {
+  if versions.len() < 2 {
+    return None;
+  }
+  let mut digest = Sha256::new();
+  for version in versions {
+    digest.update(version.sha256.as_bytes());
+  }
+  Some(hex::encode(digest.finalize()))
+}

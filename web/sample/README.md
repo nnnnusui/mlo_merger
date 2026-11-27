@@ -55,8 +55,9 @@ names, by which the merger pairs them.
   bin by the fountain.
 
 Edits to `smpl_block_01.ymap` and the LOD lights carry over to their DLC generations. The
-resources' collisions predate `smpl_summer`, so merging against the last stage removes the
-kiosk's collision, while `--gamebuild 100` merges against the stage they were made for.
+resources' collisions predate `smpl_summer`; the source cache takes that older collision as
+their baseline, so merging against the last stage keeps the kiosk's collision instead of
+removing it, and `--gamebuild 100` merges against the stage they were made for.
 
 ## Overwrites Written Against Earlier Versions (`asset/map/overwrite`, `asset/map/source-cache/history`)
 

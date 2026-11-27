@@ -243,13 +243,14 @@ merging are written.
 
 #### Source Baselines
 
-A resource's YMAP may have been made from an older vanilla version than the latest. Its
+A resource's YMAP or YBN may have been made from an older vanilla version than the latest. Its
 differences from the latest would then also revert every change vanilla made since. So
-source-cache generation compares the YMAP with every version of the vanilla YMAP the vanilla
+source-cache generation compares the file with every version of the vanilla file the vanilla
 archive stores, those of every stage and of every game build's title-update patches, and takes
-the one it differs least from, counting one change per array item and per other changed field,
-as its baseline; the latest wins a tie. When the baseline is not the latest, the differences,
-still taken from the latest, keep only what the resource changed in its baseline:
+the one it differs least from as its baseline; the latest wins a tie. Changes are counted one
+per array item, occlude triangle, grass instance, YBN polygon or child, and other changed field.
+When the baseline is not the latest, the differences, still taken from the latest, keep only
+what the resource changed in its baseline:
 
 - A removal of an item the baseline lacks, which vanilla added later, is left out.
 - An addition of an item the baseline has but the latest lacks is left out, whether or not the
@@ -257,15 +258,19 @@ still taken from the latest, keep only what the resource changed in its baseline
 - A modification of an item the resource keeps as the baseline has it is left out; one the
   resource changed makes only those changes to the latest item. A changed parent is kept only
   when the resource points the entity at another parent than the baseline does.
+- A replacement, the removal of a latest item and the addition of a source one in its place,
+  keeps whichever of the two is not left out.
 - A removal of a baseline item the latest lacks is not among the differences to begin with.
 
-Items are paired between versions as the differences pair them, by GUID for entities, so
-reordering between versions changes nothing. Entities, box occluders, time cycle modifiers,
-car generators and the YMAP's `parent` and `contentFlags` are handled so far; the
-differences in occlude models, LOD lights, distant LOD lights, physics dictionaries and
-instanced data stay those from the latest. The document records the baseline (`baseline`)
-and a digest of the versions compared (`vanilla_versions`), and is taken again when they
-change. YBNs are diffed from the latest only.
+Items are paired between versions as the differences pair them: entities by GUID, occlude
+triangles and YBN polygons by the vertices they join, grass batches and instances in world
+space, names by hash. Reordering between versions therefore changes nothing. A grass batch whose
+bounds the resource keeps from the baseline takes the latest bounds, grown to hold the instances
+it adds, so the latest instances keep their places. The LOD lights and distant LOD lights of a
+LOD light pair stay as taken from the latest: the two YMAPs hold one light at the same index
+each, and the removals of either are made in the other too, so leaving one out of a single
+YMAP would set them apart. The document records the baseline (`baseline`) and a digest of the
+versions compared (`vanilla_versions`), and is taken again when they change.
 
 ### Added Stream Files
 
@@ -897,10 +902,10 @@ are arrays. File sizes and timestamps are JSON numbers, represented as TypeScrip
 
 ## Limitations
 
-- Merge uses the latest selected vanilla. Which vanilla version a source YMAP was made from
-  is inferred only to leave out of its differences what that version holds
-  ([Source Baselines](#source-baselines)), and only for entities, box occluders, time cycle
-  modifiers and car generators so far; YBNs are not inferred. The code writing vanilla YMAP
+- Merge uses the latest selected vanilla. Which vanilla version a source YMAP or YBN was made
+  from is inferred only to leave out of its differences what that version holds
+  ([Source Baselines](#source-baselines)), by the fewest changes, and not for the lights of
+  LOD light pairs. The code writing vanilla YMAP
   version-to-version diffs is kept but not called; see [vanillaDiff.md](vanillaDiff.md).
 - Which [DLC generations](#newer-dlc-generations) the game loads is worked out from the
   installed game's files and, with `--game-storage`, each build's title-update patches of the

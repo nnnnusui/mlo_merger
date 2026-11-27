@@ -317,9 +317,10 @@ fn pipeline_runs_on_the_web_sample() {
   assert_eq!(parent_indices(&winter), [0, 1]);
   assert_eq!(workspace.merged_ymap("lodlights_small001.ymap").lod_lights.len(), 2);
   assert_eq!(workspace.merged_ymap("winter_lodlights_small001.ymap").lod_lights.len(), 3);
-  // Ground (2) and house A: the bollard is removed, and so is the kiosk `smpl_summer` added, as
-  // both resources were made from the collision before it; the overwrite leaves out the planter.
-  assert_eq!(workspace.merged_polygons("smpl_block_01.ybn"), 3);
+  // Ground (2), house A and the kiosk: the bollard is removed, but the kiosk `smpl_summer` added
+  // stays, as both resources were made from the collision before it, which they differ least
+  // from; the overwrite leaves out the planter.
+  assert_eq!(workspace.merged_polygons("smpl_block_01.ybn"), 4);
   let park_diff =
     fs::read(workspace.map("source-cache/diff/smpl_custom_props/smpl_block_02.ymap.diff.json"))
       .unwrap();

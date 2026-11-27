@@ -9,15 +9,21 @@
 //! - A removal of an item the baseline lacks, which vanilla added after it, is left out.
 //! - An addition of an item the baseline has, which vanilla removed after it, is left out,
 //!   whether or not the resource changed it: there is nothing left to change.
-//! - A modification or replacement of an item the resource keeps as its baseline has it is left
-//!   out. One the resource changed makes only those changes to the latest item.
+//! - A modification of an item the resource keeps as its baseline has it is left out. One the
+//!   resource changed makes only those changes to the latest item.
+//! - A replacement, the removal of a latest item and the addition of a source one in its place,
+//!   keeps whichever of the two is not left out.
 //!
 //! A removal of a baseline item the latest lacks is not among the differences from the latest
 //! to begin with. Items are paired between versions as the differences pair them, by GUID for
 //! entities, so a reordering between versions changes nothing.
 //!
-//! Entities, box occluders, time cycle modifiers and car generators are handled, and the YMAP's
-//! `parent` and `contentFlags`; the other differences are kept as they are.
+//! Every array of the YMAP is handled, as are its `parent` and `contentFlags`, but for the LOD
+//! lights and distant LOD lights of a LOD light pair: the two YMAPs of a pair hold one light at
+//! the same index each, and the removals of either are made in the other too (see
+//! [`super::lod_light_pairs`]), so their differences are kept from the latest. Occlude model
+//! triangles relate as the differences compare them, by the vertices they join; grass batches
+//! and instances as they pair, in world space.
 
 use std::collections::{HashMap, HashSet};
 
@@ -27,11 +33,16 @@ use struct_diff::{
 };
 
 use super::{
-  YmapDiffFields,
+  YmapDiffFields, YmapOccludeTrianglesDiff,
   entities::{self, YmapEntityDiff},
   entity_parent::YmapDiffContext,
+  instanced_data,
+  occlude_models::VertexIndex,
 };
-use crate::core::format::ymap::model::{Ymap, YmapEntity};
+use crate::core::format::ymap::{
+  model::{Ymap, YmapEntity, YmapOccludeModel},
+  reference_hash,
+};
 
 /// The YMAPs and contexts [`relative_to_baseline`] relates: the latest vanilla version and the
 /// source compared under `latest_ctx`, the baseline and the source under `baseline_ctx`.
@@ -41,6 +52,8 @@ pub struct BaselineComparison<'a> {
   pub source: &'a Ymap,
   pub latest_ctx: &'a YmapDiffContext,
   pub baseline_ctx: &'a YmapDiffContext,
+  /// Whether the YMAP is one of a LOD light pair, whose lights are kept from the latest.
+  pub light_pair: bool,
 }
 
 /// Leaves out of `diffs`, the differences of the source from the latest vanilla version, what
@@ -79,29 +92,110 @@ pub fn relative_to_baseline(
     (&latest.car_generators, &baseline.car_generators, &source.car_generators),
     tolerances,
   );
+  relate_names(
+    &mut diffs.physics_dictionaries,
+    (&latest.physics_dictionaries, &baseline.physics_dictionaries, &source.physics_dictionaries),
+  );
+  relate_triangles(
+    &mut diffs.occlude_models,
+    &baseline.occlude_models,
+    tolerances.ymap_occlude_vertex_position,
+  );
+  if !versions.light_pair {
+    relate_items(
+      &mut diffs.lod_lights,
+      (&latest.lod_lights, &baseline.lod_lights, &source.lod_lights),
+      &(),
+    );
+    if let Some(distant) = &mut diffs.distant_lod_lights {
+      relate_items(
+        &mut distant.items,
+        (
+          &latest.distant_lod_lights.items,
+          &baseline.distant_lod_lights.items,
+          &source.distant_lod_lights.items,
+        ),
+        tolerances,
+      );
+      if distant.num_street_lights.is_some()
+        && source.distant_lod_lights.num_street_lights
+          == baseline.distant_lod_lights.num_street_lights
+      {
+        distant.num_street_lights = None;
+      }
+      if distant.category.is_some()
+        && source.distant_lod_lights.category == baseline.distant_lod_lights.category
+      {
+        distant.category = None;
+      }
+      if *distant == Default::default() {
+        diffs.distant_lod_lights = None;
+      }
+    }
+  }
+  if let Some(instanced) = &mut diffs.instanced_data {
+    let (latest, baseline, source) =
+      (&latest.instanced_data, &baseline.instanced_data, &source.instanced_data);
+    if instanced.imap_link.is_some()
+      && reference_hash(&source.imap_link) == reference_hash(&baseline.imap_link)
+    {
+      instanced.imap_link = None;
+    }
+    relate_names(
+      &mut instanced.prop_instance_list,
+      (&latest.prop_instance_list, &baseline.prop_instance_list, &source.prop_instance_list),
+    );
+    instanced_data::relate_grass_batches(
+      &mut instanced.grass_instance_list,
+      (&latest.grass_instance_list, &baseline.grass_instance_list, &source.grass_instance_list),
+      tolerances.ymap_grass_position,
+    );
+    if *instanced == Default::default() {
+      diffs.instanced_data = None;
+    }
+  }
 }
 
 /// How many changes `diffs` makes: one per array item and per other changed field, by which the
 /// vanilla version a source differs least from is told.
+///
+/// Occlude models count one per triangle, and grass batches one per instance they change.
 pub fn change_count(diffs: &YmapDiffFields) -> usize {
   fn items<T>(items: &Option<Vec<T>>) -> usize {
     items.as_ref().map_or(0, Vec::len)
   }
-  let fields = [
-    diffs.parent.is_some(),
-    diffs.content_flags.is_some(),
-    diffs.distant_lod_lights.is_some(),
-    diffs.instanced_data.is_some(),
-  ];
+  let fields = [diffs.parent.is_some(), diffs.content_flags.is_some()];
+  let triangles =
+    diffs.occlude_models.iter().flatten().map(|diff| diff.removed.len() + diff.added.len());
+  let distant = diffs.distant_lod_lights.as_ref().map_or(0, |distant| {
+    items(&distant.items)
+      + usize::from(distant.num_street_lights.is_some())
+      + usize::from(distant.category.is_some())
+  });
+  let instanced = diffs.instanced_data.as_ref().map_or(0, |instanced| {
+    usize::from(instanced.imap_link.is_some())
+      + items(&instanced.prop_instance_list)
+      + instanced
+        .grass_instance_list
+        .iter()
+        .flatten()
+        .map(instanced_data::grass_change_count)
+        .sum::<usize>()
+  });
   items(&diffs.entities)
     + items(&diffs.box_occluders)
-    + items(&diffs.occlude_models)
+    + triangles.sum::<usize>()
     + items(&diffs.lod_lights)
+    + distant
     + items(&diffs.physics_dictionaries)
+    + instanced
     + items(&diffs.time_cycle_modifiers)
     + items(&diffs.car_generators)
     + fields.into_iter().filter(|changed| *changed).count()
 }
+
+/// Paired indices, as `(earlier, later)`.
+type Pairs = Vec<(usize, usize)>;
 
 /// Each later index of `pairs` keyed to its earlier one.
 fn by_later(pairs: &[(usize, usize)]) -> HashMap<usize, usize> {
@@ -201,44 +295,14 @@ fn relate_items<T: Pair + Clone>(
 ) where
   T::Output: PartialEq,
 {
-  let Some(list) = diffs else {
-    return;
-  };
-  let source_baseline = by_later(&T::pair(baseline, source, ctx).pairs);
-  let latest_pairs = T::pair(baseline, latest, ctx).pairs;
-  let latest_baseline = by_later(&latest_pairs);
-  let kept_by_latest = latest_pairs.iter().map(|&(baseline, _)| baseline).collect::<HashSet<_>>();
-  list.retain_mut(|diff| match diff {
-    ItemDiff::Removed {
-      base_index,
-      implied,
-      reason,
-    } => *implied || reason.is_some() || latest_baseline.contains_key(base_index),
-    ItemDiff::Added {
-      target_index: Some(index),
-      ..
-    } => source_baseline.get(index).is_none_or(|baseline| kept_by_latest.contains(baseline)),
-    ItemDiff::Added {
-      ..
-    } => true,
-    ItemDiff::Replaced {
-      target_index: Some(index),
-      ..
-    } => source_baseline
-      .get(index)
-      .is_none_or(|&baseline_index| baseline[baseline_index].diff(&source[*index], ctx).is_some()),
-    ItemDiff::Replaced {
-      ..
-    } => true,
+  let pairs = (T::pair(baseline, source, ctx).pairs, T::pair(baseline, latest, ctx).pairs);
+  relate_paired(diffs, pairs, |diff, baseline_index| match diff {
     ItemDiff::Modified {
       base_index,
       target_index,
       changes,
-      reason: None,
+      ..
     } => {
-      let Some(&baseline_index) = source_baseline.get(target_index) else {
-        return true;
-      };
       let Some(intent) = baseline[baseline_index].diff(&source[*target_index], ctx) else {
         return false;
       };
@@ -254,10 +318,139 @@ fn relate_items<T: Pair + Clone>(
         None => false,
       }
     }
-    ItemDiff::Modified {
-      ..
-    } => true,
+    _ => true,
   });
+}
+
+/// [`relate_items`] for names compared by hash as a multiset, which are only added or removed.
+fn relate_names<C>(
+  diffs: &mut Option<Vec<ItemDiff<String, C>>>,
+  (latest, baseline, source): (&[String], &[String], &[String]),
+) {
+  let names =
+    |list: &[String]| list.iter().map(|name| Some(reference_hash(name))).collect::<Vec<_>>();
+  let pairs =
+    |later: &[String]| struct_diff::vec::pair_by_keys(names(baseline), names(later)).pairs;
+  relate_paired(diffs, (pairs(source), pairs(latest)), |_, _| true);
+}
+
+/// Leaves out of `diffs`, taken from the latest version to the source, the removals of latest
+/// items the baseline lacks and the additions of baseline items the latest lacks, given the
+/// pairs of baseline items with source ones and with latest ones. A replacement, the removal of a
+/// latest item and the addition of a source one in its place, keeps the part that is not left
+/// out. A modification of a source item paired with a baseline item is kept when `paired`
+/// returns true, which may change it.
+pub(super) fn relate_paired<T, C>(
+  diffs: &mut Option<Vec<ItemDiff<T, C>>>,
+  (source_pairs, latest_pairs): (Pairs, Pairs),
+  mut paired: impl FnMut(&mut ItemDiff<T, C>, usize) -> bool,
+) {
+  let Some(list) = diffs else {
+    return;
+  };
+  let source_baseline = by_later(&source_pairs);
+  let latest_baseline = by_later(&latest_pairs);
+  let kept_by_latest = latest_pairs.iter().map(|&(baseline, _)| baseline).collect::<HashSet<_>>();
+  let kept_removal = |index: &usize| latest_baseline.contains_key(index);
+  let kept_addition = |index: &usize| {
+    source_baseline.get(index).is_none_or(|baseline| kept_by_latest.contains(baseline))
+  };
+  for diff in list.iter_mut() {
+    let ItemDiff::Replaced {
+      base_index,
+      target_index: Some(target_index),
+      ..
+    } = diff
+    else {
+      continue;
+    };
+    let (base_index, target_index) = (*base_index, *target_index);
+    match (kept_removal(&base_index), kept_addition(&target_index)) {
+      (true, false) => {
+        *diff = ItemDiff::Removed {
+          base_index,
+          implied: false,
+          reason: None,
+        };
+      }
+      (false, true) => {
+        let ItemDiff::Replaced {
+          item,
+          ..
+        } = std::mem::replace(
+          diff,
+          ItemDiff::Removed {
+            base_index,
+            implied: false,
+            reason: None,
+          },
+        )
+        else {
+          unreachable!()
+        };
+        *diff = ItemDiff::Added {
+          anchor_base_index: Some(base_index),
+          target_index: Some(target_index),
+          item,
+        };
+      }
+      _ => {}
+    }
+  }
+  list.retain_mut(|diff| match diff {
+    ItemDiff::Removed {
+      base_index,
+      implied,
+      reason,
+    } => *implied || reason.is_some() || kept_removal(base_index),
+    ItemDiff::Added {
+      target_index: Some(index),
+      ..
+    } => kept_addition(index),
+    ItemDiff::Replaced {
+      base_index,
+      target_index: Some(index),
+      ..
+    } => kept_removal(base_index) || kept_addition(index),
+    ItemDiff::Modified {
+      target_index: index,
+      reason: None,
+      ..
+    } => match source_baseline.get(&*index).copied() {
+      Some(baseline_index) => paired(diff, baseline_index),
+      None => true,
+    },
+    _ => true,
+  });
+  if list.is_empty() {
+    *diffs = None;
+  }
+}
+
+/// Leaves out of `diffs`, the occlude triangles changed from the latest version to the source,
+/// the removals of triangles `baseline` lacks and the additions of those it has, keyed by the
+/// vertices they join within `tolerance`.
+fn relate_triangles(
+  diffs: &mut Option<Vec<YmapOccludeTrianglesDiff>>,
+  baseline: &[YmapOccludeModel],
+  tolerance: f32,
+) {
+  let Some(list) = diffs else {
+    return;
+  };
+  let mut index = VertexIndex::new(tolerance);
+  let mut held = HashSet::new();
+  for model in baseline {
+    for triangle in &model.triangles {
+      held.insert((model.flags, index.key(triangle)));
+    }
+  }
+  for diff in list.iter_mut() {
+    let flags = diff.flags;
+    diff.removed.retain(|triangle| held.contains(&(flags, index.key(triangle))));
+    diff.added.retain(|triangle| !held.contains(&(flags, index.key(triangle))));
+  }
+  list.retain(|diff| !diff.removed.is_empty() || !diff.added.is_empty());
   if list.is_empty() {
     *diffs = None;
   }

@@ -336,3 +336,24 @@ fn a_carried_removal_names_the_candidates_polygon_so_it_merges_with_its_own_remo
   let merged = polygons::merge(&[&own, &carried[0]], TOLERANCE).unwrap();
   assert_eq!(merged.polygons[0].removed.len(), 1);
 }
+
+#[test]
+fn only_the_changes_a_source_makes_to_its_baseline_are_kept() {
+  // Vanilla later removed the triangle at 10 and added one at 20; the source, made from the
+  // baseline, removed the one at 0 and added one at 30.
+  let baseline = composite(vec![(strip(0.0, 1), FLAGS), (strip(10.0, 1), FLAGS)]);
+  let latest = composite(vec![(strip(0.0, 1), FLAGS), (strip(20.0, 1), FLAGS)]);
+  let source = composite(vec![(strip(10.0, 1), FLAGS), (strip(30.0, 1), FLAGS)]);
+  let mut diffs = polygons::diff(&latest, &source, TOLERANCE).unwrap();
+  assert_eq!(polygons::change_count(&diffs), 4);
+  let from_baseline = polygons::diff(&baseline, &source, TOLERANCE).unwrap();
+  polygons::relative_to_baseline(&mut diffs, &from_baseline, TOLERANCE).unwrap();
+  let [group] = diffs.polygons.as_slice() else {
+    panic!("{diffs:?}");
+  };
+  let x = |polygons: &[super::polygon::ResolvedPolygon]| {
+    polygons.iter().map(|polygon| polygon.shape.positions()[0][0]).collect::<Vec<_>>()
+  };
+  assert_eq!(x(&group.removed), [0.0]);
+  assert_eq!(x(&group.added), [30.0]);
+}
