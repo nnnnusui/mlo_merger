@@ -44,11 +44,25 @@ impl IncrementalMerge<'_> {
     } else {
       BTreeSet::new()
     };
-    // A YBN one source replaces is deployed as that source has it, unless an overwrite skips
-    // within it, changes are carried to it, or it is built without its repeats.
+    let generations =
+      crate::app::map::vanilla_cache::generations::Generations::load(self.vanilla_cache)?;
+    // The sources made from an older vanilla version than the latest, by their stored path.
+    let made_from_older = sources
+      .values()
+      .flatten()
+      .filter_map(|source| match source.made_from_older_version() {
+        Ok(older) => older.then(|| Ok(source.stored_path.clone())),
+        Err(error) => Some(Err(error)),
+      })
+      .collect::<Result<BTreeSet<_>>>()?;
+    // A YBN one source replaces is deployed as that source has it, unless it was made from an
+    // older vanilla version, an overwrite skips within it, changes are carried to it, it is built
+    // without its repeats, or a successor supersedes it, which takes its changes instead.
     sources.retain(|name, files| {
       !name.ends_with(".ybn")
         || files.len() > 1
+        || files.iter().any(|source| made_from_older.contains(&source.stored_path))
+        || generations.as_ref().is_some_and(|generations| generations.successor(name).is_some())
         || rebuilt_for_repeats.contains(name)
         || files
           .iter()
@@ -82,9 +96,7 @@ impl IncrementalMerge<'_> {
     // A stream file of a superseded generation is not merged: its changes are carried to the
     // latest generation, its sources are omitted and the vanilla file stays.
     let mut superseded = BTreeMap::<String, (String, Vec<&MergeSourceFile>)>::new();
-    if let Some(generations) =
-      crate::app::map::vanilla_cache::generations::Generations::load(self.vanilla_cache)?
-    {
+    if let Some(generations) = &generations {
       let names = sources
         .keys()
         .filter(|name| name.ends_with(".ymap") || name.ends_with(".ybn"))
@@ -159,8 +171,13 @@ impl IncrementalMerge<'_> {
         reused += 1;
       }
       retained_files.extend(outcome.retained);
-      for record in outcome.planned.values().filter(|record| record.output.is_some()) {
+      // The sources of a written file are omitted, and when the merge leaves the vanilla file
+      // as it is, those made from an older version, which the vanilla file stands for.
+      for record in outcome.planned.values() {
         for input in &record.merge_sources {
+          if record.output.is_none() && !input.made_from_older {
+            continue;
+          }
           if let Some(original) = &input.original_path {
             omitted.insert(original.to_string_lossy().replace('\\', "/"));
           }
@@ -274,6 +291,7 @@ impl IncrementalMerge<'_> {
             original_path: None,
             overwrite: self.vanilla_overwrite(name).map(VanillaOverwrite::digest),
             implied: None,
+            made_from_older: false,
           })
         })
         .transpose()?;
@@ -473,6 +491,7 @@ impl IncrementalMerge<'_> {
       original_path: (!source.propagated).then(|| PathBuf::from(&source.source_path)),
       overwrite: self.overwrite(source).map(StreamFileOverwrite::digest),
       implied,
+      made_from_older: source.made_from_older_version()?,
     })
   }
 }

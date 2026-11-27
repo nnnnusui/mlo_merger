@@ -11,7 +11,8 @@ use std::{
 
 /// The managed deployment files, each with its source and that source's path relative to its
 /// store: every merged stream file, and each file the source cache moved out of its resource whose
-/// name no merged file takes and whose YMAP the merge did not leave out for a newer generation.
+/// name no merged file takes and which the merge does not omit (see
+/// [`crate::app::map::merge::omitted_sources`]).
 pub(super) fn plan(
   merged: &Path,
   cache: &Path,
@@ -42,9 +43,9 @@ pub(super) fn plan(
       (path.to_path_buf(), path.strip_prefix(merged)?.to_path_buf()),
     );
   }
-  let superseded = crate::app::map::merge::superseded_sources(merged)?;
+  let omitted = crate::app::map::merge::omitted_sources(merged)?;
   for file in cached {
-    if superseded.contains(&file.source_path.replace('\\', "/")) {
+    if omitted.contains(&file.source_path.replace('\\', "/")) {
       continue;
     }
     let path = cache.join(&file.cached_path);

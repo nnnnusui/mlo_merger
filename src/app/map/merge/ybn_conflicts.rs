@@ -4,7 +4,8 @@
 //! file when it has none, and its overwrite's skip is applied to them; changes carried from
 //! another generation ([`YbnPropagatedDiff`]) follow the sources, in the order given. A YBN only
 //! one source replaces, without an overwrite, is written as that source has it, unless repeats
-//! are left out. With `[ybn_repeats]` enabled, every YBN built from diffs leaves out the polygons
+//! are left out or the source was made from an older vanilla version than the latest, which it
+//! would otherwise revert. With `[ybn_repeats]` enabled, every YBN built from diffs leaves out the polygons
 //! repeating an earlier one, and each vanilla YBN [`MergeYbnConflicts::standalone`] names is
 //! built from no source to leave them out.
 
@@ -16,6 +17,7 @@ use std::{
 };
 
 use crate::app::map::overwrite::{OverwriteFingerprint, StreamFileOverwrite};
+use crate::app::map::source_cache::made_from_older_version;
 use crate::core::format::ybn::{
   diff::polygons::{self, YbnComparisonDiff, YbnDiffFields, YbnPropagatedDiff},
   merge_ybn_diffs_with, read_ybn,
@@ -112,7 +114,8 @@ impl MergeYbnConflicts {
         [source]
           if !leave_out_repeats
             && !source.propagated
-            && source.overwrite.as_ref().is_none_or(|overwrite| overwrite.skip.is_none()) =>
+            && source.overwrite.as_ref().is_none_or(|overwrite| overwrite.skip.is_none())
+            && !source.diff_path.as_deref().map_or(Ok(false), made_from_older_version)? =>
         {
           fs::read(&source.path)?
         }

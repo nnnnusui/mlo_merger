@@ -281,6 +281,12 @@ records the baseline (`baseline`) and a digest of the
 versions compared (`vanilla_versions`), that of the LOD light partner's versions too, and is
 taken again when they change.
 
+A source made from an older version is never deployed as it is, as that would revert what
+vanilla changed since: a YMAP or YBN only it replaces is merged from its differences like any
+other, and when the merge leaves the latest vanilla file as it is, the source is listed in
+`_omit.txt` and not deployed, so the latest vanilla file stays. The merge's `cache_info.json`
+marks such a source `made_from_older`.
+
 ### Added Stream Files
 
 A stream file no vanilla file is named after, one a resource adds, is diffed and merged like
@@ -564,8 +570,10 @@ generation and carry the changes resources make to the others over to it.
 - The source cache writes each source YBN's differences from the latest vanilla YBN of its name
   to a diff document, which merges read and overwrites skip within (see
   [usage](usage.md#ybn-differences)). A YBN merges when several resources replace it, an
-  overwrite skips within it, changes are carried to it or its repeats are left out; one only
-  one source replaces is otherwise deployed as that source has it.
+  overwrite skips within it, changes are carried to it, its repeats are left out, a successor
+  supersedes it or its source was made from an older version (see
+  [Source Baselines](#source-baselines)); one only one source replaces is otherwise deployed as
+  that source has it.
 - A *repeat* is a polygon the very same as an earlier one of the same flags group: positions,
   winding, corner flags and material. Repeats add work for the game's collision and nothing
   else. With `[ybn_repeats]` enabled (see [Matching Configuration](#matching-configuration)),
@@ -622,7 +630,9 @@ Deploy writes from the existing merge and source-cache data:
 
 - Merged files: `stream/{extension}/merged/{filename}`.
 - Remaining cached files: `stream/{extension}/clone/{resourceName}/{stream-relative-path}`,
-  except the sources of YMAPs with a successor (`superseded_by` in the merge's `cache_info.json`).
+  except the sources of stream files with a successor (`superseded_by` in the merge's
+  `cache_info.json`) and those made from an older vanilla version of a file the merge leaves as
+  vanilla has it (`made_from_older`; see [Source Baselines](#source-baselines)).
 - `files.txt`: original source-relative paths of active moved files.
 
 Deploy skips unchanged copies, repairs missing or changed outputs, and removes stale

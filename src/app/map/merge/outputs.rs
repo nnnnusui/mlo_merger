@@ -50,10 +50,12 @@ pub fn merged_files(merged_dir: &Path) -> Result<Vec<MergedFile>> {
     .collect()
 }
 
-/// The source paths, relative to the source root, of the YMAPs the merge left out for a newer
-/// generation (`superseded_by` in the merge output's metadata). Their YMAPs are not to be
-/// deployed. Without merge metadata, there are none.
-pub fn superseded_sources(merged_dir: &Path) -> Result<BTreeSet<String>> {
+/// The source paths, relative to the source root, of the stream files the merge omits without
+/// writing a file of their name: those of a file left out for a newer generation
+/// (`superseded_by` in the merge output's metadata), and those made from an older vanilla version
+/// of a file the merge leaves as vanilla has it. They are not to be deployed. Without merge
+/// metadata, there are none.
+pub fn omitted_sources(merged_dir: &Path) -> Result<BTreeSet<String>> {
   let path = cache_info_path(merged_dir);
   if !fs::is_file(&path) {
     return Ok(BTreeSet::new());
@@ -64,8 +66,11 @@ pub fn superseded_sources(merged_dir: &Path) -> Result<BTreeSet<String>> {
     metadata
       .files
       .into_values()
-      .filter(|record| record.superseded_by.is_some())
-      .flat_map(|record| record.merge_sources)
+      .filter(|record| record.output.is_none())
+      .flat_map(|record| {
+        let superseded = record.superseded_by.is_some();
+        record.merge_sources.into_iter().filter(move |input| superseded || input.made_from_older)
+      })
       .filter_map(|input| input.original_path)
       .map(|original| original.to_string_lossy().replace('\\', "/"))
       .collect(),

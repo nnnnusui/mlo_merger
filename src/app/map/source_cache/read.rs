@@ -55,7 +55,32 @@ pub fn resource_name(resource: &str) -> String {
     .map_or_else(|| resource.to_string(), |name| name.to_string_lossy().into_owned())
 }
 
+/// Whether the stream file whose diff document is at `diff_path` was made from an older vanilla
+/// version than the latest: the document names a baseline (see
+/// [Source Baselines](crate::core::format::ymap::compare::baseline)). Deployed as it is, such a
+/// file would revert what vanilla changed since. A missing document names none.
+pub fn made_from_older_version(diff_path: &Path) -> Result<bool> {
+  #[derive(serde::Deserialize)]
+  struct Baseline {
+    #[serde(default)]
+    baseline: Option<serde::de::IgnoredAny>,
+  }
+  if !fs::is_file(diff_path) {
+    return Ok(false);
+  }
+  Ok(crate::common::json::read_json::<Baseline>(diff_path)?.baseline.is_some())
+}
+
 impl MergeSourceFile {
+  /// Whether it was made from an older vanilla version than the latest; see
+  /// [`made_from_older_version`]. Carried-over changes are not.
+  pub fn made_from_older_version(&self) -> Result<bool> {
+    match &self.diff_path {
+      Some(path) if !self.propagated => made_from_older_version(path),
+      _ => Ok(false),
+    }
+  }
+
   /// The name of the resource holding it; see [`resource_name`].
   pub fn resource_name(&self) -> String {
     resource_name(&self.resource)

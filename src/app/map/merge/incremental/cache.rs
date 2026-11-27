@@ -71,6 +71,12 @@ pub(in crate::app::map::merge) struct InputFile {
   #[serde(default, skip_serializing_if = "Option::is_none")]
   #[cfg_attr(feature = "typescript", specta(optional))]
   pub implied: Option<String>,
+  /// Whether this source was made from an older vanilla version than the latest, so that it is
+  /// never deployed as it is, which would revert what vanilla changed since: when the merge
+  /// leaves the vanilla file as it is, the source is omitted.
+  #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+  #[cfg_attr(feature = "typescript", specta(optional))]
+  pub made_from_older: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
