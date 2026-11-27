@@ -18,12 +18,11 @@
 //! to begin with. Items are paired between versions as the differences pair them, by GUID for
 //! entities, so a reordering between versions changes nothing.
 //!
-//! Every array of the YMAP is handled, as are its `parent` and `contentFlags`, but for the LOD
-//! lights and distant LOD lights of a LOD light pair: the two YMAPs of a pair hold one light at
-//! the same index each, and the removals of either are made in the other too (see
-//! [`super::lod_light_pairs`]), so their differences are kept from the latest. Occlude model
+//! Every array of the YMAP is handled, as are its `parent` and `contentFlags`. Occlude model
 //! triangles relate as the differences compare them, by the vertices they join; grass batches
-//! and instances as they pair, in world space.
+//! and instances as they pair, in world space. The two YMAPs of a LOD light pair are related
+//! each on its own; the removals of either are then made in the other on the latest (see
+//! [`super::lod_light_pairs`]), so both keep their lights in step.
 
 use std::collections::{HashMap, HashSet};
 
@@ -52,8 +51,6 @@ pub struct BaselineComparison<'a> {
   pub source: &'a Ymap,
   pub latest_ctx: &'a YmapDiffContext,
   pub baseline_ctx: &'a YmapDiffContext,
-  /// Whether the YMAP is one of a LOD light pair, whose lights are kept from the latest.
-  pub light_pair: bool,
 }
 
 /// Leaves out of `diffs`, the differences of the source from the latest vanilla version, what
@@ -101,36 +98,34 @@ pub fn relative_to_baseline(
     &baseline.occlude_models,
     tolerances.ymap_occlude_vertex_position,
   );
-  if !versions.light_pair {
+  relate_items(
+    &mut diffs.lod_lights,
+    (&latest.lod_lights, &baseline.lod_lights, &source.lod_lights),
+    &(),
+  );
+  if let Some(distant) = &mut diffs.distant_lod_lights {
     relate_items(
-      &mut diffs.lod_lights,
-      (&latest.lod_lights, &baseline.lod_lights, &source.lod_lights),
-      &(),
+      &mut distant.items,
+      (
+        &latest.distant_lod_lights.items,
+        &baseline.distant_lod_lights.items,
+        &source.distant_lod_lights.items,
+      ),
+      tolerances,
     );
-    if let Some(distant) = &mut diffs.distant_lod_lights {
-      relate_items(
-        &mut distant.items,
-        (
-          &latest.distant_lod_lights.items,
-          &baseline.distant_lod_lights.items,
-          &source.distant_lod_lights.items,
-        ),
-        tolerances,
-      );
-      if distant.num_street_lights.is_some()
-        && source.distant_lod_lights.num_street_lights
-          == baseline.distant_lod_lights.num_street_lights
-      {
-        distant.num_street_lights = None;
-      }
-      if distant.category.is_some()
-        && source.distant_lod_lights.category == baseline.distant_lod_lights.category
-      {
-        distant.category = None;
-      }
-      if *distant == Default::default() {
-        diffs.distant_lod_lights = None;
-      }
+    if distant.num_street_lights.is_some()
+      && source.distant_lod_lights.num_street_lights
+        == baseline.distant_lod_lights.num_street_lights
+    {
+      distant.num_street_lights = None;
+    }
+    if distant.category.is_some()
+      && source.distant_lod_lights.category == baseline.distant_lod_lights.category
+    {
+      distant.category = None;
+    }
+    if *distant == Default::default() {
+      diffs.distant_lod_lights = None;
     }
   }
   if let Some(instanced) = &mut diffs.instanced_data {

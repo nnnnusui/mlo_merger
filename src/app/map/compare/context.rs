@@ -68,6 +68,25 @@ pub struct YmapComparisonContext {
 
 type VanillaVersion = crate::app::map::vanilla_cache::ArchivedVersion;
 
+/// A source YMAP's differences from the latest vanilla version, relative to its baseline.
+struct LiftedDiff {
+  tolerances: matching::MatchTolerances,
+  /// The baseline when it is not the latest.
+  baseline: Option<ComparedFile>,
+  /// The stage of the vanilla version taken as its baseline, the latest's when it is.
+  stage: String,
+  diffs: super::YmapDiffFields,
+}
+
+/// The stage, or version of a title-update patch, holding the vanilla file at `object`, such as
+/// `0012-mpheist` or `0012-mpheist/update_rpf/3751`.
+fn stage_of(object: &str) -> String {
+  let mut parts = object.rsplitn(3, '/');
+  parts.next();
+  parts.next();
+  parts.next().unwrap_or(object).to_owned()
+}
+
 impl YmapComparisonContext {
   /// Reads source YMAPs through the inventory of `source_cache_dir`, finding those that were not
   /// moved into the cache in their resources below `source_dir`.
@@ -164,6 +183,65 @@ impl YmapComparisonContext {
       ..file.clone()
     };
     let vanilla = self.get_cache(&baseline)?;
+    let lifted = self.lifted_diff(file)?;
+    let mut diffs = lifted.diffs;
+    let partner = match self.partner_of(file, &vanilla)? {
+      Some((side, partner, partner_baseline)) => {
+        if partner.resource_name.is_some() {
+          // The partner's removals as it makes them to its baseline, so both YMAPs remove the
+          // same lights of the latest whatever each leaves out of its own differences.
+          let partner_lifted = self.lifted_diff(&partner)?;
+          if partner_lifted.stage != lifted.stage {
+            tracing::warn!(
+              "{} was made from {} but its LOD light partner {} from {}; the lights either removes are removed from both",
+              file.file_name,
+              lifted.stage,
+              partner.file_name,
+              partner_lifted.stage
+            );
+          }
+          let partner_removed = side.other().removed(&partner_lifted.diffs);
+          let implied = side.imply_removals(&mut diffs, &partner_removed);
+          if implied > 0 {
+            tracing::debug!(
+              "{}: {implied} lights removed only from {} are removed here too",
+              file.file_name,
+              partner.file_name
+            );
+          }
+        }
+        Some(YmapComparisonPartner {
+          target: self.comparison_file(&partner, None)?,
+          base: self.comparison_file(&partner_baseline, None)?,
+          vanilla_versions: self.versions_digest(&partner),
+        })
+      }
+      None => None,
+    };
+    Ok(YmapComparisonDiff {
+      schema_version: YmapComparisonDiff::SCHEMA_VERSION,
+      tolerances: lifted.tolerances,
+      partner,
+      vanilla_versions: self.versions_digest(file),
+      baseline: lifted.baseline,
+      diffs,
+      target: self.comparison_file(file, None)?,
+      base: self.comparison_file(&baseline, None)?,
+    })
+  }
+
+  /// The differences of `file` from the latest vanilla YMAP of its name, leaving out what it
+  /// keeps from the vanilla version it was made from (see [`relative_to_baseline`]), without the
+  /// removals its LOD light partner implies.
+  fn lifted_diff(
+    &self,
+    file: &StreamFileRef,
+  ) -> Result<LiftedDiff> {
+    let baseline = StreamFileRef {
+      resource_name: None,
+      ..file.clone()
+    };
+    let vanilla = self.get_cache(&baseline)?;
     let modded = self.get_cache(file)?;
     let vanilla_parent = self.parent_map(&baseline, &vanilla)?;
     let modded_parent = self.parent_map(file, &modded)?;
@@ -173,11 +251,16 @@ impl YmapComparisonContext {
       (&modded, modded_parent.as_ref().map(|parent| parent.entities.as_slice())),
     );
     let mut diffs = vanilla.diff(&modded, &ctx).unwrap_or_default();
-    let mut baseline_file = None;
+    let latest_object = self.vanilla_files.get(&file.file_name.to_ascii_lowercase());
+    let mut lifted = LiftedDiff {
+      tolerances: ctx.tolerances,
+      baseline: None,
+      stage: latest_object.map_or_else(String::new, |(_, object)| stage_of(object)),
+      diffs: Default::default(),
+    };
     if file.resource_name.is_some()
-      && let Some(baseline) = self.baseline_of(&baseline, &modded, &diffs, &ctx)?
+      && let Some((version, ymap)) = self.baseline_of(&baseline, &modded, &diffs, &ctx)?
     {
-      let (version, ymap) = baseline;
       let baseline_ctx = YmapDiffContext::new(
         ctx.tolerances,
         (&ymap, vanilla_parent.as_ref().map(|parent| parent.entities.as_slice())),
@@ -191,11 +274,11 @@ impl YmapComparisonContext {
           source: &modded,
           latest_ctx: &ctx,
           baseline_ctx: &baseline_ctx,
-          light_pair: LightSide::of(&file.file_name).is_some(),
         },
       );
       let fingerprint = Fingerprint::read(&version.path, None, false)?;
-      baseline_file = Some(ComparedFile {
+      lifted.stage = stage_of(&version.object);
+      lifted.baseline = Some(ComparedFile {
         path: version.object.clone(),
         sha256: fingerprint.sha256,
         size: fingerprint.size,
@@ -203,39 +286,8 @@ impl YmapComparisonContext {
         modified_nanos: fingerprint.modified_nanos,
       });
     }
-    let partner = match self.partner_of(file, &vanilla)? {
-      Some((side, partner, partner_baseline)) => {
-        if partner.resource_name.is_some() {
-          let (partner_vanilla, partner_modded) =
-            (self.get_cache(&partner_baseline)?, self.get_cache(&partner)?);
-          let partner_removed =
-            side.other().removed_between(&partner_vanilla, &partner_modded, &ctx.tolerances);
-          let implied = side.imply_removals(&mut diffs, &partner_removed);
-          if implied > 0 {
-            tracing::debug!(
-              "{}: {implied} lights removed only from {} are removed here too",
-              file.file_name,
-              partner.file_name
-            );
-          }
-        }
-        Some(YmapComparisonPartner {
-          target: self.comparison_file(&partner, None)?,
-          base: self.comparison_file(&partner_baseline, None)?,
-        })
-      }
-      None => None,
-    };
-    Ok(YmapComparisonDiff {
-      schema_version: YmapComparisonDiff::SCHEMA_VERSION,
-      tolerances: ctx.tolerances,
-      partner,
-      vanilla_versions: self.versions_digest(file),
-      baseline: baseline_file,
-      diffs,
-      target: self.comparison_file(file, None)?,
-      base: self.comparison_file(&baseline, None)?,
-    })
+    lifted.diffs = diffs;
+    Ok(lifted)
   }
 
   /// The vanilla version of `latest`'s YMAP, other than `latest` itself, that `modded` differs
@@ -382,7 +434,8 @@ impl YmapComparisonContext {
     Ok(match (current, partner) {
       (None, None) => true,
       (Some((_, current, current_baseline)), Some(partner)) => {
-        self.comparison_file(&current, Some(&partner.target))?.same_content(&partner.target)
+        self.versions_digest(&current) == partner.vanilla_versions
+          && self.comparison_file(&current, Some(&partner.target))?.same_content(&partner.target)
           && self
             .comparison_file(&current_baseline, Some(&partner.base))?
             .same_content(&partner.base)

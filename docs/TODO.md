@@ -4,12 +4,6 @@
 
 - [ ] Record source `.rpf` paths with their size and modification time in the archive manifest, and treat an existing archive as stale when they change. Currently an existing archive is reused unless it is explicitly regenerated.
 
-## Source Baselines
-
-Source-cache generation leaves out of a source YMAP's differences what the older vanilla version it was made from holds; see [Source Baselines](reference.md#source-baselines).
-
-- [ ] Relate the lights of LOD light pairs to the baseline: both YMAPs of a pair would need to leave out the same lights, and the implied removals each takes from the other would need to be relative to the baseline too. They are kept as taken from the latest now.
-
 ## DLC Generations
 
 Merges deploy only the generation of each vanilla stream file the game loads and carry the changes resources make to the others over to it; see [Newer DLC Generations](reference.md#newer-dlc-generations).

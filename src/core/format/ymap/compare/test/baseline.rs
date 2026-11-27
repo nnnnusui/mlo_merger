@@ -34,16 +34,6 @@ fn relative(
   baseline: &Ymap,
   source: &Ymap,
 ) -> YmapDiffFields {
-  relative_in(latest, baseline, source, false)
-}
-
-/// [`relative`] for a YMAP of a LOD light pair or not.
-fn relative_in(
-  latest: &Ymap,
-  baseline: &Ymap,
-  source: &Ymap,
-  light_pair: bool,
-) -> YmapDiffFields {
   let tolerances = MatchTolerances::default();
   let latest_ctx = YmapDiffContext::new(tolerances, (latest, None), (source, None));
   let baseline_ctx = YmapDiffContext::new(tolerances, (baseline, None), (source, None));
@@ -56,7 +46,6 @@ fn relative_in(
       source,
       latest_ctx: &latest_ctx,
       baseline_ctx: &baseline_ctx,
-      light_pair,
     },
   );
   diffs
@@ -260,21 +249,60 @@ fn grass_instances_relate_to_the_baseline_and_keep_the_latest_bounds() {
 }
 
 #[test]
-fn the_lights_of_a_lod_light_pair_stay_as_taken_from_the_latest() {
-  let lights = |falloffs: &[f32]| Ymap {
-    lod_lights: falloffs
+fn both_ymaps_of_a_lod_light_pair_remove_the_same_latest_lights() {
+  use crate::core::format::ymap::compare::lod_light_pairs::LightSide;
+  use crate::core::format::ymap::model::{YmapDistantLodLight, YmapDistantLodLights};
+  let lights = |xs: &[f32]| Ymap {
+    lod_lights: xs
       .iter()
-      .map(|falloff| YmapLodLight {
-        falloff: *falloff,
+      .map(|x| YmapLodLight {
+        falloff: *x,
         hash: "0".into(),
         ..YmapLodLight::default()
       })
       .collect(),
     ..base()
   };
-  let (baseline, latest) = (lights(&[1.0]), lights(&[1.0, 2.0]));
-  // The light vanilla added later is not removed from a lone YMAP...
-  assert!(relative_in(&latest, &baseline, &baseline, false).lod_lights.is_none());
-  // ...but stays removed from one of a pair, whose partner removes it too.
-  assert!(relative_in(&latest, &baseline, &baseline, true).lod_lights.is_some());
+  let distant = |xs: &[f32]| Ymap {
+    distant_lod_lights: YmapDistantLodLights {
+      items: xs
+        .iter()
+        .map(|x| YmapDistantLodLight {
+          position: format!("{x} 0 0"),
+          rgbi: "0".into(),
+        })
+        .collect(),
+      ..Default::default()
+    },
+    ..base()
+  };
+  // Vanilla later added light 3 to both; the source, made from the baseline, removed light 1
+  // from the LOD lights only.
+  let mut lods = relative(&lights(&[1.0, 2.0, 3.0]), &lights(&[1.0, 2.0]), &lights(&[2.0]));
+  let mut distants =
+    relative(&distant(&[1.0, 2.0, 3.0]), &distant(&[1.0, 2.0]), &distant(&[1.0, 2.0]));
+  let lods_removed = LightSide::LodLights.removed(&lods);
+  let distants_removed = LightSide::DistantLodLights.removed(&distants);
+  // Light 3 stays in both, as neither removes it from its baseline.
+  assert_eq!(lods_removed, [0].into());
+  assert!(distants_removed.is_empty());
+  LightSide::LodLights.imply_removals(&mut lods, &distants_removed);
+  LightSide::DistantLodLights.imply_removals(&mut distants, &lods_removed);
+  assert_eq!(removed(&lods.lod_lights), [0]);
+  assert_eq!(removed(&distants.distant_lod_lights.unwrap().items), [0]);
+}
+
+/// The base indices `diffs` removes.
+fn removed<T, C>(diffs: &Option<Vec<ItemDiff<T, C>>>) -> Vec<usize> {
+  diffs
+    .iter()
+    .flatten()
+    .filter_map(|diff| match diff {
+      ItemDiff::Removed {
+        base_index,
+        ..
+      } => Some(*base_index),
+      _ => None,
+    })
+    .collect()
 }

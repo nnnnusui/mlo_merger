@@ -266,11 +266,13 @@ Items are paired between versions as the differences pair them: entities by GUID
 triangles and YBN polygons by the vertices they join, grass batches and instances in world
 space, names by hash. Reordering between versions therefore changes nothing. A grass batch whose
 bounds the resource keeps from the baseline takes the latest bounds, grown to hold the instances
-it adds, so the latest instances keep their places. The LOD lights and distant LOD lights of a
-LOD light pair stay as taken from the latest: the two YMAPs hold one light at the same index
-each, and the removals of either are made in the other too, so leaving one out of a single
-YMAP would set them apart. The document records the baseline (`baseline`) and a digest of the
-versions compared (`vanilla_versions`), and is taken again when they change.
+it adds, so the latest instances keep their places. The two YMAPs of a LOD light pair, which hold
+one light at the same index each, are related each to its own baseline first; the lights
+either then removes from the latest are removed from both, so they stay in step whatever each
+leaves out. A warning names a pair whose YMAPs were made from different versions. The document
+records the baseline (`baseline`) and a digest of the
+versions compared (`vanilla_versions`), that of the LOD light partner's versions too, and is
+taken again when they change.
 
 ### Added Stream Files
 
@@ -904,8 +906,7 @@ are arrays. File sizes and timestamps are JSON numbers, represented as TypeScrip
 
 - Merge uses the latest selected vanilla. Which vanilla version a source YMAP or YBN was made
   from is inferred only to leave out of its differences what that version holds
-  ([Source Baselines](#source-baselines)), by the fewest changes, and not for the lights of
-  LOD light pairs. The code writing vanilla YMAP
+  ([Source Baselines](#source-baselines)), by the fewest changes. The code writing vanilla YMAP
   version-to-version diffs is kept but not called; see [vanillaDiff.md](vanillaDiff.md).
 - Which [DLC generations](#newer-dlc-generations) the game loads is worked out from the
   installed game's files and, with `--game-storage`, each build's title-update patches of the
