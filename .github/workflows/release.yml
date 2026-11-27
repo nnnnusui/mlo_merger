@@ -257,6 +257,14 @@ jobs:
           if [[ "$RELEASE_TAG" == *-* ]]; then
             release_flags+=(--prerelease)
           fi
+          # The tagged commit's message body, when it has one, opens the notes, before those
+          # GitHub generates, without its `Created with AI ...` line and the blank lines that
+          # then lead it. The checkout is the tagged commit.
+          body=$(git log -1 --format=%b HEAD | sed -e '/^Created with AI /d' | sed -e '/./,$!d')
+          if [[ -n "${body//[[:space:]]/}" ]]; then
+            printf '%s\n' "$body" > release-notes.md
+            release_flags+=(--notes-file release-notes.md)
+          fi
           if ! gh release view "$RELEASE_TAG" > /dev/null 2>&1; then
             gh release create "$RELEASE_TAG" --verify-tag --generate-notes \
               --title "$RELEASE_TAG" --draft "${release_flags[@]}"
