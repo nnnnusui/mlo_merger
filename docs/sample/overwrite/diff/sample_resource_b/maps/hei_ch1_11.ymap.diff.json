@@ -1,5 +1,5 @@
 {
-  "schema_version": 14,
+  "schema_version": 15,
   "target": {
     "path": "docs/sample/source/sample_resource_b/stream/maps/hei_ch1_11.ymap",
     "sha256": "a493826fe6e1c3caff10f449e21b46cf299d722dc880b1b66ac130b0b67a537c",

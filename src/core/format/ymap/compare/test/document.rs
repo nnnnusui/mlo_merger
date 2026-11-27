@@ -152,6 +152,8 @@ fn only_documents_of_the_current_files_and_tolerances_are_read() {
     base: file(&vanilla),
     tolerances: MatchTolerances::default(),
     partner: None,
+    vanilla_versions: None,
+    baseline: None,
     diffs: Default::default(),
   };
   fs::write(&path, serde_json::to_vec(&document).unwrap()).unwrap();

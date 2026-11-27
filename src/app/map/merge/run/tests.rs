@@ -591,6 +591,8 @@ fn sources_with_a_diff_document_merge_through_it_and_reject_stale_ones() {
       base: recorded(&vanilla),
       tolerances: Default::default(),
       partner: None,
+      vanilla_versions: None,
+      baseline: None,
       diffs: crate::core::format::ymap::compare::YmapDiffFields {
         content_flags: Some(flags),
         ..Default::default()

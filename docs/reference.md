@@ -241,6 +241,32 @@ or stale document fails the merge, so `--merge` and the pipeline update the sour
 first. Only YMAPs that still differ from vanilla after
 merging are written.
 
+#### Source Baselines
+
+A resource's YMAP may have been made from an older vanilla version than the latest. Its
+differences from the latest would then also revert every change vanilla made since. So
+source-cache generation compares the YMAP with every version of the vanilla YMAP the vanilla
+archive stores, those of every stage and of every game build's title-update patches, and takes
+the one it differs least from, counting one change per array item and per other changed field,
+as its baseline; the latest wins a tie. When the baseline is not the latest, the differences,
+still taken from the latest, keep only what the resource changed in its baseline:
+
+- A removal of an item the baseline lacks, which vanilla added later, is left out.
+- An addition of an item the baseline has but the latest lacks is left out, whether or not the
+  resource changed it.
+- A modification of an item the resource keeps as the baseline has it is left out; one the
+  resource changed makes only those changes to the latest item. A changed parent is kept only
+  when the resource points the entity at another parent than the baseline does.
+- A removal of a baseline item the latest lacks is not among the differences to begin with.
+
+Items are paired between versions as the differences pair them, by GUID for entities, so
+reordering between versions changes nothing. Entities, box occluders, time cycle modifiers,
+car generators and the YMAP's `parent` and `contentFlags` are handled so far; the
+differences in occlude models, LOD lights, distant LOD lights, physics dictionaries and
+instanced data stay those from the latest. The document records the baseline (`baseline`)
+and a digest of the versions compared (`vanilla_versions`), and is taken again when they
+change. YBNs are diffed from the latest only.
+
 ### Added Stream Files
 
 A stream file no vanilla file is named after, one a resource adds, is diffed and merged like
@@ -871,12 +897,11 @@ are arrays. File sizes and timestamps are JSON numbers, represented as TypeScrip
 
 ## Limitations
 
-- Merge uses the latest selected vanilla, without inferring which vanilla version a
-  source was made from. That inference is deferred: for YMAPs it matters only for MLOs
-  made from a vanilla version older than mp2025_02 (apart from some LOD light YMAPs,
-  versions up to patchday27ng, before GameBuild 2699), and it needs a way to track
-  differences exactly. The code writing vanilla YMAP version-to-version diffs is kept but
-  not called; see [vanillaDiff.md](vanillaDiff.md).
+- Merge uses the latest selected vanilla. Which vanilla version a source YMAP was made from
+  is inferred only to leave out of its differences what that version holds
+  ([Source Baselines](#source-baselines)), and only for entities, box occluders, time cycle
+  modifiers and car generators so far; YBNs are not inferred. The code writing vanilla YMAP
+  version-to-version diffs is kept but not called; see [vanillaDiff.md](vanillaDiff.md).
 - Which [DLC generations](#newer-dlc-generations) the game loads is worked out from the
   installed game's files and, with `--game-storage`, each build's title-update patches of the
   packs. FiveM also mounts the build's own `dlclist.xml`, `lodlights.rpf` and other files of

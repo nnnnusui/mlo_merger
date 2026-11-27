@@ -75,6 +75,8 @@ struct DiffInputs {
   base: ComparedFile,
   #[serde(default)]
   partner: Option<YmapComparisonPartner>,
+  #[serde(default)]
+  vanilla_versions: Option<String>,
 }
 
 /// Rebuilds the `diff` directory for every source YMAP that overrides a vanilla YMAP or that a
@@ -389,7 +391,13 @@ fn is_current(
   inputs.schema_version == YmapComparisonDiff::SCHEMA_VERSION
     && inputs.tolerances == Some(matching::current())
     && context
-      .is_diff_current(file, &inputs.target, &inputs.base, inputs.partner.as_ref())
+      .is_diff_current(
+        file,
+        &inputs.target,
+        &inputs.base,
+        inputs.partner.as_ref(),
+        inputs.vanilla_versions.as_ref(),
+      )
       .unwrap_or(false)
 }
 

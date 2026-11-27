@@ -9,7 +9,9 @@ use std::{
 use struct_diff::Diff;
 
 use super::{
-  YmapComparisonDiff, YmapComparisonPartner, YmapDiffContext, lod_light_pairs::LightSide,
+  YmapComparisonDiff, YmapComparisonPartner, YmapDiffContext,
+  baseline::{BaselineComparison, change_count, relative_to_baseline},
+  lod_light_pairs::LightSide,
 };
 use crate::{
   app::map::source_cache::{SourceYmapIndex, load_source_ymap_index, read_stream_bytes},
@@ -57,6 +59,54 @@ pub struct YmapComparisonContext {
   /// Names used to resolve hashes while decoding, e.g. vanilla `hash_names.json`.
   hash_names: HashMap<u32, String>,
   pub(super) cache_by_ref: Mutex<HashMap<StreamFileRef, Arc<Ymap>>>,
+  /// Every vanilla version of each YMAP in the vanilla archive, those of every stage and of
+  /// every game build's title-update patches, keyed by lowercase file name, oldest first.
+  vanilla_versions: HashMap<String, Vec<VanillaVersion>>,
+  /// The vanilla versions decoded so far, keyed by their path in the vanilla archive.
+  versions_by_object: Mutex<HashMap<String, Arc<Ymap>>>,
+}
+
+/// One vanilla version of a YMAP in the vanilla archive.
+#[derive(Debug, Clone)]
+struct VanillaVersion {
+  path: PathBuf,
+  object: String,
+  sha256: String,
+}
+
+/// Every distinct version of each YMAP the vanilla archive at `archive` stores; empty when it
+/// cannot be read.
+fn vanilla_versions(archive: &Path) -> HashMap<String, Vec<VanillaVersion>> {
+  let manifest = match crate::core::game_archive::load_manifest(archive) {
+    Ok(manifest) => manifest,
+    Err(error) => {
+      tracing::debug!("No vanilla versions to find source baselines among: {error}");
+      return HashMap::new();
+    }
+  };
+  let mut versions = HashMap::<String, Vec<VanillaVersion>>::new();
+  let changes = manifest.versions.iter().flat_map(|version| {
+    version.changes.iter().chain(version.patches.iter().flat_map(|patch| patch.changes.iter()))
+  });
+  for (name, change) in changes {
+    let name = name.to_ascii_lowercase();
+    if !name.ends_with(".ymap") {
+      continue;
+    }
+    let known = versions.entry(name).or_default();
+    if known.iter().any(|version| version.sha256 == change.file.sha256) {
+      continue;
+    }
+    let Ok(path) = change.file.path(archive) else {
+      continue;
+    };
+    known.push(VanillaVersion {
+      path,
+      object: change.file.object.clone(),
+      sha256: change.file.sha256.clone(),
+    });
+  }
+  versions
 }
 
 impl YmapComparisonContext {
@@ -81,6 +131,9 @@ impl YmapComparisonContext {
         file_names_by_hash.entry(reference_hash(stem)).or_default().insert(file_name);
       }
     }
+    let vanilla_versions = crate::app::map::vanilla_cache::archive_dir(vanilla_cache_dir)
+      .map(|archive| vanilla_versions(&archive))
+      .unwrap_or_default();
     Ok(Self {
       vanilla_files,
       stores: [source_cache_dir.to_path_buf(), source_dir.to_path_buf()],
@@ -89,6 +142,8 @@ impl YmapComparisonContext {
       file_names_by_hash,
       hash_names,
       cache_by_ref: Mutex::new(HashMap::new()),
+      vanilla_versions,
+      versions_by_object: Mutex::new(HashMap::new()),
     })
   }
 
@@ -161,6 +216,35 @@ impl YmapComparisonContext {
       (&modded, modded_parent.as_ref().map(|parent| parent.entities.as_slice())),
     );
     let mut diffs = vanilla.diff(&modded, &ctx).unwrap_or_default();
+    let mut baseline_file = None;
+    if file.resource_name.is_some()
+      && let Some(baseline) = self.baseline_of(&baseline, &modded, &diffs, &ctx)?
+    {
+      let (version, ymap) = baseline;
+      let baseline_ctx = YmapDiffContext::new(
+        ctx.tolerances,
+        (&ymap, vanilla_parent.as_ref().map(|parent| parent.entities.as_slice())),
+        (&modded, modded_parent.as_ref().map(|parent| parent.entities.as_slice())),
+      );
+      relative_to_baseline(
+        &mut diffs,
+        &BaselineComparison {
+          latest: &vanilla,
+          baseline: &ymap,
+          source: &modded,
+          latest_ctx: &ctx,
+          baseline_ctx: &baseline_ctx,
+        },
+      );
+      let fingerprint = Fingerprint::read(&version.path, None, false)?;
+      baseline_file = Some(ComparedFile {
+        path: version.object.clone(),
+        sha256: fingerprint.sha256,
+        size: fingerprint.size,
+        modified_seconds: fingerprint.modified_seconds,
+        modified_nanos: fingerprint.modified_nanos,
+      });
+    }
     let partner = match self.partner_of(file, &vanilla)? {
       Some((side, partner, partner_baseline)) => {
         if partner.resource_name.is_some() {
@@ -188,10 +272,77 @@ impl YmapComparisonContext {
       schema_version: YmapComparisonDiff::SCHEMA_VERSION,
       tolerances: ctx.tolerances,
       partner,
+      vanilla_versions: self.versions_digest(file),
+      baseline: baseline_file,
       diffs,
       target: self.comparison_file(file, None)?,
       base: self.comparison_file(&baseline, None)?,
     })
+  }
+
+  /// The vanilla version of `latest`'s YMAP, other than `latest` itself, that `modded` differs
+  /// least from, decoded, when it differs less from it than from `latest`, whose differences
+  /// are `diffs`.
+  fn baseline_of(
+    &self,
+    latest: &StreamFileRef,
+    modded: &Ymap,
+    diffs: &super::YmapDiffFields,
+    ctx: &YmapDiffContext,
+  ) -> Result<Option<(VanillaVersion, Arc<Ymap>)>> {
+    let Some(versions) = self.vanilla_versions.get(&latest.file_name.to_ascii_lowercase()) else {
+      return Ok(None);
+    };
+    if versions.len() < 2 {
+      return Ok(None);
+    }
+    let latest_sha256 = self.comparison_file(latest, None)?.sha256;
+    let mut best = change_count(diffs);
+    let mut found = None;
+    for version in versions.iter().filter(|version| version.sha256 != latest_sha256) {
+      let ymap = self.vanilla_version_ymap(version)?;
+      let version_ctx = YmapDiffContext::new(ctx.tolerances, (&ymap, None), (modded, None));
+      let count = ymap.diff(modded, &version_ctx).as_ref().map_or(0, change_count);
+      if count < best {
+        best = count;
+        found = Some((version.clone(), ymap));
+      }
+    }
+    if let Some((version, _)) = &found {
+      tracing::debug!("{}: taking {} as the baseline", latest.file_name, version.object);
+    }
+    Ok(found)
+  }
+
+  /// The decoded vanilla `version`, read on first use.
+  fn vanilla_version_ymap(
+    &self,
+    version: &VanillaVersion,
+  ) -> Result<Arc<Ymap>> {
+    let lock = || self.versions_by_object.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    if let Some(ymap) = lock().get(&version.object) {
+      return Ok(ymap.clone());
+    }
+    let ymap = Arc::new(ymap_to_model(&read_stream_bytes(&version.path)?, &self.hash_names)?);
+    Ok(lock().entry(version.object.clone()).or_insert(ymap).clone())
+  }
+
+  /// A digest of the vanilla versions of `file`'s YMAP its baseline is found among, when there
+  /// are several.
+  fn versions_digest(
+    &self,
+    file: &StreamFileRef,
+  ) -> Option<String> {
+    use sha2::{Digest, Sha256};
+    let versions = self.vanilla_versions.get(&file.file_name.to_ascii_lowercase())?;
+    if versions.len() < 2 || file.resource_name.is_none() {
+      return None;
+    }
+    let mut digest = Sha256::new();
+    for version in versions {
+      digest.update(version.sha256.as_bytes());
+    }
+    Some(hex::encode(digest.finalize()))
   }
 
   /// For `file`, one YMAP of a LOD light pair whose vanilla baseline is `vanilla`, its side and
@@ -255,11 +406,15 @@ impl YmapComparisonContext {
     source: &ComparedFile,
     vanilla: &ComparedFile,
     partner: Option<&YmapComparisonPartner>,
+    vanilla_versions: Option<&String>,
   ) -> Result<bool> {
     let baseline = StreamFileRef {
       resource_name: None,
       ..file.clone()
     };
+    if self.versions_digest(file).as_ref() != vanilla_versions {
+      return Ok(false);
+    }
     if !self.comparison_file(file, Some(source))?.same_content(source)
       || !self.comparison_file(&baseline, Some(vanilla))?.same_content(vanilla)
     {

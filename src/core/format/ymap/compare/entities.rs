@@ -91,9 +91,27 @@ fn aliased(
   aliases.get(&guid).copied().unwrap_or(guid)
 }
 
+/// The indices of `vanilla` and `modded` entities paired by GUID, `modded`'s as `aliases` maps
+/// them, one to one in entity order, as [`diff`] pairs them.
+pub(super) fn guid_pairs(
+  vanilla: &[YmapEntity],
+  modded: &[YmapEntity],
+  aliases: &GuidAliases,
+) -> Vec<(usize, usize)> {
+  let vanilla_by_guid = indices_by_guid(vanilla, &GuidAliases::new());
+  let mut modded_by_guid = indices_by_guid(modded, aliases);
+  let mut pairs = Vec::new();
+  for (guid, vanilla_indices) in vanilla_by_guid {
+    if let Some(modded_indices) = modded_by_guid.remove(&guid) {
+      pairs.extend(vanilla_indices.into_iter().zip(modded_indices));
+    }
+  }
+  pairs
+}
+
 /// The parent of `entities[index]` from `parents`, or its raw index when `parents` does not
 /// cover it.
-fn parent_of(
+pub(super) fn parent_of(
   parents: &[EntityParent],
   entities: &[YmapEntity],
   index: usize,

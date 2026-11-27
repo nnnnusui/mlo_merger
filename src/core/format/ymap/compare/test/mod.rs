@@ -4,6 +4,7 @@
 //! unchanged fields are omitted from the JSON.
 
 mod apply;
+mod baseline;
 mod box_occluders;
 mod car_generators;
 mod distant_lod_lights;

@@ -112,6 +112,8 @@ GUID による対応付けは問題なく機能している。並べ替えが起
 
 ## 今後の利用: source のベースライン推定と合成
 
+> source-cache 生成では、この連鎖を使わない形でベースライン推定を実装した（[reference.md の「Source Baselines」](reference.md#source-baselines)）。source と全バージョンを直接比較して差分最小の版 B を選び、最新版に対する差分から「B が持っていた内容」を B と最新版の直接の対応付けで取り除く。保存する差分の base は最新版のままなので、以下の rebase は不要になった。
+
 想定している流れは次のとおり。
 
 1. source YMAP と各 vanilla バージョンを比較し、差分が最小のバージョン B を推定する。

@@ -8,6 +8,7 @@
 //! lights, and how the diffs of several sources combine.
 
 pub mod added;
+pub mod baseline;
 mod diff;
 pub mod distant_lod_lights;
 pub mod entities;

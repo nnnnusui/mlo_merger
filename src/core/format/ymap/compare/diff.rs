@@ -30,6 +30,17 @@ pub struct YmapComparisonDiff {
   /// implied removals; see [`super::lod_light_pairs`].
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub partner: Option<YmapComparisonPartner>,
+  /// A digest of the vanilla versions of the YMAP the source was compared with to find its
+  /// baseline, when there are several.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  #[cfg_attr(feature = "typescript", specta(optional))]
+  pub vanilla_versions: Option<String>,
+  /// The vanilla version the source differs least from, taken as the one it was made from,
+  /// when it is not `base`: `diffs` leave out what the source keeps from it (see
+  /// [`super::baseline`]).
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  #[cfg_attr(feature = "typescript", specta(optional))]
+  pub baseline: Option<ComparedFile>,
   pub diffs: YmapDiffFields,
 }
 
@@ -44,7 +55,7 @@ pub struct YmapComparisonPartner {
 
 impl YmapComparisonDiff {
   /// The current [`Self::schema_version`]. Documents without one predate versioning.
-  pub const SCHEMA_VERSION: u32 = 14;
+  pub const SCHEMA_VERSION: u32 = 15;
 
   /// Reads the document at `path` when it holds the differences of `source` from `vanilla` as
   /// both are now, taken with `tolerances`; `None` when it is missing, of another layout or
